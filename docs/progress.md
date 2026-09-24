@@ -11,11 +11,12 @@ Latest completed milestone: P02 pending run processing and order price adjustmen
 Latest committed implementation:
 
 ```text
-90db14f Process pending price change runs
-b1c3d8f Cover price run processing conflicts
+6c7fbb8 Test statement price adjustment links
+3a6a1e3 Link price adjustments from statements
+b976b3f Expose price adjustment sources
 ```
 
-The working tree was verified for this commit.
+The working tree was verified clean after these commits.
 
 ## Verification Baseline
 
@@ -339,7 +340,8 @@ Continue historical price revaluation and adjustment modeling.
 
 Suggested first version:
 
-- Add settlement-aware adjustment handling for processed runs, including already-paid and post-settlement balances.
+- Confirm order/request funding, ledger, and payment-preview paths consume updated totals after an eligible pre-completion price revaluation.
+- Add immutable statement snapshots and post-settlement adjustment balances when a supported historical price-change flow can reach settled orders.
 - Add P01 impact preview and asynchronous P02 revaluation with persisted per-order outcomes and adjustments.
 - Add overpayment disposal flows after payment confirmation can record real overpaid amounts.
 - Connect adjustment sources to payment remaining balances and preserve immutable settled statement snapshots.
