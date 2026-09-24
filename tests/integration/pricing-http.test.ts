@@ -109,7 +109,7 @@ test('pricing HTTP endpoint publishes prices and lists versions', async () => {
         }),
       });
       assert.equal(response.status, 201);
-      return (await response.json()) as { data: { scopeId: string; salesPrice: string; supplyPrice: string; reason: string; revision: number }; traceId: string };
+      return (await response.json()) as { data: { scopeId: string; salesPrice: string; supplyPrice: string; reason: string; revision: number; runId: string }; traceId: string };
     };
 
     const first = await publish('10.000000', '8.000000', '2026-09-01T00:00:00.000Z');
@@ -117,6 +117,12 @@ test('pricing HTTP endpoint publishes prices and lists versions', async () => {
     assert.equal(first.data.supplyPrice, '8');
     assert.equal(first.data.reason, 'Supplier price update');
     assert.equal(first.data.revision, 1);
+    assert.notEqual(first.data.runId, '');
+    const run = await fetch(`${baseUrl}/jobs/${first.data.runId}`, { headers: { authorization: `Bearer ${token}` } });
+    assert.equal(run.status, 200);
+    const runBody = (await run.json()) as { data: { status: string; priceVersionIds: string[] } };
+    assert.equal(runBody.data.status, 'PENDING');
+    assert.equal(runBody.data.priceVersionIds.length, 1);
     const second = await publish('12.000000', '9.000000', '2026-09-10T00:00:00.000Z');
     assert.equal(second.data.scopeId, first.data.scopeId);
     assert.equal(second.data.revision, 2);

@@ -14,6 +14,17 @@ export type PriceQuote = {
   effectiveAt: string;
   reason: string;
   revision: number;
+  runId: string;
+};
+
+export type PriceChangeRunView = {
+  id: string;
+  status: 'PENDING' | 'SUCCEEDED' | 'FAILED';
+  affectedOrderCount: number;
+  salesDelta: string;
+  supplyDelta: string;
+  priceVersionIds: string[];
+  createdAt: string;
 };
 
 export type PublishPriceInput = {
@@ -101,12 +112,34 @@ export class PricingService {
           revision: (latest?.revision ?? 0) + 1,
         },
       });
+      const run = await tx.priceChangeRun.create({
+        data: {
+          versions: { create: { priceVersionId: version.id } },
+        },
+      });
       return {
         scopeId: scope.id, versionId: version.id, productId: scope.productId, supplierId: scope.supplierId,
         salesPrice: version.salesPrice.toString(), supplyPrice: version.supplyPrice.toString(),
-        effectiveAt: version.effectiveAt.toISOString(), reason: version.reason, revision: version.revision,
+        effectiveAt: version.effectiveAt.toISOString(), reason: version.reason, revision: version.revision, runId: run.id,
       };
     });
+  }
+
+  async getRun(id: string): Promise<PriceChangeRunView> {
+    const run = await this.database.client.priceChangeRun.findUnique({
+      where: { id },
+      include: { versions: { select: { priceVersionId: true } } },
+    });
+    if (!run) throw new NotFoundException({ code: 'PRICE_CHANGE_RUN_NOT_FOUND', message: 'Price change run was not found' });
+    return {
+      id: run.id,
+      status: run.status,
+      affectedOrderCount: run.affectedOrderCount,
+      salesDelta: run.salesDelta.toString(),
+      supplyDelta: run.supplyDelta.toString(),
+      priceVersionIds: run.versions.map((version) => version.priceVersionId),
+      createdAt: run.createdAt.toISOString(),
+    };
   }
 
   async getEffectivePrice(productId: string, supplierId: string, at: Date): Promise<PriceQuote> {
@@ -146,6 +179,7 @@ export class PricingService {
       effectiveAt: version.effectiveAt.toISOString(),
       reason: version.reason,
       revision: version.revision,
+      runId: '',
     };
   }
 
@@ -173,6 +207,7 @@ export class PricingService {
       effectiveAt: version.effectiveAt.toISOString(),
       reason: version.reason,
       revision: version.revision,
+      runId: '',
     }));
   }
 }

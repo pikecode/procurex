@@ -157,6 +157,12 @@ enum CommandStatus {
   FAILED
 }
 
+enum PriceChangeRunStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
 model User {
   id           String          @id @default(uuid()) @db.Uuid
   phone        String?         @unique @db.VarChar(32)
@@ -436,9 +442,30 @@ model PriceVersion {
   revision    Int        @default(1)
   createdAt   DateTime   @default(now()) @db.Timestamptz(6)
   scope       PriceScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  runVersions PriceChangeRunVersion[]
 
   @@unique([scopeId, revision])
   @@index([scopeId, effectiveAt])
+}
+
+model PriceChangeRun {
+  id                 String               @id @default(uuid()) @db.Uuid
+  status             PriceChangeRunStatus @default(PENDING)
+  affectedOrderCount Int                  @default(0)
+  salesDelta         Decimal              @default(0) @db.Decimal(20, 2)
+  supplyDelta        Decimal              @default(0) @db.Decimal(20, 2)
+  createdAt          DateTime             @default(now()) @db.Timestamptz(6)
+  versions           PriceChangeRunVersion[]
+}
+
+model PriceChangeRunVersion {
+  runId         String          @db.Uuid
+  priceVersionId String         @db.Uuid
+  run           PriceChangeRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  priceVersion  PriceVersion   @relation(fields: [priceVersionId], references: [id], onDelete: Cascade)
+
+  @@id([runId, priceVersionId])
+  @@index([priceVersionId])
 }
 
 model PurchaseRequest {
