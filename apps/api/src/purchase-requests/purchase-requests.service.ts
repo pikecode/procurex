@@ -85,6 +85,26 @@ export type ReplacePurchaseRequestItemInput = {
   quantity: string;
 };
 
+export type ReassignPurchaseRequestPreview = {
+  requestId: string;
+  supplierId: string;
+  items: ReassignPurchaseRequestPreviewItem[];
+};
+
+export type ReassignPurchaseRequestPreviewItem = {
+  requestItemId: string;
+  productId: string | null;
+  currentSupplierId: string | null;
+  targetSupplierId: string;
+  eligible: boolean;
+  reason: string | null;
+  salesUnitPrice: string | null;
+  supplyUnitPrice: string | null;
+  salesLineAmount: string | null;
+  supplyLineAmount: string | null;
+  priceVersionId: string | null;
+};
+
 export type ConfirmPurchaseRequestResult = {
   requestId: string;
   status: PurchaseRequestStatus;
@@ -323,6 +343,173 @@ export class PurchaseRequestsService {
     return toPurchaseRequestDetailView(updated);
   }
 
+  async reassignPreview(id: string, expectedVersion: number, itemIds: string[], supplierId: string): Promise<ReassignPurchaseRequestPreview> {
+    const request = await this.loadEditableRequest(id, expectedVersion);
+    const previewItems = await this.previewReassignment(request, itemIds, supplierId);
+    return { requestId: request.id, supplierId, items: previewItems };
+  }
+
+  async assign(id: string, expectedVersion: number, itemIds: string[], supplierId: string): Promise<PurchaseRequestDetailView> {
+    const request = await this.loadEditableRequest(id, expectedVersion);
+    const previewItems = await this.previewReassignment(request, itemIds, supplierId);
+    const ineligible = previewItems.filter((item) => !item.eligible);
+    if (ineligible.length > 0) {
+      throw new ConflictException({
+        code: 'REASSIGNMENT_NOT_ELIGIBLE',
+        message: 'All purchase request items must be eligible before assignment',
+        details: { items: ineligible },
+      });
+    }
+
+    const updatedItems = request.items.map((item) => {
+      const preview = previewItems.find((candidate) => candidate.requestItemId === item.id);
+      if (!preview) {
+        return item;
+      }
+      return {
+        ...item,
+        supplierId,
+        priceVersionId: preview.priceVersionId,
+        salesUnitPrice: new Decimal(preview.salesUnitPrice!),
+        supplyUnitPrice: new Decimal(preview.supplyUnitPrice!),
+        salesLineAmount: new Decimal(preview.salesLineAmount!),
+        supplyLineAmount: new Decimal(preview.supplyLineAmount!),
+      };
+    });
+    const salesGoodsAmount = updatedItems.reduce((sum, item) => sum.plus(item.salesLineAmount), toMoney(0));
+    const supplyGoodsAmount = updatedItems.reduce((sum, item) => sum.plus(item.supplyLineAmount), toMoney(0));
+    const account = await this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } });
+    const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), salesGoodsAmount);
+
+    const updated = await this.database.client.$transaction(async (tx) => {
+      for (const preview of previewItems) {
+        await tx.requestItem.update({
+          where: { id: preview.requestItemId },
+          data: {
+            supplierId,
+            priceVersionId: preview.priceVersionId,
+            salesUnitPrice: preview.salesUnitPrice!,
+            supplyUnitPrice: preview.supplyUnitPrice!,
+            salesLineAmount: preview.salesLineAmount!,
+            supplyLineAmount: preview.supplyLineAmount!,
+          },
+        });
+      }
+
+      await tx.purchaseRequest.update({
+        where: { id: request.id },
+        data: {
+          status: funding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS,
+          paymentStatus: funding.canConfirm ? PaymentStatus.PAID : PaymentStatus.UNPAID,
+          salesGoodsAmount: salesGoodsAmount.toFixed(2),
+          supplyGoodsAmount: supplyGoodsAmount.toFixed(2),
+          paidAmount: funding.paidAmount.toFixed(2),
+          shortfallAmount: funding.shortfallAmount.toFixed(2),
+          version: { increment: 1 },
+        },
+      });
+
+      return tx.purchaseRequest.findUniqueOrThrow({
+        where: { id: request.id },
+        include: {
+          items: { orderBy: { createdAt: 'asc' } },
+          supplierOrders: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+    });
+
+    return toPurchaseRequestDetailView(updated);
+  }
+
+  private async loadEditableRequest(id: string, expectedVersion: number): Promise<PurchaseRequest & { items: RequestItem[]; supplierOrders: SupplierOrder[] }> {
+    const request = await this.database.client.purchaseRequest.findUnique({
+      where: { id },
+      include: {
+        items: { orderBy: { createdAt: 'asc' } },
+        supplierOrders: true,
+      },
+    });
+    if (!request) {
+      throw new NotFoundException({
+        code: 'PURCHASE_REQUEST_NOT_FOUND',
+        message: 'Purchase request was not found',
+      });
+    }
+
+    if (request.version !== expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Purchase request version has changed',
+        details: { expectedVersion, currentVersion: request.version },
+      });
+    }
+
+    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT || request.supplierOrders.length > 0) {
+      throw new ConflictException({
+        code: 'PURCHASE_REQUEST_ITEMS_NOT_EDITABLE',
+        message: 'Purchase request items cannot be edited in its current status',
+        details: { status: request.status },
+      });
+    }
+
+    return request;
+  }
+
+  private async previewReassignment(
+    request: PurchaseRequest & { items: RequestItem[] },
+    itemIds: string[],
+    supplierId: string,
+  ): Promise<ReassignPurchaseRequestPreviewItem[]> {
+    const itemsById = new Map(request.items.map((item) => [item.id, item]));
+    const templateItems = await this.database.client.templateItem.findMany({
+      where: {
+        templateId: request.templateId,
+        isEnabled: true,
+        product: { isActive: true },
+      },
+      include: { suppliers: true },
+    });
+    const allowedSuppliersByProduct = new Map(
+      templateItems.map((item) => [item.productId, new Set(item.suppliers.map((supplier) => supplier.supplierId))]),
+    );
+
+    return Promise.all(
+      itemIds.map(async (itemId) => {
+        const item = itemsById.get(itemId);
+        if (!item) {
+          return toIneligibleReassignment(itemId, null, null, supplierId, 'ITEM_NOT_FOUND');
+        }
+
+        const allowedSuppliers = allowedSuppliersByProduct.get(item.productId);
+        if (!allowedSuppliers?.has(supplierId)) {
+          return toIneligibleReassignment(item.id, item.productId, item.supplierId, supplierId, 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT');
+        }
+
+        try {
+          const price = await this.pricingService.getEffectivePrice(item.productId, supplierId, new Date());
+          return {
+            requestItemId: item.id,
+            productId: item.productId,
+            currentSupplierId: item.supplierId,
+            targetSupplierId: supplierId,
+            eligible: true,
+            reason: null,
+            salesUnitPrice: new Decimal(price.salesPrice).toString(),
+            supplyUnitPrice: new Decimal(price.supplyPrice).toString(),
+            salesLineAmount: lineAmount(item.quantity, price.salesPrice).toFixed(2),
+            supplyLineAmount: lineAmount(item.quantity, price.supplyPrice).toFixed(2),
+            priceVersionId: price.versionId,
+          };
+        } catch (error) {
+          if (error instanceof NotFoundException) {
+            return toIneligibleReassignment(item.id, item.productId, item.supplierId, supplierId, 'PRICE_NOT_AVAILABLE');
+          }
+          throw error;
+        }
+      }),
+    );
+  }
+
   async confirm(id: string, expectedVersion: number): Promise<ConfirmPurchaseRequestResult> {
     const request = await this.database.client.purchaseRequest.findUnique({
       where: { id },
@@ -540,6 +727,28 @@ function findDuplicate(values: string[]): string | null {
     seen.add(value);
   }
   return null;
+}
+
+function toIneligibleReassignment(
+  requestItemId: string,
+  productId: string | null,
+  currentSupplierId: string | null,
+  targetSupplierId: string,
+  reason: string,
+): ReassignPurchaseRequestPreviewItem {
+  return {
+    requestItemId,
+    productId,
+    currentSupplierId,
+    targetSupplierId,
+    eligible: false,
+    reason,
+    salesUnitPrice: null,
+    supplyUnitPrice: null,
+    salesLineAmount: null,
+    supplyLineAmount: null,
+    priceVersionId: null,
+  };
 }
 
 function makeRequestNo(): string {

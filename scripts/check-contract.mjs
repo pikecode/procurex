@@ -94,6 +94,10 @@ assertIncludes(purchaseRequestsController, '@Get()', 'purchase requests controll
 assertIncludes(purchaseRequestsController, "@Get(':id')", 'purchase requests controller');
 assertIncludes(apiDesign, '`PATCH /purchase-requests/{id}/items`', 'api design');
 assertIncludes(purchaseRequestsController, "@Patch(':id/items')", 'purchase requests controller');
+assertIncludes(apiDesign, '`POST /purchase-requests/{id}/reassign-preview`', 'api design');
+assertIncludes(purchaseRequestsController, "@Post(':id/reassign-preview')", 'purchase requests controller');
+assertIncludes(apiDesign, '`POST /purchase-requests/{id}/assign`', 'api design');
+assertIncludes(purchaseRequestsController, "@Post(':id/assign')", 'purchase requests controller');
 assertIncludes(apiDesign, '`POST /purchase-requests/{id}/confirm`', 'api design');
 assertIncludes(purchaseRequestsController, "@Post(':id/confirm')", 'purchase requests controller');
 assertIncludes(apiDesign, '`POST /purchase-requests/{id}/reject`', 'api design');

@@ -491,6 +491,7 @@ test('purchase request item patch reprices supplier assignments', async () => {
         shortfallAmount: string;
         version: number;
         items: Array<{
+          id: string;
           productId: string;
           supplierId: string;
           priceVersionId: string | null;
@@ -519,15 +520,88 @@ test('purchase request item patch reprices supplier assignments', async () => {
     assert.equal(patched.data.items[0]?.salesLineAmount, '100.00');
     assert.equal(patched.data.items[0]?.supplyLineAmount, '75.00');
 
+    const reassignPreviewResponse = await fetch(`${baseUrl}/purchase-requests/${created.data.id}/reassign-preview`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'x-trace-id': 'trace-reassign-preview',
+      },
+      body: JSON.stringify({
+        expectedVersion: patched.data.version,
+        itemIds: [patched.data.items[0]?.id],
+        supplierId: supplierA.id,
+      }),
+    });
+    assert.equal(reassignPreviewResponse.status, 201);
+    const reassignPreview = (await reassignPreviewResponse.json()) as {
+      data: {
+        requestId: string;
+        supplierId: string;
+        items: Array<{
+          requestItemId: string;
+          productId: string | null;
+          currentSupplierId: string | null;
+          targetSupplierId: string;
+          eligible: boolean;
+          reason: string | null;
+          salesLineAmount: string | null;
+          supplyLineAmount: string | null;
+        }>;
+      };
+    };
+    assert.equal(reassignPreview.data.requestId, created.data.id);
+    assert.equal(reassignPreview.data.supplierId, supplierA.id);
+    assert.equal(reassignPreview.data.items.length, 1);
+    assert.equal(reassignPreview.data.items[0]?.requestItemId, patched.data.items[0]!.id);
+    assert.equal(reassignPreview.data.items[0]?.productId, product.id);
+    assert.equal(reassignPreview.data.items[0]?.currentSupplierId, supplierB.id);
+    assert.equal(reassignPreview.data.items[0]?.targetSupplierId, supplierA.id);
+    assert.equal(reassignPreview.data.items[0]?.eligible, true);
+    assert.equal(reassignPreview.data.items[0]?.reason, null);
+    assert.equal(reassignPreview.data.items[0]?.salesLineAmount, '60.00');
+    assert.equal(reassignPreview.data.items[0]?.supplyLineAmount, '45.00');
+
+    const assignResponse = await fetch(`${baseUrl}/purchase-requests/${created.data.id}/assign`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'x-trace-id': 'trace-assign',
+      },
+      body: JSON.stringify({
+        expectedVersion: patched.data.version,
+        itemIds: [patched.data.items[0]?.id],
+        supplierId: supplierA.id,
+      }),
+    });
+    assert.equal(assignResponse.status, 201);
+    const assigned = (await assignResponse.json()) as {
+      data: {
+        salesGoodsAmount: string;
+        supplyGoodsAmount: string;
+        paidAmount: string;
+        version: number;
+        items: Array<{ supplierId: string; salesLineAmount: string; supplyLineAmount: string }>;
+      };
+    };
+    assert.equal(assigned.data.salesGoodsAmount, '60.00');
+    assert.equal(assigned.data.supplyGoodsAmount, '45.00');
+    assert.equal(assigned.data.paidAmount, '60.00');
+    assert.equal(assigned.data.version, 3);
+    assert.equal(assigned.data.items[0]?.supplierId, supplierA.id);
+    assert.equal(assigned.data.items[0]?.salesLineAmount, '60.00');
+    assert.equal(assigned.data.items[0]?.supplyLineAmount, '45.00');
+
     const request = await prisma.purchaseRequest.findUniqueOrThrow({
       where: { id: created.data.id },
       include: { items: true },
     });
-    assert.equal(request.version, 2);
-    assert.equal(request.salesGoodsAmount.toString(), '100');
+    assert.equal(request.version, 3);
+    assert.equal(request.salesGoodsAmount.toString(), '60');
     assert.equal(request.items.length, 1);
-    assert.equal(request.items[0]?.supplierId, supplierB.id);
-    assert.equal(request.items[0]?.priceVersionId, priceVersionB.id);
+    assert.equal(request.items[0]?.supplierId, supplierA.id);
+    assert.notEqual(request.items[0]?.priceVersionId, priceVersionB.id);
   } finally {
     await app.close();
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });

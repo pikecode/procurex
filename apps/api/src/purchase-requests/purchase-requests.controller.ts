@@ -19,6 +19,7 @@ import {
   type PurchaseRequestDetailView,
   type PurchaseRequestSummaryView,
   type PurchaseRequestView,
+  type ReassignPurchaseRequestPreview,
   type ReplacePurchaseRequestItemInput,
   type RejectPurchaseRequestResult,
 } from './purchase-requests.service.js';
@@ -53,6 +54,12 @@ type PatchItemsBody = {
   expectedVersion?: unknown;
   reason?: unknown;
   items?: unknown;
+};
+
+type ReassignBody = {
+  expectedVersion?: unknown;
+  itemIds?: unknown;
+  supplierId?: unknown;
 };
 
 @Controller('purchase-requests')
@@ -119,6 +126,20 @@ export class PurchaseRequestsController {
   replaceItems(@Param('id') id: string, @Body() body: PatchItemsBody): Promise<PurchaseRequestDetailView> {
     const input = parsePatchItemsBody(id, body);
     return this.purchaseRequestsService.replaceItems(input.id, input.expectedVersion, input.items);
+  }
+
+  @Post(':id/reassign-preview')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  reassignPreview(@Param('id') id: string, @Body() body: ReassignBody): Promise<ReassignPurchaseRequestPreview> {
+    const input = parseReassignBody(id, body);
+    return this.purchaseRequestsService.reassignPreview(input.id, input.expectedVersion, input.itemIds, input.supplierId);
+  }
+
+  @Post(':id/assign')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  assign(@Param('id') id: string, @Body() body: ReassignBody): Promise<PurchaseRequestDetailView> {
+    const input = parseReassignBody(id, body);
+    return this.purchaseRequestsService.assign(input.id, input.expectedVersion, input.itemIds, input.supplierId);
   }
 
   @Post(':id/confirm')
@@ -269,6 +290,37 @@ function parsePatchItemsBody(
 
   throwIfInvalid(issues);
   return { id, expectedVersion: body.expectedVersion as number, reason: reason!, items };
+}
+
+function parseReassignBody(
+  id: string,
+  body: ReassignBody,
+): { id: string; expectedVersion: number; itemIds: string[]; supplierId: string } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+    ...validateUuid('supplierId', body.supplierId),
+  ];
+  const itemIds: string[] = [];
+
+  if (!Array.isArray(body.itemIds) || body.itemIds.length === 0) {
+    issues.push({ field: 'itemIds', code: 'INVALID_ITEM_IDS', message: 'itemIds must be a non-empty array' });
+  } else {
+    const seen = new Set<string>();
+    for (const [index, itemId] of body.itemIds.entries()) {
+      issues.push(...validateUuid(`itemIds.${index}`, itemId));
+      if (typeof itemId === 'string') {
+        if (seen.has(itemId)) {
+          issues.push({ field: `itemIds.${index}`, code: 'DUPLICATE_ITEM_ID', message: 'itemIds must not contain duplicates' });
+        }
+        seen.add(itemId);
+        itemIds.push(itemId);
+      }
+    }
+  }
+
+  throwIfInvalid(issues);
+  return { id, expectedVersion: body.expectedVersion as number, itemIds, supplierId: body.supplierId as string };
 }
 
 function parseRejectBody(id: string, body: RejectBody): { id: string; expectedVersion: number; reason: string } {
