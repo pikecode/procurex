@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M4 settlement/read-model development.
 
-Latest completed milestone: B12 difference disposal offset first version.
+Latest completed milestone: B04 direct settlement statement read model first version.
 
 Latest implementation commit:
 
 ```text
-Add difference disposal offset support
+Add direct settlement statement read model
 ```
 
 The working tree was verified for this commit.
@@ -305,13 +305,22 @@ Current B12 behavior:
 - Uses Idempotency-Key through command records for create and confirm.
 - Overpayment, adjustment-driven credit items, direct settlement offsets, and evidence files remain future work.
 
+Current B04 behavior:
+
+- Implements `GET /direct-statements` and `GET /direct-statements/{id}`.
+- Groups completed supplier orders for suppliers currently configured with `SUPPLIER_TERM` by store, supplier, cycle, and first shipment period.
+- Uses sales goods amount plus shipment freight as the direct settlement total.
+- Returns source order lines, stable direct settlement item IDs, source revision, and OPEN payment summary fields.
+- The current schema has no supplier-order settlement snapshot, so template-level historical overrides are not distinguishable here; direct statements use the supplier's current default settlement mode.
+
 ## Recommended Next Step
 
-Continue settlement adjustment and difference-disposal polish.
+Continue settlement adjustment and historical price persistence.
 
 Suggested first version:
 
 - Add persisted adjustment source modeling for historical price changes and post-settlement revisions.
+- Add order settlement snapshots before expanding direct statement payment flows.
 - Add overpayment disposal flows after payment confirmation can record real overpaid amounts.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.

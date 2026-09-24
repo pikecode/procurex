@@ -36,6 +36,7 @@ const [
   purchaseRequestsController,
   rechargesController,
   storeStatementsController,
+  directStatementsController,
   supplierOrdersController,
   supplierStoreStatementsController,
   supplierStatementsController,
@@ -64,6 +65,7 @@ const [
   readProjectFile('apps/api/src/purchase-requests/purchase-requests.controller.ts'),
   readProjectFile('apps/api/src/recharges/recharges.controller.ts'),
   readProjectFile('apps/api/src/store-statements/store-statements.controller.ts'),
+  readProjectFile('apps/api/src/direct-statements/direct-statements.controller.ts'),
     readProjectFile('apps/api/src/supplier-orders/supplier-orders.controller.ts'),
   readProjectFile('apps/api/src/supplier-store-statements/supplier-store-statements.controller.ts'),
   readProjectFile('apps/api/src/supplier-statements/supplier-statements.controller.ts'),
@@ -119,6 +121,9 @@ assertIncludes(apiDesign, '`GET /store-statements`、`GET /store-statements/{id}
 assertIncludes(storeStatementsController, "@Controller('store-statements')", 'store statements controller');
 assertIncludes(storeStatementsController, '@Get()', 'store statements controller');
 assertIncludes(storeStatementsController, "@Get(':id')", 'store statements controller');
+assertIncludes(apiDesign, '`GET /direct-statements`、`GET /direct-statements/{id}`', 'api design');
+assertIncludes(directStatementsController, "@Controller('direct-statements')", 'direct statements controller');
+assertIncludes(directStatementsController, "@Get(':id')", 'direct statements controller');
 assertIncludes(apiDesign, '`GET /supplier-statements`、`GET /supplier-statements/{id}`', 'api design');
 assertIncludes(supplierStatementsController, "@Controller('supplier-statements')", 'supplier statements controller');
 assertIncludes(supplierStatementsController, '@Get()', 'supplier statements controller');
