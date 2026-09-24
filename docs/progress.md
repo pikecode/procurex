@@ -324,6 +324,7 @@ Current price history behavior:
 - Price versions persist the reason for each change and return it from publish and version history queries.
 - Price versions persist a per-scope monotonic revision; the highest revision wins when effective times match, and publishing appends history in a transaction.
 - P02 now creates a persisted pending price change run linked to the published version; each currently affected execution order is recorded as a pending run item, and `GET /jobs/{id}` exposes the status and deltas.
+- `POST /jobs/{id}/process` applies pending order price changes in one transaction, records before/after prices and amount deltas, updates order/request totals, and marks the run successful.
 - P01 previews the uncompleted orders in the price version's effective interval and returns estimated sales and supply deltas; completed orders are excluded.
 - The current P02 endpoint still publishes one product/supplier version synchronously; asynchronous order revaluation and adjustment generation remain future work.
 
@@ -333,7 +334,7 @@ Continue historical price revaluation and adjustment modeling.
 
 Suggested first version:
 
-- Process pending run items into order price revisions and adjustment source records for historical price changes and post-settlement revisions.
+- Add settlement-aware adjustment handling for processed runs, including already-paid and post-settlement balances.
 - Add P01 impact preview and asynchronous P02 revaluation with persisted per-order outcomes and adjustments.
 - Add overpayment disposal flows after payment confirmation can record real overpaid amounts.
 - Add integration coverage to the existing purchase/supplier flow test.

@@ -99,6 +99,8 @@ erDiagram
 | `price_versions` | `scope_id ID`、`effective_at T`、`revision int`、销售/供货单价、`reason text`、`created_by ID` | scope+revision 唯一；生效时间相同时用最新修订；价格记录追加而非覆盖，发布原因随版本持久化 |
 | `price_change_runs` | `document_id ID`、`job_id ID`、`status`、`impact_summary jsonb` | 关联价格发布和重算结果；每次发布记录实际影响 |
 | `price_change_run_versions` | `run_id ID`、`price_version_id ID` | 一次直接账期同价发布可关联两个价格范围版本 |
+| `price_change_run_orders` | `run_id ID`、`supplier_order_id ID`、`status`、销售/供货差额 | 每个受影响未完成执行单一条待处理明细；处理成功或失败保留状态 |
+| `price_change_adjustments` | `run_id ID`、`supplier_order_id ID`、`order_item_id ID`、改价前后单价、两侧差额 | 订单价格重算的来源记录；同一 run 和订单行只生成一次 |
 
 同一有效价查询按 `effective_at <= 业务基准时间`，再按 `effective_at DESC, revision DESC` 取一条。未来版本提前保存，但不能提前应用。历史改价插入早期时间点，不覆盖时间线上其后已存在的有效价格。
 

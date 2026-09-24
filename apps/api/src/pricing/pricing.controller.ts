@@ -48,6 +48,12 @@ export class PricingController {
     throwIfInvalid(validateUuid('id', id));
     return this.pricingService.getRun(id);
   }
+
+  @Post('jobs/:id/process')
+  processRun(@Param('id') id: string): Promise<PriceChangeRunView> {
+    throwIfInvalid(validateUuid('id', id));
+    return this.pricingService.processRun(id);
+  }
 }
 
 function parsePriceChangeBody(body: PriceChangeBody, requireReason = true): {

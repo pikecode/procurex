@@ -178,7 +178,12 @@ assertIncludes(pricingController, "@Get('price-scopes/:id/versions')", 'pricing 
 assertIncludes(apiDesign, '`POST /prices/impact-preview`', 'api design');
 assertIncludes(pricingController, "@Post('prices/impact-preview')", 'pricing impact preview controller');
 assertIncludes(pricingController, "@Get('jobs/:id')", 'pricing jobs controller');
+assertIncludes(apiDesign, '`POST /jobs/{id}/process`', 'api design');
+assertIncludes(pricingController, "@Post('jobs/:id/process')", 'pricing job process controller');
 assertIncludes(prismaSchema, 'reason      String     @default("") @db.VarChar(500)', 'price version change reason');
+assertIncludes(prismaSchema, 'model PriceChangeRun', 'price change run model');
+assertIncludes(prismaSchema, 'model PriceChangeRunOrder', 'price change run order model');
+assertIncludes(prismaSchema, 'model PriceChangeAdjustment', 'price change adjustment model');
 assertIncludes(pricingController, 'requiredReason(body.reason, issues)', 'pricing change reason validation');
 assertIncludes(apiDesign, '`POST /purchase-requests/preview`', 'api design');
 assertIncludes(purchaseRequestsController, "@Post('preview')", 'purchase requests controller');

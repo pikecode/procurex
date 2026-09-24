@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
 import { SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
@@ -168,6 +168,72 @@ export class PricingService {
       orders: run.orders.map((order) => ({ supplierOrderId: order.supplierOrderId, status: order.status, salesDelta: order.salesDelta.toString(), supplyDelta: order.supplyDelta.toString() })),
       createdAt: run.createdAt.toISOString(),
     };
+  }
+
+  async processRun(id: string): Promise<PriceChangeRunView> {
+    await this.database.client.$transaction(async (tx) => {
+      const run = await tx.priceChangeRun.findUnique({
+        where: { id },
+        include: {
+          versions: { include: { priceVersion: { include: { scope: true } } } },
+          orders: { where: { status: 'PENDING' } },
+        },
+      });
+      if (!run) throw new NotFoundException({ code: 'PRICE_CHANGE_RUN_NOT_FOUND', message: 'Price change run was not found' });
+      if (run.status !== 'PENDING') throw new ConflictException({ code: 'PRICE_CHANGE_RUN_ALREADY_PROCESSED', message: 'Price change run has already been processed' });
+      const version = run.versions[0]?.priceVersion;
+      if (!version) throw new ConflictException({ code: 'PRICE_CHANGE_RUN_INVALID', message: 'Price change run has no price version' });
+
+      for (const runOrder of run.orders) {
+        const order = await tx.supplierOrder.findUnique({
+          where: { id: runOrder.supplierOrderId },
+          include: { items: { where: { productId: version.scope.productId } } },
+        });
+        const item = order?.items[0];
+        if (!order || !item || order.status === SupplierOrderStatus.COMPLETED || order.status === SupplierOrderStatus.CANCELED || order.status === SupplierOrderStatus.REJECTED) {
+          await tx.priceChangeRunOrder.update({ where: { runId_supplierOrderId: { runId: id, supplierOrderId: runOrder.supplierOrderId } }, data: { status: 'FAILED' } });
+          continue;
+        }
+        const salesDelta = lineAmount(item.quantity, version.salesPrice).minus(item.salesLineAmount);
+        const supplyDelta = lineAmount(item.quantity, version.supplyPrice).minus(item.supplyLineAmount);
+        await tx.orderItem.update({
+          where: { id: item.id },
+          data: {
+            salesUnitPrice: version.salesPrice,
+            supplyUnitPrice: version.supplyPrice,
+            salesLineAmount: lineAmount(item.quantity, version.salesPrice),
+            supplyLineAmount: lineAmount(item.quantity, version.supplyPrice),
+          },
+        });
+        await tx.supplierOrder.update({
+          where: { id: order.id },
+          data: { salesGoodsAmount: { increment: salesDelta }, supplyGoodsAmount: { increment: supplyDelta }, version: { increment: 1 } },
+        });
+        await tx.purchaseRequest.update({
+          where: { id: order.requestId },
+          data: { salesGoodsAmount: { increment: salesDelta }, supplyGoodsAmount: { increment: supplyDelta } },
+        });
+        await tx.priceChangeAdjustment.create({
+          data: {
+            runId: id,
+            supplierOrderId: order.id,
+            orderItemId: item.id,
+            previousSalesPrice: item.salesUnitPrice,
+            newSalesPrice: version.salesPrice,
+            previousSupplyPrice: item.supplyUnitPrice,
+            newSupplyPrice: version.supplyPrice,
+            salesDelta,
+            supplyDelta,
+          },
+        });
+        await tx.priceChangeRunOrder.update({
+          where: { runId_supplierOrderId: { runId: id, supplierOrderId: order.id } },
+          data: { status: 'SUCCEEDED', salesDelta, supplyDelta },
+        });
+      }
+      await tx.priceChangeRun.update({ where: { id }, data: { status: 'SUCCEEDED' } });
+    });
+    return this.getRun(id);
   }
 
   async getEffectivePrice(productId: string, supplierId: string, at: Date): Promise<PriceQuote> {
