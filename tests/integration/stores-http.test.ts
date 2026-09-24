@@ -7,7 +7,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { AppModule } from '../../apps/api/src/app.module.js';
 import { ApiExceptionFilter } from '../../apps/api/src/common/api-exception.filter.js';
 import { ResponseEnvelopeInterceptor } from '../../apps/api/src/common/response-envelope.interceptor.js';
-import { StoreStatus } from '../../packages/backend/generated/prisma/enums.js';
+import { LedgerDirection, LedgerSourceType, StoreStatus } from '../../packages/backend/generated/prisma/enums.js';
 import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
 import { hashPassword } from '../../packages/domain/src/password.js';
 
@@ -112,6 +112,88 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(createdBody.traceId, 'trace-stores-create');
     assert.equal(createdBody.data.code, storeCode);
     assert.equal(createdBody.data.status, StoreStatus.ACTIVE);
+    const account = await prisma.storeAccount.create({
+      data: {
+        storeId: createdBody.data.id,
+        balance: '320.50',
+        creditLimit: '1000.00',
+        creditUsed: '125.25',
+      },
+    });
+    await prisma.accountLedger.create({
+      data: {
+        accountId: account.id,
+        direction: LedgerDirection.CREDIT,
+        amount: '320.50',
+        balanceAfter: '320.50',
+        sourceType: LedgerSourceType.RECHARGE,
+        sourceId: createdBody.data.id,
+        note: 'Initial recharge',
+        occurredAt: new Date('2026-09-24T08:00:00.000Z'),
+      },
+    });
+
+    const accountResponse = await fetch(`${baseUrl}/stores/${createdBody.data.id}/account`, {
+      headers: {
+        authorization: `Bearer ${storeToken}`,
+        'x-trace-id': 'trace-store-account',
+      },
+    });
+    assert.equal(accountResponse.status, 200);
+    const accountBody = (await accountResponse.json()) as {
+      data: {
+        id: string;
+        storeId: string;
+        balance: string;
+        creditLimit: string;
+        creditUsed: string;
+        creditAvailable: string;
+        version: number;
+      };
+      traceId: string;
+    };
+    assert.equal(accountBody.traceId, 'trace-store-account');
+    assert.equal(accountBody.data.id, account.id);
+    assert.equal(accountBody.data.storeId, createdBody.data.id);
+    assert.equal(accountBody.data.balance, '320.50');
+    assert.equal(accountBody.data.creditLimit, '1000.00');
+    assert.equal(accountBody.data.creditUsed, '125.25');
+    assert.equal(accountBody.data.creditAvailable, '874.75');
+    assert.equal(accountBody.data.version, 1);
+
+    const ledgersResponse = await fetch(
+      `${baseUrl}/stores/${createdBody.data.id}/ledgers?occurredFrom=2026-09-24T00:00:00.000Z&occurredTo=2026-09-25T00:00:00.000Z`,
+      {
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          'x-trace-id': 'trace-store-ledgers',
+        },
+      },
+    );
+    assert.equal(ledgersResponse.status, 200);
+    const ledgersBody = (await ledgersResponse.json()) as {
+      data: Array<{
+        accountId: string;
+        direction: LedgerDirection;
+        amount: string;
+        balanceAfter: string;
+        sourceType: LedgerSourceType;
+        sourceId: string;
+        note: string | null;
+        occurredAt: string;
+      }>;
+      traceId: string;
+    };
+    assert.equal(ledgersBody.traceId, 'trace-store-ledgers');
+    assert.equal(ledgersBody.data.length, 1);
+    assert.equal(ledgersBody.data[0]?.accountId, account.id);
+    assert.equal(ledgersBody.data[0]?.direction, LedgerDirection.CREDIT);
+    assert.equal(ledgersBody.data[0]?.amount, '320.50');
+    assert.equal(ledgersBody.data[0]?.balanceAfter, '320.50');
+    assert.equal(ledgersBody.data[0]?.sourceType, LedgerSourceType.RECHARGE);
+    assert.equal(ledgersBody.data[0]?.sourceId, createdBody.data.id);
+    assert.equal(ledgersBody.data[0]?.note, 'Initial recharge');
+    assert.equal(ledgersBody.data[0]?.occurredAt, '2026-09-24T08:00:00.000Z');
 
     const list = await fetch(`${baseUrl}/stores`, {
       headers: {
@@ -150,6 +232,8 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(disabledBody.data.status, StoreStatus.DISABLED);
   } finally {
     await app.close();
+    await prisma.accountLedger.deleteMany({ where: { account: { store: { code: storeCode } } } });
+    await prisma.storeAccount.deleteMany({ where: { store: { code: storeCode } } });
     await prisma.store.deleteMany({ where: { code: storeCode } });
     await prisma.userSession.deleteMany({ where: { user: { username: { in: [adminUsername, storeUsername] } } } });
     await prisma.userRole.deleteMany({ where: { user: { username: { in: [adminUsername, storeUsername] } } } });

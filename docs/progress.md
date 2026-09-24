@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: O11 supplier order funding reconciliation.
+Latest completed milestone: A01 store account read APIs.
 
 Latest implementation commit:
 
 ```text
-Add supplier order funding reconciliation
+Add store account read endpoints
 ```
 
 The working tree was clean after this commit.
@@ -133,14 +133,27 @@ Current F06/F07 behavior:
 - Settlement and reconciliation remain future work.
 - Frontend pages are not implemented yet.
 
+### Store Finance
+
+Implemented interfaces:
+
+- A01 `GET /stores/{id}/account`, `GET /stores/{id}/ledgers`
+
+Current A01 behavior:
+
+- Returns store account balance, credit limit, credit used, and available credit.
+- Returns account ledgers ordered by occurred time.
+- Supports `occurredFrom` and `occurredTo` filters.
+- Access control is role-based; store-user data-scope binding is not implemented yet.
+
 ## Recommended Next Step
 
-Tighten fulfillment completion after all discrepancies and gaps are closed, or start A01 account read endpoints.
+Implement A02 recharge creation or tighten fulfillment completion after all discrepancies and gaps are closed.
 
 Suggested first version:
 
 - If continuing fulfillment work, tighten completion status after all discrepancies and gaps are closed.
-- If continuing finance work, add account/ledger read endpoints before deeper settlement work.
+- If continuing finance work, add A02 recharge creation and ledger write behavior.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 

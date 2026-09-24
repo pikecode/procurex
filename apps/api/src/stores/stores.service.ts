@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { StoreStatus } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { Store } from '../../../../packages/backend/generated/prisma/client.js';
+import { LedgerDirection, LedgerSourceType, StoreStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import type { AccountLedger, Store, StoreAccount } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type StoreView = {
@@ -14,6 +14,36 @@ export type StoreView = {
   version: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type StoreAccountView = {
+  id: string | null;
+  storeId: string;
+  balance: string;
+  creditLimit: string;
+  creditUsed: string;
+  creditAvailable: string;
+  version: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type StoreLedgerQuery = {
+  occurredFrom?: Date;
+  occurredTo?: Date;
+};
+
+export type AccountLedgerView = {
+  id: string;
+  accountId: string;
+  direction: LedgerDirection;
+  amount: string;
+  balanceAfter: string;
+  sourceType: LedgerSourceType;
+  sourceId: string;
+  note: string | null;
+  occurredAt: string;
+  createdAt: string;
 };
 
 export type CreateStoreInput = {
@@ -90,6 +120,43 @@ export class StoresService {
 
     return toStoreView(updated);
   }
+
+  async getAccount(storeId: string): Promise<StoreAccountView> {
+    await this.assertStoreExists(storeId);
+    const account = await this.database.client.storeAccount.findUnique({ where: { storeId } });
+    return toStoreAccountView(storeId, account);
+  }
+
+  async listLedgers(storeId: string, query: StoreLedgerQuery): Promise<AccountLedgerView[]> {
+    await this.assertStoreExists(storeId);
+    const account = await this.database.client.storeAccount.findUnique({ where: { storeId } });
+    if (!account) {
+      return [];
+    }
+
+    const ledgers = await this.database.client.accountLedger.findMany({
+      where: {
+        accountId: account.id,
+        occurredAt: {
+          gte: query.occurredFrom,
+          lt: query.occurredTo,
+        },
+      },
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+    });
+
+    return ledgers.map(toAccountLedgerView);
+  }
+
+  private async assertStoreExists(storeId: string): Promise<void> {
+    const store = await this.database.client.store.findUnique({ where: { id: storeId } });
+    if (!store) {
+      throw new NotFoundException({
+        code: 'STORE_NOT_FOUND',
+        message: 'Store was not found',
+      });
+    }
+  }
 }
 
 function toStoreView(store: Store): StoreView {
@@ -109,4 +176,48 @@ function toStoreView(store: Store): StoreView {
 
 function storeVersion(store: Pick<Store, 'updatedAt'>): number {
   return store.updatedAt.getTime();
+}
+
+function toStoreAccountView(storeId: string, account: StoreAccount | null): StoreAccountView {
+  if (!account) {
+    return {
+      id: null,
+      storeId,
+      balance: '0.00',
+      creditLimit: '0.00',
+      creditUsed: '0.00',
+      creditAvailable: '0.00',
+      version: 0,
+      createdAt: null,
+      updatedAt: null,
+    };
+  }
+
+  const creditAvailable = account.creditLimit.minus(account.creditUsed);
+  return {
+    id: account.id,
+    storeId: account.storeId,
+    balance: account.balance.toFixed(2),
+    creditLimit: account.creditLimit.toFixed(2),
+    creditUsed: account.creditUsed.toFixed(2),
+    creditAvailable: creditAvailable.toFixed(2),
+    version: account.version,
+    createdAt: account.createdAt.toISOString(),
+    updatedAt: account.updatedAt.toISOString(),
+  };
+}
+
+function toAccountLedgerView(ledger: AccountLedger): AccountLedgerView {
+  return {
+    id: ledger.id,
+    accountId: ledger.accountId,
+    direction: ledger.direction,
+    amount: ledger.amount.toFixed(2),
+    balanceAfter: ledger.balanceAfter.toFixed(2),
+    sourceType: ledger.sourceType,
+    sourceId: ledger.sourceId,
+    note: ledger.note,
+    occurredAt: ledger.occurredAt.toISOString(),
+    createdAt: ledger.createdAt.toISOString(),
+  };
 }

@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
-import { StoresService, type StoreView } from './stores.service.js';
+import { StoresService, type AccountLedgerView, type StoreAccountView, type StoreLedgerQuery, type StoreView } from './stores.service.js';
 import { StoreStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { validateExpectedVersion, validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
 
@@ -18,6 +18,11 @@ type CreateStoreBody = {
 type PatchStoreBody = CreateStoreBody & {
   expectedVersion?: unknown;
   status?: unknown;
+};
+
+type LedgerQuery = {
+  occurredFrom?: unknown;
+  occurredTo?: unknown;
 };
 
 @Controller('stores')
@@ -35,6 +40,20 @@ export class StoresController {
   @RequireRoles('ADMIN')
   createStore(@Body() body: CreateStoreBody): Promise<StoreView> {
     return this.storesService.createStore(parseCreateStoreBody(body));
+  }
+
+  @Get(':id/account')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE')
+  getAccount(@Param('id') id: string): Promise<StoreAccountView> {
+    throwIfInvalid(validateUuid('id', id));
+    return this.storesService.getAccount(id);
+  }
+
+  @Get(':id/ledgers')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE')
+  listLedgers(@Param('id') id: string, @Query() query: LedgerQuery): Promise<AccountLedgerView[]> {
+    throwIfInvalid(validateUuid('id', id));
+    return this.storesService.listLedgers(id, parseLedgerQuery(query));
   }
 
   @Patch(':id')
@@ -95,6 +114,15 @@ function parsePatchStoreBody(id: string, body: PatchStoreBody): {
   };
 }
 
+function parseLedgerQuery(query: LedgerQuery): StoreLedgerQuery {
+  const issues: ValidationIssue[] = [];
+  const occurredFrom = optionalDate('occurredFrom', query.occurredFrom, issues);
+  const occurredTo = optionalDate('occurredTo', query.occurredTo, issues);
+
+  throwIfInvalid(issues);
+  return { occurredFrom, occurredTo };
+}
+
 function requiredTrimmedString(field: string, value: unknown, issues: ValidationIssue[]): string | undefined {
   if (typeof value !== 'string' || value.trim().length === 0) {
     issues.push({ field, code: 'REQUIRED_STRING', message: `${field} is required` });
@@ -140,4 +168,22 @@ function optionalStoreStatus(value: unknown, issues: ValidationIssue[]): StoreSt
 
   issues.push({ field: 'status', code: 'INVALID_STORE_STATUS', message: 'status must be ACTIVE or DISABLED' });
   return undefined;
+}
+
+function optionalDate(field: string, value: unknown, issues: ValidationIssue[]): Date | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    issues.push({ field, code: 'INVALID_DATE', message: `${field} must be an ISO date string` });
+    return undefined;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    issues.push({ field, code: 'INVALID_DATE', message: `${field} must be an ISO date string` });
+    return undefined;
+  }
+
+  return parsed;
 }
