@@ -81,6 +81,11 @@ enum LedgerSourceType {
   ADJUSTMENT
 }
 
+enum ShipmentKind {
+  INITIAL
+  REPLENISHMENT
+}
+
 enum CommandStatus {
   PROCESSING
   SUCCEEDED
@@ -434,6 +439,7 @@ model SupplierOrder {
   store             Store               @relation(fields: [storeId], references: [id])
   supplier          Supplier            @relation(fields: [supplierId], references: [id])
   items             OrderItem[]
+  shipments         Shipment[]
 
   @@index([requestId])
   @@index([supplierId, firstShippedAt])
@@ -453,8 +459,44 @@ model OrderItem {
   createdAt         DateTime      @default(now()) @db.Timestamptz(6)
   supplierOrder     SupplierOrder @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
   product           Product       @relation(fields: [productId], references: [id])
+  shipmentItems     ShipmentItem[]
 
   @@unique([supplierOrderId, productId])
+}
+
+model Shipment {
+  id              String         @id @default(uuid()) @db.Uuid
+  shipmentNo      String         @unique @db.VarChar(80)
+  supplierOrderId String         @db.Uuid
+  sequence        Int
+  kind            ShipmentKind
+  shippedAt       DateTime       @default(now()) @db.Timestamptz(6)
+  trackingNo      String?        @db.VarChar(100)
+  freight         Decimal        @default(0) @db.Decimal(20, 2)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(6)
+  supplierOrder   SupplierOrder  @relation(fields: [supplierOrderId], references: [id])
+  items           ShipmentItem[]
+
+  @@unique([supplierOrderId, sequence])
+  @@index([supplierOrderId, shippedAt])
+}
+
+model ShipmentItem {
+  id                  String    @id @default(uuid()) @db.Uuid
+  shipmentId          String    @db.Uuid
+  orderItemId         String    @db.Uuid
+  quantity            Decimal   @db.Decimal(20, 6)
+  permanentlyReduced  Decimal   @default(0) @db.Decimal(20, 6)
+  salesPriceSnapshot  Decimal   @db.Decimal(20, 6)
+  supplyPriceSnapshot Decimal   @db.Decimal(20, 6)
+  salesLineAmount     Decimal   @db.Decimal(20, 2)
+  supplyLineAmount    Decimal   @db.Decimal(20, 2)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
+  shipment            Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  orderItem           OrderItem @relation(fields: [orderItemId], references: [id])
+
+  @@unique([shipmentId, orderItemId])
+  @@index([orderItemId])
 }
 
 model StoreAccount {

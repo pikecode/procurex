@@ -1019,6 +1019,88 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(previewProductA?.remainingQuantityAfter, '3');
     assert.equal(previewProductA?.salesLineAmount, '66.00');
     assert.equal(previewProductA?.supplyLineAmount, '48.00');
+    const createShipmentResponse = await fetch(`${baseUrl}/supplier-orders/${supplierBOrderAfterReallocate.id}/shipments`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'idempotency-key': 'create-shipment-once',
+        'x-trace-id': 'trace-create-shipment',
+      },
+      body: JSON.stringify({
+        expectedVersion: supplierBOrderAfterReallocate.version,
+        freight: '0.00',
+        items: [
+          {
+            orderItemId: productAOrderItem.id,
+            shipQuantity: '6.000000',
+            permanentlyReduceQuantity: '1.000000',
+          },
+          {
+            orderItemId: productBOrderItem.id,
+            shipQuantity: '2.000000',
+            permanentlyReduceQuantity: '0.000000',
+          },
+        ],
+      }),
+    });
+    assert.equal(createShipmentResponse.status, 201);
+    const createdShipment = (await createShipmentResponse.json()) as {
+      data: {
+        id: string;
+        supplierOrderId: string;
+        sequence: number;
+        kind: string;
+        freight: string;
+        items: Array<{ orderItemId: string; quantity: string; permanentlyReduced: string; salesLineAmount: string }>;
+      };
+    };
+    assert.equal(createdShipment.data.supplierOrderId, supplierBOrderAfterReallocate.id);
+    assert.equal(createdShipment.data.sequence, 1);
+    assert.equal(createdShipment.data.kind, 'INITIAL');
+    assert.equal(createdShipment.data.freight, '0.00');
+    assert.equal(createdShipment.data.items.length, 2);
+    const shippedProductA = createdShipment.data.items.find((item) => item.orderItemId === productAOrderItem.id);
+    assert.equal(shippedProductA?.quantity, '6');
+    assert.equal(shippedProductA?.permanentlyReduced, '1');
+    assert.equal(shippedProductA?.salesLineAmount, '66.00');
+    const createShipmentReplayResponse = await fetch(`${baseUrl}/supplier-orders/${supplierBOrderAfterReallocate.id}/shipments`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'idempotency-key': 'create-shipment-once',
+        'x-trace-id': 'trace-create-shipment-replay',
+      },
+      body: JSON.stringify({
+        expectedVersion: supplierBOrderAfterReallocate.version,
+        freight: '0.00',
+        items: [
+          {
+            orderItemId: productAOrderItem.id,
+            shipQuantity: '6.000000',
+            permanentlyReduceQuantity: '1.000000',
+          },
+          {
+            orderItemId: productBOrderItem.id,
+            shipQuantity: '2.000000',
+            permanentlyReduceQuantity: '0.000000',
+          },
+        ],
+      }),
+    });
+    assert.equal(createShipmentReplayResponse.status, 201);
+    const replayedShipment = (await createShipmentReplayResponse.json()) as { data: { id: string } };
+    assert.equal(replayedShipment.data.id, createdShipment.data.id);
+    const shippedOrder = await prisma.supplierOrder.findUniqueOrThrow({ where: { id: supplierBOrderAfterReallocate.id } });
+    assert.equal(shippedOrder.status, 'PARTIAL_SHIPPED');
+    assert.equal(shippedOrder.fulfillmentStatus, 'PARTIAL_SHIPPED');
+    assert.ok(shippedOrder.firstShippedAt);
+    const shippedItems = await prisma.orderItem.findMany({ where: { supplierOrderId: supplierBOrderAfterReallocate.id } });
+    assert.equal(shippedItems.find((item) => item.id === productAOrderItem.id)?.shippedQuantity.toString(), '6');
+    assert.equal(shippedItems.find((item) => item.id === productBOrderItem.id)?.shippedQuantity.toString(), '2');
+    const persistedShipments = await prisma.shipment.findMany({ where: { supplierOrderId: supplierBOrderAfterReallocate.id } });
+    assert.equal(persistedShipments.length, 1);
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
     });
@@ -1030,6 +1112,8 @@ test('purchase request confirm splits supplier orders once per idempotency key',
   } finally {
     await app.close();
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
+    await prisma.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } });
+    await prisma.shipment.deleteMany({ where: { supplierOrder: { request: { store: { code: storeCode } } } } });
     await prisma.orderItem.deleteMany({ where: { supplierOrder: { request: { store: { code: storeCode } } } } });
     await prisma.supplierOrder.deleteMany({ where: { request: { store: { code: storeCode } } } });
     await prisma.requestItem.deleteMany({ where: { request: { store: { code: storeCode } } } });

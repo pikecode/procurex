@@ -11,6 +11,7 @@ import {
   type RejectSupplierOrderResult,
   type ShipmentPreviewInput,
   type ShipmentPreviewView,
+  type ShipmentView,
   SupplierOrdersService,
   type ListSupplierOrdersInput,
   type SupplierOrderDetailView,
@@ -68,6 +69,38 @@ export class SupplierOrdersController {
   shipmentPreview(@Param('id') id: string, @Body() body: ShipmentPreviewBody): Promise<ShipmentPreviewView> {
     const input = parseShipmentPreviewBody(id, body);
     return this.supplierOrdersService.shipmentPreview(input.id, input.expectedVersion, input.preview);
+  }
+
+  @Post(':id/shipments')
+  @RequireRoles('ADMIN', 'SUPPLIER')
+  async createShipment(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Body() body: ShipmentPreviewBody,
+  ): Promise<ShipmentView> {
+    const input = parseShipmentPreviewBody(id, body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'supplier-order.shipment.create',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, ...body } as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as ShipmentView;
+    }
+
+    const result = await this.supplierOrdersService.createShipment(input.id, input.expectedVersion, input.preview);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'Shipment',
+      resourceId: result.id,
+      responseBody: result as never,
+    });
+
+    return result;
   }
 
   @Post(':id/reject')

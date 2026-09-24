@@ -1,11 +1,13 @@
+import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import {
   FulfillmentStatus,
   PurchaseRequestStatus,
+  ShipmentKind,
   SupplierOrderStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { OrderItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import type { OrderItem, Shipment, ShipmentItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type ListSupplierOrdersInput = {
@@ -81,6 +83,28 @@ export type ShipmentPreviewView = {
     supplyGoodsAmount: string;
     freight: string;
   };
+};
+
+export type ShipmentView = {
+  id: string;
+  shipmentNo: string;
+  supplierOrderId: string;
+  sequence: number;
+  kind: ShipmentKind;
+  shippedAt: string;
+  trackingNo: string | null;
+  freight: string;
+  items: ShipmentItemView[];
+};
+
+export type ShipmentItemView = {
+  id: string;
+  orderItemId: string;
+  productId: string;
+  quantity: string;
+  permanentlyReduced: string;
+  salesLineAmount: string;
+  supplyLineAmount: string;
 };
 
 export type ShipmentPreviewItemView = {
@@ -224,6 +248,70 @@ export class SupplierOrdersService {
     };
   }
 
+  async createShipment(id: string, expectedVersion: number, input: ShipmentPreviewInput): Promise<ShipmentView> {
+    const preview = await this.shipmentPreview(id, expectedVersion, input);
+    const order = await this.database.client.supplierOrder.findUniqueOrThrow({
+      where: { id },
+      include: { items: true, shipments: true },
+    });
+    const orderItemsById = new Map(order.items.map((item) => [item.id, item]));
+    const sequence = order.shipments.length + 1;
+    const kind = sequence === 1 ? ShipmentKind.INITIAL : ShipmentKind.REPLENISHMENT;
+    const hasRemainingAfter = preview.items.some((item) => new Decimal(item.remainingQuantityAfter).gt(0));
+
+    const shipment = await this.database.client.$transaction(async (tx) => {
+      const created = await tx.shipment.create({
+        data: {
+          shipmentNo: makeShipmentNo(),
+          supplierOrderId: order.id,
+          sequence,
+          kind,
+          trackingNo: input.trackingNo,
+          freight: preview.totals.freight,
+        },
+      });
+
+      for (const previewItem of preview.items) {
+        const orderItem = orderItemsById.get(previewItem.orderItemId)!;
+        await tx.shipmentItem.create({
+          data: {
+            shipmentId: created.id,
+            orderItemId: orderItem.id,
+            quantity: previewItem.shipQuantity,
+            permanentlyReduced: previewItem.permanentlyReduceQuantity,
+            salesPriceSnapshot: orderItem.salesUnitPrice,
+            supplyPriceSnapshot: orderItem.supplyUnitPrice,
+            salesLineAmount: previewItem.salesLineAmount,
+            supplyLineAmount: previewItem.supplyLineAmount,
+          },
+        });
+        await tx.orderItem.update({
+          where: { id: orderItem.id },
+          data: {
+            shippedQuantity: { increment: previewItem.shipQuantity },
+          },
+        });
+      }
+
+      await tx.supplierOrder.update({
+        where: { id: order.id },
+        data: {
+          status: hasRemainingAfter ? SupplierOrderStatus.PARTIAL_SHIPPED : SupplierOrderStatus.SHIPPED,
+          fulfillmentStatus: hasRemainingAfter ? FulfillmentStatus.PARTIAL_SHIPPED : FulfillmentStatus.SHIPPED,
+          firstShippedAt: order.firstShippedAt ?? new Date(),
+          version: { increment: 1 },
+        },
+      });
+
+      return tx.shipment.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { items: { include: { orderItem: true }, orderBy: { createdAt: 'asc' } } },
+      });
+    });
+
+    return toShipmentView(shipment);
+  }
+
   async reject(id: string, expectedVersion: number, reason: string): Promise<RejectSupplierOrderResult> {
     const order = await this.database.client.supplierOrder.findUnique({ where: { id } });
     if (!order) {
@@ -334,4 +422,39 @@ function toSupplierOrderItemView(item: OrderItem): SupplierOrderItemView {
     salesLineAmount: item.salesLineAmount.toFixed(2),
     supplyLineAmount: item.supplyLineAmount.toFixed(2),
   };
+}
+
+function toShipmentView(shipment: Shipment & { items: Array<ShipmentItem & { orderItem: OrderItem }> }): ShipmentView {
+  return {
+    id: shipment.id,
+    shipmentNo: shipment.shipmentNo,
+    supplierOrderId: shipment.supplierOrderId,
+    sequence: shipment.sequence,
+    kind: shipment.kind,
+    shippedAt: shipment.shippedAt.toISOString(),
+    trackingNo: shipment.trackingNo,
+    freight: shipment.freight.toFixed(2),
+    items: shipment.items.map((item) => ({
+      id: item.id,
+      orderItemId: item.orderItemId,
+      productId: item.orderItem.productId,
+      quantity: item.quantity.toString(),
+      permanentlyReduced: item.permanentlyReduced.toString(),
+      salesLineAmount: item.salesLineAmount.toFixed(2),
+      supplyLineAmount: item.supplyLineAmount.toFixed(2),
+    })),
+  };
+}
+
+function makeShipmentNo(): string {
+  const now = new Date();
+  const stamp = [
+    now.getUTCFullYear(),
+    String(now.getUTCMonth() + 1).padStart(2, '0'),
+    String(now.getUTCDate()).padStart(2, '0'),
+    String(now.getUTCHours()).padStart(2, '0'),
+    String(now.getUTCMinutes()).padStart(2, '0'),
+    String(now.getUTCSeconds()).padStart(2, '0'),
+  ].join('');
+  return `SH${stamp}${String(randomInt(0, 1_000_000)).padStart(6, '0')}`;
 }
