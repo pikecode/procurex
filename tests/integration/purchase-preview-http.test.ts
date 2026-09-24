@@ -807,6 +807,49 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       supplierOrders.map((order) => order.fulfillmentStatus),
       ['PENDING', 'PENDING'],
     );
+    const supplierOrderA = supplierOrders.find((order) => order.supplierId === supplierA.id);
+    assert.ok(supplierOrderA);
+    const supplierOrderListResponse = await fetch(`${baseUrl}/supplier-orders?supplierId=${supplierA.id}&status=PUSHED`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(supplierOrderListResponse.status, 200);
+    const supplierOrderList = (await supplierOrderListResponse.json()) as {
+      data: Array<{
+        id: string;
+        requestId: string;
+        storeId: string;
+        supplierId: string;
+        status: string;
+        fulfillmentStatus: string;
+        salesGoodsAmount: string;
+        supplyGoodsAmount: string;
+      }>;
+    };
+    const listedSupplierOrder = supplierOrderList.data.find((order) => order.id === supplierOrderA.id);
+    assert.equal(listedSupplierOrder?.requestId, created.data.id);
+    assert.equal(listedSupplierOrder?.storeId, store.id);
+    assert.equal(listedSupplierOrder?.supplierId, supplierA.id);
+    assert.equal(listedSupplierOrder?.status, 'PUSHED');
+    assert.equal(listedSupplierOrder?.fulfillmentStatus, 'PENDING');
+    assert.equal(listedSupplierOrder?.salesGoodsAmount, '120.00');
+    assert.equal(listedSupplierOrder?.supplyGoodsAmount, '90.00');
+
+    const supplierOrderDetailResponse = await fetch(`${baseUrl}/supplier-orders/${supplierOrderA.id}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(supplierOrderDetailResponse.status, 200);
+    const supplierOrderDetail = (await supplierOrderDetailResponse.json()) as {
+      data: {
+        id: string;
+        items: Array<{ productId: string; quantity: string; salesLineAmount: string; supplyLineAmount: string }>;
+      };
+    };
+    assert.equal(supplierOrderDetail.data.id, supplierOrderA.id);
+    assert.equal(supplierOrderDetail.data.items.length, 1);
+    assert.equal(supplierOrderDetail.data.items[0]?.productId, productA.id);
+    assert.equal(supplierOrderDetail.data.items[0]?.quantity, '10');
+    assert.equal(supplierOrderDetail.data.items[0]?.salesLineAmount, '120.00');
+    assert.equal(supplierOrderDetail.data.items[0]?.supplyLineAmount, '90.00');
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
     });

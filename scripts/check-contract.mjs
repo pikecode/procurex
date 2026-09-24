@@ -28,6 +28,7 @@ const [
   pricingService,
   pricingController,
   purchaseRequestsController,
+  supplierOrdersController,
   templatesController,
 ] = await Promise.all([
   readProjectFile('docs/api-design.md'),
@@ -44,6 +45,7 @@ const [
     readProjectFile('apps/api/src/pricing/pricing.service.ts'),
     readProjectFile('apps/api/src/pricing/pricing.controller.ts'),
     readProjectFile('apps/api/src/purchase-requests/purchase-requests.controller.ts'),
+    readProjectFile('apps/api/src/supplier-orders/supplier-orders.controller.ts'),
     readProjectFile('apps/api/src/templates/templates.controller.ts'),
   ]);
 
@@ -102,6 +104,10 @@ assertIncludes(apiDesign, '`POST /purchase-requests/{id}/confirm`', 'api design'
 assertIncludes(purchaseRequestsController, "@Post(':id/confirm')", 'purchase requests controller');
 assertIncludes(apiDesign, '`POST /purchase-requests/{id}/reject`', 'api design');
 assertIncludes(purchaseRequestsController, "@Post(':id/reject')", 'purchase requests controller');
+assertIncludes(apiDesign, '`GET /supplier-orders`、`GET /supplier-orders/{id}`', 'api design');
+assertIncludes(supplierOrdersController, "@Controller('supplier-orders')", 'supplier orders controller');
+assertIncludes(supplierOrdersController, '@Get()', 'supplier orders controller');
+assertIncludes(supplierOrdersController, "@Get(':id')", 'supplier orders controller');
 assertIncludes(apiDesign, '`GET/POST /templates`', 'api design');
 assertIncludes(templatesController, "@Controller('templates')", 'templates controller');
 assertIncludes(templatesController, "@Put(':id/stores')", 'templates controller');
