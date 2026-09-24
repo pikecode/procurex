@@ -1,17 +1,18 @@
 # ProcureX Development Progress
 
-Last updated: 2026-09-24
+Last updated: 2026-09-25
 
 ## Current Position
 
 The backend is currently in M4 settlement/read-model development.
 
-Latest completed milestone: P01 price impact preview and price change reason persistence.
+Latest completed milestone: P02 pending run processing and order price adjustment persistence.
 
 Latest committed implementation:
 
 ```text
-7f2d78a Add price impact preview and change reason
+90db14f Process pending price change runs
+b1c3d8f Cover price run processing conflicts
 ```
 
 The working tree was verified for this commit.
@@ -325,8 +326,9 @@ Current price history behavior:
 - Price versions persist a per-scope monotonic revision; the highest revision wins when effective times match, and publishing appends history in a transaction.
 - P02 now creates a persisted pending price change run linked to the published version; each currently affected execution order is recorded as a pending run item, and `GET /jobs/{id}` exposes the status and deltas.
 - `POST /jobs/{id}/process` applies pending order price changes in one transaction, records before/after prices and amount deltas, updates order/request totals, and marks the run successful.
+- The database integration test covers a real affected execution order, updated line totals, and persisted price adjustment source; repeated run processing returns 409.
 - P01 previews the uncompleted orders in the price version's effective interval and returns estimated sales and supply deltas; completed orders are excluded.
-- The current P02 endpoint still publishes one product/supplier version synchronously; asynchronous order revaluation and adjustment generation remain future work.
+- Publishing remains synchronous; a separate worker queue and automatic asynchronous run pickup remain future work.
 
 ## Recommended Next Step
 
@@ -337,7 +339,7 @@ Suggested first version:
 - Add settlement-aware adjustment handling for processed runs, including already-paid and post-settlement balances.
 - Add P01 impact preview and asynchronous P02 revaluation with persisted per-order outcomes and adjustments.
 - Add overpayment disposal flows after payment confirmation can record real overpaid amounts.
-- Add integration coverage to the existing purchase/supplier flow test.
+- Add settlement-aware adjustment handling once a valid post-settlement price change path exists.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:

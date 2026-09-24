@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { DeliveryMode, SettlementMode } from '../../packages/backend/generated/prisma/enums.js';
+import { DeliveryMode, FulfillmentStatus, PurchaseRequestStatus, SettlementMode, SupplierOrderStatus } from '../../packages/backend/generated/prisma/enums.js';
 import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
 import { PricingService } from '../../apps/api/src/pricing/pricing.service.js';
 
@@ -59,6 +59,43 @@ test('pricing service returns latest version effective at business time', async 
       effectiveAt: new Date('2026-09-01T00:00:00.000Z'),
       reason: 'Initial price',
     });
+    const store = await prisma.store.create({ data: { code: `PRICESTORE${runId}`, name: 'Price Store' } });
+    const template = await prisma.orderTemplate.create({ data: { code: `PRICETPL${runId}`, name: 'Price Template' } });
+    const request = await prisma.purchaseRequest.create({
+      data: {
+        requestNo: `PRICEREQ${runId}`,
+        storeId: store.id,
+        templateId: template.id,
+        status: PurchaseRequestStatus.CONFIRMED,
+        submittedAt: new Date('2026-09-05T00:00:00.000Z'),
+        salesGoodsAmount: '100.00',
+        supplyGoodsAmount: '80.00',
+      },
+    });
+    const order = await prisma.supplierOrder.create({
+      data: {
+        supplierOrderNo: `PRICESO${runId}`,
+        requestId: request.id,
+        storeId: store.id,
+        supplierId: supplier.id,
+        status: SupplierOrderStatus.PUSHED,
+        fulfillmentStatus: FulfillmentStatus.PARTIAL_SHIPPED,
+        firstShippedAt: new Date('2026-09-15T00:00:00.000Z'),
+        salesGoodsAmount: '100.00',
+        supplyGoodsAmount: '80.00',
+        items: {
+          create: {
+            productId: product.id,
+            quantity: '10',
+            salesUnitPrice: '10',
+            supplyUnitPrice: '8',
+            salesLineAmount: '100.00',
+            supplyLineAmount: '80.00',
+          },
+        },
+      },
+      include: { items: true },
+    });
     const latest = await service.publishPrice({
       productId: product.id,
       supplierId: supplier.id,
@@ -67,6 +104,13 @@ test('pricing service returns latest version effective at business time', async 
       effectiveAt: new Date('2026-09-10T00:00:00.000Z'),
       reason: 'Price increase',
     });
+    const processed = await service.processRun(latest.runId!);
+    assert.equal(processed.status, 'SUCCEEDED');
+    assert.equal(processed.orders[0]?.supplierOrderId, order.id);
+    const updatedOrder = await prisma.supplierOrder.findUnique({ where: { id: order.id }, include: { items: true } });
+    assert.equal(updatedOrder?.items[0]?.salesLineAmount.toString(), '120');
+    assert.equal(updatedOrder?.items[0]?.supplyLineAmount.toString(), '90');
+    assert.equal((await prisma.priceChangeAdjustment.count({ where: { runId: latest.runId } })), 1);
     const sameTimeRevision = await service.publishPrice({
       productId: product.id,
       supplierId: supplier.id,
@@ -94,6 +138,12 @@ test('pricing service returns latest version effective at business time', async 
     );
   } finally {
     await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: supplierCode } } } });
+    await prisma.priceChangeAdjustment.deleteMany({ where: { supplierOrderId: { in: (await prisma.supplierOrder.findMany({ where: { supplier: { code: supplierCode } }, select: { id: true } })).map((item) => item.id) } } });
+    await prisma.priceChangeRunOrder.deleteMany({ where: { supplierOrder: { supplier: { code: supplierCode } } } });
+    await prisma.supplierOrder.deleteMany({ where: { supplier: { code: supplierCode } } });
+    await prisma.purchaseRequest.deleteMany({ where: { requestNo: `PRICEREQ${runId}` } });
+    await prisma.orderTemplate.deleteMany({ where: { code: `PRICETPL${runId}` } });
+    await prisma.store.deleteMany({ where: { code: `PRICESTORE${runId}` } });
     await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });
     await prisma.product.deleteMany({ where: { sku } });
     await prisma.supplier.deleteMany({ where: { code: supplierCode } });
