@@ -67,15 +67,26 @@ test('pricing service returns latest version effective at business time', async 
       effectiveAt: new Date('2026-09-10T00:00:00.000Z'),
       reason: 'Price increase',
     });
+    const sameTimeRevision = await service.publishPrice({
+      productId: product.id,
+      supplierId: supplier.id,
+      salesPrice: '13.000000',
+      supplyPrice: '10.000000',
+      effectiveAt: new Date('2026-09-10T00:00:00.000Z'),
+      reason: 'Correction',
+    });
+    assert.equal(latest.revision, 2);
+    assert.equal(sameTimeRevision.revision, 3);
 
     const beforeChange = await service.getEffectivePrice(product.id, supplier.id, new Date('2026-09-05T00:00:00.000Z'));
     assert.equal(beforeChange.salesPrice, '10');
     assert.equal(beforeChange.supplyPrice, '8');
 
     const afterChange = await service.getEffectivePrice(product.id, supplier.id, new Date('2026-09-10T00:00:00.000Z'));
-    assert.equal(afterChange.versionId, latest.versionId);
-    assert.equal(afterChange.salesPrice, '12');
-    assert.equal(afterChange.supplyPrice, '9');
+    assert.equal(afterChange.versionId, sameTimeRevision.versionId);
+    assert.equal(afterChange.salesPrice, '13');
+    assert.equal(afterChange.supplyPrice, '10');
+    assert.equal(afterChange.revision, 3);
 
     await assert.rejects(
       service.getEffectivePrice(product.id, supplier.id, new Date('2026-08-31T00:00:00.000Z')),

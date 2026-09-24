@@ -322,6 +322,7 @@ Current settlement snapshot behavior:
 Current price history behavior:
 
 - Price versions persist the reason for each change and return it from publish and version history queries.
+- Price versions persist a per-scope monotonic revision; the highest revision wins when effective times match, and publishing appends history in a transaction.
 - P01 previews the uncompleted orders in the price version's effective interval and returns estimated sales and supply deltas; completed orders are excluded.
 - The current P02 endpoint still publishes one product/supplier version synchronously; asynchronous order revaluation and adjustment generation remain future work.
 
@@ -331,7 +332,7 @@ Continue historical price revaluation and adjustment modeling.
 
 Suggested first version:
 
-- Add persisted adjustment source modeling for historical price changes and post-settlement revisions.
+- Add persisted price change run and adjustment source modeling for historical price changes and post-settlement revisions.
 - Add P01 impact preview and asynchronous P02 revaluation with persisted per-order outcomes and adjustments.
 - Add overpayment disposal flows after payment confirmation can record real overpaid amounts.
 - Add integration coverage to the existing purchase/supplier flow test.

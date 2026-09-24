@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
 import { SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
@@ -13,6 +13,7 @@ export type PriceQuote = {
   supplyPrice: string;
   effectiveAt: string;
   reason: string;
+  revision: number;
 };
 
 export type PublishPriceInput = {
@@ -48,9 +49,6 @@ export class PricingService {
       throw new NotFoundException({ code: 'PRICE_SCOPE_NOT_FOUND', message: 'Price scope was not found' });
     }
 
-    if (scope.versions.some((version) => version.effectiveAt.getTime() === input.effectiveAt.getTime())) {
-      throw new ConflictException({ code: 'PRICE_VERSION_EXISTS', message: 'A price version already exists at this effective time' });
-    }
     const nextVersion = scope.versions.find((version) => version.effectiveAt > input.effectiveAt);
     const orders = await this.database.client.supplierOrder.findMany({
       where: {
@@ -86,35 +84,29 @@ export class PricingService {
   }
 
   async publishPrice(input: PublishPriceInput): Promise<PriceQuote> {
-    const scope = await this.database.client.priceScope.upsert({
-      where: { productId_supplierId: { productId: input.productId, supplierId: input.supplierId } },
-      update: {},
-      create: {
-        productId: input.productId,
-        supplierId: input.supplierId,
-      },
+    return this.database.client.$transaction(async (tx) => {
+      const scope = await tx.priceScope.upsert({
+        where: { productId_supplierId: { productId: input.productId, supplierId: input.supplierId } },
+        update: {},
+        create: { productId: input.productId, supplierId: input.supplierId },
+      });
+      const latest = await tx.priceVersion.findFirst({ where: { scopeId: scope.id }, orderBy: { revision: 'desc' }, select: { revision: true } });
+      const version = await tx.priceVersion.create({
+        data: {
+          scopeId: scope.id,
+          salesPrice: input.salesPrice,
+          supplyPrice: input.supplyPrice,
+          effectiveAt: input.effectiveAt,
+          reason: input.reason,
+          revision: (latest?.revision ?? 0) + 1,
+        },
+      });
+      return {
+        scopeId: scope.id, versionId: version.id, productId: scope.productId, supplierId: scope.supplierId,
+        salesPrice: version.salesPrice.toString(), supplyPrice: version.supplyPrice.toString(),
+        effectiveAt: version.effectiveAt.toISOString(), reason: version.reason, revision: version.revision,
+      };
     });
-
-    const version = await this.database.client.priceVersion.create({
-      data: {
-        scopeId: scope.id,
-        salesPrice: input.salesPrice,
-        supplyPrice: input.supplyPrice,
-        effectiveAt: input.effectiveAt,
-        reason: input.reason,
-      },
-    });
-
-    return {
-      scopeId: scope.id,
-      versionId: version.id,
-      productId: scope.productId,
-      supplierId: scope.supplierId,
-      salesPrice: version.salesPrice.toString(),
-      supplyPrice: version.supplyPrice.toString(),
-      effectiveAt: version.effectiveAt.toISOString(),
-      reason: version.reason,
-    };
   }
 
   async getEffectivePrice(productId: string, supplierId: string, at: Date): Promise<PriceQuote> {
@@ -134,7 +126,7 @@ export class PricingService {
         scopeId: scope.id,
         effectiveAt: { lte: at },
       },
-      orderBy: [{ effectiveAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ effectiveAt: 'desc' }, { revision: 'desc' }],
     });
 
     if (!version) {
@@ -153,6 +145,7 @@ export class PricingService {
       supplyPrice: version.supplyPrice.toString(),
       effectiveAt: version.effectiveAt.toISOString(),
       reason: version.reason,
+      revision: version.revision,
     };
   }
 
@@ -167,7 +160,7 @@ export class PricingService {
 
     const versions = await this.database.client.priceVersion.findMany({
       where: { scopeId },
-      orderBy: [{ effectiveAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ effectiveAt: 'desc' }, { revision: 'desc' }],
     });
 
     return versions.map((version) => ({
@@ -179,6 +172,7 @@ export class PricingService {
       supplyPrice: version.supplyPrice.toString(),
       effectiveAt: version.effectiveAt.toISOString(),
       reason: version.reason,
+      revision: version.revision,
     }));
   }
 }

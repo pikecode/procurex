@@ -8,7 +8,10 @@ test('price impact preview limits the effective interval and excludes completed 
     client: {
       priceScope: { findUnique: async () => ({
         id: 'scope-1',
-        versions: [{ effectiveAt: new Date('2026-10-01T00:00:00Z') }],
+        versions: [
+          { effectiveAt: new Date('2026-09-01T00:00:00Z'), revision: 2 },
+          { effectiveAt: new Date('2026-10-01T00:00:00Z'), revision: 3 },
+        ],
       }) },
       supplierOrder: { findMany: async (value: any) => {
         query = value;
@@ -35,10 +38,8 @@ test('price impact preview limits the effective interval and excludes completed 
   assert.equal(preview.salesDelta, '20.00');
   assert.equal(preview.supplyDelta, '10.00');
   assert.equal(preview.orders[0]?.supplierOrderId, 'order-1');
-  await assert.rejects(
-    service.previewImpact({
-      productId: 'product-1', supplierId: 'supplier-1', salesPrice: '12', supplyPrice: '9', effectiveAt: new Date('2026-10-01T00:00:00Z'),
-    }),
-    (error: unknown) => typeof error === 'object' && error !== null && 'getStatus' in error && (error as { getStatus: () => number }).getStatus() === 409,
-  );
+  const sameTimePreview = await service.previewImpact({
+    productId: 'product-1', supplierId: 'supplier-1', salesPrice: '12', supplyPrice: '9', effectiveAt: new Date('2026-10-01T00:00:00Z'),
+  });
+  assert.equal(sameTimePreview.affectedOrderCount, 0);
 });
