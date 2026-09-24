@@ -4,6 +4,7 @@ import { CatalogModule } from './catalog/catalog.module.js';
 import { CommandsModule } from './commands/commands.module.js';
 import { TraceIdMiddleware } from './common/trace-id.middleware.js';
 import { DatabaseModule } from './database/database.module.js';
+import { DiscrepanciesModule } from './discrepancies/discrepancies.module.js';
 import { HealthController } from './health.controller.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { PurchaseRequestsModule } from './purchase-requests/purchase-requests.module.js';
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module.js';
     PurchaseRequestsModule,
     SupplierOrdersModule,
     ShipmentsModule,
+    DiscrepanciesModule,
   ],
   controllers: [HealthController],
 })

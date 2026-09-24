@@ -1120,7 +1120,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
           expectedReceiptRevision: 0,
           items: createdShipment.data.items.map((item) => ({
             shipmentItemId: item.id,
-            receivedQuantity: item.quantity,
+            receivedQuantity: item.orderItemId === productAOrderItem.id ? '5.000000' : item.quantity,
           })),
         }),
       });
@@ -1142,14 +1142,49 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(receipt.data.revision, 1);
     assert.equal(receipt.data.isCurrent, true);
     assert.equal(receipt.data.items.length, 2);
-    assert.equal(receipt.data.items.find((item) => item.shipmentItemId === shippedProductA?.id)?.receivedQuantity, '6');
+    assert.equal(receipt.data.items.find((item) => item.shipmentItemId === shippedProductA?.id)?.receivedQuantity, '5');
     const receivedItems = await prisma.orderItem.findMany({ where: { supplierOrderId: supplierBOrderAfterReallocate.id } });
-    assert.equal(receivedItems.find((item) => item.id === productAOrderItem.id)?.receivedQuantity.toString(), '6');
+    assert.equal(receivedItems.find((item) => item.id === productAOrderItem.id)?.receivedQuantity.toString(), '5');
     assert.equal(receivedItems.find((item) => item.id === productBOrderItem.id)?.receivedQuantity.toString(), '2');
     const orderAfterReceipt = await prisma.supplierOrder.findUniqueOrThrow({ where: { id: supplierBOrderAfterReallocate.id } });
     assert.equal(orderAfterReceipt.fulfillmentStatus, 'PARTIAL_SHIPPED');
     const persistedReceipts = await prisma.receipt.findMany({ where: { shipmentId: createdShipment.data.id } });
     assert.equal(persistedReceipts.length, 1);
+    const discrepancy = await prisma.discrepancy.findFirstOrThrow({
+      where: { orderItemId: productAOrderItem.id, status: 'OPEN' },
+    });
+    assert.equal(discrepancy.missingQuantity.toString(), '1');
+    const resolveDiscrepancy = async () => {
+      const response = await fetch(`${baseUrl}/discrepancies/${discrepancy.id}/resolve`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'resolve-discrepancy-once',
+          'x-trace-id': 'trace-resolve-discrepancy',
+        },
+        body: JSON.stringify({
+          expectedVersion: discrepancy.version,
+          action: 'ACCEPT',
+          reason: 'Store accepts shortage',
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: { id: string; status: string; version: number; resolvedAt: string | null; missingQuantity: string };
+      };
+    };
+    const resolvedDiscrepancy = await resolveDiscrepancy();
+    const resolvedDiscrepancyReplay = await resolveDiscrepancy();
+    assert.deepEqual(resolvedDiscrepancyReplay.data, resolvedDiscrepancy.data);
+    assert.equal(resolvedDiscrepancy.data.id, discrepancy.id);
+    assert.equal(resolvedDiscrepancy.data.status, 'RESOLVED');
+    assert.equal(resolvedDiscrepancy.data.version, 2);
+    assert.equal(resolvedDiscrepancy.data.missingQuantity, '1');
+    assert.ok(resolvedDiscrepancy.data.resolvedAt);
+    const discrepancyActions = await prisma.discrepancyAction.findMany({ where: { discrepancyId: discrepancy.id } });
+    assert.equal(discrepancyActions.length, 1);
+    assert.equal(discrepancyActions[0]?.action, 'ACCEPT');
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
     });
@@ -1161,6 +1196,8 @@ test('purchase request confirm splits supplier orders once per idempotency key',
   } finally {
     await app.close();
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
+    await prisma.discrepancyAction.deleteMany({ where: { discrepancy: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } } } });
+    await prisma.discrepancy.deleteMany({ where: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } } });
     await prisma.receiptItem.deleteMany({ where: { receipt: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } } });
     await prisma.receipt.deleteMany({ where: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } });
     await prisma.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } });

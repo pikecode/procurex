@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: F04 store receipt creation.
+Latest completed milestone: F05 discrepancy accept resolution.
 
 Latest implementation commit:
 
 ```text
-Add shipment receipt creation
+Add discrepancy accept resolution
 ```
 
 The working tree was clean after this commit.
@@ -88,7 +88,6 @@ Current F03 behavior:
 
 Not yet implemented:
 
-- F05 `POST /discrepancies/{id}/resolve`
 - F06 `POST /supplier-orders/{id}/freight-confirmations`
 - F07 freight confirmation approve/reject
 
@@ -103,29 +102,36 @@ Current F04 behavior:
 - Updates supplier order fulfillment status based on shipped, received, and permanently reduced quantities.
 - Uses Idempotency-Key through command records.
 
+Current F05 behavior:
+
+- Creates an OPEN discrepancy automatically when a receipt item is short.
+- Implements `POST /discrepancies/{id}/resolve`.
+- Supports ACCEPT resolution in this version.
+- Persists a discrepancy action record and marks the discrepancy RESOLVED.
+- Uses Idempotency-Key through command records.
+
 ## Known Boundaries
 
 - Current access control is role-based. Supplier-user and store-user data-scope binding is not implemented yet.
 - Funding logic is still a first pass. It records stored-value summaries but does not yet implement the complete immutable allocation/ledger behavior described in the long-term design.
 - F03 stores permanently reduced quantity on shipment items, but full fulfillment gap and discrepancy models are not implemented yet.
 - F04 currently supports first receipt creation only. Receipt revision replacement is not implemented yet.
-- Discrepancies, replenishment gaps, freight confirmations, settlement, and reconciliation remain future work.
+- F05 currently supports ACCEPT only. REPLENISH and RETURN require replenishment gap and return models.
+- Replenishment gaps, freight confirmations, settlement, and reconciliation remain future work.
 - Frontend pages are not implemented yet.
 
 ## Recommended Next Step
 
-Implement F05: `POST /discrepancies/{id}/resolve`.
+Implement replenishment gap tracking or F06/F07 freight confirmation flow.
 
 Suggested first version:
 
-- Add discrepancy tables for receipt shortages.
-- Create discrepancy records when a receipt item is short.
-- Implement a first resolution action, likely `ACCEPT`, because it can close the shortage without requiring replenishment gap modeling first.
-- Keep `REPLENISH` and `RETURN` as follow-up work if the supporting gap/return models are not ready.
+- If continuing discrepancy work, add fulfillment gap models and support REPLENISH.
+- If continuing freight work, add freight confirmation tables and F06/F07 endpoints.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
-After F05, continue with:
+After that, continue with:
 
 1. Replenishment gap tracking for shortages.
 2. F06/F07 freight confirmation flow.

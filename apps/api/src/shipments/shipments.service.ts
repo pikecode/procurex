@@ -119,13 +119,23 @@ export class ShipmentsService {
       });
 
       for (const item of receiptItems) {
-        await tx.receiptItem.create({
+        const createdReceiptItem = await tx.receiptItem.create({
           data: {
             receiptId: created.id,
             shipmentItemId: item.shipmentItem.id,
             receivedQuantity: item.receivedQuantity.toDecimalPlaces(6).toString(),
           },
         });
+        const missingQuantity = new Decimal(item.shipmentItem.quantity).minus(item.receivedQuantity);
+        if (missingQuantity.gt(0)) {
+          await tx.discrepancy.create({
+            data: {
+              receiptItemId: createdReceiptItem.id,
+              orderItemId: item.shipmentItem.orderItemId,
+              missingQuantity: missingQuantity.toDecimalPlaces(6).toString(),
+            },
+          });
+        }
         await tx.orderItem.update({
           where: { id: item.shipmentItem.orderItemId },
           data: {
