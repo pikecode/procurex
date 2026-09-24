@@ -6,6 +6,7 @@ import { TraceIdMiddleware } from './common/trace-id.middleware.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health.controller.js';
 import { PricingModule } from './pricing/pricing.module.js';
+import { PurchaseRequestsModule } from './purchase-requests/purchase-requests.module.js';
 import { StoresModule } from './stores/stores.module.js';
 import { SuppliersModule } from './suppliers/suppliers.module.js';
 import { TemplatesModule } from './templates/templates.module.js';
@@ -22,6 +23,7 @@ import { UsersModule } from './users/users.module.js';
     CatalogModule,
     PricingModule,
     TemplatesModule,
+    PurchaseRequestsModule,
   ],
   controllers: [HealthController],
 })

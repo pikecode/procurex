@@ -27,6 +27,7 @@ const [
   catalogController,
   pricingService,
   pricingController,
+  purchaseRequestsController,
   templatesController,
 ] = await Promise.all([
   readProjectFile('docs/api-design.md'),
@@ -42,6 +43,7 @@ const [
     readProjectFile('apps/api/src/catalog/catalog.controller.ts'),
     readProjectFile('apps/api/src/pricing/pricing.service.ts'),
     readProjectFile('apps/api/src/pricing/pricing.controller.ts'),
+    readProjectFile('apps/api/src/purchase-requests/purchase-requests.controller.ts'),
     readProjectFile('apps/api/src/templates/templates.controller.ts'),
   ]);
 
@@ -83,6 +85,8 @@ assertIncludes(pricingService, 'getEffectivePrice', 'pricing service');
 assertIncludes(apiDesign, '`POST /price-changes`', 'api design');
 assertIncludes(pricingController, "@Post('price-changes')", 'pricing controller');
 assertIncludes(pricingController, "@Get('price-scopes/:id/versions')", 'pricing controller');
+assertIncludes(apiDesign, '`POST /purchase-requests/preview`', 'api design');
+assertIncludes(purchaseRequestsController, "@Post('preview')", 'purchase requests controller');
 assertIncludes(apiDesign, '`GET/POST /templates`', 'api design');
 assertIncludes(templatesController, "@Controller('templates')", 'templates controller');
 assertIncludes(templatesController, "@Put(':id/stores')", 'templates controller');
