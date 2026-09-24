@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
 import { CatalogModule } from '../catalog/catalog.module.js';
+import { CommandsModule } from '../commands/commands.module.js';
 import { PurchaseRequestPreviewService } from './purchase-request-preview.service.js';
 import { PurchaseRequestsController } from './purchase-requests.controller.js';
+import { PurchaseRequestsService } from './purchase-requests.service.js';
 
 @Module({
-  imports: [AuthModule, CatalogModule],
+  imports: [AuthModule, CatalogModule, CommandsModule],
   controllers: [PurchaseRequestsController],
-  providers: [PurchaseRequestPreviewService],
+  providers: [PurchaseRequestPreviewService, PurchaseRequestsService],
 })
 export class PurchaseRequestsModule {}

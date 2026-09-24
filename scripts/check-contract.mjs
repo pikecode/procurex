@@ -87,6 +87,8 @@ assertIncludes(pricingController, "@Post('price-changes')", 'pricing controller'
 assertIncludes(pricingController, "@Get('price-scopes/:id/versions')", 'pricing controller');
 assertIncludes(apiDesign, '`POST /purchase-requests/preview`', 'api design');
 assertIncludes(purchaseRequestsController, "@Post('preview')", 'purchase requests controller');
+assertIncludes(apiDesign, '`POST /purchase-requests`', 'api design');
+assertIncludes(purchaseRequestsController, '@Post()', 'purchase requests controller');
 assertIncludes(apiDesign, '`GET/POST /templates`', 'api design');
 assertIncludes(templatesController, "@Controller('templates')", 'templates controller');
 assertIncludes(templatesController, "@Put(':id/stores')", 'templates controller');

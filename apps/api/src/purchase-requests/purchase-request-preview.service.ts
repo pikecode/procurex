@@ -17,6 +17,7 @@ export type PurchaseRequestPreviewInput = {
 
 export type PurchaseRequestPreview = {
   storeId: string;
+  templateId: string;
   items: Array<{
     productId: string;
     supplierId: string;
@@ -93,6 +94,7 @@ export class PurchaseRequestPreviewService {
 
     return {
       storeId: input.storeId,
+      templateId: catalog.templateId,
       items,
       totals: {
         salesGoodsAmount: salesGoodsAmount.toFixed(2),

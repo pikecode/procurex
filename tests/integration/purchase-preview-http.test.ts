@@ -183,3 +183,136 @@ test('purchase request preview prices catalog items and reports stored-value sho
     await prisma.$disconnect();
   }
 });
+
+test('purchase request create persists request once per idempotency key', async () => {
+  const prisma = createClient();
+  const runId = Date.now();
+  const storeUsername = `it_create_store_user_${runId}`;
+  const storeCode = `CREQSTORE${runId}`;
+  const templateCode = `CREQTPL${runId}`;
+  const categoryCode = `CREQCAT${runId}`;
+  const unitCode = `CREQUNIT${runId}`;
+  const sku = `CREQSKU${runId}`;
+  const supplierCode = `CREQSUP${runId}`;
+  const { app, baseUrl } = await createTestApp();
+
+  try {
+    const storeRole = await prisma.role.upsert({
+      where: { code: 'STORE' },
+      update: {},
+      create: { code: 'STORE', name: 'Store' },
+    });
+    const user = await prisma.user.create({
+      data: {
+        username: storeUsername,
+        displayName: 'Integration Create Store',
+        passwordHash: await hashPassword('correct-password'),
+        roles: { create: [{ roleId: storeRole.id }] },
+      },
+    });
+
+    const [store, category, unit, supplier, template] = await Promise.all([
+      prisma.store.create({ data: { code: storeCode, name: 'Create Store' } }),
+      prisma.category.create({ data: { code: categoryCode, name: 'Create Category' } }),
+      prisma.unit.create({ data: { code: unitCode, name: 'piece' } }),
+      prisma.supplier.create({
+        data: {
+          code: supplierCode,
+          name: 'Create Supplier',
+          deliveryMode: DeliveryMode.SELF,
+          defaultSettlementMode: SettlementMode.STORED_VALUE,
+          defaultSettlementCycle: 'MONTHLY',
+        },
+      }),
+      prisma.orderTemplate.create({ data: { code: templateCode, name: 'Create Template' } }),
+    ]);
+    const product = await prisma.product.create({
+      data: {
+        sku,
+        name: 'Create Product',
+        categoryId: category.id,
+        baseUnitId: unit.id,
+      },
+    });
+    await prisma.storeAccount.create({ data: { storeId: store.id, balance: '100.00' } });
+    await prisma.templateItem.create({
+      data: {
+        templateId: template.id,
+        productId: product.id,
+        suppliers: { create: [{ supplierId: supplier.id, priority: 1 }] },
+      },
+    });
+    await prisma.storeTemplateBinding.create({ data: { storeId: store.id, templateId: template.id } });
+    const scope = await prisma.priceScope.create({ data: { productId: product.id, supplierId: supplier.id } });
+    await prisma.priceVersion.create({
+      data: {
+        scopeId: scope.id,
+        salesPrice: '12.000000',
+        supplyPrice: '9.000000',
+        effectiveAt: new Date('2026-09-01T00:00:00.000Z'),
+      },
+    });
+
+    const token = await login(baseUrl, storeUsername);
+    const requestBody = {
+      storeId: store.id,
+      items: [{ productId: product.id, quantity: '10.000000' }],
+    };
+    const create = async () => {
+      const response = await fetch(`${baseUrl}/purchase-requests`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'create-request-once',
+          'x-trace-id': 'trace-create-request',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: { id: string; requestNo: string; status: string; paymentStatus: string; totals: { salesGoodsAmount: string }; funding: { canConfirm: boolean } };
+      };
+    };
+
+    const first = await create();
+    const second = await create();
+    assert.equal(second.data.id, first.data.id);
+    assert.equal(second.data.requestNo, first.data.requestNo);
+    assert.equal(first.data.status, 'PENDING_FUNDS');
+    assert.equal(first.data.paymentStatus, 'UNPAID');
+    assert.equal(first.data.totals.salesGoodsAmount, '120.00');
+    assert.equal(first.data.funding.canConfirm, false);
+
+    const requests = await prisma.purchaseRequest.findMany({ where: { storeId: store.id } });
+    assert.equal(requests.length, 1);
+    const items = await prisma.requestItem.findMany({ where: { requestId: first.data.id } });
+    assert.equal(items.length, 1);
+    assert.equal(items[0]?.salesLineAmount.toString(), '120');
+    const commands = await prisma.commandRecord.findMany({
+      where: { actorUserId: user.id, action: 'purchase-request.create', idempotencyKey: 'create-request-once' },
+    });
+    assert.equal(commands.length, 1);
+  } finally {
+    await app.close();
+    await prisma.commandRecord.deleteMany({ where: { actor: { username: storeUsername } } });
+    await prisma.requestItem.deleteMany({ where: { request: { store: { code: storeCode } } } });
+    await prisma.purchaseRequest.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: supplierCode } } } });
+    await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });
+    await prisma.storeAccount.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.storeTemplateBinding.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
+    await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
+    await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
+    await prisma.product.deleteMany({ where: { sku } });
+    await prisma.supplier.deleteMany({ where: { code: supplierCode } });
+    await prisma.store.deleteMany({ where: { code: storeCode } });
+    await prisma.category.deleteMany({ where: { code: categoryCode } });
+    await prisma.unit.deleteMany({ where: { code: unitCode } });
+    await prisma.userSession.deleteMany({ where: { user: { username: storeUsername } } });
+    await prisma.userRole.deleteMany({ where: { user: { username: storeUsername } } });
+    await prisma.user.deleteMany({ where: { username: storeUsername } });
+    await prisma.$disconnect();
+  }
+});
