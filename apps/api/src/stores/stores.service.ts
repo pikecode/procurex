@@ -1,6 +1,8 @@
+import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Decimal } from 'decimal.js';
 import { LedgerDirection, LedgerSourceType, StoreStatus } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { AccountLedger, Store, StoreAccount } from '../../../../packages/backend/generated/prisma/client.js';
+import type { AccountLedger, RechargeDocument, Store, StoreAccount } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type StoreView = {
@@ -44,6 +46,25 @@ export type AccountLedgerView = {
   note: string | null;
   occurredAt: string;
   createdAt: string;
+};
+
+export type CreateRechargeInput = {
+  amount: string;
+  businessDate: Date;
+  collectionAccountId: string;
+  remark?: string;
+};
+
+export type RechargeDocumentView = {
+  id: string;
+  rechargeNo: string;
+  storeId: string;
+  amount: string;
+  businessDate: string;
+  collectionAccountId: string;
+  remark: string | null;
+  createdAt: string;
+  account: StoreAccountView;
 };
 
 export type CreateStoreInput = {
@@ -148,6 +169,60 @@ export class StoresService {
     return ledgers.map(toAccountLedgerView);
   }
 
+  async createRecharge(storeId: string, input: CreateRechargeInput): Promise<RechargeDocumentView> {
+    await this.assertStoreExists(storeId);
+
+    const amount = new Decimal(input.amount).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    if (amount.lte(0)) {
+      throw new ConflictException({
+        code: 'INVALID_RECHARGE_AMOUNT',
+        message: 'Recharge amount must be greater than zero',
+      });
+    }
+
+    const result = await this.database.client.$transaction(async (tx) => {
+      const recharge = await tx.rechargeDocument.create({
+        data: {
+          rechargeNo: makeRechargeNo(),
+          storeId,
+          amount: amount.toFixed(2),
+          businessDate: input.businessDate,
+          collectionAccountId: input.collectionAccountId,
+          remark: input.remark,
+        },
+      });
+
+      const account = await tx.storeAccount.upsert({
+        where: { storeId },
+        create: {
+          storeId,
+          balance: amount.toFixed(2),
+        },
+        update: {
+          balance: { increment: amount.toFixed(2) },
+          version: { increment: 1 },
+        },
+      });
+
+      await tx.accountLedger.create({
+        data: {
+          accountId: account.id,
+          direction: LedgerDirection.CREDIT,
+          amount: amount.toFixed(2),
+          balanceAfter: account.balance.toFixed(2),
+          sourceType: LedgerSourceType.RECHARGE,
+          sourceId: recharge.id,
+          note: input.remark,
+          occurredAt: input.businessDate,
+        },
+      });
+
+      return { recharge, account };
+    });
+
+    return toRechargeDocumentView(result.recharge, result.account);
+  }
+
   private async assertStoreExists(storeId: string): Promise<void> {
     const store = await this.database.client.store.findUnique({ where: { id: storeId } });
     if (!store) {
@@ -220,4 +295,31 @@ function toAccountLedgerView(ledger: AccountLedger): AccountLedgerView {
     occurredAt: ledger.occurredAt.toISOString(),
     createdAt: ledger.createdAt.toISOString(),
   };
+}
+
+function toRechargeDocumentView(recharge: RechargeDocument, account: StoreAccount): RechargeDocumentView {
+  return {
+    id: recharge.id,
+    rechargeNo: recharge.rechargeNo,
+    storeId: recharge.storeId,
+    amount: recharge.amount.toFixed(2),
+    businessDate: recharge.businessDate.toISOString().slice(0, 10),
+    collectionAccountId: recharge.collectionAccountId,
+    remark: recharge.remark,
+    createdAt: recharge.createdAt.toISOString(),
+    account: toStoreAccountView(recharge.storeId, account),
+  };
+}
+
+function makeRechargeNo(): string {
+  const now = new Date();
+  const stamp = [
+    now.getUTCFullYear(),
+    String(now.getUTCMonth() + 1).padStart(2, '0'),
+    String(now.getUTCDate()).padStart(2, '0'),
+    String(now.getUTCHours()).padStart(2, '0'),
+    String(now.getUTCMinutes()).padStart(2, '0'),
+    String(now.getUTCSeconds()).padStart(2, '0'),
+  ].join('');
+  return `RCH${stamp}${String(randomInt(0, 1_000_000)).padStart(6, '0')}`;
 }

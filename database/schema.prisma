@@ -223,6 +223,7 @@ model Store {
   accounts       StoreAccount[]
   requests       PurchaseRequest[]
   supplierOrders SupplierOrder[]
+  rechargeDocuments RechargeDocument[]
 }
 
 model Supplier {
@@ -653,6 +654,20 @@ model StoreAccount {
   ledgers        AccountLedger[]
 
   @@unique([storeId])
+}
+
+model RechargeDocument {
+  id                  String   @id @default(uuid()) @db.Uuid
+  rechargeNo          String   @unique @db.VarChar(80)
+  storeId             String   @db.Uuid
+  amount              Decimal  @db.Decimal(20, 2)
+  businessDate        DateTime @db.Date
+  collectionAccountId String   @db.VarChar(80)
+  remark              String?  @db.VarChar(300)
+  createdAt           DateTime @default(now()) @db.Timestamptz(6)
+  store               Store    @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, businessDate])
 }
 
 model AccountLedger {

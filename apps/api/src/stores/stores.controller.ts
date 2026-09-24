@@ -1,11 +1,27 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard.js';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
+import { type AuthenticatedSession } from '../auth/auth.service.js';
+import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
-import { throwIfInvalid } from '../common/request-contract.js';
-import { StoresService, type AccountLedgerView, type StoreAccountView, type StoreLedgerQuery, type StoreView } from './stores.service.js';
+import { CommandsService } from '../commands/commands.service.js';
+import { getOrCreateTraceId } from '../common/request-context.js';
+import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contract.js';
+import {
+  StoresService,
+  type AccountLedgerView,
+  type RechargeDocumentView,
+  type StoreAccountView,
+  type StoreLedgerQuery,
+  type StoreView,
+} from './stores.service.js';
 import { StoreStatus } from '../../../../packages/backend/generated/prisma/enums.js';
-import { validateExpectedVersion, validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
+import {
+  validateDecimalString,
+  validateExpectedVersion,
+  validateUuid,
+  type ValidationIssue,
+} from '../../../../packages/domain/src/validation.js';
 
 type CreateStoreBody = {
   code?: unknown;
@@ -25,10 +41,20 @@ type LedgerQuery = {
   occurredTo?: unknown;
 };
 
+type CreateRechargeBody = {
+  amount?: unknown;
+  businessDate?: unknown;
+  collectionAccountId?: unknown;
+  remark?: unknown;
+};
+
 @Controller('stores')
 @UseGuards(AuthGuard, RolesGuard)
 export class StoresController {
-  constructor(private readonly storesService: StoresService) {}
+  constructor(
+    private readonly storesService: StoresService,
+    private readonly commandsService: CommandsService,
+  ) {}
 
   @Get()
   @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE')
@@ -54,6 +80,38 @@ export class StoresController {
   listLedgers(@Param('id') id: string, @Query() query: LedgerQuery): Promise<AccountLedgerView[]> {
     throwIfInvalid(validateUuid('id', id));
     return this.storesService.listLedgers(id, parseLedgerQuery(query));
+  }
+
+  @Post(':id/recharges')
+  @RequireRoles('ADMIN', 'HQ_FINANCE')
+  async createRecharge(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Body() body: CreateRechargeBody,
+  ): Promise<RechargeDocumentView> {
+    const input = parseCreateRechargeBody(id, body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'store.recharge.create',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, ...body } as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as RechargeDocumentView;
+    }
+
+    const result = await this.storesService.createRecharge(input.id, input.recharge);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'RechargeDocument',
+      resourceId: result.id,
+      responseBody: result as never,
+    });
+
+    return result;
   }
 
   @Patch(':id')
@@ -123,6 +181,27 @@ function parseLedgerQuery(query: LedgerQuery): StoreLedgerQuery {
   return { occurredFrom, occurredTo };
 }
 
+function parseCreateRechargeBody(
+  id: string,
+  body: CreateRechargeBody,
+): { id: string; recharge: { amount: string; businessDate: Date; collectionAccountId: string; remark?: string } } {
+  const issues: ValidationIssue[] = [...validateUuid('id', id), ...validateDecimalString('amount', body.amount, 2)];
+  const businessDate = requiredDate('businessDate', body.businessDate, issues);
+  const collectionAccountId = requiredTrimmedString('collectionAccountId', body.collectionAccountId, issues);
+  const remark = optionalTrimmedString('remark', body.remark, issues);
+
+  throwIfInvalid(issues);
+  return {
+    id,
+    recharge: {
+      amount: body.amount as string,
+      businessDate: businessDate!,
+      collectionAccountId: collectionAccountId!,
+      remark,
+    },
+  };
+}
+
 function requiredTrimmedString(field: string, value: unknown, issues: ValidationIssue[]): string | undefined {
   if (typeof value !== 'string' || value.trim().length === 0) {
     issues.push({ field, code: 'REQUIRED_STRING', message: `${field} is required` });
@@ -185,5 +264,13 @@ function optionalDate(field: string, value: unknown, issues: ValidationIssue[]):
     return undefined;
   }
 
+  return parsed;
+}
+
+function requiredDate(field: string, value: unknown, issues: ValidationIssue[]): Date | undefined {
+  const parsed = optionalDate(field, value, issues);
+  if (value === undefined) {
+    issues.push({ field, code: 'REQUIRED_DATE', message: `${field} is required` });
+  }
   return parsed;
 }

@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: A01 store account read APIs.
+Latest completed milestone: A02 store recharge creation.
 
 Latest implementation commit:
 
 ```text
-Add store account read endpoints
+Add store recharge creation
 ```
 
 The working tree was clean after this commit.
@@ -138,6 +138,7 @@ Current F06/F07 behavior:
 Implemented interfaces:
 
 - A01 `GET /stores/{id}/account`, `GET /stores/{id}/ledgers`
+- A02 `POST /stores/{id}/recharges`
 
 Current A01 behavior:
 
@@ -146,14 +147,21 @@ Current A01 behavior:
 - Supports `occurredFrom` and `occurredTo` filters.
 - Access control is role-based; store-user data-scope binding is not implemented yet.
 
+Current A02 behavior:
+
+- Creates a `RechargeDocument`.
+- Creates the store account when missing, or increments the existing balance.
+- Writes a CREDIT account ledger with source type RECHARGE.
+- Uses Idempotency-Key through command records.
+
 ## Recommended Next Step
 
-Implement A02 recharge creation or tighten fulfillment completion after all discrepancies and gaps are closed.
+Implement A03 credit limit updates or tighten fulfillment completion after all discrepancies and gaps are closed.
 
 Suggested first version:
 
 - If continuing fulfillment work, tighten completion status after all discrepancies and gaps are closed.
-- If continuing finance work, add A02 recharge creation and ledger write behavior.
+- If continuing finance work, add A03 credit limit updates.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
