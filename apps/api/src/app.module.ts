@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module.js';
+import { CatalogModule } from './catalog/catalog.module.js';
 import { CommandsModule } from './commands/commands.module.js';
 import { TraceIdMiddleware } from './common/trace-id.middleware.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -9,7 +10,7 @@ import { SuppliersModule } from './suppliers/suppliers.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
-  imports: [DatabaseModule, CommandsModule, AuthModule, UsersModule, StoresModule, SuppliersModule],
+  imports: [DatabaseModule, CommandsModule, AuthModule, UsersModule, StoresModule, SuppliersModule, CatalogModule],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {
