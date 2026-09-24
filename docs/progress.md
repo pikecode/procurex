@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: A06 recharge detail lookup.
+Latest completed milestone: A04 clearing preview.
 
 Latest implementation commit:
 
 ```text
-Add recharge detail lookup
+Add clearing preview
 ```
 
 The working tree was clean after this commit.
@@ -142,6 +142,7 @@ Implemented interfaces:
 - A01 `GET /stores/{id}/account`, `GET /stores/{id}/ledgers`
 - A02 `POST /stores/{id}/recharges`
 - A03 `PATCH /stores/{id}/credit-limit`
+- A04 `POST /stores/{id}/clearings/preview`
 - A06 `GET /recharges/{id}` (recharge detail only)
 
 Current A01 behavior:
@@ -170,14 +171,20 @@ Current A06 recharge behavior:
 - Includes the current store account snapshot.
 - Access control is role-based; store-user data-scope binding is not implemented yet.
 
+Current A04 behavior:
+
+- Adds the `FundingAllocation` model.
+- Validates selected allocations belong to the store, are active, and have clearable credit outstanding.
+- Returns per-allocation clearable amounts and total clearable amount.
+
 ## Recommended Next Step
 
-Start A04/A05 clearing previews, or add receipt revision replacement.
+Implement A05 clearing documents, or add receipt revision replacement.
 
 Suggested first version:
 
 - If continuing fulfillment work, add receipt revision replacement.
-- If continuing finance work, add A04/A05 clearing previews and clearing documents.
+- If continuing finance work, add A05 clearing documents and clearing items.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 

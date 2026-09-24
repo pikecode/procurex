@@ -1,7 +1,12 @@
 import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { LedgerDirection, LedgerSourceType, StoreStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import {
+  FundingAllocationMethod,
+  LedgerDirection,
+  LedgerSourceType,
+  StoreStatus,
+} from '../../../../packages/backend/generated/prisma/enums.js';
 import type { AccountLedger, RechargeDocument, Store, StoreAccount } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
@@ -59,6 +64,26 @@ export type UpdateCreditLimitInput = {
   expectedVersion: number;
   limit: string;
   reason: string;
+};
+
+export type ClearingPreviewInput = {
+  fundingAllocationIds: string[];
+};
+
+export type ClearingPreviewView = {
+  storeId: string;
+  totalAmount: string;
+  items: ClearingPreviewItemView[];
+};
+
+export type ClearingPreviewItemView = {
+  fundingAllocationId: string;
+  method: FundingAllocationMethod;
+  targetAmount: string;
+  netPaid: string;
+  creditOutstanding: string;
+  clearableAmount: string;
+  version: number;
 };
 
 export type RechargeDocumentView = {
@@ -265,6 +290,63 @@ export class StoresService {
     });
 
     return toStoreAccountView(storeId, updated);
+  }
+
+  async previewClearing(storeId: string, input: ClearingPreviewInput): Promise<ClearingPreviewView> {
+    await this.assertStoreExists(storeId);
+    const allocations = await this.database.client.fundingAllocation.findMany({
+      where: { id: { in: input.fundingAllocationIds } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    if (allocations.length !== input.fundingAllocationIds.length) {
+      throw new ConflictException({
+        code: 'FUNDING_ALLOCATION_NOT_FOUND',
+        message: 'One or more funding allocations were not found',
+      });
+    }
+
+    const items = allocations.map((allocation) => {
+      if (allocation.storeId !== storeId) {
+        throw new ConflictException({
+          code: 'FUNDING_ALLOCATION_STORE_MISMATCH',
+          message: 'Funding allocation does not belong to this store',
+          details: { fundingAllocationId: allocation.id },
+        });
+      }
+      if (!allocation.active) {
+        throw new ConflictException({
+          code: 'FUNDING_ALLOCATION_INACTIVE',
+          message: 'Funding allocation is not active',
+          details: { fundingAllocationId: allocation.id },
+        });
+      }
+
+      const clearableAmount = Decimal.max(new Decimal(0), allocation.creditOutstanding);
+      if (clearableAmount.lte(0)) {
+        throw new ConflictException({
+          code: 'FUNDING_ALLOCATION_NOT_CLEARABLE',
+          message: 'Funding allocation has no clearable amount',
+          details: { fundingAllocationId: allocation.id },
+        });
+      }
+
+      return {
+        fundingAllocationId: allocation.id,
+        method: allocation.method,
+        targetAmount: allocation.targetAmount.toFixed(2),
+        netPaid: allocation.netPaid.toFixed(2),
+        creditOutstanding: allocation.creditOutstanding.toFixed(2),
+        clearableAmount: clearableAmount.toFixed(2),
+        version: allocation.version,
+      };
+    });
+    const totalAmount = items.reduce((sum, item) => sum.plus(item.clearableAmount), new Decimal(0));
+
+    return {
+      storeId,
+      totalAmount: totalAmount.toFixed(2),
+      items,
+    };
   }
 
   private async assertStoreExists(storeId: string): Promise<void> {

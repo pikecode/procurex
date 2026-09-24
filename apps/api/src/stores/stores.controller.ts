@@ -10,6 +10,7 @@ import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contrac
 import {
   StoresService,
   type AccountLedgerView,
+  type ClearingPreviewView,
   type RechargeDocumentView,
   type StoreAccountView,
   type StoreLedgerQuery,
@@ -52,6 +53,10 @@ type UpdateCreditLimitBody = {
   expectedVersion?: unknown;
   limit?: unknown;
   reason?: unknown;
+};
+
+type ClearingPreviewBody = {
+  fundingAllocationIds?: unknown;
 };
 
 @Controller('stores')
@@ -150,6 +155,13 @@ export class StoresController {
     });
 
     return result;
+  }
+
+  @Post(':id/clearings/preview')
+  @RequireRoles('ADMIN', 'HQ_FINANCE')
+  previewClearing(@Param('id') id: string, @Body() body: ClearingPreviewBody): Promise<ClearingPreviewView> {
+    const input = parseClearingPreviewBody(id, body);
+    return this.storesService.previewClearing(input.id, input.preview);
   }
 
   @Patch(':id')
@@ -260,6 +272,41 @@ function parseUpdateCreditLimitBody(
       reason: reason!,
     },
   };
+}
+
+function parseClearingPreviewBody(
+  id: string,
+  body: ClearingPreviewBody,
+): { id: string; preview: { fundingAllocationIds: string[] } } {
+  const issues: ValidationIssue[] = [...validateUuid('id', id)];
+  const fundingAllocationIds: string[] = [];
+
+  if (!Array.isArray(body.fundingAllocationIds) || body.fundingAllocationIds.length === 0) {
+    issues.push({
+      field: 'fundingAllocationIds',
+      code: 'INVALID_FUNDING_ALLOCATION_IDS',
+      message: 'fundingAllocationIds must be a non-empty array',
+    });
+  } else {
+    const seen = new Set<string>();
+    for (const [index, value] of body.fundingAllocationIds.entries()) {
+      issues.push(...validateUuid(`fundingAllocationIds.${index}`, value));
+      if (typeof value === 'string') {
+        if (seen.has(value)) {
+          issues.push({
+            field: `fundingAllocationIds.${index}`,
+            code: 'DUPLICATE_FUNDING_ALLOCATION_ID',
+            message: 'funding allocation ids must not repeat',
+          });
+        }
+        seen.add(value);
+        fundingAllocationIds.push(value);
+      }
+    }
+  }
+
+  throwIfInvalid(issues);
+  return { id, preview: { fundingAllocationIds } };
 }
 
 function requiredTrimmedString(field: string, value: unknown, issues: ValidationIssue[]): string | undefined {

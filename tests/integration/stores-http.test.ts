@@ -7,7 +7,12 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { AppModule } from '../../apps/api/src/app.module.js';
 import { ApiExceptionFilter } from '../../apps/api/src/common/api-exception.filter.js';
 import { ResponseEnvelopeInterceptor } from '../../apps/api/src/common/response-envelope.interceptor.js';
-import { LedgerDirection, LedgerSourceType, StoreStatus } from '../../packages/backend/generated/prisma/enums.js';
+import {
+  FundingAllocationMethod,
+  LedgerDirection,
+  LedgerSourceType,
+  StoreStatus,
+} from '../../packages/backend/generated/prisma/enums.js';
 import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
 import { hashPassword } from '../../packages/domain/src/password.js';
 
@@ -244,6 +249,55 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(creditLimit.data.creditUsed, '0.00');
     assert.equal(creditLimit.data.creditAvailable, '1000.00');
     assert.equal(creditLimit.data.version, 2);
+    const fundingAllocation = await prisma.fundingAllocation.create({
+      data: {
+        storeId: createdBody.data.id,
+        method: FundingAllocationMethod.CREDIT,
+        targetAmount: '240.00',
+        netPaid: '40.00',
+        creditOutstanding: '200.00',
+      },
+    });
+    const clearingPreviewResponse = await fetch(`${baseUrl}/stores/${createdBody.data.id}/clearings/preview`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+        'content-type': 'application/json',
+        'x-trace-id': 'trace-clearing-preview',
+      },
+      body: JSON.stringify({ fundingAllocationIds: [fundingAllocation.id] }),
+    });
+    assert.equal(clearingPreviewResponse.status, 201);
+    const clearingPreview = (await clearingPreviewResponse.json()) as {
+      data: {
+        storeId: string;
+        totalAmount: string;
+        items: Array<{
+          fundingAllocationId: string;
+          method: FundingAllocationMethod;
+          targetAmount: string;
+          netPaid: string;
+          creditOutstanding: string;
+          clearableAmount: string;
+          version: number;
+        }>;
+      };
+      traceId: string;
+    };
+    assert.equal(clearingPreview.traceId, 'trace-clearing-preview');
+    assert.equal(clearingPreview.data.storeId, createdBody.data.id);
+    assert.equal(clearingPreview.data.totalAmount, '200.00');
+    assert.deepEqual(clearingPreview.data.items, [
+      {
+        fundingAllocationId: fundingAllocation.id,
+        method: FundingAllocationMethod.CREDIT,
+        targetAmount: '240.00',
+        netPaid: '40.00',
+        creditOutstanding: '200.00',
+        clearableAmount: '200.00',
+        version: 1,
+      },
+    ]);
 
     const ledgersResponse = await fetch(
       `${baseUrl}/stores/${createdBody.data.id}/ledgers?occurredFrom=2026-09-24T00:00:00.000Z&occurredTo=2026-09-25T00:00:00.000Z`,
@@ -319,6 +373,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     await prisma.commandRecord.deleteMany({ where: { actor: { username: adminUsername } } });
     await prisma.accountLedger.deleteMany({ where: { account: { store: { code: storeCode } } } });
     await prisma.rechargeDocument.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.fundingAllocation.deleteMany({ where: { store: { store: { code: storeCode } } } });
     await prisma.storeAccount.deleteMany({ where: { store: { code: storeCode } } });
     await prisma.store.deleteMany({ where: { code: storeCode } });
     await prisma.userSession.deleteMany({ where: { user: { username: { in: [adminUsername, storeUsername] } } } });

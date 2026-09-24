@@ -81,6 +81,11 @@ enum LedgerSourceType {
   ADJUSTMENT
 }
 
+enum FundingAllocationMethod {
+  STORED_VALUE
+  CREDIT
+}
+
 enum ShipmentKind {
   INITIAL
   REPLENISHMENT
@@ -469,6 +474,7 @@ model SupplierOrder {
   items             OrderItem[]
   shipments         Shipment[]
   freightConfirmations FreightConfirmation[]
+  fundingAllocations FundingAllocation[]
 
   @@index([requestId])
   @@index([supplierId, firstShippedAt])
@@ -652,8 +658,28 @@ model StoreAccount {
   updatedAt      DateTime        @updatedAt @db.Timestamptz(6)
   store          Store           @relation(fields: [storeId], references: [id])
   ledgers        AccountLedger[]
+  fundingAllocations FundingAllocation[]
 
   @@unique([storeId])
+}
+
+model FundingAllocation {
+  id                String                  @id @default(uuid()) @db.Uuid
+  storeId           String                  @db.Uuid
+  supplierOrderId   String?                 @db.Uuid
+  method            FundingAllocationMethod
+  targetAmount      Decimal                 @db.Decimal(20, 2)
+  netPaid           Decimal                 @default(0) @db.Decimal(20, 2)
+  creditOutstanding Decimal                 @default(0) @db.Decimal(20, 2)
+  active            Boolean                 @default(true)
+  version           Int                     @default(1)
+  createdAt         DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                @updatedAt @db.Timestamptz(6)
+  store             StoreAccount            @relation(fields: [storeId], references: [storeId])
+  supplierOrder     SupplierOrder?          @relation(fields: [supplierOrderId], references: [id])
+
+  @@index([storeId, active])
+  @@index([supplierOrderId])
 }
 
 model RechargeDocument {
