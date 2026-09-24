@@ -138,7 +138,7 @@ export class AdjustmentsService {
       if (!order.firstShippedAt) {
         return false;
       }
-      const cycle = normalizeCycle(order.supplier.defaultSettlementCycle);
+      const cycle = normalizeCycle(order.settlementCycleSnapshot);
       if (input.cycle && input.cycle !== cycle) {
         return false;
       }
@@ -159,7 +159,7 @@ export class AdjustmentsService {
 
 function toSummaryView(row: ReturnWithRelations): AdjustmentSummaryView {
   const order = row.orderItem.supplierOrder;
-  const cycle = normalizeCycle(order.supplier.defaultSettlementCycle);
+  const cycle = normalizeCycle(order.settlementCycleSnapshot);
   const originalPeriod = toPeriod(cycle, order.firstShippedAt!);
   const actualPeriod = toPeriod(cycle, row.createdAt);
   const amount = adjustmentAmount(row);

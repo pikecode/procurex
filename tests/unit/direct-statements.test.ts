@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DirectStatementsService } from '../../apps/api/src/direct-statements/direct-statements.service.js';
+import { SupplierStatementsService } from '../../apps/api/src/supplier-statements/supplier-statements.service.js';
 
 test('direct statements group completed supplier-term orders and include freight', async () => {
   let query: any;
@@ -27,4 +28,22 @@ test('direct statements group completed supplier-term orders and include freight
   assert.equal(statement?.freightAmount, '5.00');
   assert.equal(statement?.totalAmount, '125.00');
   assert.equal(statement?.lineCount, 1);
+});
+
+test('supplier statements use the order cycle snapshot after supplier settings change', async () => {
+  const service = new SupplierStatementsService({
+    client: {
+      supplierOrder: {
+        findMany: async () => [{
+          id: 'order-1', supplierOrderNo: 'SO-1', storeId: 'store-1', supplierId: 'supplier-1', version: 1,
+          supplyGoodsAmount: '80.00', firstShippedAt: new Date('2026-09-10T00:00:00.000Z'),
+          settlementCycleSnapshot: 'MONTHLY',
+          supplier: { defaultSettlementCycle: 'WEEKLY' }, shipments: [], priceChangeRuns: [],
+        }],
+      },
+    },
+  } as any);
+
+  const [statement] = await service.list({ supplierId: 'supplier-1' });
+  assert.equal(statement?.cycle, 'MONTHLY');
 });

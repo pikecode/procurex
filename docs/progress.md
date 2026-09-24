@@ -19,7 +19,7 @@ Latest committed implementation:
 b976b3f Expose price adjustment sources
 ```
 
-The working tree was clean after the latest commit.
+The current verified period-snapshot fix is pending commit.
 
 Recommended next step: continue DEV-406 by adding immutable statement snapshots and post-settlement adjustment items. Existing statement endpoints are dynamic OPEN read models and cannot yet preserve a settled amount after later eligible changes.
 
@@ -31,9 +31,11 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count: 26 integration tests passing.
+Current integration coverage count: 26 integration tests passing; unit coverage is 9 tests.
 
 Current verified change: price-change runs now report FAILED when any child order fails; P02 revaluation refreshes purchase-request funding summaries; purchase confirmation recalculates funding from current item amounts and current account balance before splitting. Payment preview blocks unresolved positive shortfalls and company-term supplier payments whose store receivables are not confirmed paid. Price changes do not mutate balances or ledgers.
+
+Statement and adjustment period grouping now uses the supplier order's settlement cycle snapshot, so changing supplier defaults does not move historical orders.
 
 ## Completed Areas
 

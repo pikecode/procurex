@@ -93,6 +93,8 @@
 3. npm audit 报告需要单独评估，不在本次直接使用强制升级。
 ## 2026-09-25
 
+- Fixed statement and adjustment period grouping to use each supplier order's settlement cycle snapshot instead of the supplier's current default; added a regression unit test.
+- Verification: build, 9 unit tests, 26 integration tests, contract check, and `git diff --check` passed.
 - Kept P02 price revaluation funding summaries in sync with changed request totals; verified increased prices create a positive shortfall that blocks store-side payment preview.
 - Enforced B06's company-term rule: supplier payment preview stays blocked until the related store receivable is confirmed paid; RESERVED payment alone does not satisfy it.
 - Verification: build, 8 unit tests, 26 integration tests, contract check, and `git diff --check` passed.

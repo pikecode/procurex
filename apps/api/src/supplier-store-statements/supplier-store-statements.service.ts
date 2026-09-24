@@ -121,7 +121,7 @@ export class SupplierStoreStatementsService {
       if (!order.firstShippedAt) {
         continue;
       }
-      const cycle = normalizeCycle(order.supplier.defaultSettlementCycle);
+      const cycle = normalizeCycle(order.settlementCycleSnapshot);
       if (input.cycle && cycle !== input.cycle) {
         continue;
       }
