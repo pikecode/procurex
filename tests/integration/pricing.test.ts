@@ -107,6 +107,8 @@ test('pricing service returns latest version effective at business time', async 
     const processed = await service.processRun(latest.runId!);
     assert.equal(processed.status, 'SUCCEEDED');
     assert.equal(processed.orders[0]?.supplierOrderId, order.id);
+    assert.equal(processed.orders[0]?.adjustment?.previousSalesPrice, '10');
+    assert.equal(processed.orders[0]?.adjustment?.newSalesPrice, '12');
     const updatedOrder = await prisma.supplierOrder.findUnique({ where: { id: order.id }, include: { items: true } });
     assert.equal(updatedOrder?.items[0]?.salesLineAmount.toString(), '120');
     assert.equal(updatedOrder?.items[0]?.supplyLineAmount.toString(), '90');

@@ -24,7 +24,13 @@ export type PriceChangeRunView = {
   salesDelta: string;
   supplyDelta: string;
   priceVersionIds: string[];
-  orders: Array<{ supplierOrderId: string; status: 'PENDING' | 'SUCCEEDED' | 'FAILED'; salesDelta: string; supplyDelta: string }>;
+  orders: Array<{
+    supplierOrderId: string;
+    status: 'PENDING' | 'SUCCEEDED' | 'FAILED';
+    salesDelta: string;
+    supplyDelta: string;
+    adjustment: { id: string; previousSalesPrice: string; newSalesPrice: string; previousSupplyPrice: string; newSupplyPrice: string } | null;
+  }>;
   createdAt: string;
 };
 
@@ -155,7 +161,10 @@ export class PricingService {
   async getRun(id: string): Promise<PriceChangeRunView> {
     const run = await this.database.client.priceChangeRun.findUnique({
       where: { id },
-      include: { versions: { select: { priceVersionId: true } }, orders: { orderBy: { supplierOrderId: 'asc' } } },
+      include: {
+        versions: { select: { priceVersionId: true } },
+        orders: { orderBy: { supplierOrderId: 'asc' }, include: { adjustment: true } },
+      },
     });
     if (!run) throw new NotFoundException({ code: 'PRICE_CHANGE_RUN_NOT_FOUND', message: 'Price change run was not found' });
     return {
@@ -165,7 +174,21 @@ export class PricingService {
       salesDelta: run.salesDelta.toString(),
       supplyDelta: run.supplyDelta.toString(),
       priceVersionIds: run.versions.map((version) => version.priceVersionId),
-      orders: run.orders.map((order) => ({ supplierOrderId: order.supplierOrderId, status: order.status, salesDelta: order.salesDelta.toString(), supplyDelta: order.supplyDelta.toString() })),
+      orders: run.orders.map((order) => ({
+        supplierOrderId: order.supplierOrderId,
+        status: order.status,
+        salesDelta: order.salesDelta.toString(),
+        supplyDelta: order.supplyDelta.toString(),
+        adjustment: order.adjustment
+          ? {
+              id: order.adjustment.id,
+              previousSalesPrice: order.adjustment.previousSalesPrice.toString(),
+              newSalesPrice: order.adjustment.newSalesPrice.toString(),
+              previousSupplyPrice: order.adjustment.previousSupplyPrice.toString(),
+              newSupplyPrice: order.adjustment.newSupplyPrice.toString(),
+            }
+          : null,
+      })),
       createdAt: run.createdAt.toISOString(),
     };
   }
