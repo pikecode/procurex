@@ -1976,6 +1976,111 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierPaymentPreview.data.items[0]?.sourceVersion, completedOrderAfterReturn.version);
     assert.equal(supplierPaymentPreview.data.items[0]?.payableAmount, '106.50');
     assert.equal(supplierPaymentPreview.data.blockedItems.length, 0);
+    const createSupplierPayment = async () => {
+      const response = await fetch(`${baseUrl}/payment-records`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'create-supplier-payment-once',
+          'x-trace-id': 'trace-create-supplier-payment',
+        },
+        body: JSON.stringify({
+          direction: 'COMPANY_TO_SUPPLIER',
+          businessDate: '2026-09-24',
+          remark: 'Company pays supplier for completed order',
+          items: [
+            {
+              settlementItemId: supplierPaymentPreview.data.items[0]!.settlementItemId,
+              expectedVersion: supplierPaymentPreview.data.items[0]!.sourceVersion,
+              expectedAmount: supplierPaymentPreview.data.items[0]!.payableAmount,
+            },
+          ],
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          direction: string;
+          supplierId: string | null;
+          amount: string;
+          status: string;
+          version: number;
+          allocations: Array<{ settlementItemId: string; amount: string; state: string }>;
+        };
+      };
+    };
+    const supplierPayment = await createSupplierPayment();
+    const supplierPaymentReplay = await createSupplierPayment();
+    assert.deepEqual(supplierPaymentReplay.data, supplierPayment.data);
+    assert.equal(supplierPayment.data.direction, 'COMPANY_TO_SUPPLIER');
+    assert.equal(supplierPayment.data.supplierId, supplierB.id);
+    assert.equal(supplierPayment.data.amount, '106.50');
+    assert.equal(supplierPayment.data.status, 'PENDING');
+    assert.equal(supplierPayment.data.allocations[0]?.settlementItemId, supplierPaymentPreview.data.items[0]?.settlementItemId);
+    assert.equal(supplierPayment.data.allocations[0]?.amount, '106.50');
+    assert.equal(supplierPayment.data.allocations[0]?.state, 'RESERVED');
+    const rejectSupplierPayment = async () => {
+      const response = await fetch(`${baseUrl}/payment-records/${supplierPayment.data.id}/reject`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'reject-supplier-payment-once',
+          'x-trace-id': 'trace-reject-supplier-payment',
+        },
+        body: JSON.stringify({
+          expectedVersion: supplierPayment.data.version,
+          reason: 'Supplier bank proof was invalid',
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          status: string;
+          rejectedReason: string | null;
+          version: number;
+          allocations: Array<{ settlementItemId: string; amount: string; state: string }>;
+        };
+      };
+    };
+    const rejectedSupplierPayment = await rejectSupplierPayment();
+    const rejectedSupplierPaymentReplay = await rejectSupplierPayment();
+    assert.deepEqual(rejectedSupplierPaymentReplay.data, rejectedSupplierPayment.data);
+    assert.equal(rejectedSupplierPayment.data.id, supplierPayment.data.id);
+    assert.equal(rejectedSupplierPayment.data.status, 'REJECTED');
+    assert.equal(rejectedSupplierPayment.data.rejectedReason, 'Supplier bank proof was invalid');
+    assert.equal(rejectedSupplierPayment.data.version, 2);
+    assert.equal(rejectedSupplierPayment.data.allocations[0]?.settlementItemId, supplierPaymentPreview.data.items[0]?.settlementItemId);
+    assert.equal(rejectedSupplierPayment.data.allocations[0]?.amount, '106.50');
+    assert.equal(rejectedSupplierPayment.data.allocations[0]?.state, 'RELEASED');
+    const supplierPaymentPreviewAfterRejectResponse = await fetch(`${baseUrl}/payment-records/preview`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        settlementItemIds: [supplierStatementDetail.data.lines[0]!.settlementItemId],
+      }),
+    });
+    assert.equal(supplierPaymentPreviewAfterRejectResponse.status, 201);
+    const supplierPaymentPreviewAfterReject = (await supplierPaymentPreviewAfterRejectResponse.json()) as {
+      data: {
+        totalPayableAmount: string;
+        totalPendingPaymentAmount: string;
+        totalConfirmedPaidAmount: string;
+        items: Array<{ payableAmount: string; pendingPaymentAmount: string; confirmedPaidAmount: string }>;
+      };
+    };
+    assert.equal(supplierPaymentPreviewAfterReject.data.totalPayableAmount, '106.50');
+    assert.equal(supplierPaymentPreviewAfterReject.data.totalPendingPaymentAmount, '0.00');
+    assert.equal(supplierPaymentPreviewAfterReject.data.totalConfirmedPaidAmount, '0.00');
+    assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.payableAmount, '106.50');
+    assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.pendingPaymentAmount, '0.00');
+    assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.confirmedPaidAmount, '0.00');
     const supplierStoreStatementsResponse = await fetch(
       `${baseUrl}/supplier-store-statements?supplierId=${supplierB.id}&storeId=${store.id}`,
       {

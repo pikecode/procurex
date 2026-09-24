@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently entering M4 settlement/read-model development.
 
-Latest completed milestone: B08 payment confirmation.
+Latest completed milestone: B09 payment rejection.
 
 Latest implementation commit:
 
 ```text
-Add payment confirmation
+Add payment rejection
 ```
 
 The working tree was clean after this commit.
@@ -204,6 +204,7 @@ Implemented interfaces:
 - B06 `POST /payment-records/preview`
 - B07 `POST /payment-records`
 - B08 `POST /payment-records/{id}/confirm`
+- B09 `POST /payment-records/{id}/reject`
 
 Current B01 behavior:
 
@@ -254,20 +255,28 @@ Current B08 behavior:
 - Later payment previews show confirmed paid amounts and no remaining payable amount for confirmed items.
 - Uses Idempotency-Key through command records.
 
+Current B09 behavior:
+
+- Rejects PENDING payment records with expectedVersion checking and a rejection reason.
+- Marks the payment record REJECTED and increments its version.
+- Converts RESERVED allocations to RELEASED.
+- Later payment previews ignore RELEASED allocations, so rejected items become payable again.
+- Uses Idempotency-Key through command records.
+
 ## Recommended Next Step
 
-Start payment rejection and cancellation.
+Start payment cancellation and read endpoints.
 
 Suggested first version:
 
-- If moving into payment work, add payment rejection/cancellation to release RESERVED allocations.
+- If moving into payment work, add payment cancellation to release RESERVED allocations, then read endpoints.
 - If continuing fulfillment finance linkage, connect RETURN discrepancy records to settlement/payment difference disposal.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:
 
-1. Payment rejection and cancellation.
+1. Payment cancellation.
 2. Payment record list/detail endpoints.
 3. Settlement difference disposal for accepted, replenished, and returned discrepancies.
 

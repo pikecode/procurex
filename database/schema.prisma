@@ -770,6 +770,7 @@ model PaymentRecord {
   businessDate  DateTime               @db.Date
   status        PaymentRecordStatus    @default(PENDING)
   remark        String?                @db.VarChar(300)
+  rejectedReason String?               @db.VarChar(300)
   version       Int                    @default(1)
   confirmedAt   DateTime?              @db.Timestamptz(6)
   rejectedAt    DateTime?              @db.Timestamptz(6)
