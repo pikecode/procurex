@@ -113,6 +113,10 @@ test('pricing service returns latest version effective at business time', async 
     assert.equal(updatedOrder?.items[0]?.salesLineAmount.toString(), '120');
     assert.equal(updatedOrder?.items[0]?.supplyLineAmount.toString(), '90');
     assert.equal((await prisma.priceChangeAdjustment.count({ where: { runId: latest.runId } })), 1);
+    const adjustments = await service.listAdjustments(latest.runId!);
+    assert.equal(adjustments.length, 1);
+    assert.equal(adjustments[0]?.salesDelta, '20');
+    assert.equal(adjustments[0]?.supplyDelta, '10');
     const sameTimeRevision = await service.publishPrice({
       productId: product.id,
       supplierId: supplier.id,

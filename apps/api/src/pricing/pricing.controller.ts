@@ -3,7 +3,7 @@ import { AuthGuard } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
-import { PricingService, type PriceChangeRunView, type PriceImpactPreview, type PriceQuote } from './pricing.service.js';
+import { PricingService, type PriceChangeAdjustmentView, type PriceChangeRunView, type PriceImpactPreview, type PriceQuote } from './pricing.service.js';
 import {
   validateDecimalString,
   validateUuid,
@@ -53,6 +53,12 @@ export class PricingController {
   processRun(@Param('id') id: string): Promise<PriceChangeRunView> {
     throwIfInvalid(validateUuid('id', id));
     return this.pricingService.processRun(id);
+  }
+
+  @Get('jobs/:id/adjustments')
+  listAdjustments(@Param('id') id: string): Promise<PriceChangeAdjustmentView[]> {
+    throwIfInvalid(validateUuid('id', id));
+    return this.pricingService.listAdjustments(id);
   }
 }
 

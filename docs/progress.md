@@ -328,6 +328,7 @@ Current price history behavior:
 - `POST /jobs/{id}/process` applies pending order price changes in one transaction, records before/after prices and amount deltas, updates order/request totals, and marks the run successful.
 - The database integration test covers a real affected execution order, updated line totals, and persisted price adjustment source; repeated run processing returns 409.
 - `GET /jobs/{id}` returns each processed order's adjustment ID and before/after sales and supply prices.
+- `GET /jobs/{id}/adjustments` returns the persisted per-order adjustment source rows for later statement and payment reconciliation.
 - P01 previews the uncompleted orders in the price version's effective interval and returns estimated sales and supply deltas; completed orders are excluded.
 - Publishing remains synchronous; a separate worker queue and automatic asynchronous run pickup remain future work.
 

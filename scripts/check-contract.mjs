@@ -180,6 +180,8 @@ assertIncludes(pricingController, "@Post('prices/impact-preview')", 'pricing imp
 assertIncludes(pricingController, "@Get('jobs/:id')", 'pricing jobs controller');
 assertIncludes(apiDesign, '`POST /jobs/{id}/process`', 'api design');
 assertIncludes(pricingController, "@Post('jobs/:id/process')", 'pricing job process controller');
+assertIncludes(apiDesign, '`GET /jobs/{id}/adjustments`', 'api design');
+assertIncludes(pricingController, "@Get('jobs/:id/adjustments')", 'pricing job adjustments controller');
 assertIncludes(prismaSchema, 'reason      String     @default("") @db.VarChar(500)', 'price version change reason');
 assertIncludes(prismaSchema, 'model PriceChangeRun', 'price change run model');
 assertIncludes(prismaSchema, 'model PriceChangeRunOrder', 'price change run order model');

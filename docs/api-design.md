@@ -111,7 +111,7 @@ Blocker = { code, message, itemId? }
 | T06 | `GET /stores/{id}/catalog` | categoryId、keyword、page；返回当前模板可订商品、销售价、起订规则和可用状态 |
 | P01 | `POST /prices/impact-preview` | productId、supplierId、salesPrice、supplyPrice、effectiveAt；只读返回生效区间内未完成执行单及两侧金额净变化，排除已完成单 |
 | P02 | `POST /price-changes` | productId、supplierId、salesPrice、supplyPrice、effectiveAt、reason；按 scope 事务追加单调递增 revision，并持久化 500 字符内原因。当前接口尚未实现批量发布和后台重算任务 |
-| P03 | `GET /price-scopes/{id}/versions`、`GET /jobs/{id}`、`POST /jobs/{id}/process` | 版本历史、价格变更 run 状态及影响汇总；处理待重算明细并返回每单改价前后及调整来源；按采购或相关内部权限查询 |
+| P03 | `GET /price-scopes/{id}/versions`、`GET /jobs/{id}`、`POST /jobs/{id}/process`、`GET /jobs/{id}/adjustments` | 版本历史、价格变更 run 状态及影响汇总；处理待重算明细并查询调整来源；按采购或相关内部权限查询 |
 
  T01-T05、P01-P03 的修改只允许 PURCHASER/ADMIN，采购小程序和 Web 的快速改价都调用 P02。预览不锁订单，也不保证提交时影响数不变。P02 允许同一 scope 追加同一生效时间的修订，并以最大 revision 生效；直接账期相关两价需要同步调整时使用同一 changes 数组。
 

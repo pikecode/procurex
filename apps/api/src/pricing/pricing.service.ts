@@ -34,6 +34,19 @@ export type PriceChangeRunView = {
   createdAt: string;
 };
 
+export type PriceChangeAdjustmentView = {
+  id: string;
+  supplierOrderId: string;
+  orderItemId: string;
+  previousSalesPrice: string;
+  newSalesPrice: string;
+  previousSupplyPrice: string;
+  newSupplyPrice: string;
+  salesDelta: string;
+  supplyDelta: string;
+  createdAt: string;
+};
+
 export type PublishPriceInput = {
   productId: string;
   supplierId: string;
@@ -257,6 +270,24 @@ export class PricingService {
       await tx.priceChangeRun.update({ where: { id }, data: { status: 'SUCCEEDED' } });
     });
     return this.getRun(id);
+  }
+
+  async listAdjustments(runId: string): Promise<PriceChangeAdjustmentView[]> {
+    const run = await this.database.client.priceChangeRun.findUnique({ where: { id: runId }, select: { id: true } });
+    if (!run) throw new NotFoundException({ code: 'PRICE_CHANGE_RUN_NOT_FOUND', message: 'Price change run was not found' });
+    const adjustments = await this.database.client.priceChangeAdjustment.findMany({ where: { runId }, orderBy: { createdAt: 'asc' } });
+    return adjustments.map((adjustment) => ({
+      id: adjustment.id,
+      supplierOrderId: adjustment.supplierOrderId,
+      orderItemId: adjustment.orderItemId,
+      previousSalesPrice: adjustment.previousSalesPrice.toString(),
+      newSalesPrice: adjustment.newSalesPrice.toString(),
+      previousSupplyPrice: adjustment.previousSupplyPrice.toString(),
+      newSupplyPrice: adjustment.newSupplyPrice.toString(),
+      salesDelta: adjustment.salesDelta.toString(),
+      supplyDelta: adjustment.supplyDelta.toString(),
+      createdAt: adjustment.createdAt.toISOString(),
+    }));
   }
 
   async getEffectivePrice(productId: string, supplierId: string, at: Date): Promise<PriceQuote> {
