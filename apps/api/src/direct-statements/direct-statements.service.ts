@@ -21,6 +21,7 @@ export type DirectStatementLineView = {
   totalAmount: string;
   sourceRevision: number;
   firstShippedAt: string;
+  priceAdjustments: Array<{ id: string; runId: string; orderItemId: string; salesDelta: string; supplyDelta: string; createdAt: string }>;
 };
 
 export type DirectStatementSummaryView = {
@@ -44,7 +45,7 @@ export type DirectStatementSummaryView = {
 
 export type DirectStatementDetailView = DirectStatementSummaryView & { lines: DirectStatementLineView[] };
 
-type StatementOrder = SupplierOrder & { supplier: Supplier; shipments: Shipment[] };
+type StatementOrder = SupplierOrder & { supplier: Supplier; shipments: Shipment[]; priceChangeRuns: Array<{ runId: string; adjustment: { id: string; orderItemId: string; salesDelta: import('decimal.js').Decimal; supplyDelta: import('decimal.js').Decimal; createdAt: Date } | null }> };
 type StatementGroup = Omit<DirectStatementSummaryView, 'settlementStatus' | 'goodsAmount' | 'freightAmount' | 'totalAmount' | 'confirmedPaidAmount' | 'pendingPaymentAmount' | 'payableAmount' | 'lineCount'> & { lines: DirectStatementLineView[] };
 
 @Injectable()
@@ -74,7 +75,7 @@ export class DirectStatementsService {
         firstShippedAt: { not: null },
         settlementMode: SettlementMode.SUPPLIER_TERM,
       },
-      include: { supplier: true, shipments: true },
+      include: { supplier: true, shipments: true, priceChangeRuns: { include: { adjustment: true }, where: { status: 'SUCCEEDED' } } },
       orderBy: [{ firstShippedAt: 'desc' }, { id: 'desc' }],
     });
     const groups = new Map<string, StatementGroup>();
@@ -105,6 +106,7 @@ function toLineView(order: StatementOrder): DirectStatementLineView {
     settlementItemId: encodeSettlementItemId(order.id), supplierOrderId: order.id, supplierOrderNo: order.supplierOrderNo,
     goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount: goodsAmount.plus(freightAmount).toFixed(2),
     sourceRevision: order.version, firstShippedAt: order.firstShippedAt!.toISOString(),
+    priceAdjustments: (order.priceChangeRuns ?? []).flatMap(({ runId, adjustment }) => adjustment ? [{ id: adjustment.id, runId, orderItemId: adjustment.orderItemId, salesDelta: adjustment.salesDelta.toFixed(2), supplyDelta: adjustment.supplyDelta.toFixed(2), createdAt: adjustment.createdAt.toISOString() }] : []),
   };
 }
 

@@ -47,9 +47,10 @@ export type SupplierStoreStatementLineView = {
   totalAmount: string;
   sourceRevision: number;
   firstShippedAt: string;
+  priceAdjustments: Array<{ id: string; runId: string; orderItemId: string; salesDelta: string; supplyDelta: string; createdAt: string }>;
 };
 
-type StatementOrder = SupplierOrder & { supplier: Supplier; shipments: Shipment[] };
+type StatementOrder = SupplierOrder & { supplier: Supplier; shipments: Shipment[]; priceChangeRuns: Array<{ runId: string; adjustment: { id: string; orderItemId: string; salesDelta: import('decimal.js').Decimal; supplyDelta: import('decimal.js').Decimal; createdAt: Date } | null }> };
 
 type StatementGroup = {
   id: string;
@@ -110,6 +111,7 @@ export class SupplierStoreStatementsService {
       include: {
         supplier: true,
         shipments: true,
+        priceChangeRuns: { include: { adjustment: true }, where: { status: 'SUCCEEDED' } },
       },
       orderBy: [{ firstShippedAt: 'desc' }, { id: 'desc' }],
     });
@@ -174,6 +176,7 @@ function toLineView(order: StatementOrder): SupplierStoreStatementLineView {
     totalAmount: goodsAmount.plus(freightAmount).toFixed(2),
     sourceRevision: order.version,
     firstShippedAt: order.firstShippedAt!.toISOString(),
+    priceAdjustments: (order.priceChangeRuns ?? []).flatMap(({ runId, adjustment }) => adjustment ? [{ id: adjustment.id, runId, orderItemId: adjustment.orderItemId, salesDelta: adjustment.salesDelta.toFixed(2), supplyDelta: adjustment.supplyDelta.toFixed(2), createdAt: adjustment.createdAt.toISOString() }] : []),
   };
 }
 

@@ -329,6 +329,7 @@ Current price history behavior:
 - The database integration test covers a real affected execution order, updated line totals, and persisted price adjustment source; repeated run processing returns 409.
 - `GET /jobs/{id}` returns each processed order's adjustment ID and before/after sales and supply prices.
 - `GET /jobs/{id}/adjustments` returns the persisted per-order adjustment source rows for later statement and payment reconciliation.
+- Store, supplier total, supplier store, and direct statement detail lines include associated processed price adjustment IDs and deltas; statement amounts use current order totals once.
 - P01 previews the uncompleted orders in the price version's effective interval and returns estimated sales and supply deltas; completed orders are excluded.
 - Publishing remains synchronous; a separate worker queue and automatic asynchronous run pickup remain future work.
 
@@ -341,7 +342,7 @@ Suggested first version:
 - Add settlement-aware adjustment handling for processed runs, including already-paid and post-settlement balances.
 - Add P01 impact preview and asynchronous P02 revaluation with persisted per-order outcomes and adjustments.
 - Add overpayment disposal flows after payment confirmation can record real overpaid amounts.
-- Add settlement-aware adjustment handling once a valid post-settlement price change path exists.
+- Connect adjustment sources to payment remaining balances and preserve immutable settled statement snapshots.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:
