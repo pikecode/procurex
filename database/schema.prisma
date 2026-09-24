@@ -99,6 +99,13 @@ enum DiscrepancyActionType {
   ACCEPT
 }
 
+enum FreightConfirmationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  USED
+}
+
 enum CommandStatus {
   PROCESSING
   SUCCEEDED
@@ -453,6 +460,7 @@ model SupplierOrder {
   supplier          Supplier            @relation(fields: [supplierId], references: [id])
   items             OrderItem[]
   shipments         Shipment[]
+  freightConfirmations FreightConfirmation[]
 
   @@index([requestId])
   @@index([supplierId, firstShippedAt])
@@ -570,6 +578,21 @@ model DiscrepancyAction {
   discrepancy   Discrepancy           @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
 
   @@index([discrepancyId, createdAt])
+}
+
+model FreightConfirmation {
+  id              String                    @id @default(uuid()) @db.Uuid
+  supplierOrderId String                    @db.Uuid
+  amount          Decimal                   @db.Decimal(20, 2)
+  reason          String                    @db.VarChar(300)
+  status          FreightConfirmationStatus @default(PENDING)
+  version         Int                       @default(1)
+  confirmedAt     DateTime?                 @db.Timestamptz(6)
+  rejectedAt      DateTime?                 @db.Timestamptz(6)
+  createdAt       DateTime                  @default(now()) @db.Timestamptz(6)
+  supplierOrder   SupplierOrder             @relation(fields: [supplierOrderId], references: [id])
+
+  @@index([supplierOrderId, status])
 }
 
 model StoreAccount {

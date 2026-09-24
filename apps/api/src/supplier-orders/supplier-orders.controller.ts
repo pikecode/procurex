@@ -8,6 +8,10 @@ import { CommandsService } from '../commands/commands.service.js';
 import { getOrCreateTraceId } from '../common/request-context.js';
 import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contract.js';
 import {
+  FreightConfirmationsService,
+  type FreightConfirmationView,
+} from '../freight-confirmations/freight-confirmations.service.js';
+import {
   type RejectSupplierOrderResult,
   type ShipmentPreviewInput,
   type ShipmentPreviewView,
@@ -43,12 +47,19 @@ type ShipmentPreviewBody = {
   trackingNo?: unknown;
 };
 
+type CreateFreightConfirmationBody = {
+  expectedVersion?: unknown;
+  amount?: unknown;
+  reason?: unknown;
+};
+
 @Controller('supplier-orders')
 @UseGuards(AuthGuard, RolesGuard)
 export class SupplierOrdersController {
   constructor(
     private readonly supplierOrdersService: SupplierOrdersService,
     private readonly commandsService: CommandsService,
+    private readonly freightConfirmationsService: FreightConfirmationsService,
   ) {}
 
   @Get()
@@ -96,6 +107,38 @@ export class SupplierOrdersController {
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'Shipment',
+      resourceId: result.id,
+      responseBody: result as never,
+    });
+
+    return result;
+  }
+
+  @Post(':id/freight-confirmations')
+  @RequireRoles('ADMIN', 'SUPPLIER')
+  async createFreightConfirmation(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Body() body: CreateFreightConfirmationBody,
+  ): Promise<FreightConfirmationView> {
+    const input = parseCreateFreightConfirmationBody(id, body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'supplier-order.freight-confirmation.create',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, ...body } as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as FreightConfirmationView;
+    }
+
+    const result = await this.freightConfirmationsService.createForSupplierOrder(input.id, input.confirmation);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'FreightConfirmation',
       resourceId: result.id,
       responseBody: result as never,
     });
@@ -173,6 +216,28 @@ function parseRejectBody(id: string, body: RejectBody): { id: string; expectedVe
 
   throwIfInvalid(issues);
   return { id, expectedVersion: body.expectedVersion as number, reason: reason! };
+}
+
+function parseCreateFreightConfirmationBody(
+  id: string,
+  body: CreateFreightConfirmationBody,
+): { id: string; confirmation: { expectedVersion: number; amount: string; reason: string } } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+    ...validateDecimalString('amount', body.amount, 2),
+  ];
+  const reason = requiredReason(body.reason, issues);
+
+  throwIfInvalid(issues);
+  return {
+    id,
+    confirmation: {
+      expectedVersion: body.expectedVersion as number,
+      amount: body.amount as string,
+      reason: reason!,
+    },
+  };
 }
 
 function parseShipmentPreviewBody(

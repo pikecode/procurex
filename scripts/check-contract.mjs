@@ -26,6 +26,7 @@ const [
   suppliersController,
   catalogController,
   discrepanciesController,
+  freightConfirmationsController,
   pricingService,
   pricingController,
   purchaseRequestsController,
@@ -45,6 +46,7 @@ const [
     readProjectFile('apps/api/src/suppliers/suppliers.controller.ts'),
   readProjectFile('apps/api/src/catalog/catalog.controller.ts'),
   readProjectFile('apps/api/src/discrepancies/discrepancies.controller.ts'),
+  readProjectFile('apps/api/src/freight-confirmations/freight-confirmations.controller.ts'),
   readProjectFile('apps/api/src/pricing/pricing.service.ts'),
     readProjectFile('apps/api/src/pricing/pricing.controller.ts'),
     readProjectFile('apps/api/src/purchase-requests/purchase-requests.controller.ts'),
@@ -122,6 +124,11 @@ assertIncludes(apiDesign, '`POST /shipments/{id}/receipts`', 'api design');
 assertIncludes(shipmentsController, "@Post(':id/receipts')", 'shipments controller');
 assertIncludes(apiDesign, '`POST /discrepancies/{id}/resolve`', 'api design');
 assertIncludes(discrepanciesController, "@Post(':id/resolve')", 'discrepancies controller');
+assertIncludes(apiDesign, '`POST /supplier-orders/{id}/freight-confirmations`', 'api design');
+assertIncludes(supplierOrdersController, "@Post(':id/freight-confirmations')", 'supplier orders controller');
+assertIncludes(apiDesign, '`POST /freight-confirmations/{id}/confirm`', 'api design');
+assertIncludes(freightConfirmationsController, "@Post(':id/confirm')", 'freight confirmations controller');
+assertIncludes(freightConfirmationsController, "@Post(':id/reject')", 'freight confirmations controller');
 assertIncludes(apiDesign, '`POST /purchase-requests/{id}/reallocate`', 'api design');
 assertIncludes(purchaseRequestsController, "@Post(':id/reallocate')", 'purchase requests controller');
 assertIncludes(apiDesign, '`GET/POST /templates`', 'api design');

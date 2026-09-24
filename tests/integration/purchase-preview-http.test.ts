@@ -1185,6 +1185,79 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     const discrepancyActions = await prisma.discrepancyAction.findMany({ where: { discrepancyId: discrepancy.id } });
     assert.equal(discrepancyActions.length, 1);
     assert.equal(discrepancyActions[0]?.action, 'ACCEPT');
+
+    const createFreightConfirmation = async () => {
+      const response = await fetch(`${baseUrl}/supplier-orders/${supplierBOrderAfterReallocate.id}/freight-confirmations`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'create-freight-confirmation-once',
+          'x-trace-id': 'trace-create-freight-confirmation',
+        },
+        body: JSON.stringify({
+          expectedVersion: orderAfterReceipt.version,
+          amount: '18.50',
+          reason: 'Extra replenishment freight',
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          supplierOrderId: string;
+          amount: string;
+          reason: string;
+          status: string;
+          version: number;
+          confirmedAt: string | null;
+          rejectedAt: string | null;
+        };
+      };
+    };
+    const freightConfirmation = await createFreightConfirmation();
+    const freightConfirmationReplay = await createFreightConfirmation();
+    assert.deepEqual(freightConfirmationReplay.data, freightConfirmation.data);
+    assert.equal(freightConfirmation.data.supplierOrderId, supplierBOrderAfterReallocate.id);
+    assert.equal(freightConfirmation.data.amount, '18.50');
+    assert.equal(freightConfirmation.data.reason, 'Extra replenishment freight');
+    assert.equal(freightConfirmation.data.status, 'PENDING');
+    assert.equal(freightConfirmation.data.version, 1);
+    assert.equal(freightConfirmation.data.confirmedAt, null);
+    assert.equal(freightConfirmation.data.rejectedAt, null);
+
+    const confirmFreightConfirmation = async () => {
+      const response = await fetch(`${baseUrl}/freight-confirmations/${freightConfirmation.data.id}/confirm`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'confirm-freight-confirmation-once',
+          'x-trace-id': 'trace-confirm-freight-confirmation',
+        },
+        body: JSON.stringify({
+          expectedVersion: freightConfirmation.data.version,
+          reason: 'Approved freight',
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: { id: string; amount: string; status: string; version: number; confirmedAt: string | null };
+      };
+    };
+    const confirmedFreight = await confirmFreightConfirmation();
+    const confirmedFreightReplay = await confirmFreightConfirmation();
+    assert.deepEqual(confirmedFreightReplay.data, confirmedFreight.data);
+    assert.equal(confirmedFreight.data.id, freightConfirmation.data.id);
+    assert.equal(confirmedFreight.data.amount, '18.50');
+    assert.equal(confirmedFreight.data.status, 'CONFIRMED');
+    assert.equal(confirmedFreight.data.version, 2);
+    assert.ok(confirmedFreight.data.confirmedAt);
+    const persistedFreight = await prisma.freightConfirmation.findUniqueOrThrow({
+      where: { id: freightConfirmation.data.id },
+    });
+    assert.equal(persistedFreight.status, 'CONFIRMED');
+
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
     });
@@ -1196,6 +1269,9 @@ test('purchase request confirm splits supplier orders once per idempotency key',
   } finally {
     await app.close();
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
+    await prisma.freightConfirmation.deleteMany({
+      where: { supplierOrder: { request: { store: { code: storeCode } } } },
+    });
     await prisma.discrepancyAction.deleteMany({ where: { discrepancy: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } } } });
     await prisma.discrepancy.deleteMany({ where: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } } });
     await prisma.receiptItem.deleteMany({ where: { receipt: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } } });
