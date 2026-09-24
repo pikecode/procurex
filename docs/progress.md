@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: A04 clearing preview.
+Latest completed milestone: A05 clearing creation.
 
 Latest implementation commit:
 
 ```text
-Add clearing preview
+Add clearing creation
 ```
 
 The working tree was clean after this commit.
@@ -143,6 +143,7 @@ Implemented interfaces:
 - A02 `POST /stores/{id}/recharges`
 - A03 `PATCH /stores/{id}/credit-limit`
 - A04 `POST /stores/{id}/clearings/preview`
+- A05 `POST /stores/{id}/clearings`
 - A06 `GET /recharges/{id}` (recharge detail only)
 
 Current A01 behavior:
@@ -177,14 +178,22 @@ Current A04 behavior:
 - Validates selected allocations belong to the store, are active, and have clearable credit outstanding.
 - Returns per-allocation clearable amounts and total clearable amount.
 
+Current A05 behavior:
+
+- Creates `ClearingDocument` and `ClearingItem` records.
+- Requires each selected funding allocation version and amount to match the previewed clearable amount.
+- Reduces funding allocation credit outstanding and releases store account credit used.
+- Writes a DEBIT account ledger with source type CLEARING.
+- Uses Idempotency-Key through command records.
+
 ## Recommended Next Step
 
-Implement A05 clearing documents, or add receipt revision replacement.
+Add clearing detail lookup, or add receipt revision replacement.
 
 Suggested first version:
 
 - If continuing fulfillment work, add receipt revision replacement.
-- If continuing finance work, add A05 clearing documents and clearing items.
+- If continuing finance work, add `GET /clearings/{id}`.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 

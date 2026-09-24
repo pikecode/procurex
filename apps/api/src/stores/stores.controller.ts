@@ -10,6 +10,7 @@ import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contrac
 import {
   StoresService,
   type AccountLedgerView,
+  type ClearingDocumentView,
   type ClearingPreviewView,
   type RechargeDocumentView,
   type StoreAccountView,
@@ -57,6 +58,12 @@ type UpdateCreditLimitBody = {
 
 type ClearingPreviewBody = {
   fundingAllocationIds?: unknown;
+};
+
+type CreateClearingBody = {
+  items?: unknown;
+  businessDate?: unknown;
+  remark?: unknown;
 };
 
 @Controller('stores')
@@ -162,6 +169,38 @@ export class StoresController {
   previewClearing(@Param('id') id: string, @Body() body: ClearingPreviewBody): Promise<ClearingPreviewView> {
     const input = parseClearingPreviewBody(id, body);
     return this.storesService.previewClearing(input.id, input.preview);
+  }
+
+  @Post(':id/clearings')
+  @RequireRoles('ADMIN', 'HQ_FINANCE')
+  async createClearing(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Body() body: CreateClearingBody,
+  ): Promise<ClearingDocumentView> {
+    const input = parseCreateClearingBody(id, body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'store.clearing.create',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, ...body } as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as ClearingDocumentView;
+    }
+
+    const result = await this.storesService.createClearing(input.id, input.clearing);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'ClearingDocument',
+      resourceId: result.id,
+      responseBody: result as never,
+    });
+
+    return result;
   }
 
   @Patch(':id')
@@ -309,6 +348,62 @@ function parseClearingPreviewBody(
   return { id, preview: { fundingAllocationIds } };
 }
 
+function parseCreateClearingBody(
+  id: string,
+  body: CreateClearingBody,
+): {
+  id: string;
+  clearing: {
+    items: Array<{ fundingAllocationId: string; expectedVersion: number; expectedAmount: string }>;
+    businessDate: Date;
+    remark?: string;
+  };
+} {
+  const issues: ValidationIssue[] = [...validateUuid('id', id)];
+  const items: Array<{ fundingAllocationId: string; expectedVersion: number; expectedAmount: string }> = [];
+
+  if (!Array.isArray(body.items) || body.items.length === 0) {
+    issues.push({ field: 'items', code: 'INVALID_CLEARING_ITEMS', message: 'items must be a non-empty array' });
+  } else {
+    const seen = new Set<string>();
+    for (const [index, item] of body.items.entries()) {
+      if (!isRecord(item)) {
+        issues.push({ field: `items.${index}`, code: 'INVALID_CLEARING_ITEM', message: 'item must be an object' });
+        continue;
+      }
+      issues.push(...validateUuid(`items.${index}.fundingAllocationId`, item.fundingAllocationId));
+      issues.push(...validateExpectedVersion(`items.${index}.expectedVersion`, item.expectedVersion));
+      issues.push(...validateDecimalString(`items.${index}.expectedAmount`, item.expectedAmount, 2));
+      if (typeof item.fundingAllocationId === 'string') {
+        if (seen.has(item.fundingAllocationId)) {
+          issues.push({
+            field: `items.${index}.fundingAllocationId`,
+            code: 'DUPLICATE_FUNDING_ALLOCATION_ID',
+            message: 'funding allocation ids must not repeat',
+          });
+        }
+        seen.add(item.fundingAllocationId);
+      }
+      if (
+        typeof item.fundingAllocationId === 'string' &&
+        typeof item.expectedVersion === 'number' &&
+        typeof item.expectedAmount === 'string'
+      ) {
+        items.push({
+          fundingAllocationId: item.fundingAllocationId,
+          expectedVersion: item.expectedVersion,
+          expectedAmount: item.expectedAmount,
+        });
+      }
+    }
+  }
+  const businessDate = requiredDate('businessDate', body.businessDate, issues);
+  const remark = optionalTrimmedString('remark', body.remark, issues);
+
+  throwIfInvalid(issues);
+  return { id, clearing: { items, businessDate: businessDate!, remark } };
+}
+
 function requiredTrimmedString(field: string, value: unknown, issues: ValidationIssue[]): string | undefined {
   if (typeof value !== 'string' || value.trim().length === 0) {
     issues.push({ field, code: 'REQUIRED_STRING', message: `${field} is required` });
@@ -380,4 +475,8 @@ function requiredDate(field: string, value: unknown, issues: ValidationIssue[]):
     issues.push({ field, code: 'REQUIRED_DATE', message: `${field} is required` });
   }
   return parsed;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

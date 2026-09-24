@@ -249,6 +249,10 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(creditLimit.data.creditUsed, '0.00');
     assert.equal(creditLimit.data.creditAvailable, '1000.00');
     assert.equal(creditLimit.data.version, 2);
+    await prisma.storeAccount.update({
+      where: { storeId: createdBody.data.id },
+      data: { creditUsed: '200.00', version: { increment: 1 } },
+    });
     const fundingAllocation = await prisma.fundingAllocation.create({
       data: {
         storeId: createdBody.data.id,
@@ -333,6 +337,69 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(ledgersBody.data[0]?.note, 'Initial recharge');
     assert.equal(ledgersBody.data[0]?.occurredAt, '2026-09-24T00:00:00.000Z');
 
+    const createClearing = async () => {
+      const response = await fetch(`${baseUrl}/stores/${createdBody.data.id}/clearings`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'create-store-clearing-once',
+          'x-trace-id': 'trace-store-clearing',
+        },
+        body: JSON.stringify({
+          businessDate: '2026-09-24',
+          remark: 'Clear store credit',
+          items: [
+            {
+              fundingAllocationId: fundingAllocation.id,
+              expectedVersion: clearingPreview.data.items[0]!.version,
+              expectedAmount: clearingPreview.data.items[0]!.clearableAmount,
+            },
+          ],
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          clearingNo: string;
+          storeId: string;
+          amount: string;
+          businessDate: string;
+          remark: string | null;
+          items: Array<{ fundingAllocationId: string; amount: string; sourceVersion: number }>;
+          account: { creditUsed: string; creditAvailable: string; version: number };
+        };
+        traceId: string;
+      };
+    };
+    const clearing = await createClearing();
+    const clearingReplay = await createClearing();
+    assert.deepEqual(clearingReplay.data, clearing.data);
+    assert.equal(clearing.traceId, 'trace-store-clearing');
+    assert.equal(clearing.data.storeId, createdBody.data.id);
+    assert.equal(clearing.data.amount, '200.00');
+    assert.equal(clearing.data.businessDate, '2026-09-24');
+    assert.equal(clearing.data.remark, 'Clear store credit');
+    assert.deepEqual(clearing.data.items.map((item) => ({
+      fundingAllocationId: item.fundingAllocationId,
+      amount: item.amount,
+      sourceVersion: item.sourceVersion,
+    })), [
+      {
+        fundingAllocationId: fundingAllocation.id,
+        amount: '200.00',
+        sourceVersion: 1,
+      },
+    ]);
+    assert.equal(clearing.data.account.creditUsed, '0.00');
+    assert.equal(clearing.data.account.creditAvailable, '1000.00');
+    const clearedAllocation = await prisma.fundingAllocation.findUniqueOrThrow({ where: { id: fundingAllocation.id } });
+    assert.equal(clearedAllocation.active, false);
+    assert.equal(clearedAllocation.netPaid.toString(), '240');
+    assert.equal(clearedAllocation.creditOutstanding.toString(), '0');
+    assert.equal(clearedAllocation.version, 2);
+
     const list = await fetch(`${baseUrl}/stores`, {
       headers: {
         authorization: `Bearer ${adminToken}`,
@@ -372,6 +439,8 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     await app.close();
     await prisma.commandRecord.deleteMany({ where: { actor: { username: adminUsername } } });
     await prisma.accountLedger.deleteMany({ where: { account: { store: { code: storeCode } } } });
+    await prisma.clearingItem.deleteMany({ where: { clearing: { store: { code: storeCode } } } });
+    await prisma.clearingDocument.deleteMany({ where: { store: { code: storeCode } } });
     await prisma.rechargeDocument.deleteMany({ where: { store: { code: storeCode } } });
     await prisma.fundingAllocation.deleteMany({ where: { store: { store: { code: storeCode } } } });
     await prisma.storeAccount.deleteMany({ where: { store: { code: storeCode } } });

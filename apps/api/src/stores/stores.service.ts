@@ -7,7 +7,14 @@ import {
   LedgerSourceType,
   StoreStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { AccountLedger, RechargeDocument, Store, StoreAccount } from '../../../../packages/backend/generated/prisma/client.js';
+import type {
+  AccountLedger,
+  ClearingDocument,
+  ClearingItem,
+  RechargeDocument,
+  Store,
+  StoreAccount,
+} from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type StoreView = {
@@ -74,6 +81,37 @@ export type ClearingPreviewView = {
   storeId: string;
   totalAmount: string;
   items: ClearingPreviewItemView[];
+};
+
+export type CreateClearingInput = {
+  items: CreateClearingItemInput[];
+  businessDate: Date;
+  remark?: string;
+};
+
+export type CreateClearingItemInput = {
+  fundingAllocationId: string;
+  expectedVersion: number;
+  expectedAmount: string;
+};
+
+export type ClearingDocumentView = {
+  id: string;
+  clearingNo: string;
+  storeId: string;
+  amount: string;
+  businessDate: string;
+  remark: string | null;
+  createdAt: string;
+  items: ClearingItemView[];
+  account: StoreAccountView;
+};
+
+export type ClearingItemView = {
+  id: string;
+  fundingAllocationId: string;
+  amount: string;
+  sourceVersion: number;
 };
 
 export type ClearingPreviewItemView = {
@@ -349,6 +387,116 @@ export class StoresService {
     };
   }
 
+  async createClearing(storeId: string, input: CreateClearingInput): Promise<ClearingDocumentView> {
+    const preview = await this.previewClearing(storeId, {
+      fundingAllocationIds: input.items.map((item) => item.fundingAllocationId),
+    });
+    const inputById = new Map(input.items.map((item) => [item.fundingAllocationId, item]));
+    for (const item of preview.items) {
+      const inputItem = inputById.get(item.fundingAllocationId)!;
+      if (inputItem.expectedVersion !== item.version) {
+        throw new ConflictException({
+          code: 'VERSION_CONFLICT',
+          message: 'Funding allocation version has changed',
+          details: {
+            fundingAllocationId: item.fundingAllocationId,
+            expectedVersion: inputItem.expectedVersion,
+            currentVersion: item.version,
+          },
+        });
+      }
+      if (!new Decimal(inputItem.expectedAmount).eq(item.clearableAmount)) {
+        throw new ConflictException({
+          code: 'CLEARING_AMOUNT_CHANGED',
+          message: 'Funding allocation clearable amount has changed',
+          details: {
+            fundingAllocationId: item.fundingAllocationId,
+            expectedAmount: inputItem.expectedAmount,
+            currentAmount: item.clearableAmount,
+          },
+        });
+      }
+    }
+
+    const account = await this.database.client.storeAccount.findUnique({ where: { storeId } });
+    if (!account) {
+      throw new NotFoundException({
+        code: 'STORE_ACCOUNT_NOT_FOUND',
+        message: 'Store account was not found',
+      });
+    }
+    const totalAmount = new Decimal(preview.totalAmount);
+    if (account.creditUsed.lt(totalAmount)) {
+      throw new ConflictException({
+        code: 'CREDIT_USED_BELOW_CLEARING',
+        message: 'Store credit used is lower than clearing amount',
+        details: { creditUsed: account.creditUsed.toFixed(2), clearingAmount: totalAmount.toFixed(2) },
+      });
+    }
+
+    const result = await this.database.client.$transaction(async (tx) => {
+      const clearing = await tx.clearingDocument.create({
+        data: {
+          clearingNo: makeClearingNo(),
+          storeId,
+          amount: totalAmount.toFixed(2),
+          businessDate: input.businessDate,
+          remark: input.remark,
+        },
+      });
+
+      for (const item of preview.items) {
+        await tx.clearingItem.create({
+          data: {
+            clearingId: clearing.id,
+            fundingAllocationId: item.fundingAllocationId,
+            amount: item.clearableAmount,
+            sourceVersion: item.version,
+          },
+        });
+        await tx.fundingAllocation.update({
+          where: { id: item.fundingAllocationId },
+          data: {
+            netPaid: { increment: item.clearableAmount },
+            creditOutstanding: { decrement: item.clearableAmount },
+            active: false,
+            version: { increment: 1 },
+          },
+        });
+      }
+
+      const updatedAccount = await tx.storeAccount.update({
+        where: { id: account.id },
+        data: {
+          creditUsed: { decrement: totalAmount.toFixed(2) },
+          version: { increment: 1 },
+        },
+      });
+
+      await tx.accountLedger.create({
+        data: {
+          accountId: account.id,
+          direction: LedgerDirection.DEBIT,
+          amount: totalAmount.toFixed(2),
+          balanceAfter: updatedAccount.balance.toFixed(2),
+          sourceType: LedgerSourceType.CLEARING,
+          sourceId: clearing.id,
+          note: input.remark,
+          occurredAt: input.businessDate,
+        },
+      });
+
+      const created = await tx.clearingDocument.findUniqueOrThrow({
+        where: { id: clearing.id },
+        include: { items: { orderBy: { createdAt: 'asc' } } },
+      });
+
+      return { clearing: created, account: updatedAccount };
+    });
+
+    return toClearingDocumentView(result.clearing, result.account);
+  }
+
   private async assertStoreExists(storeId: string): Promise<void> {
     const store = await this.database.client.store.findUnique({ where: { id: storeId } });
     if (!store) {
@@ -437,7 +585,34 @@ function toRechargeDocumentView(recharge: RechargeDocument, account: StoreAccoun
   };
 }
 
+function toClearingDocumentView(clearing: ClearingDocument & { items: ClearingItem[] }, account: StoreAccount): ClearingDocumentView {
+  return {
+    id: clearing.id,
+    clearingNo: clearing.clearingNo,
+    storeId: clearing.storeId,
+    amount: clearing.amount.toFixed(2),
+    businessDate: clearing.businessDate.toISOString().slice(0, 10),
+    remark: clearing.remark,
+    createdAt: clearing.createdAt.toISOString(),
+    items: clearing.items.map((item) => ({
+      id: item.id,
+      fundingAllocationId: item.fundingAllocationId,
+      amount: item.amount.toFixed(2),
+      sourceVersion: item.sourceVersion,
+    })),
+    account: toStoreAccountView(clearing.storeId, account),
+  };
+}
+
 function makeRechargeNo(): string {
+  return makeDocumentNo('RCH');
+}
+
+function makeClearingNo(): string {
+  return makeDocumentNo('CLR');
+}
+
+function makeDocumentNo(prefix: string): string {
   const now = new Date();
   const stamp = [
     now.getUTCFullYear(),
@@ -447,5 +622,5 @@ function makeRechargeNo(): string {
     String(now.getUTCMinutes()).padStart(2, '0'),
     String(now.getUTCSeconds()).padStart(2, '0'),
   ].join('');
-  return `RCH${stamp}${String(randomInt(0, 1_000_000)).padStart(6, '0')}`;
+  return `${prefix}${stamp}${String(randomInt(0, 1_000_000)).padStart(6, '0')}`;
 }

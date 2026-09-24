@@ -229,6 +229,7 @@ model Store {
   requests       PurchaseRequest[]
   supplierOrders SupplierOrder[]
   rechargeDocuments RechargeDocument[]
+  clearingDocuments ClearingDocument[]
 }
 
 model Supplier {
@@ -677,6 +678,7 @@ model FundingAllocation {
   updatedAt         DateTime                @updatedAt @db.Timestamptz(6)
   store             StoreAccount            @relation(fields: [storeId], references: [storeId])
   supplierOrder     SupplierOrder?          @relation(fields: [supplierOrderId], references: [id])
+  clearingItems     ClearingItem[]
 
   @@index([storeId, active])
   @@index([supplierOrderId])
@@ -694,6 +696,34 @@ model RechargeDocument {
   store               Store    @relation(fields: [storeId], references: [id])
 
   @@index([storeId, businessDate])
+}
+
+model ClearingDocument {
+  id           String         @id @default(uuid()) @db.Uuid
+  clearingNo   String         @unique @db.VarChar(80)
+  storeId      String         @db.Uuid
+  amount       Decimal        @db.Decimal(20, 2)
+  businessDate DateTime       @db.Date
+  remark       String?        @db.VarChar(300)
+  createdAt    DateTime       @default(now()) @db.Timestamptz(6)
+  store        Store          @relation(fields: [storeId], references: [id])
+  items        ClearingItem[]
+
+  @@index([storeId, businessDate])
+}
+
+model ClearingItem {
+  id                  String            @id @default(uuid()) @db.Uuid
+  clearingId          String            @db.Uuid
+  fundingAllocationId String            @db.Uuid
+  amount              Decimal           @db.Decimal(20, 2)
+  sourceVersion       Int
+  createdAt           DateTime          @default(now()) @db.Timestamptz(6)
+  clearing            ClearingDocument  @relation(fields: [clearingId], references: [id], onDelete: Cascade)
+  fundingAllocation   FundingAllocation @relation(fields: [fundingAllocationId], references: [id])
+
+  @@index([clearingId])
+  @@index([fundingAllocationId])
 }
 
 model AccountLedger {

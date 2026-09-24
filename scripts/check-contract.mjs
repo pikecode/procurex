@@ -91,6 +91,10 @@ assertIncludes(storesController, "@Patch(':id/credit-limit')", 'stores controlle
 assertIncludes(apiDesign, '`POST /stores/{id}/clearings/preview`', 'api design');
 assertIncludes(storesController, "@Post(':id/clearings/preview')", 'stores controller');
 assertIncludes(prismaSchema, 'model FundingAllocation', 'prisma schema');
+assertIncludes(apiDesign, '`POST /stores/{id}/clearings`', 'api design');
+assertIncludes(storesController, "@Post(':id/clearings')", 'stores controller');
+assertIncludes(prismaSchema, 'model ClearingDocument', 'prisma schema');
+assertIncludes(prismaSchema, 'model ClearingItem', 'prisma schema');
 assertIncludes(apiDesign, '`GET /recharges/{id}`', 'api design');
 assertIncludes(rechargesController, "@Controller('recharges')", 'recharges controller');
 assertIncludes(rechargesController, "@Get(':id')", 'recharges controller');
