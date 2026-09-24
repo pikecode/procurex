@@ -14,7 +14,7 @@ export type PriceQuote = {
   effectiveAt: string;
   reason: string;
   revision: number;
-  runId: string;
+  runId?: string;
 };
 
 export type PriceChangeRunView = {
@@ -207,7 +207,6 @@ export class PricingService {
       effectiveAt: version.effectiveAt.toISOString(),
       reason: version.reason,
       revision: version.revision,
-      runId: '',
     };
   }
 
@@ -235,7 +234,6 @@ export class PricingService {
       effectiveAt: version.effectiveAt.toISOString(),
       reason: version.reason,
       revision: version.revision,
-      runId: '',
     }));
   }
 }
