@@ -15,6 +15,7 @@ import { ShipmentsModule } from './shipments/shipments.module.js';
 import { StoreStatementsModule } from './store-statements/store-statements.module.js';
 import { StoresModule } from './stores/stores.module.js';
 import { SupplierOrdersModule } from './supplier-orders/supplier-orders.module.js';
+import { SupplierStatementsModule } from './supplier-statements/supplier-statements.module.js';
 import { SuppliersModule } from './suppliers/suppliers.module.js';
 import { TemplatesModule } from './templates/templates.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -38,6 +39,7 @@ import { UsersModule } from './users/users.module.js';
     FreightConfirmationsModule,
     RechargesModule,
     StoreStatementsModule,
+    SupplierStatementsModule,
   ],
   controllers: [HealthController],
 })

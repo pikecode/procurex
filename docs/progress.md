@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently entering M4 settlement/read-model development.
 
-Latest completed milestone: B01 store statement read endpoint.
+Latest completed milestone: B02 supplier statement read endpoint.
 
 Latest implementation commit:
 
 ```text
-Add store statement read endpoint
+Add supplier statement read endpoint
 ```
 
 The working tree was clean after this commit.
@@ -199,6 +199,7 @@ Current A05 behavior:
 Implemented interfaces:
 
 - B01 `GET /store-statements`, `GET /store-statements/{id}`
+- B02 `GET /supplier-statements`, `GET /supplier-statements/{id}`
 
 Current B01 behavior:
 
@@ -208,13 +209,21 @@ Current B01 behavior:
 - Returns statement details with source supplier order lines and source revision.
 - Keeps payment and settlement status as an OPEN read model in this first version; allocation and confirmed payment are future work.
 
+Current B02 behavior:
+
+- Dynamically groups completed supplier orders into supplier total statements by supplier, settlement cycle, and first shipment period.
+- Uses the supplier supply amount plus shipment freight as the supplier payable total.
+- Returns open supplier statement summaries with goods amount, freight amount, total amount, payable amount, store count, and line count.
+- Returns supplier statement details with source supplier order lines, store IDs, and source revision.
+- Keeps payment and settlement status as an OPEN read model in this first version; shared payment allocation is future work.
+
 ## Recommended Next Step
 
 Continue settlement read models or start payment preview/allocation.
 
 Suggested first version:
 
-- If continuing finance work, add supplier total/store statement read endpoints.
+- If continuing finance work, add supplier-store statement read endpoints.
 - If moving into payment work, add payment preview over statement lines before creating payment records.
 - If continuing fulfillment finance linkage, connect RETURN discrepancy records to settlement/payment difference disposal.
 - Add integration coverage to the existing purchase/supplier flow test.
@@ -222,7 +231,7 @@ Suggested first version:
 
 After that, continue with:
 
-1. Supplier total and supplier-store statement read endpoints.
+1. Supplier-store statement read endpoints.
 2. Payment preview, payment record creation, and confirmation.
 3. Settlement difference disposal for accepted, replenished, and returned discrepancies.
 
