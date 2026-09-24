@@ -8,10 +8,21 @@ import { HealthController } from './health.controller.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { StoresModule } from './stores/stores.module.js';
 import { SuppliersModule } from './suppliers/suppliers.module.js';
+import { TemplatesModule } from './templates/templates.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
-  imports: [DatabaseModule, CommandsModule, AuthModule, UsersModule, StoresModule, SuppliersModule, CatalogModule, PricingModule],
+  imports: [
+    DatabaseModule,
+    CommandsModule,
+    AuthModule,
+    UsersModule,
+    StoresModule,
+    SuppliersModule,
+    CatalogModule,
+    PricingModule,
+    TemplatesModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {

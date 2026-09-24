@@ -26,6 +26,7 @@ const [
   suppliersController,
   catalogController,
   pricingService,
+  templatesController,
 ] = await Promise.all([
   readProjectFile('docs/api-design.md'),
   readProjectFile('package.json'),
@@ -39,6 +40,7 @@ const [
     readProjectFile('apps/api/src/suppliers/suppliers.controller.ts'),
     readProjectFile('apps/api/src/catalog/catalog.controller.ts'),
     readProjectFile('apps/api/src/pricing/pricing.service.ts'),
+    readProjectFile('apps/api/src/templates/templates.controller.ts'),
   ]);
 
 const pkg = JSON.parse(packageJson);
@@ -74,6 +76,9 @@ assertIncludes(catalogController, "@Post('categories')", 'catalog controller');
 assertIncludes(catalogController, "@Post('units')", 'catalog controller');
 assertIncludes(apiDesign, '`POST /prices/impact-preview`', 'api design');
 assertIncludes(pricingService, 'getEffectivePrice', 'pricing service');
+assertIncludes(apiDesign, '`GET/POST /templates`', 'api design');
+assertIncludes(templatesController, "@Controller('templates')", 'templates controller');
+assertIncludes(templatesController, "@Put(':id/stores')", 'templates controller');
 
 assertIncludes(apiDesign, '`GET /health/live`、`GET /health/ready`', 'api design');
 assertIncludes(healthController, "@Get('live')", 'health controller');
