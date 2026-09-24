@@ -79,6 +79,8 @@ assertIncludes(pricingService, 'getEffectivePrice', 'pricing service');
 assertIncludes(apiDesign, '`GET/POST /templates`', 'api design');
 assertIncludes(templatesController, "@Controller('templates')", 'templates controller');
 assertIncludes(templatesController, "@Put(':id/stores')", 'templates controller');
+assertIncludes(templatesController, "@Put(':id/items')", 'templates controller');
+assertIncludes(templatesController, "@Put(':id/supplier-settings/:supplierId')", 'templates controller');
 
 assertIncludes(apiDesign, '`GET /health/live`、`GET /health/ready`', 'api design');
 assertIncludes(healthController, "@Get('live')", 'health controller');

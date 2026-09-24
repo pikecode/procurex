@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { SettlementMode } from '../../../../packages/backend/generated/prisma/enums.js';
 import type { OrderTemplate } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
@@ -15,6 +16,26 @@ export type TemplateView = {
 export type TemplateStoresView = {
   templateId: string;
   storeIds: string[];
+  version: number;
+};
+
+export type TemplateItemInput = {
+  productId: string;
+  sortOrder?: number;
+  suppliers: Array<{ supplierId: string; priority: number }>;
+};
+
+export type TemplateItemsView = {
+  templateId: string;
+  items: Array<{ productId: string; sortOrder: number; suppliers: Array<{ supplierId: string; priority: number }> }>;
+  version: number;
+};
+
+export type TemplateSupplierSettingView = {
+  templateId: string;
+  supplierId: string;
+  settlementMode: SettlementMode;
+  settlementCycle: string;
   version: number;
 };
 
@@ -109,6 +130,114 @@ export class TemplatesService {
       storeIds: activeBindings.map((binding) => binding.storeId),
       version: templateVersion(updated),
     };
+  }
+
+  async replaceTemplateItems(templateId: string, expectedVersion: number, items: TemplateItemInput[]): Promise<TemplateItemsView> {
+    const template = await this.requireActiveTemplate(templateId);
+    this.assertTemplateVersion(template, expectedVersion);
+
+    const productIds = [...new Set(items.map((item) => item.productId))];
+    const supplierIds = [...new Set(items.flatMap((item) => item.suppliers.map((supplier) => supplier.supplierId)))];
+    const [products, suppliers] = await Promise.all([
+      this.database.client.product.findMany({ where: { id: { in: productIds } }, select: { id: true } }),
+      this.database.client.supplier.findMany({ where: { id: { in: supplierIds } }, select: { id: true } }),
+    ]);
+
+    if (products.length !== productIds.length) {
+      throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'One or more products were not found' });
+    }
+    if (suppliers.length !== supplierIds.length) {
+      throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'One or more suppliers were not found' });
+    }
+
+    await this.database.client.$transaction(async (tx) => {
+      await tx.templateItem.deleteMany({ where: { templateId } });
+      for (const item of items) {
+        await tx.templateItem.create({
+          data: {
+            templateId,
+            productId: item.productId,
+            sortOrder: item.sortOrder ?? 0,
+            suppliers: {
+              create: item.suppliers.map((supplier) => ({
+                supplierId: supplier.supplierId,
+                priority: supplier.priority,
+              })),
+            },
+          },
+        });
+      }
+    });
+
+    const updated = await this.database.client.orderTemplate.update({ where: { id: templateId }, data: {} });
+    const currentItems = await this.database.client.templateItem.findMany({
+      where: { templateId },
+      orderBy: [{ sortOrder: 'asc' }, { productId: 'asc' }],
+      include: { suppliers: { orderBy: [{ priority: 'asc' }, { supplierId: 'asc' }] } },
+    });
+
+    return {
+      templateId,
+      items: currentItems.map((item) => ({
+        productId: item.productId,
+        sortOrder: item.sortOrder,
+        suppliers: item.suppliers.map((supplier) => ({ supplierId: supplier.supplierId, priority: supplier.priority })),
+      })),
+      version: templateVersion(updated),
+    };
+  }
+
+  async setSupplierSetting(
+    templateId: string,
+    supplierId: string,
+    expectedVersion: number,
+    settlementMode: SettlementMode,
+    settlementCycle: string,
+  ): Promise<TemplateSupplierSettingView> {
+    const template = await this.requireActiveTemplate(templateId);
+    this.assertTemplateVersion(template, expectedVersion);
+
+    const supplier = await this.database.client.supplier.findUnique({ where: { id: supplierId } });
+    if (!supplier) {
+      throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'Supplier was not found' });
+    }
+
+    const setting = await this.database.client.templateSupplierSetting.upsert({
+      where: { templateId_supplierId: { templateId, supplierId } },
+      update: { settlementMode, settlementCycle },
+      create: { templateId, supplierId, settlementMode, settlementCycle },
+    });
+    const updated = await this.database.client.orderTemplate.update({ where: { id: templateId }, data: {} });
+
+    return {
+      templateId: setting.templateId,
+      supplierId: setting.supplierId,
+      settlementMode: setting.settlementMode,
+      settlementCycle: setting.settlementCycle,
+      version: templateVersion(updated),
+    };
+  }
+
+  private async requireActiveTemplate(templateId: string): Promise<OrderTemplate> {
+    const template = await this.database.client.orderTemplate.findUnique({ where: { id: templateId } });
+    if (!template || template.isArchived) {
+      throw new NotFoundException({
+        code: 'TEMPLATE_NOT_FOUND',
+        message: 'Template was not found',
+      });
+    }
+    return template;
+  }
+
+  private assertTemplateVersion(template: OrderTemplate, expectedVersion: number): void {
+    const version = templateVersion(template);
+    if (version !== expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Template version has changed',
+        details: { expectedVersion, currentVersion: version },
+      });
+    }
   }
 }
 
