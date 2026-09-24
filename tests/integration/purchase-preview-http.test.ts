@@ -708,7 +708,12 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         data: {
           templateId: template.id,
           productId: productA.id,
-          suppliers: { create: [{ supplierId: supplierA.id, priority: 1 }] },
+          suppliers: {
+            create: [
+              { supplierId: supplierA.id, priority: 1 },
+              { supplierId: supplierB.id, priority: 2 },
+            ],
+          },
         },
       }),
       prisma.templateItem.create({
@@ -720,8 +725,9 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       }),
     ]);
     await prisma.storeTemplateBinding.create({ data: { storeId: store.id, templateId: template.id } });
-    const [scopeA, scopeB] = await Promise.all([
+    const [scopeA, scopeAB, scopeB] = await Promise.all([
       prisma.priceScope.create({ data: { productId: productA.id, supplierId: supplierA.id } }),
+      prisma.priceScope.create({ data: { productId: productA.id, supplierId: supplierB.id } }),
       prisma.priceScope.create({ data: { productId: productB.id, supplierId: supplierB.id } }),
     ]);
     await Promise.all([
@@ -730,6 +736,14 @@ test('purchase request confirm splits supplier orders once per idempotency key',
           scopeId: scopeA.id,
           salesPrice: '12.000000',
           supplyPrice: '9.000000',
+          effectiveAt: new Date('2026-09-01T00:00:00.000Z'),
+        },
+      }),
+      prisma.priceVersion.create({
+        data: {
+          scopeId: scopeAB.id,
+          salesPrice: '11.000000',
+          supplyPrice: '8.000000',
           effectiveAt: new Date('2026-09-01T00:00:00.000Z'),
         },
       }),
@@ -896,6 +910,50 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(rejectedSupplierOrder.rejectedReason, 'Out of stock');
     const requestAfterSupplierReject = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id: created.data.id } });
     assert.equal(requestAfterSupplierReject.status, 'PARTIAL_PUSHED');
+    const rejectedRequestItem = await prisma.requestItem.findFirstOrThrow({
+      where: { requestId: created.data.id, productId: productA.id },
+    });
+    const reallocateResponse = await fetch(`${baseUrl}/purchase-requests/${created.data.id}/reallocate`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'x-trace-id': 'trace-reallocate-request',
+      },
+      body: JSON.stringify({
+        expectedVersion: requestAfterSupplierReject.version,
+        rejectedOrderId: supplierOrderA.id,
+        reason: 'Move rejected item to alternate supplier',
+        assignments: [{ requestItemId: rejectedRequestItem.id, supplierId: supplierB.id }],
+      }),
+    });
+    assert.equal(reallocateResponse.status, 201);
+    const reallocated = (await reallocateResponse.json()) as {
+      data: {
+        id: string;
+        status: string;
+        salesGoodsAmount: string;
+        supplyGoodsAmount: string;
+        version: number;
+        items: Array<{ productId: string; supplierId: string; salesLineAmount: string; supplyLineAmount: string }>;
+      };
+    };
+    assert.equal(reallocated.data.id, created.data.id);
+    assert.equal(reallocated.data.status, 'CONFIRMED');
+    assert.equal(reallocated.data.salesGoodsAmount, '120.00');
+    assert.equal(reallocated.data.supplyGoodsAmount, '88.00');
+    assert.equal(reallocated.data.version, 4);
+    const reallocatedProductA = reallocated.data.items.find((item) => item.productId === productA.id);
+    assert.equal(reallocatedProductA?.supplierId, supplierB.id);
+    assert.equal(reallocatedProductA?.salesLineAmount, '110.00');
+    assert.equal(reallocatedProductA?.supplyLineAmount, '80.00');
+    const supplierBOrderAfterReallocate = await prisma.supplierOrder.findFirstOrThrow({
+      where: { requestId: created.data.id, supplierId: supplierB.id, status: 'PUSHED' },
+      include: { items: true },
+    });
+    assert.equal(supplierBOrderAfterReallocate.salesGoodsAmount.toString(), '120');
+    assert.equal(supplierBOrderAfterReallocate.supplyGoodsAmount.toString(), '88');
+    assert.equal(supplierBOrderAfterReallocate.items.length, 2);
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
     });

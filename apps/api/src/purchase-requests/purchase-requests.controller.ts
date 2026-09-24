@@ -20,6 +20,7 @@ import {
   type PurchaseRequestSummaryView,
   type PurchaseRequestView,
   type ReassignPurchaseRequestPreview,
+  type ReallocatePurchaseRequestAssignmentInput,
   type ReplacePurchaseRequestItemInput,
   type RejectPurchaseRequestResult,
 } from './purchase-requests.service.js';
@@ -60,6 +61,13 @@ type ReassignBody = {
   expectedVersion?: unknown;
   itemIds?: unknown;
   supplierId?: unknown;
+};
+
+type ReallocateBody = {
+  expectedVersion?: unknown;
+  rejectedOrderId?: unknown;
+  assignments?: unknown;
+  reason?: unknown;
 };
 
 @Controller('purchase-requests')
@@ -140,6 +148,13 @@ export class PurchaseRequestsController {
   assign(@Param('id') id: string, @Body() body: ReassignBody): Promise<PurchaseRequestDetailView> {
     const input = parseReassignBody(id, body);
     return this.purchaseRequestsService.assign(input.id, input.expectedVersion, input.itemIds, input.supplierId);
+  }
+
+  @Post(':id/reallocate')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  reallocate(@Param('id') id: string, @Body() body: ReallocateBody): Promise<PurchaseRequestDetailView> {
+    const input = parseReallocateBody(id, body);
+    return this.purchaseRequestsService.reallocate(input.id, input.expectedVersion, input.rejectedOrderId, input.assignments);
   }
 
   @Post(':id/confirm')
@@ -321,6 +336,76 @@ function parseReassignBody(
 
   throwIfInvalid(issues);
   return { id, expectedVersion: body.expectedVersion as number, itemIds, supplierId: body.supplierId as string };
+}
+
+function parseReallocateBody(
+  id: string,
+  body: ReallocateBody,
+): {
+  id: string;
+  expectedVersion: number;
+  rejectedOrderId: string;
+  reason: string;
+  assignments: ReallocatePurchaseRequestAssignmentInput[];
+} {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+    ...validateUuid('rejectedOrderId', body.rejectedOrderId),
+  ];
+  const reason = requiredReason(body.reason, issues);
+  const assignments: ReallocatePurchaseRequestAssignmentInput[] = [];
+
+  if (!Array.isArray(body.assignments) || body.assignments.length === 0) {
+    issues.push({ field: 'assignments', code: 'INVALID_ASSIGNMENTS', message: 'assignments must be a non-empty array' });
+  } else {
+    const seen = new Set<string>();
+    for (const [index, assignment] of body.assignments.entries()) {
+      if (!isRecord(assignment)) {
+        issues.push({ field: `assignments.${index}`, code: 'INVALID_ASSIGNMENT', message: 'assignment must be an object' });
+        continue;
+      }
+      issues.push(...validateUuid(`assignments.${index}.requestItemId`, assignment.requestItemId));
+      if (typeof assignment.requestItemId === 'string') {
+        if (seen.has(assignment.requestItemId)) {
+          issues.push({ field: `assignments.${index}.requestItemId`, code: 'DUPLICATE_ITEM_ID', message: 'assignment item ids must not repeat' });
+        }
+        seen.add(assignment.requestItemId);
+      }
+
+      const cancel = assignment.cancel === true;
+      if (assignment.cancel !== undefined && typeof assignment.cancel !== 'boolean') {
+        issues.push({ field: `assignments.${index}.cancel`, code: 'INVALID_CANCEL', message: 'cancel must be a boolean' });
+      }
+      if (cancel && assignment.supplierId !== undefined) {
+        issues.push({
+          field: `assignments.${index}.supplierId`,
+          code: 'INVALID_REALLOCATION_TARGET',
+          message: 'supplierId must be omitted when cancel is true',
+        });
+      }
+      if (!cancel) {
+        issues.push(...validateUuid(`assignments.${index}.supplierId`, assignment.supplierId));
+      }
+
+      if (typeof assignment.requestItemId === 'string' && (cancel || typeof assignment.supplierId === 'string')) {
+        assignments.push({
+          requestItemId: assignment.requestItemId,
+          supplierId: typeof assignment.supplierId === 'string' ? assignment.supplierId : undefined,
+          cancel,
+        });
+      }
+    }
+  }
+
+  throwIfInvalid(issues);
+  return {
+    id,
+    expectedVersion: body.expectedVersion as number,
+    rejectedOrderId: body.rejectedOrderId as string,
+    reason: reason!,
+    assignments,
+  };
 }
 
 function parseRejectBody(id: string, body: RejectBody): { id: string; expectedVersion: number; reason: string } {

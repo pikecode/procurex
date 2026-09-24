@@ -105,6 +105,12 @@ export type ReassignPurchaseRequestPreviewItem = {
   priceVersionId: string | null;
 };
 
+export type ReallocatePurchaseRequestAssignmentInput = {
+  requestItemId: string;
+  supplierId?: string;
+  cancel?: boolean;
+};
+
 export type ConfirmPurchaseRequestResult = {
   requestId: string;
   status: PurchaseRequestStatus;
@@ -400,6 +406,241 @@ export class PurchaseRequestsService {
         where: { id: request.id },
         data: {
           status: funding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS,
+          paymentStatus: funding.canConfirm ? PaymentStatus.PAID : PaymentStatus.UNPAID,
+          salesGoodsAmount: salesGoodsAmount.toFixed(2),
+          supplyGoodsAmount: supplyGoodsAmount.toFixed(2),
+          paidAmount: funding.paidAmount.toFixed(2),
+          shortfallAmount: funding.shortfallAmount.toFixed(2),
+          version: { increment: 1 },
+        },
+      });
+
+      return tx.purchaseRequest.findUniqueOrThrow({
+        where: { id: request.id },
+        include: {
+          items: { orderBy: { createdAt: 'asc' } },
+          supplierOrders: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+    });
+
+    return toPurchaseRequestDetailView(updated);
+  }
+
+  async reallocate(
+    id: string,
+    expectedVersion: number,
+    rejectedOrderId: string,
+    assignments: ReallocatePurchaseRequestAssignmentInput[],
+  ): Promise<PurchaseRequestDetailView> {
+    const request = await this.database.client.purchaseRequest.findUnique({
+      where: { id },
+      include: {
+        items: { orderBy: { createdAt: 'asc' } },
+        supplierOrders: { include: { items: true } },
+      },
+    });
+    if (!request) {
+      throw new NotFoundException({
+        code: 'PURCHASE_REQUEST_NOT_FOUND',
+        message: 'Purchase request was not found',
+      });
+    }
+
+    if (request.version !== expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Purchase request version has changed',
+        details: { expectedVersion, currentVersion: request.version },
+      });
+    }
+
+    if (request.status !== PurchaseRequestStatus.PARTIAL_PUSHED) {
+      throw new ConflictException({
+        code: 'PURCHASE_REQUEST_NOT_REALLOCATABLE',
+        message: 'Purchase request cannot be reallocated in its current status',
+        details: { status: request.status },
+      });
+    }
+
+    const rejectedOrder = request.supplierOrders.find((order) => order.id === rejectedOrderId);
+    if (!rejectedOrder || rejectedOrder.status !== SupplierOrderStatus.REJECTED) {
+      throw new ConflictException({
+        code: 'REJECTED_SUPPLIER_ORDER_NOT_FOUND',
+        message: 'Rejected supplier order does not belong to this purchase request',
+        details: { rejectedOrderId },
+      });
+    }
+
+    const requestItemsById = new Map(request.items.map((item) => [item.id, item]));
+    const rejectedProductIds = new Set(rejectedOrder.items.map((item) => item.productId));
+    const rejectedRequestItemIds = new Set(request.items.filter((item) => rejectedProductIds.has(item.productId)).map((item) => item.id));
+    const assignmentIds = new Set(assignments.map((assignment) => assignment.requestItemId));
+
+    if (assignmentIds.size !== assignments.length || assignmentIds.size !== rejectedRequestItemIds.size) {
+      throw new ConflictException({
+        code: 'INVALID_REALLOCATION_ASSIGNMENTS',
+        message: 'Assignments must cover each rejected request item exactly once',
+      });
+    }
+    for (const requestItemId of rejectedRequestItemIds) {
+      if (!assignmentIds.has(requestItemId)) {
+        throw new ConflictException({
+          code: 'INVALID_REALLOCATION_ASSIGNMENTS',
+          message: 'Assignments must cover each rejected request item exactly once',
+          details: { requestItemId },
+        });
+      }
+    }
+
+    const templateItems = await this.database.client.templateItem.findMany({
+      where: {
+        templateId: request.templateId,
+        isEnabled: true,
+        product: { isActive: true },
+      },
+      include: { suppliers: true },
+    });
+    const allowedSuppliersByProduct = new Map(
+      templateItems.map((item) => [item.productId, new Set(item.suppliers.map((supplier) => supplier.supplierId))]),
+    );
+
+    const pricedAssignments = await Promise.all(
+      assignments.map(async (assignment) => {
+        const item = requestItemsById.get(assignment.requestItemId);
+        if (!item || !rejectedRequestItemIds.has(item.id)) {
+          throw new ConflictException({
+            code: 'REALLOCATION_ITEM_NOT_REJECTED',
+            message: 'Assignment item is not part of the rejected supplier order',
+            details: { requestItemId: assignment.requestItemId },
+          });
+        }
+
+        if (assignment.cancel) {
+          return { assignment, item, price: null };
+        }
+
+        if (!assignment.supplierId) {
+          throw new ConflictException({
+            code: 'REALLOCATION_SUPPLIER_REQUIRED',
+            message: 'supplierId is required unless cancel is true',
+            details: { requestItemId: item.id },
+          });
+        }
+
+        const allowedSuppliers = allowedSuppliersByProduct.get(item.productId);
+        if (!allowedSuppliers?.has(assignment.supplierId)) {
+          throw new ConflictException({
+            code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT',
+            message: 'Supplier is not allowed for this template product',
+            details: { productId: item.productId, supplierId: assignment.supplierId },
+          });
+        }
+
+        const targetOrder = request.supplierOrders.find((order) => order.supplierId === assignment.supplierId && order.status !== SupplierOrderStatus.REJECTED);
+        if (targetOrder?.firstShippedAt) {
+          throw new ConflictException({
+            code: 'TARGET_SUPPLIER_ALREADY_SHIPPED',
+            message: 'Target supplier order has already shipped',
+            details: { supplierId: assignment.supplierId },
+          });
+        }
+
+        const price = await this.pricingService.getEffectivePrice(item.productId, assignment.supplierId, new Date());
+        return { assignment, item, price };
+      }),
+    );
+
+    const replacementItems = request.items
+      .filter((item) => !pricedAssignments.some((priced) => priced.item.id === item.id && priced.assignment.cancel))
+      .map((item) => {
+        const priced = pricedAssignments.find((candidate) => candidate.item.id === item.id && !candidate.assignment.cancel);
+        if (!priced?.price || !priced.assignment.supplierId) {
+          return item;
+        }
+        return {
+          ...item,
+          supplierId: priced.assignment.supplierId,
+          priceVersionId: priced.price.versionId,
+          salesUnitPrice: new Decimal(priced.price.salesPrice),
+          supplyUnitPrice: new Decimal(priced.price.supplyPrice),
+          salesLineAmount: lineAmount(item.quantity, priced.price.salesPrice),
+          supplyLineAmount: lineAmount(item.quantity, priced.price.supplyPrice),
+        };
+      });
+    const salesGoodsAmount = replacementItems.reduce((sum, item) => sum.plus(item.salesLineAmount), toMoney(0));
+    const supplyGoodsAmount = replacementItems.reduce((sum, item) => sum.plus(item.supplyLineAmount), toMoney(0));
+    const account = await this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } });
+    const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), salesGoodsAmount);
+
+    const updated = await this.database.client.$transaction(async (tx) => {
+      for (const priced of pricedAssignments) {
+        if (priced.assignment.cancel) {
+          await tx.requestItem.delete({ where: { id: priced.item.id } });
+          continue;
+        }
+
+        await tx.requestItem.update({
+          where: { id: priced.item.id },
+          data: {
+            supplierId: priced.assignment.supplierId!,
+            priceVersionId: priced.price!.versionId,
+            salesUnitPrice: priced.price!.salesPrice,
+            supplyUnitPrice: priced.price!.supplyPrice,
+            salesLineAmount: lineAmount(priced.item.quantity, priced.price!.salesPrice).toFixed(2),
+            supplyLineAmount: lineAmount(priced.item.quantity, priced.price!.supplyPrice).toFixed(2),
+          },
+        });
+
+        let targetOrder = request.supplierOrders.find(
+          (order) => order.supplierId === priced.assignment.supplierId && order.status !== SupplierOrderStatus.REJECTED,
+        );
+        const lineSalesAmount = lineAmount(priced.item.quantity, priced.price!.salesPrice).toFixed(2);
+        const lineSupplyAmount = lineAmount(priced.item.quantity, priced.price!.supplyPrice).toFixed(2);
+        if (!targetOrder) {
+          targetOrder = await tx.supplierOrder.create({
+            data: {
+              supplierOrderNo: makeSupplierOrderNo(),
+              requestId: request.id,
+              storeId: request.storeId,
+              supplierId: priced.assignment.supplierId!,
+              status: SupplierOrderStatus.PUSHED,
+              fulfillmentStatus: FulfillmentStatus.PENDING,
+              pushedAt: new Date(),
+              salesGoodsAmount: lineSalesAmount,
+              supplyGoodsAmount: lineSupplyAmount,
+            },
+            include: { items: true },
+          });
+          request.supplierOrders.push(targetOrder);
+        } else {
+          await tx.supplierOrder.update({
+            where: { id: targetOrder.id },
+            data: {
+              salesGoodsAmount: { increment: lineSalesAmount },
+              supplyGoodsAmount: { increment: lineSupplyAmount },
+              version: { increment: 1 },
+            },
+          });
+        }
+
+        await tx.orderItem.create({
+          data: {
+            supplierOrderId: targetOrder.id,
+            productId: priced.item.productId,
+            quantity: priced.item.quantity,
+            salesUnitPrice: priced.price!.salesPrice,
+            supplyUnitPrice: priced.price!.supplyPrice,
+            salesLineAmount: lineSalesAmount,
+            supplyLineAmount: lineSupplyAmount,
+          },
+        });
+      }
+
+      await tx.purchaseRequest.update({
+        where: { id: request.id },
+        data: {
+          status: funding.canConfirm ? PurchaseRequestStatus.CONFIRMED : PurchaseRequestStatus.PENDING_FUNDS,
           paymentStatus: funding.canConfirm ? PaymentStatus.PAID : PaymentStatus.UNPAID,
           salesGoodsAmount: salesGoodsAmount.toFixed(2),
           supplyGoodsAmount: supplyGoodsAmount.toFixed(2),
