@@ -39,6 +39,7 @@ export type SupplierStoreStatementDetailView = SupplierStoreStatementSummaryView
 };
 
 export type SupplierStoreStatementLineView = {
+  settlementItemId: string;
   supplierOrderId: string;
   supplierOrderNo: string;
   goodsAmount: string;
@@ -165,6 +166,7 @@ function toLineView(order: StatementOrder): SupplierStoreStatementLineView {
   const goodsAmount = new Decimal(order.supplyGoodsAmount);
   const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
   return {
+    settlementItemId: encodeSettlementItemId('SUPPLIER_PAYABLE', order.id),
     supplierOrderId: order.id,
     supplierOrderNo: order.supplierOrderNo,
     goodsAmount: goodsAmount.toFixed(2),
@@ -173,6 +175,10 @@ function toLineView(order: StatementOrder): SupplierStoreStatementLineView {
     sourceRevision: order.version,
     firstShippedAt: order.firstShippedAt!.toISOString(),
   };
+}
+
+function encodeSettlementItemId(kind: 'SUPPLIER_PAYABLE', supplierOrderId: string): string {
+  return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
 }
 
 function toSummaryView(group: StatementGroup): SupplierStoreStatementSummaryView {

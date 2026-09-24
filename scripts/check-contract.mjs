@@ -28,6 +28,7 @@ const [
   clearingsController,
   discrepanciesController,
   freightConfirmationsController,
+  paymentRecordsController,
   pricingService,
   pricingController,
   purchaseRequestsController,
@@ -53,6 +54,7 @@ const [
   readProjectFile('apps/api/src/clearings/clearings.controller.ts'),
   readProjectFile('apps/api/src/discrepancies/discrepancies.controller.ts'),
   readProjectFile('apps/api/src/freight-confirmations/freight-confirmations.controller.ts'),
+  readProjectFile('apps/api/src/payment-records/payment-records.controller.ts'),
   readProjectFile('apps/api/src/pricing/pricing.service.ts'),
     readProjectFile('apps/api/src/pricing/pricing.controller.ts'),
   readProjectFile('apps/api/src/purchase-requests/purchase-requests.controller.ts'),
@@ -121,6 +123,9 @@ assertIncludes(apiDesign, '`GET /supplier-store-statements`、`GET /supplier-sto
 assertIncludes(supplierStoreStatementsController, "@Controller('supplier-store-statements')", 'supplier store statements controller');
 assertIncludes(supplierStoreStatementsController, '@Get()', 'supplier store statements controller');
 assertIncludes(supplierStoreStatementsController, "@Get(':id')", 'supplier store statements controller');
+assertIncludes(apiDesign, '`POST /payment-records/preview`', 'api design');
+assertIncludes(paymentRecordsController, "@Controller('payment-records')", 'payment records controller');
+assertIncludes(paymentRecordsController, "@Post('preview')", 'payment records controller');
 assertIncludes(apiDesign, '`GET/POST /suppliers`、`GET/PATCH /suppliers/{id}`', 'api design');
 assertIncludes(suppliersController, "@Controller('suppliers')", 'suppliers controller');
 assertIncludes(apiDesign, '`GET/PUT /suppliers/{id}/products`', 'api design');

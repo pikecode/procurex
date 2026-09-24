@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently entering M4 settlement/read-model development.
 
-Latest completed milestone: B03 supplier-store statement read endpoint.
+Latest completed milestone: B06 payment preview endpoint.
 
 Latest implementation commit:
 
 ```text
-Add supplier-store statement read endpoint
+Add payment preview endpoint
 ```
 
 The working tree was clean after this commit.
@@ -201,6 +201,7 @@ Implemented interfaces:
 - B01 `GET /store-statements`, `GET /store-statements/{id}`
 - B02 `GET /supplier-statements`, `GET /supplier-statements/{id}`
 - B03 `GET /supplier-store-statements`, `GET /supplier-store-statements/{id}`
+- B06 `POST /payment-records/preview`
 
 Current B01 behavior:
 
@@ -226,21 +227,30 @@ Current B03 behavior:
 - Returns supplier-store statement details with source supplier order lines and source revision.
 - Keeps payment and settlement status as an OPEN read model in this first version; shared settlement item IDs are future work.
 
+Current B06 behavior:
+
+- Statement detail lines expose stable virtual `settlementItemId` values.
+- Store statement lines preview as `STORE_TO_COMPANY` payment items using sales amount plus shipment freight.
+- Supplier total and supplier-store statement lines share supplier payable IDs and preview as `COMPANY_TO_SUPPLIER` items using supply amount plus shipment freight.
+- Validates selected items are completed, share the same payment direction, and belong to the same paying/receiving subject.
+- Returns payable amount, pending amount, confirmed paid amount, source version, and blocked items.
+- Does not create payment records or reserve allocations yet.
+
 ## Recommended Next Step
 
-Start payment preview/allocation.
+Start payment record creation and allocation reservation.
 
 Suggested first version:
 
-- If moving into payment work, add payment preview over statement lines before creating payment records.
+- If moving into payment work, create payment records from previewed statement lines and reserve allocations.
 - If continuing fulfillment finance linkage, connect RETURN discrepancy records to settlement/payment difference disposal.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:
 
-1. Payment preview over statement lines.
-2. Payment record creation and confirmation.
+1. Payment record creation and allocation reservation.
+2. Payment confirmation, rejection, and cancellation.
 3. Settlement difference disposal for accepted, replenished, and returned discrepancies.
 
 ## Where To Look

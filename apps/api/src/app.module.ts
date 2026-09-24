@@ -8,6 +8,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { DiscrepanciesModule } from './discrepancies/discrepancies.module.js';
 import { FreightConfirmationsModule } from './freight-confirmations/freight-confirmations.module.js';
 import { HealthController } from './health.controller.js';
+import { PaymentRecordsModule } from './payment-records/payment-records.module.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { PurchaseRequestsModule } from './purchase-requests/purchase-requests.module.js';
 import { RechargesModule } from './recharges/recharges.module.js';
@@ -31,6 +32,7 @@ import { UsersModule } from './users/users.module.js';
     SuppliersModule,
     CatalogModule,
     ClearingsModule,
+    PaymentRecordsModule,
     PricingModule,
     TemplatesModule,
     PurchaseRequestsModule,

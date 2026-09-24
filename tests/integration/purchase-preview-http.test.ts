@@ -1703,7 +1703,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         goodsAmount: string;
         freightAmount: string;
         totalAmount: string;
-        lines: Array<{ supplierOrderId: string; goodsAmount: string; freightAmount: string; totalAmount: string }>;
+        lines: Array<{ settlementItemId: string; supplierOrderId: string; goodsAmount: string; freightAmount: string; totalAmount: string }>;
       };
     };
     assert.equal(storeStatementDetail.data.id, storeStatement.id);
@@ -1714,6 +1714,43 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(storeStatementDetail.data.lines[0]?.goodsAmount, '120.00');
     assert.equal(storeStatementDetail.data.lines[0]?.freightAmount, '18.50');
     assert.equal(storeStatementDetail.data.lines[0]?.totalAmount, '138.50');
+    const storePaymentPreviewResponse = await fetch(`${baseUrl}/payment-records/preview`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        settlementItemIds: [storeStatementDetail.data.lines[0]!.settlementItemId],
+      }),
+    });
+    assert.equal(storePaymentPreviewResponse.status, 201);
+    const storePaymentPreview = (await storePaymentPreviewResponse.json()) as {
+      data: {
+        direction: string;
+        channel: string;
+        storeId: string | null;
+        supplierId: string | null;
+        totalPayableAmount: string;
+        totalPendingPaymentAmount: string;
+        totalConfirmedPaidAmount: string;
+        items: Array<{ settlementItemId: string; kind: string; supplierOrderId: string; sourceVersion: number; payableAmount: string }>;
+        blockedItems: unknown[];
+      };
+    };
+    assert.equal(storePaymentPreview.data.direction, 'STORE_TO_COMPANY');
+    assert.equal(storePaymentPreview.data.channel, 'COMPANY');
+    assert.equal(storePaymentPreview.data.storeId, store.id);
+    assert.equal(storePaymentPreview.data.supplierId, null);
+    assert.equal(storePaymentPreview.data.totalPayableAmount, '138.50');
+    assert.equal(storePaymentPreview.data.totalPendingPaymentAmount, '0.00');
+    assert.equal(storePaymentPreview.data.totalConfirmedPaidAmount, '0.00');
+    assert.equal(storePaymentPreview.data.items[0]?.settlementItemId, storeStatementDetail.data.lines[0]?.settlementItemId);
+    assert.equal(storePaymentPreview.data.items[0]?.kind, 'STORE_RECEIVABLE');
+    assert.equal(storePaymentPreview.data.items[0]?.supplierOrderId, supplierBOrderAfterReallocate.id);
+    assert.equal(storePaymentPreview.data.items[0]?.sourceVersion, completedOrderAfterReturn.version);
+    assert.equal(storePaymentPreview.data.items[0]?.payableAmount, '138.50');
+    assert.equal(storePaymentPreview.data.blockedItems.length, 0);
     const supplierStatementsResponse = await fetch(`${baseUrl}/supplier-statements?supplierId=${supplierB.id}`, {
       headers: { authorization: `Bearer ${token}` },
     });
@@ -1754,7 +1791,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         goodsAmount: string;
         freightAmount: string;
         totalAmount: string;
-        lines: Array<{ supplierOrderId: string; storeId: string; goodsAmount: string; freightAmount: string; totalAmount: string }>;
+        lines: Array<{ settlementItemId: string; supplierOrderId: string; storeId: string; goodsAmount: string; freightAmount: string; totalAmount: string }>;
       };
     };
     assert.equal(supplierStatementDetail.data.id, supplierStatement.id);
@@ -1766,6 +1803,39 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierStatementDetail.data.lines[0]?.goodsAmount, '88.00');
     assert.equal(supplierStatementDetail.data.lines[0]?.freightAmount, '18.50');
     assert.equal(supplierStatementDetail.data.lines[0]?.totalAmount, '106.50');
+    const supplierPaymentPreviewResponse = await fetch(`${baseUrl}/payment-records/preview`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        settlementItemIds: [supplierStatementDetail.data.lines[0]!.settlementItemId],
+      }),
+    });
+    assert.equal(supplierPaymentPreviewResponse.status, 201);
+    const supplierPaymentPreview = (await supplierPaymentPreviewResponse.json()) as {
+      data: {
+        direction: string;
+        channel: string;
+        storeId: string | null;
+        supplierId: string | null;
+        totalPayableAmount: string;
+        items: Array<{ settlementItemId: string; kind: string; supplierOrderId: string; sourceVersion: number; payableAmount: string }>;
+        blockedItems: unknown[];
+      };
+    };
+    assert.equal(supplierPaymentPreview.data.direction, 'COMPANY_TO_SUPPLIER');
+    assert.equal(supplierPaymentPreview.data.channel, 'COMPANY');
+    assert.equal(supplierPaymentPreview.data.storeId, null);
+    assert.equal(supplierPaymentPreview.data.supplierId, supplierB.id);
+    assert.equal(supplierPaymentPreview.data.totalPayableAmount, '106.50');
+    assert.equal(supplierPaymentPreview.data.items[0]?.settlementItemId, supplierStatementDetail.data.lines[0]?.settlementItemId);
+    assert.equal(supplierPaymentPreview.data.items[0]?.kind, 'SUPPLIER_PAYABLE');
+    assert.equal(supplierPaymentPreview.data.items[0]?.supplierOrderId, supplierBOrderAfterReallocate.id);
+    assert.equal(supplierPaymentPreview.data.items[0]?.sourceVersion, completedOrderAfterReturn.version);
+    assert.equal(supplierPaymentPreview.data.items[0]?.payableAmount, '106.50');
+    assert.equal(supplierPaymentPreview.data.blockedItems.length, 0);
     const supplierStoreStatementsResponse = await fetch(
       `${baseUrl}/supplier-store-statements?supplierId=${supplierB.id}&storeId=${store.id}`,
       {
@@ -1812,7 +1882,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         goodsAmount: string;
         freightAmount: string;
         totalAmount: string;
-        lines: Array<{ supplierOrderId: string; goodsAmount: string; freightAmount: string; totalAmount: string }>;
+        lines: Array<{ settlementItemId: string; supplierOrderId: string; goodsAmount: string; freightAmount: string; totalAmount: string }>;
       };
     };
     assert.equal(supplierStoreStatementDetail.data.id, supplierStoreStatement.id);
@@ -1821,6 +1891,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierStoreStatementDetail.data.freightAmount, '18.50');
     assert.equal(supplierStoreStatementDetail.data.totalAmount, '106.50');
     assert.equal(supplierStoreStatementDetail.data.lines[0]?.supplierOrderId, supplierBOrderAfterReallocate.id);
+    assert.equal(supplierStoreStatementDetail.data.lines[0]?.settlementItemId, supplierStatementDetail.data.lines[0]?.settlementItemId);
     assert.equal(supplierStoreStatementDetail.data.lines[0]?.goodsAmount, '88.00');
     assert.equal(supplierStoreStatementDetail.data.lines[0]?.freightAmount, '18.50');
     assert.equal(supplierStoreStatementDetail.data.lines[0]?.totalAmount, '106.50');

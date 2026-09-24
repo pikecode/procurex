@@ -39,6 +39,7 @@ export type StoreStatementDetailView = StoreStatementSummaryView & {
 };
 
 export type StoreStatementLineView = {
+  settlementItemId: string;
   supplierOrderId: string;
   supplierOrderNo: string;
   goodsAmount: string;
@@ -158,6 +159,7 @@ function toLineView(order: StatementOrder): StoreStatementLineView {
   const goodsAmount = new Decimal(order.salesGoodsAmount);
   const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
   return {
+    settlementItemId: encodeSettlementItemId('STORE_RECEIVABLE', order.id),
     supplierOrderId: order.id,
     supplierOrderNo: order.supplierOrderNo,
     goodsAmount: goodsAmount.toFixed(2),
@@ -166,6 +168,10 @@ function toLineView(order: StatementOrder): StoreStatementLineView {
     sourceRevision: order.version,
     firstShippedAt: order.firstShippedAt!.toISOString(),
   };
+}
+
+function encodeSettlementItemId(kind: 'STORE_RECEIVABLE', supplierOrderId: string): string {
+  return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
 }
 
 function toSummaryView(group: StatementGroup): StoreStatementSummaryView {
