@@ -254,6 +254,7 @@ function parseShipmentPreviewBody(
     issues.push({ field: 'items', code: 'INVALID_ITEMS', message: 'items must be a non-empty array' });
   } else {
     const seen = new Set<string>();
+    const seenGapIds = new Set<string>();
     for (const [index, item] of body.items.entries()) {
       if (!isRecord(item)) {
         issues.push({ field: `items.${index}`, code: 'INVALID_ITEM', message: 'item must be an object' });
@@ -262,6 +263,7 @@ function parseShipmentPreviewBody(
       issues.push(...validateUuid(`items.${index}.orderItemId`, item.orderItemId));
       issues.push(...validateDecimalString(`items.${index}.shipQuantity`, item.shipQuantity, 6));
       issues.push(...validateDecimalString(`items.${index}.permanentlyReduceQuantity`, item.permanentlyReduceQuantity, 6));
+      const gapAllocations = parseGapAllocations(`items.${index}.gapAllocations`, item.gapAllocations, seenGapIds, issues);
       if (typeof item.orderItemId === 'string') {
         if (seen.has(item.orderItemId)) {
           issues.push({ field: `items.${index}.orderItemId`, code: 'DUPLICATE_ITEM_ID', message: 'order item ids must not repeat' });
@@ -277,6 +279,7 @@ function parseShipmentPreviewBody(
           orderItemId: item.orderItemId,
           shipQuantity: item.shipQuantity,
           permanentlyReduceQuantity: item.permanentlyReduceQuantity,
+          gapAllocations,
         });
       }
     }
@@ -296,6 +299,42 @@ function parseShipmentPreviewBody(
       trackingNo,
     },
   };
+}
+
+function parseGapAllocations(
+  field: string,
+  value: unknown,
+  seenGapIds: Set<string>,
+  issues: ValidationIssue[],
+): ShipmentPreviewInput['items'][number]['gapAllocations'] {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    issues.push({ field, code: 'INVALID_GAP_ALLOCATIONS', message: 'gapAllocations must be an array' });
+    return undefined;
+  }
+
+  const allocations: NonNullable<ShipmentPreviewInput['items'][number]['gapAllocations']> = [];
+  for (const [index, allocation] of value.entries()) {
+    if (!isRecord(allocation)) {
+      issues.push({ field: `${field}.${index}`, code: 'INVALID_GAP_ALLOCATION', message: 'gap allocation must be an object' });
+      continue;
+    }
+    issues.push(...validateUuid(`${field}.${index}.gapId`, allocation.gapId));
+    issues.push(...validateDecimalString(`${field}.${index}.quantity`, allocation.quantity, 6));
+    if (typeof allocation.gapId === 'string') {
+      if (seenGapIds.has(allocation.gapId)) {
+        issues.push({ field: `${field}.${index}.gapId`, code: 'DUPLICATE_GAP_ID', message: 'gap ids must not repeat' });
+      }
+      seenGapIds.add(allocation.gapId);
+    }
+    if (typeof allocation.gapId === 'string' && typeof allocation.quantity === 'string') {
+      allocations.push({ gapId: allocation.gapId, quantity: allocation.quantity });
+    }
+  }
+
+  return allocations;
 }
 
 function optionalTrimmedString(field: string, value: unknown, issues: ValidationIssue[]): string | undefined {

@@ -526,9 +526,23 @@ model ShipmentItem {
   shipment            Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   orderItem           OrderItem @relation(fields: [orderItemId], references: [id])
   receiptItems        ReceiptItem[]
+  gapAllocations      ShipmentGapAllocation[]
 
   @@unique([shipmentId, orderItemId])
   @@index([orderItemId])
+}
+
+model ShipmentGapAllocation {
+  id             String           @id @default(uuid()) @db.Uuid
+  shipmentItemId String           @db.Uuid
+  gapId          String           @db.Uuid
+  quantity       Decimal          @db.Decimal(20, 6)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+  shipmentItem   ShipmentItem     @relation(fields: [shipmentItemId], references: [id], onDelete: Cascade)
+  gap            ReplenishmentGap @relation(fields: [gapId], references: [id])
+
+  @@unique([shipmentItemId, gapId])
+  @@index([gapId])
 }
 
 model Receipt {
@@ -601,6 +615,7 @@ model ReplenishmentGap {
   updatedAt         DateTime               @updatedAt @db.Timestamptz(6)
   discrepancy       Discrepancy            @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
   orderItem         OrderItem              @relation(fields: [orderItemId], references: [id])
+  shipmentAllocations ShipmentGapAllocation[]
 
   @@index([orderItemId, status])
   @@index([status])

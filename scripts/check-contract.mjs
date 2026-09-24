@@ -120,6 +120,8 @@ assertIncludes(apiDesign, '`POST /supplier-orders/{id}/shipment-preview`', 'api 
 assertIncludes(supplierOrdersController, "@Post(':id/shipment-preview')", 'supplier orders controller');
 assertIncludes(apiDesign, '`POST /supplier-orders/{id}/shipments`', 'api design');
 assertIncludes(supplierOrdersController, "@Post(':id/shipments')", 'supplier orders controller');
+assertIncludes(supplierOrdersController, 'gapAllocations', 'supplier orders controller');
+assertIncludes(prismaSchema, 'model ShipmentGapAllocation', 'prisma schema');
 assertIncludes(apiDesign, '`POST /shipments/{id}/receipts`', 'api design');
 assertIncludes(shipmentsController, "@Post(':id/receipts')", 'shipments controller');
 assertIncludes(apiDesign, '`POST /discrepancies/{id}/resolve`', 'api design');

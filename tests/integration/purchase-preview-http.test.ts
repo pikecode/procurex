@@ -1382,6 +1382,58 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(persistedGap.status, 'PENDING');
     assert.equal(persistedGap.remainingQuantity.toString(), '1');
 
+    const orderBeforeGapShipment = await prisma.supplierOrder.findUniqueOrThrow({
+      where: { id: supplierBOrderAfterReallocate.id },
+    });
+    const createGapShipmentResponse = await fetch(`${baseUrl}/supplier-orders/${supplierBOrderAfterReallocate.id}/shipments`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'idempotency-key': 'create-gap-shipment-once',
+        'x-trace-id': 'trace-create-gap-shipment',
+      },
+      body: JSON.stringify({
+        expectedVersion: orderBeforeGapShipment.version,
+        freight: '0.00',
+        items: [
+          {
+            orderItemId: productAOrderItem.id,
+            shipQuantity: '1.000000',
+            permanentlyReduceQuantity: '0.000000',
+            gapAllocations: [{ gapId: persistedGap.id, quantity: '1.000000' }],
+          },
+        ],
+      }),
+    });
+    assert.equal(createGapShipmentResponse.status, 201);
+    const gapShipment = (await createGapShipmentResponse.json()) as {
+      data: {
+        id: string;
+        kind: string;
+        items: Array<{
+          id: string;
+          orderItemId: string;
+          quantity: string;
+          gapAllocations: Array<{ gapId: string; quantity: string }>;
+        }>;
+      };
+    };
+    assert.equal(gapShipment.data.kind, 'REPLENISHMENT');
+    const gapShipmentProductA = gapShipment.data.items.find((item) => item.orderItemId === productAOrderItem.id);
+    assert.equal(gapShipmentProductA?.quantity, '1');
+    assert.deepEqual(gapShipmentProductA?.gapAllocations, [{ gapId: persistedGap.id, quantity: '1' }]);
+    const filledGap = await prisma.replenishmentGap.findUniqueOrThrow({ where: { id: persistedGap.id } });
+    assert.equal(filledGap.status, 'FILLED');
+    assert.equal(filledGap.remainingQuantity.toString(), '0');
+    assert.equal(filledGap.version, 2);
+    const persistedGapAllocations = await prisma.shipmentGapAllocation.findMany({
+      where: { gapId: persistedGap.id },
+    });
+    assert.equal(persistedGapAllocations.length, 1);
+    assert.equal(persistedGapAllocations[0]?.shipmentItemId, gapShipmentProductA?.id);
+    assert.equal(persistedGapAllocations[0]?.quantity.toString(), '1');
+
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
     });
@@ -1395,6 +1447,9 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
     await prisma.freightConfirmation.deleteMany({
       where: { supplierOrder: { request: { store: { code: storeCode } } } },
+    });
+    await prisma.shipmentGapAllocation.deleteMany({
+      where: { shipmentItem: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } },
     });
     await prisma.replenishmentGap.deleteMany({
       where: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } },

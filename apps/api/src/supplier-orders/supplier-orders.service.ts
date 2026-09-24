@@ -4,10 +4,18 @@ import { Decimal } from 'decimal.js';
 import {
   FulfillmentStatus,
   PurchaseRequestStatus,
+  ReplenishmentGapStatus,
   ShipmentKind,
   SupplierOrderStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { OrderItem, Shipment, ShipmentItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import type {
+  OrderItem,
+  ReplenishmentGap,
+  Shipment,
+  ShipmentGapAllocation,
+  ShipmentItem,
+  SupplierOrder,
+} from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type ListSupplierOrdersInput = {
@@ -69,6 +77,12 @@ export type ShipmentPreviewItemInput = {
   orderItemId: string;
   shipQuantity: string;
   permanentlyReduceQuantity: string;
+  gapAllocations?: ShipmentGapAllocationInput[];
+};
+
+export type ShipmentGapAllocationInput = {
+  gapId: string;
+  quantity: string;
 };
 
 export type ShipmentPreviewView = {
@@ -105,6 +119,12 @@ export type ShipmentItemView = {
   permanentlyReduced: string;
   salesLineAmount: string;
   supplyLineAmount: string;
+  gapAllocations: ShipmentGapAllocationView[];
+};
+
+export type ShipmentGapAllocationView = {
+  gapId: string;
+  quantity: string;
 };
 
 export type ShipmentPreviewItemView = {
@@ -119,6 +139,14 @@ export type ShipmentPreviewItemView = {
   remainingQuantityAfter: string;
   salesLineAmount: string;
   supplyLineAmount: string;
+  gapAllocations: ShipmentPreviewGapAllocationView[];
+};
+
+export type ShipmentPreviewGapAllocationView = {
+  gapId: string;
+  quantity: string;
+  remainingQuantityBefore: string;
+  remainingQuantityAfter: string;
 };
 
 @Injectable()
@@ -186,6 +214,11 @@ export class SupplierOrdersService {
     }
 
     const orderItemsById = new Map(order.items.map((item) => [item.id, item]));
+    const requestedGapIds = input.items.flatMap((item) => item.gapAllocations?.map((allocation) => allocation.gapId) ?? []);
+    const gaps = requestedGapIds.length
+      ? await this.database.client.replenishmentGap.findMany({ where: { id: { in: requestedGapIds } } })
+      : [];
+    const gapsById = new Map(gaps.map((gap) => [gap.id, gap]));
     const previewItems = input.items.map((inputItem) => {
       const item = orderItemsById.get(inputItem.orderItemId);
       if (!item) {
@@ -211,6 +244,54 @@ export class SupplierOrdersService {
         });
       }
 
+      const gapAllocations = (inputItem.gapAllocations ?? []).map((allocation) => {
+        const gap = gapsById.get(allocation.gapId);
+        if (!gap) {
+          throw new ConflictException({
+            code: 'REPLENISHMENT_GAP_NOT_FOUND',
+            message: 'Replenishment gap was not found',
+            details: { gapId: allocation.gapId },
+          });
+        }
+        if (gap.orderItemId !== item.id) {
+          throw new ConflictException({
+            code: 'REPLENISHMENT_GAP_ITEM_MISMATCH',
+            message: 'Replenishment gap does not belong to the shipment order item',
+            details: { gapId: gap.id, orderItemId: item.id },
+          });
+        }
+        if (gap.status !== ReplenishmentGapStatus.PENDING && gap.status !== ReplenishmentGapStatus.PARTIAL_FILLED) {
+          throw new ConflictException({
+            code: 'REPLENISHMENT_GAP_NOT_ALLOCATABLE',
+            message: 'Replenishment gap cannot be allocated in its current status',
+            details: { gapId: gap.id, status: gap.status },
+          });
+        }
+        const quantity = new Decimal(allocation.quantity);
+        if (quantity.lte(0) || quantity.gt(gap.remainingQuantity)) {
+          throw new ConflictException({
+            code: 'INVALID_REPLENISHMENT_GAP_QUANTITY',
+            message: 'Replenishment gap allocation must be positive and cannot exceed remaining gap quantity',
+            details: { gapId: gap.id, remainingQuantity: gap.remainingQuantity.toString() },
+          });
+        }
+        const remainingQuantityAfter = new Decimal(gap.remainingQuantity).minus(quantity);
+        return {
+          gapId: gap.id,
+          quantity: quantity.toDecimalPlaces(6).toString(),
+          remainingQuantityBefore: gap.remainingQuantity.toString(),
+          remainingQuantityAfter: remainingQuantityAfter.toDecimalPlaces(6).toString(),
+        };
+      });
+      const allocatedGapQuantity = gapAllocations.reduce((sum, allocation) => sum.plus(allocation.quantity), new Decimal(0));
+      if (allocatedGapQuantity.gt(shipQuantity)) {
+        throw new ConflictException({
+          code: 'INVALID_REPLENISHMENT_GAP_QUANTITY',
+          message: 'Replenishment gap allocations cannot exceed shipped quantity',
+          details: { orderItemId: item.id, shipQuantity: shipQuantity.toDecimalPlaces(6).toString() },
+        });
+      }
+
       const remainingAfter = remainingBefore.minus(handledQuantity);
       return {
         orderItemId: item.id,
@@ -224,6 +305,7 @@ export class SupplierOrdersService {
         remainingQuantityAfter: remainingAfter.toDecimalPlaces(6).toString(),
         salesLineAmount: shipQuantity.mul(item.salesUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
         supplyLineAmount: shipQuantity.mul(item.supplyUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
+        gapAllocations,
       };
     });
 
@@ -273,7 +355,7 @@ export class SupplierOrdersService {
 
       for (const previewItem of preview.items) {
         const orderItem = orderItemsById.get(previewItem.orderItemId)!;
-        await tx.shipmentItem.create({
+        const shipmentItem = await tx.shipmentItem.create({
           data: {
             shipmentId: created.id,
             orderItemId: orderItem.id,
@@ -285,6 +367,25 @@ export class SupplierOrdersService {
             supplyLineAmount: previewItem.supplyLineAmount,
           },
         });
+        for (const allocation of previewItem.gapAllocations) {
+          await tx.shipmentGapAllocation.create({
+            data: {
+              shipmentItemId: shipmentItem.id,
+              gapId: allocation.gapId,
+              quantity: allocation.quantity,
+            },
+          });
+          await tx.replenishmentGap.update({
+            where: { id: allocation.gapId },
+            data: {
+              remainingQuantity: allocation.remainingQuantityAfter,
+              status: new Decimal(allocation.remainingQuantityAfter).eq(0)
+                ? ReplenishmentGapStatus.FILLED
+                : ReplenishmentGapStatus.PARTIAL_FILLED,
+              version: { increment: 1 },
+            },
+          });
+        }
         await tx.orderItem.update({
           where: { id: orderItem.id },
           data: {
@@ -305,7 +406,7 @@ export class SupplierOrdersService {
 
       return tx.shipment.findUniqueOrThrow({
         where: { id: created.id },
-        include: { items: { include: { orderItem: true }, orderBy: { createdAt: 'asc' } } },
+        include: { items: { include: { orderItem: true, gapAllocations: true }, orderBy: { createdAt: 'asc' } } },
       });
     });
 
@@ -424,7 +525,9 @@ function toSupplierOrderItemView(item: OrderItem): SupplierOrderItemView {
   };
 }
 
-function toShipmentView(shipment: Shipment & { items: Array<ShipmentItem & { orderItem: OrderItem }> }): ShipmentView {
+function toShipmentView(
+  shipment: Shipment & { items: Array<ShipmentItem & { orderItem: OrderItem; gapAllocations: ShipmentGapAllocation[] }> },
+): ShipmentView {
   return {
     id: shipment.id,
     shipmentNo: shipment.shipmentNo,
@@ -442,6 +545,10 @@ function toShipmentView(shipment: Shipment & { items: Array<ShipmentItem & { ord
       permanentlyReduced: item.permanentlyReduced.toString(),
       salesLineAmount: item.salesLineAmount.toFixed(2),
       supplyLineAmount: item.supplyLineAmount.toFixed(2),
+      gapAllocations: item.gapAllocations.map((allocation) => ({
+        gapId: allocation.gapId,
+        quantity: allocation.quantity.toString(),
+      })),
     })),
   };
 }

@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: F05 REPLENISH gap tracking.
+Latest completed milestone: F03 shipment gap allocation.
 
 Latest implementation commit:
 
 ```text
-Add replenishment gap tracking
+Add shipment gap allocation
 ```
 
 The working tree was clean after this commit.
@@ -82,6 +82,9 @@ Implemented interfaces:
 Current F03 behavior:
 
 - Creates `Shipment` and `ShipmentItem` records.
+- Supports item-level `gapAllocations` for replenishment gaps.
+- Creates `ShipmentGapAllocation` records and decrements gap remaining quantity.
+- Marks replenishment gaps PARTIAL_FILLED or FILLED when allocated.
 - Updates `OrderItem.shippedQuantity`.
 - Updates supplier order status and fulfillment status to `PARTIAL_SHIPPED` or `SHIPPED`.
 - Uses Idempotency-Key through command records.
@@ -118,20 +121,20 @@ Current F06/F07 behavior:
 
 - Current access control is role-based. Supplier-user and store-user data-scope binding is not implemented yet.
 - Funding logic is still a first pass. It records stored-value summaries but does not yet implement the complete immutable allocation/ledger behavior described in the long-term design.
-- F03 stores permanently reduced quantity on shipment items, but shipment consumption of replenishment gaps is not implemented yet.
+- F03 stores permanently reduced quantity on shipment items. Replenishment gap allocation is supported when the caller provides explicit `gapAllocations`.
 - F04 currently supports first receipt creation only. Receipt revision replacement is not implemented yet.
 - F05 currently supports ACCEPT and REPLENISH. RETURN still requires a return model.
-- Shipment gap allocation, shipment usage of confirmed freight, settlement, and reconciliation remain future work.
+- Shipment usage of confirmed freight, settlement, and reconciliation remain future work.
 - Frontend pages are not implemented yet.
 
 ## Recommended Next Step
 
-Implement shipment gap allocation or O11 funding reconciliation.
+Implement confirmed freight usage on replenishment shipment creation or O11 funding reconciliation.
 
 Suggested first version:
 
-- If continuing discrepancy work, add `gapAllocations` to shipment preview/create and consume replenishment gaps.
 - If continuing freight work, wire confirmed freight confirmations into replenishment shipment creation and mark used.
+- If continuing fulfillment work, tighten completion status after all discrepancies and gaps are closed.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
