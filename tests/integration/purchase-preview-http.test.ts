@@ -1575,7 +1575,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
           items: [
             {
               shipmentItemId: gapShipmentProductA!.id,
-              receivedQuantity: '1.000000',
+              receivedQuantity: '0.000000',
             },
           ],
         }),
@@ -1591,7 +1591,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(replacementReceipt.data.shipmentId, gapShipment.data.id);
     assert.equal(replacementReceipt.data.revision, 2);
     assert.equal(replacementReceipt.data.isCurrent, true);
-    assert.equal(replacementReceipt.data.items[0]?.receivedQuantity, '1');
+    assert.equal(replacementReceipt.data.items[0]?.receivedQuantity, '0');
     const gapReceipts = await prisma.receipt.findMany({
       where: { shipmentId: gapShipment.data.id },
       orderBy: { revision: 'asc' },
@@ -1599,11 +1599,70 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(gapReceipts.length, 2);
     assert.equal(gapReceipts[0]?.isCurrent, false);
     assert.equal(gapReceipts[1]?.isCurrent, true);
-    const completedOrderAfterReplacement = await prisma.supplierOrder.findUniqueOrThrow({
+    const returnDiscrepancy = await prisma.discrepancy.findFirstOrThrow({
+      where: {
+        orderItemId: productAOrderItem.id,
+        receiptItem: { receiptId: replacementReceipt.data.id },
+        status: 'OPEN',
+      },
+    });
+    assert.equal(returnDiscrepancy.missingQuantity.toString(), '1');
+    const orderAfterReplacement = await prisma.supplierOrder.findUniqueOrThrow({
       where: { id: supplierBOrderAfterReallocate.id },
     });
-    assert.equal(completedOrderAfterReplacement.status, 'COMPLETED');
-    assert.equal(completedOrderAfterReplacement.fulfillmentStatus, 'COMPLETED');
+    assert.equal(orderAfterReplacement.status, 'PARTIAL_SHIPPED');
+    assert.equal(orderAfterReplacement.fulfillmentStatus, 'PARTIAL_SHIPPED');
+    const resolveReturnDiscrepancy = async () => {
+      const response = await fetch(`${baseUrl}/discrepancies/${returnDiscrepancy.id}/resolve`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'resolve-return-discrepancy-once',
+          'x-trace-id': 'trace-resolve-return-discrepancy',
+        },
+        body: JSON.stringify({
+          expectedVersion: returnDiscrepancy.version,
+          action: 'RETURN',
+          reason: 'Supplier will return shortage value',
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          orderItemId: string;
+          missingQuantity: string;
+          status: string;
+          version: number;
+          resolvedAt: string | null;
+          returnRecord: { id: string; discrepancyId: string; orderItemId: string; quantity: string; reason: string | null } | null;
+        };
+      };
+    };
+    const returnedDiscrepancy = await resolveReturnDiscrepancy();
+    const returnedDiscrepancyReplay = await resolveReturnDiscrepancy();
+    assert.deepEqual(returnedDiscrepancyReplay.data, returnedDiscrepancy.data);
+    assert.equal(returnedDiscrepancy.data.id, returnDiscrepancy.id);
+    assert.equal(returnedDiscrepancy.data.orderItemId, productAOrderItem.id);
+    assert.equal(returnedDiscrepancy.data.missingQuantity, '1');
+    assert.equal(returnedDiscrepancy.data.status, 'RESOLVED');
+    assert.equal(returnedDiscrepancy.data.version, 2);
+    assert.ok(returnedDiscrepancy.data.resolvedAt);
+    assert.equal(returnedDiscrepancy.data.returnRecord?.discrepancyId, returnDiscrepancy.id);
+    assert.equal(returnedDiscrepancy.data.returnRecord?.orderItemId, productAOrderItem.id);
+    assert.equal(returnedDiscrepancy.data.returnRecord?.quantity, '1');
+    assert.equal(returnedDiscrepancy.data.returnRecord?.reason, 'Supplier will return shortage value');
+    const persistedReturn = await prisma.discrepancyReturn.findUniqueOrThrow({
+      where: { discrepancyId: returnDiscrepancy.id },
+    });
+    assert.equal(persistedReturn.quantity.toString(), '1');
+    assert.equal(persistedReturn.reason, 'Supplier will return shortage value');
+    const completedOrderAfterReturn = await prisma.supplierOrder.findUniqueOrThrow({
+      where: { id: supplierBOrderAfterReallocate.id },
+    });
+    assert.equal(completedOrderAfterReturn.status, 'COMPLETED');
+    assert.equal(completedOrderAfterReturn.fulfillmentStatus, 'COMPLETED');
 
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
@@ -1623,6 +1682,9 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       where: { shipmentItem: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } },
     });
     await prisma.replenishmentGap.deleteMany({
+      where: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } },
+    });
+    await prisma.discrepancyReturn.deleteMany({
       where: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } },
     });
     await prisma.discrepancyAction.deleteMany({ where: { discrepancy: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } } } });

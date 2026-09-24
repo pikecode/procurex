@@ -6,7 +6,7 @@ import {
   ReplenishmentGapStatus,
   SupplierOrderStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { Discrepancy, ReplenishmentGap } from '../../../../packages/backend/generated/prisma/client.js';
+import type { Discrepancy, DiscrepancyReturn, ReplenishmentGap } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import { resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
 
@@ -26,6 +26,7 @@ export type DiscrepancyView = {
   resolvedAt: string | null;
   createdAt: string;
   replenishmentGap: ReplenishmentGapView | null;
+  returnRecord: DiscrepancyReturnView | null;
 };
 
 export type ReplenishmentGapView = {
@@ -40,6 +41,15 @@ export type ReplenishmentGapView = {
   updatedAt: string;
 };
 
+export type DiscrepancyReturnView = {
+  id: string;
+  discrepancyId: string;
+  orderItemId: string;
+  quantity: string;
+  reason: string | null;
+  createdAt: string;
+};
+
 @Injectable()
 export class DiscrepanciesService {
   constructor(private readonly database: DatabaseService) {}
@@ -47,7 +57,7 @@ export class DiscrepanciesService {
   async resolve(id: string, input: ResolveDiscrepancyInput): Promise<DiscrepancyView> {
     const discrepancy = await this.database.client.discrepancy.findUnique({
       where: { id },
-      include: { replenishmentGap: true },
+      include: { replenishmentGap: true, returnRecord: true },
     });
     if (!discrepancy) {
       throw new NotFoundException({
@@ -76,14 +86,6 @@ export class DiscrepanciesService {
       });
     }
 
-    if (input.action === DiscrepancyActionType.RETURN) {
-      throw new ConflictException({
-        code: 'DISCREPANCY_ACTION_NOT_SUPPORTED',
-        message: 'RETURN discrepancy resolution is not supported in this version',
-        details: { action: input.action },
-      });
-    }
-
     const resolved = await this.database.client.$transaction(async (tx) => {
       await tx.discrepancyAction.create({
         data: {
@@ -103,15 +105,25 @@ export class DiscrepanciesService {
           },
         });
       }
+      if (input.action === DiscrepancyActionType.RETURN) {
+        await tx.discrepancyReturn.create({
+          data: {
+            discrepancyId: discrepancy.id,
+            orderItemId: discrepancy.orderItemId,
+            quantity: discrepancy.missingQuantity,
+            reason: input.reason,
+          },
+        });
+      }
 
       const updated = await tx.discrepancy.update({
         where: { id: discrepancy.id },
         data: {
           status: input.action === DiscrepancyActionType.REPLENISH ? DiscrepancyStatus.REPLENISH_PENDING : DiscrepancyStatus.RESOLVED,
-          resolvedAt: input.action === DiscrepancyActionType.ACCEPT ? new Date() : undefined,
+          resolvedAt: input.action !== DiscrepancyActionType.REPLENISH ? new Date() : undefined,
           version: { increment: 1 },
         },
-        include: { replenishmentGap: true },
+        include: { replenishmentGap: true, returnRecord: true },
       });
 
       const orderItem = await tx.orderItem.findUniqueOrThrow({
@@ -142,7 +154,9 @@ export class DiscrepanciesService {
   }
 }
 
-function toDiscrepancyView(discrepancy: Discrepancy & { replenishmentGap?: ReplenishmentGap | null }): DiscrepancyView {
+function toDiscrepancyView(
+  discrepancy: Discrepancy & { replenishmentGap?: ReplenishmentGap | null; returnRecord?: DiscrepancyReturn | null },
+): DiscrepancyView {
   return {
     id: discrepancy.id,
     receiptItemId: discrepancy.receiptItemId,
@@ -153,6 +167,7 @@ function toDiscrepancyView(discrepancy: Discrepancy & { replenishmentGap?: Reple
     resolvedAt: discrepancy.resolvedAt?.toISOString() ?? null,
     createdAt: discrepancy.createdAt.toISOString(),
     replenishmentGap: discrepancy.replenishmentGap ? toReplenishmentGapView(discrepancy.replenishmentGap) : null,
+    returnRecord: discrepancy.returnRecord ? toDiscrepancyReturnView(discrepancy.returnRecord) : null,
   };
 }
 
@@ -167,5 +182,16 @@ function toReplenishmentGapView(gap: ReplenishmentGap): ReplenishmentGapView {
     version: gap.version,
     createdAt: gap.createdAt.toISOString(),
     updatedAt: gap.updatedAt.toISOString(),
+  };
+}
+
+function toDiscrepancyReturnView(returnRecord: DiscrepancyReturn): DiscrepancyReturnView {
+  return {
+    id: returnRecord.id,
+    discrepancyId: returnRecord.discrepancyId,
+    orderItemId: returnRecord.orderItemId,
+    quantity: returnRecord.quantity.toString(),
+    reason: returnRecord.reason,
+    createdAt: returnRecord.createdAt.toISOString(),
   };
 }

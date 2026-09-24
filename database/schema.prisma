@@ -498,6 +498,7 @@ model OrderItem {
   shipmentItems     ShipmentItem[]
   discrepancies     Discrepancy[]
   replenishmentGaps ReplenishmentGap[]
+  discrepancyReturns DiscrepancyReturn[]
 
   @@unique([supplierOrderId, productId])
 }
@@ -597,6 +598,7 @@ model Discrepancy {
   orderItem       OrderItem           @relation(fields: [orderItemId], references: [id])
   actions         DiscrepancyAction[]
   replenishmentGap ReplenishmentGap?
+  returnRecord    DiscrepancyReturn?
 
   @@index([orderItemId])
   @@index([status])
@@ -611,6 +613,19 @@ model DiscrepancyAction {
   discrepancy   Discrepancy           @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
 
   @@index([discrepancyId, createdAt])
+}
+
+model DiscrepancyReturn {
+  id            String      @id @default(uuid()) @db.Uuid
+  discrepancyId String      @unique @db.Uuid
+  orderItemId   String      @db.Uuid
+  quantity      Decimal     @db.Decimal(20, 6)
+  reason        String?     @db.VarChar(300)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(6)
+  discrepancy   Discrepancy @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
+  orderItem     OrderItem   @relation(fields: [orderItemId], references: [id])
+
+  @@index([orderItemId, createdAt])
 }
 
 model ReplenishmentGap {

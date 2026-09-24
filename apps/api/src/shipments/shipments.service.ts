@@ -191,7 +191,7 @@ export class ShipmentsService {
         where: { id: shipment.supplierOrderId },
         data: {
           fulfillmentStatus: nextFulfillmentStatus,
-          status: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : shipment.supplierOrder.status,
+          status: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : SupplierOrderStatus.PARTIAL_SHIPPED,
           version: { increment: 1 },
         },
       });

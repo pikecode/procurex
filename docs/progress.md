@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: F04 receipt revision replacement.
+Latest completed milestone: F05 RETURN discrepancy handling.
 
 Latest implementation commit:
 
 ```text
-Add receipt revision replacement
+Add discrepancy return resolution
 ```
 
 The working tree was clean after this commit.
@@ -112,9 +112,10 @@ Current F05 behavior:
 
 - Creates an OPEN discrepancy automatically when a receipt item is short.
 - Implements `POST /discrepancies/{id}/resolve`.
-- Supports ACCEPT and REPLENISH resolution in this version.
+- Supports ACCEPT, REPLENISH, and RETURN resolution in this version.
 - ACCEPT persists a discrepancy action record and marks the discrepancy RESOLVED.
 - REPLENISH persists a discrepancy action record, marks the discrepancy REPLENISH_PENDING, and creates a replenishment gap with pending quantity.
+- RETURN persists a discrepancy action record, creates a return record for the shortage quantity, and marks the discrepancy RESOLVED.
 - Resolving discrepancies recalculates supplier order fulfillment status.
 - Uses Idempotency-Key through command records.
 
@@ -132,8 +133,7 @@ Current F06/F07 behavior:
 - Current access control is role-based. Supplier-user and store-user data-scope binding is not implemented yet.
 - Funding logic is still a first pass. It records stored-value summaries and O11 reconciliation results but does not yet implement the complete immutable allocation/ledger behavior described in the long-term design.
 - F03 stores permanently reduced quantity on shipment items. Replenishment gap allocation is supported when the caller provides explicit `gapAllocations`.
-- F04 currently supports first receipt creation only. Receipt revision replacement is not implemented yet.
-- F05 currently supports ACCEPT and REPLENISH. RETURN still requires a return model.
+- F05 RETURN currently records internal shortage-return resolution. Downstream supplier statement/payment disposal remains future work.
 - Settlement and reconciliation remain future work.
 - Frontend pages are not implemented yet.
 
@@ -196,20 +196,20 @@ Current A05 behavior:
 
 ## Recommended Next Step
 
-Start statement/payment read models, or add RETURN discrepancy handling.
+Start statement/payment read models or settlement difference disposal.
 
 Suggested first version:
 
-- If continuing fulfillment work, add RETURN discrepancy handling.
 - If continuing finance work, start statement/payment read models.
+- If continuing fulfillment finance linkage, connect RETURN discrepancy records to settlement/payment difference disposal.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:
 
-1. Replenishment gap tracking for shortages.
-2. O11 funding reconciliation.
-3. Finance/settlement modules.
+1. Statement/payment read models.
+2. Settlement difference disposal for accepted, replenished, and returned discrepancies.
+3. Frontend pages for purchase, fulfillment, and finance operations.
 
 ## Where To Look
 
