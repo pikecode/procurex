@@ -1560,6 +1560,50 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     });
     assert.equal(completedOrder.status, 'COMPLETED');
     assert.equal(completedOrder.fulfillmentStatus, 'COMPLETED');
+    const replaceGapReceipt = async () => {
+      const response = await fetch(`${baseUrl}/shipments/${gapShipment.data.id}/receipts`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'replace-gap-receipt-once',
+          'x-trace-id': 'trace-replace-gap-receipt',
+        },
+        body: JSON.stringify({
+          expectedOrderVersion: completedOrder.version,
+          expectedReceiptRevision: 1,
+          items: [
+            {
+              shipmentItemId: gapShipmentProductA!.id,
+              receivedQuantity: '1.000000',
+            },
+          ],
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: { id: string; shipmentId: string; revision: number; isCurrent: boolean; items: Array<{ shipmentItemId: string; receivedQuantity: string }> };
+      };
+    };
+    const replacementReceipt = await replaceGapReceipt();
+    const replacementReceiptReplay = await replaceGapReceipt();
+    assert.deepEqual(replacementReceiptReplay.data, replacementReceipt.data);
+    assert.equal(replacementReceipt.data.shipmentId, gapShipment.data.id);
+    assert.equal(replacementReceipt.data.revision, 2);
+    assert.equal(replacementReceipt.data.isCurrent, true);
+    assert.equal(replacementReceipt.data.items[0]?.receivedQuantity, '1');
+    const gapReceipts = await prisma.receipt.findMany({
+      where: { shipmentId: gapShipment.data.id },
+      orderBy: { revision: 'asc' },
+    });
+    assert.equal(gapReceipts.length, 2);
+    assert.equal(gapReceipts[0]?.isCurrent, false);
+    assert.equal(gapReceipts[1]?.isCurrent, true);
+    const completedOrderAfterReplacement = await prisma.supplierOrder.findUniqueOrThrow({
+      where: { id: supplierBOrderAfterReallocate.id },
+    });
+    assert.equal(completedOrderAfterReplacement.status, 'COMPLETED');
+    assert.equal(completedOrderAfterReplacement.fulfillmentStatus, 'COMPLETED');
 
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },

@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: A06 clearing detail lookup.
+Latest completed milestone: F04 receipt revision replacement.
 
 Latest implementation commit:
 
 ```text
-Add clearing detail lookup
+Add receipt revision replacement
 ```
 
 The working tree was clean after this commit.
@@ -98,6 +98,8 @@ Current F04 behavior:
 
 - Creates `Receipt` and `ReceiptItem` records.
 - Supports first receipt revision with `expectedReceiptRevision = 0`.
+- Supports replacing the current receipt by submitting the current `expectedReceiptRevision`; the old receipt is retained and marked non-current.
+- Supersedes OPEN discrepancies from the replaced receipt; receipts with already resolved/replenishment discrepancies cannot be replaced in this version.
 - Validates each shipment item belongs to the shipment.
 - Requires receipt items to cover all shipment items exactly once.
 - Validates received quantity is between zero and shipped quantity.
@@ -194,11 +196,11 @@ Current A05 behavior:
 
 ## Recommended Next Step
 
-Add receipt revision replacement, or start statement/payment read models.
+Start statement/payment read models, or add RETURN discrepancy handling.
 
 Suggested first version:
 
-- If continuing fulfillment work, add receipt revision replacement.
+- If continuing fulfillment work, add RETURN discrepancy handling.
 - If continuing finance work, start statement/payment read models.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.

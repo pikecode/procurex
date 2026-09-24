@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { FulfillmentStatus, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import { DiscrepancyStatus, FulfillmentStatus, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import type { Receipt, ReceiptItem } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import { resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
@@ -43,7 +43,11 @@ export class ShipmentsService {
       include: {
         supplierOrder: { include: { items: { include: { shipmentItems: true } } } },
         items: { orderBy: { createdAt: 'asc' } },
-        receipts: { where: { isCurrent: true }, orderBy: { revision: 'desc' } },
+        receipts: {
+          where: { isCurrent: true },
+          include: { items: { include: { discrepancy: true } } },
+          orderBy: { revision: 'desc' },
+        },
       },
     });
     if (!shipment) {
@@ -61,11 +65,23 @@ export class ShipmentsService {
       });
     }
 
-    if (input.expectedReceiptRevision !== 0 || shipment.receipts.length > 0) {
+    const currentReceipt = shipment.receipts[0];
+    const currentRevision = currentReceipt?.revision ?? 0;
+    if (input.expectedReceiptRevision !== currentRevision) {
       throw new ConflictException({
         code: 'RECEIPT_REVISION_CONFLICT',
-        message: 'Only first receipt revision is supported in this version',
-        details: { expectedReceiptRevision: input.expectedReceiptRevision, currentRevision: shipment.receipts[0]?.revision ?? 0 },
+        message: 'Receipt revision has changed',
+        details: { expectedReceiptRevision: input.expectedReceiptRevision, currentRevision },
+      });
+    }
+    const blockingDiscrepancy = currentReceipt?.items.find(
+      (item) => item.discrepancy && item.discrepancy.status !== DiscrepancyStatus.OPEN,
+    )?.discrepancy;
+    if (blockingDiscrepancy) {
+      throw new ConflictException({
+        code: 'RECEIPT_REVISION_NOT_REPLACEABLE',
+        message: 'Receipt cannot be replaced after its discrepancy has been resolved or moved to replenishment',
+        details: { discrepancyId: blockingDiscrepancy.id, status: blockingDiscrepancy.status },
       });
     }
 
@@ -111,11 +127,27 @@ export class ShipmentsService {
     });
 
     const receipt = await this.database.client.$transaction(async (tx) => {
+      if (currentReceipt) {
+        await tx.receipt.update({
+          where: { id: currentReceipt.id },
+          data: { isCurrent: false },
+        });
+        await tx.discrepancy.updateMany({
+          where: {
+            receiptItem: { receiptId: currentReceipt.id },
+            status: DiscrepancyStatus.OPEN,
+          },
+          data: { status: DiscrepancyStatus.SUPERSEDED },
+        });
+      }
+      const oldReceiptItemsByShipmentItemId = new Map(
+        currentReceipt?.items.map((item) => [item.shipmentItemId, item]) ?? [],
+      );
       const created = await tx.receipt.create({
         data: {
           receiptNo: makeReceiptNo(),
           shipmentId: shipment.id,
-          revision: 1,
+          revision: currentRevision + 1,
         },
       });
 
@@ -137,10 +169,12 @@ export class ShipmentsService {
             },
           });
         }
+        const oldReceivedQuantity = oldReceiptItemsByShipmentItemId.get(item.shipmentItem.id)?.receivedQuantity ?? new Decimal(0);
+        const receivedDelta = item.receivedQuantity.minus(oldReceivedQuantity);
         await tx.orderItem.update({
           where: { id: item.shipmentItem.orderItemId },
           data: {
-            receivedQuantity: { increment: item.receivedQuantity.toDecimalPlaces(6).toString() },
+            receivedQuantity: { increment: receivedDelta.toDecimalPlaces(6).toString() },
           },
         });
       }
