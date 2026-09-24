@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+.DS_Store
+.omc/
+docs/.omc/
+packages/backend/generated/
+*.tsbuildinfo
+

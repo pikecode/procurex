@@ -1,0 +1,19 @@
+name: procurex-local
+services:
+  postgres:
+    image: postgres:18.3-alpine
+    environment:
+      POSTGRES_USER: procurex
+      POSTGRES_PASSWORD: procurex_local_only
+      POSTGRES_DB: procurex
+    ports:
+      - "127.0.0.1:55438:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U procurex -d procurex"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  postgres_data:
