@@ -4,8 +4,10 @@ import {
   DifferenceDisposalDirection,
   DifferenceDisposalMethod,
   DifferenceDisposalStatus,
+  PaymentAllocationState,
+  SupplierOrderStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { DifferenceDisposal, DifferenceDisposalItem } from '../../../../packages/backend/generated/prisma/client.js';
+import type { DifferenceDisposal, DifferenceDisposalItem, PaymentAllocation, Shipment, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type CreateDifferenceDisposalInput = {
@@ -47,6 +49,15 @@ export type DifferenceDisposalItemView = {
   createdAt: string;
 };
 
+type SettlementItemKind = 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE';
+
+type DecodedSettlementItemId = {
+  kind: SettlementItemKind;
+  supplierOrderId: string;
+};
+
+type TargetOrder = SupplierOrder & { shipments: Shipment[] };
+
 @Injectable()
 export class DifferenceDisposalsService {
   constructor(private readonly database: DatabaseService) {}
@@ -66,16 +77,16 @@ export class DifferenceDisposalsService {
   }
 
   async create(input: CreateDifferenceDisposalInput): Promise<DifferenceDisposalView> {
-    if (input.method !== DifferenceDisposalMethod.OFFLINE_RETURN) {
-      throw new ConflictException({
-        code: 'DIFFERENCE_DISPOSAL_METHOD_NOT_SUPPORTED',
-        message: 'Only OFFLINE_RETURN is supported in this version',
-      });
-    }
-    if (input.targetDebitItemIds && input.targetDebitItemIds.length > 0) {
+    if (input.method === DifferenceDisposalMethod.OFFLINE_RETURN && input.targetDebitItemIds && input.targetDebitItemIds.length > 0) {
       throw new ConflictException({
         code: 'TARGET_DEBIT_NOT_SUPPORTED',
         message: 'Offline return does not accept target debit items',
+      });
+    }
+    if (input.method === DifferenceDisposalMethod.OFFSET && (input.targetDebitItemIds?.length ?? 0) !== input.creditItemIds.length) {
+      throw new ConflictException({
+        code: 'TARGET_DEBIT_REQUIRED',
+        message: 'Offset disposal requires one target debit item for each credit item',
       });
     }
 
@@ -92,6 +103,9 @@ export class DifferenceDisposalsService {
 
     const storeId = returns[0]!.orderItem.supplierOrder.storeId;
     const supplierId = returns[0]!.orderItem.supplierOrder.supplierId;
+    const targetDebitItemIds = input.method === DifferenceDisposalMethod.OFFSET ? input.targetDebitItemIds! : [];
+    const targetAvailability =
+      input.method === DifferenceDisposalMethod.OFFSET ? await this.loadTargetAvailability(targetDebitItemIds, supplierId) : new Map<string, Decimal>();
     const items = returns.map((returnRecord) => {
       if (returnRecord.differenceDisposalItems.length > 0) {
         throw new ConflictException({
@@ -108,10 +122,28 @@ export class DifferenceDisposalsService {
       }
       return {
         creditItemId: returnRecord.id,
+        targetDebitItemId: targetDebitItemIds[input.creditItemIds.indexOf(returnRecord.id)] ?? null,
         amount: new Decimal(returnRecord.quantity).mul(returnRecord.orderItem.supplyUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
         sourceVersion: returnRecord.orderItem.supplierOrder.version,
       };
     });
+    for (const item of items) {
+      if (!item.targetDebitItemId) {
+        continue;
+      }
+      const available = targetAvailability.get(item.targetDebitItemId);
+      if (!available || available.lt(item.amount)) {
+        throw new ConflictException({
+          code: 'TARGET_DEBIT_AMOUNT_INSUFFICIENT',
+          message: 'Target debit item does not have enough payable amount for this offset',
+          details: {
+            targetDebitItemId: item.targetDebitItemId,
+            requiredAmount: item.amount.toFixed(2),
+            availableAmount: available?.toFixed(2) ?? '0.00',
+          },
+        });
+      }
+    }
 
     const amount = items.reduce((sum, item) => sum.plus(item.amount), new Decimal(0));
     if (!amount.eq(input.amount)) {
@@ -135,6 +167,7 @@ export class DifferenceDisposalsService {
         items: {
           create: items.map((item) => ({
             creditItemId: item.creditItemId,
+            targetDebitItemId: item.targetDebitItemId,
             amount: item.amount.toFixed(2),
             sourceVersion: item.sourceVersion,
           })),
@@ -144,6 +177,73 @@ export class DifferenceDisposalsService {
     });
 
     return toDifferenceDisposalView(disposal);
+  }
+
+  private async loadTargetAvailability(targetDebitItemIds: string[], supplierId: string): Promise<Map<string, Decimal>> {
+    if (new Set(targetDebitItemIds).size !== targetDebitItemIds.length) {
+      throw new ConflictException({
+        code: 'TARGET_DEBIT_DUPLICATED',
+        message: 'Target debit items must not repeat',
+      });
+    }
+    const decoded = targetDebitItemIds.map((id) => ({ id, decoded: decodeSettlementItemId(id) }));
+    for (const item of decoded) {
+      if (item.decoded.kind !== 'SUPPLIER_PAYABLE') {
+        throw new ConflictException({
+          code: 'TARGET_DEBIT_KIND_NOT_SUPPORTED',
+          message: 'Offset disposal currently supports supplier payable target debit items only',
+          details: { targetDebitItemId: item.id },
+        });
+      }
+    }
+
+    const orders = await this.database.client.supplierOrder.findMany({
+      where: { id: { in: decoded.map((item) => item.decoded.supplierOrderId) } },
+      include: { shipments: true },
+    });
+    const ordersById = new Map(orders.map((order) => [order.id, order]));
+    const allocations = await this.database.client.paymentAllocation.findMany({
+      where: {
+        settlementItemId: { in: targetDebitItemIds },
+        state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] },
+      },
+    });
+    const usedByPayments = summarizeAllocations(allocations);
+    const disposalItems = await this.database.client.differenceDisposalItem.findMany({
+      where: {
+        targetDebitItemId: { in: targetDebitItemIds },
+        disposal: { status: { in: [DifferenceDisposalStatus.PENDING, DifferenceDisposalStatus.CONFIRMED] } },
+      },
+    });
+    const usedByDisposals = summarizeDisposalItems(disposalItems);
+
+    const result = new Map<string, Decimal>();
+    for (const item of decoded) {
+      const order = ordersById.get(item.decoded.supplierOrderId);
+      if (!order) {
+        throw new NotFoundException({
+          code: 'TARGET_DEBIT_ITEM_NOT_FOUND',
+          message: 'Target debit item source order was not found',
+          details: { targetDebitItemId: item.id },
+        });
+      }
+      if (order.supplierId !== supplierId) {
+        throw new ConflictException({
+          code: 'TARGET_DEBIT_SUBJECT_MISMATCH',
+          message: 'Offset target debit item must belong to the same supplier',
+          details: { targetDebitItemId: item.id },
+        });
+      }
+      if (order.status !== SupplierOrderStatus.COMPLETED || !order.firstShippedAt) {
+        throw new ConflictException({
+          code: 'TARGET_DEBIT_NOT_PAYABLE',
+          message: 'Offset target debit item source order is not completed',
+          details: { targetDebitItemId: item.id },
+        });
+      }
+      result.set(item.id, targetAvailableAmount(order, usedByPayments.get(item.id), usedByDisposals.get(item.id)));
+    }
+    return result;
   }
 
   async confirm(id: string, input: ConfirmDifferenceDisposalInput): Promise<DifferenceDisposalView> {
@@ -214,6 +314,52 @@ function toDifferenceDisposalItemView(item: DifferenceDisposalItem): DifferenceD
     sourceVersion: item.sourceVersion,
     createdAt: item.createdAt.toISOString(),
   };
+}
+
+function decodeSettlementItemId(id: string): DecodedSettlementItemId {
+  try {
+    const parsed = JSON.parse(Buffer.from(id, 'base64url').toString('utf8')) as {
+      kind?: unknown;
+      supplierOrderId?: unknown;
+    };
+    if (
+      (parsed.kind === 'STORE_RECEIVABLE' || parsed.kind === 'SUPPLIER_PAYABLE') &&
+      typeof parsed.supplierOrderId === 'string'
+    ) {
+      return { kind: parsed.kind, supplierOrderId: parsed.supplierOrderId };
+    }
+  } catch {
+    // Fall through to uniform bad item handling.
+  }
+  throw new ConflictException({
+    code: 'INVALID_TARGET_DEBIT_ITEM_ID',
+    message: 'Target debit item id is invalid',
+  });
+}
+
+function targetAvailableAmount(order: TargetOrder, paymentAmount: Decimal | undefined, disposalAmount: Decimal | undefined): Decimal {
+  const goodsAmount = new Decimal(order.supplyGoodsAmount);
+  const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
+  return Decimal.max(goodsAmount.plus(freightAmount).minus(paymentAmount ?? 0).minus(disposalAmount ?? 0), 0);
+}
+
+function summarizeAllocations(allocations: PaymentAllocation[]): Map<string, Decimal> {
+  const result = new Map<string, Decimal>();
+  for (const allocation of allocations) {
+    result.set(allocation.settlementItemId, (result.get(allocation.settlementItemId) ?? new Decimal(0)).plus(allocation.amount));
+  }
+  return result;
+}
+
+function summarizeDisposalItems(items: DifferenceDisposalItem[]): Map<string, Decimal> {
+  const result = new Map<string, Decimal>();
+  for (const item of items) {
+    if (!item.targetDebitItemId) {
+      continue;
+    }
+    result.set(item.targetDebitItemId, (result.get(item.targetDebitItemId) ?? new Decimal(0)).plus(item.amount));
+  }
+  return result;
 }
 
 function makeDisposalNo(): string {

@@ -1678,6 +1678,9 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     });
     assert.equal(completedOrderAfterReturn.status, 'COMPLETED');
     assert.equal(completedOrderAfterReturn.fulfillmentStatus, 'COMPLETED');
+    const supplierPayableSettlementItemId = Buffer.from(
+      JSON.stringify({ kind: 'SUPPLIER_PAYABLE', supplierOrderId: supplierBOrderAfterReallocate.id }),
+    ).toString('base64url');
     const createDifferenceDisposal = async () => {
       const response = await fetch(`${baseUrl}/difference-disposals`, {
         method: 'POST',
@@ -1688,11 +1691,12 @@ test('purchase request confirm splits supplier orders once per idempotency key',
           'x-trace-id': 'trace-create-difference-disposal',
         },
         body: JSON.stringify({
-          method: 'OFFLINE_RETURN',
+          method: 'OFFSET',
           creditItemIds: [persistedReturn.id],
+          targetDebitItemIds: [supplierPayableSettlementItemId],
           amount: '8.00',
           businessDate: '2026-09-24',
-          reason: 'Supplier returned shortage value offline',
+          reason: 'Offset shortage value against supplier payable',
         }),
       });
       assert.equal(response.status, 201);
@@ -1719,17 +1723,17 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.deepEqual(differenceDisposalReplay.data, differenceDisposal.data);
     assert.ok(differenceDisposal.data.disposalNo);
     assert.equal(differenceDisposal.data.direction, 'SUPPLIER_TO_COMPANY');
-    assert.equal(differenceDisposal.data.method, 'OFFLINE_RETURN');
+    assert.equal(differenceDisposal.data.method, 'OFFSET');
     assert.equal(differenceDisposal.data.storeId, store.id);
     assert.equal(differenceDisposal.data.supplierId, supplierB.id);
     assert.equal(differenceDisposal.data.amount, '8.00');
     assert.equal(differenceDisposal.data.businessDate, '2026-09-24');
     assert.equal(differenceDisposal.data.status, 'PENDING');
-    assert.equal(differenceDisposal.data.reason, 'Supplier returned shortage value offline');
+    assert.equal(differenceDisposal.data.reason, 'Offset shortage value against supplier payable');
     assert.equal(differenceDisposal.data.version, 1);
     assert.equal(differenceDisposal.data.confirmedAt, null);
     assert.equal(differenceDisposal.data.items[0]?.creditItemId, persistedReturn.id);
-    assert.equal(differenceDisposal.data.items[0]?.targetDebitItemId, null);
+    assert.equal(differenceDisposal.data.items[0]?.targetDebitItemId, supplierPayableSettlementItemId);
     assert.equal(differenceDisposal.data.items[0]?.amount, '8.00');
     assert.equal(differenceDisposal.data.items[0]?.sourceVersion, completedOrderAfterReturn.version);
     const confirmDifferenceDisposal = async () => {
@@ -2117,6 +2121,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierStatementDetail.data.goodsAmount, '88.00');
     assert.equal(supplierStatementDetail.data.freightAmount, '18.50');
     assert.equal(supplierStatementDetail.data.totalAmount, '106.50');
+    assert.equal(supplierStatementDetail.data.lines[0]?.settlementItemId, supplierPayableSettlementItemId);
     assert.equal(supplierStatementDetail.data.lines[0]?.supplierOrderId, supplierBOrderAfterReallocate.id);
     assert.equal(supplierStatementDetail.data.lines[0]?.storeId, store.id);
     assert.equal(supplierStatementDetail.data.lines[0]?.goodsAmount, '88.00');
@@ -2148,12 +2153,12 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierPaymentPreview.data.channel, 'COMPANY');
     assert.equal(supplierPaymentPreview.data.storeId, null);
     assert.equal(supplierPaymentPreview.data.supplierId, supplierB.id);
-    assert.equal(supplierPaymentPreview.data.totalPayableAmount, '106.50');
+    assert.equal(supplierPaymentPreview.data.totalPayableAmount, '98.50');
     assert.equal(supplierPaymentPreview.data.items[0]?.settlementItemId, supplierStatementDetail.data.lines[0]?.settlementItemId);
     assert.equal(supplierPaymentPreview.data.items[0]?.kind, 'SUPPLIER_PAYABLE');
     assert.equal(supplierPaymentPreview.data.items[0]?.supplierOrderId, supplierBOrderAfterReallocate.id);
     assert.equal(supplierPaymentPreview.data.items[0]?.sourceVersion, completedOrderAfterReturn.version);
-    assert.equal(supplierPaymentPreview.data.items[0]?.payableAmount, '106.50');
+    assert.equal(supplierPaymentPreview.data.items[0]?.payableAmount, '98.50');
     assert.equal(supplierPaymentPreview.data.blockedItems.length, 0);
     const createSupplierPayment = async () => {
       const response = await fetch(`${baseUrl}/payment-records`, {
@@ -2195,10 +2200,10 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.deepEqual(supplierPaymentReplay.data, supplierPayment.data);
     assert.equal(supplierPayment.data.direction, 'COMPANY_TO_SUPPLIER');
     assert.equal(supplierPayment.data.supplierId, supplierB.id);
-    assert.equal(supplierPayment.data.amount, '106.50');
+    assert.equal(supplierPayment.data.amount, '98.50');
     assert.equal(supplierPayment.data.status, 'PENDING');
     assert.equal(supplierPayment.data.allocations[0]?.settlementItemId, supplierPaymentPreview.data.items[0]?.settlementItemId);
-    assert.equal(supplierPayment.data.allocations[0]?.amount, '106.50');
+    assert.equal(supplierPayment.data.allocations[0]?.amount, '98.50');
     assert.equal(supplierPayment.data.allocations[0]?.state, 'RESERVED');
     const rejectSupplierPayment = async () => {
       const response = await fetch(`${baseUrl}/payment-records/${supplierPayment.data.id}/reject`, {
@@ -2233,7 +2238,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(rejectedSupplierPayment.data.rejectedReason, 'Supplier bank proof was invalid');
     assert.equal(rejectedSupplierPayment.data.version, 2);
     assert.equal(rejectedSupplierPayment.data.allocations[0]?.settlementItemId, supplierPaymentPreview.data.items[0]?.settlementItemId);
-    assert.equal(rejectedSupplierPayment.data.allocations[0]?.amount, '106.50');
+    assert.equal(rejectedSupplierPayment.data.allocations[0]?.amount, '98.50');
     assert.equal(rejectedSupplierPayment.data.allocations[0]?.state, 'RELEASED');
     const supplierPaymentPreviewAfterRejectResponse = await fetch(`${baseUrl}/payment-records/preview`, {
       method: 'POST',
@@ -2254,10 +2259,10 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         items: Array<{ payableAmount: string; pendingPaymentAmount: string; confirmedPaidAmount: string }>;
       };
     };
-    assert.equal(supplierPaymentPreviewAfterReject.data.totalPayableAmount, '106.50');
+    assert.equal(supplierPaymentPreviewAfterReject.data.totalPayableAmount, '98.50');
     assert.equal(supplierPaymentPreviewAfterReject.data.totalPendingPaymentAmount, '0.00');
     assert.equal(supplierPaymentPreviewAfterReject.data.totalConfirmedPaidAmount, '0.00');
-    assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.payableAmount, '106.50');
+    assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.payableAmount, '98.50');
     assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.pendingPaymentAmount, '0.00');
     assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.confirmedPaidAmount, '0.00');
     const createSupplierPaymentForCancel = async () => {
@@ -2296,7 +2301,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     const supplierPaymentForCancel = await createSupplierPaymentForCancel();
     const supplierPaymentForCancelReplay = await createSupplierPaymentForCancel();
     assert.deepEqual(supplierPaymentForCancelReplay.data, supplierPaymentForCancel.data);
-    assert.equal(supplierPaymentForCancel.data.amount, '106.50');
+    assert.equal(supplierPaymentForCancel.data.amount, '98.50');
     assert.equal(supplierPaymentForCancel.data.status, 'PENDING');
     assert.equal(supplierPaymentForCancel.data.allocations[0]?.state, 'RESERVED');
     const cancelSupplierPayment = async () => {
@@ -2332,7 +2337,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(cancelledSupplierPayment.data.cancelledReason, 'Entered by mistake');
     assert.equal(cancelledSupplierPayment.data.version, 2);
     assert.equal(cancelledSupplierPayment.data.allocations[0]?.settlementItemId, supplierPaymentPreview.data.items[0]?.settlementItemId);
-    assert.equal(cancelledSupplierPayment.data.allocations[0]?.amount, '106.50');
+    assert.equal(cancelledSupplierPayment.data.allocations[0]?.amount, '98.50');
     assert.equal(cancelledSupplierPayment.data.allocations[0]?.state, 'RELEASED');
     const supplierPaymentPreviewAfterCancelResponse = await fetch(`${baseUrl}/payment-records/preview`, {
       method: 'POST',
@@ -2353,10 +2358,10 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         items: Array<{ payableAmount: string; pendingPaymentAmount: string; confirmedPaidAmount: string }>;
       };
     };
-    assert.equal(supplierPaymentPreviewAfterCancel.data.totalPayableAmount, '106.50');
+    assert.equal(supplierPaymentPreviewAfterCancel.data.totalPayableAmount, '98.50');
     assert.equal(supplierPaymentPreviewAfterCancel.data.totalPendingPaymentAmount, '0.00');
     assert.equal(supplierPaymentPreviewAfterCancel.data.totalConfirmedPaidAmount, '0.00');
-    assert.equal(supplierPaymentPreviewAfterCancel.data.items[0]?.payableAmount, '106.50');
+    assert.equal(supplierPaymentPreviewAfterCancel.data.items[0]?.payableAmount, '98.50');
     assert.equal(supplierPaymentPreviewAfterCancel.data.items[0]?.pendingPaymentAmount, '0.00');
     assert.equal(supplierPaymentPreviewAfterCancel.data.items[0]?.confirmedPaidAmount, '0.00');
     const supplierPaymentsResponse = await fetch(`${baseUrl}/payment-records?supplierId=${supplierB.id}&direction=COMPANY_TO_SUPPLIER`, {
@@ -2370,7 +2375,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.ok(supplierPayments.data.some((payment) => payment.id === supplierPaymentForCancel.data.id && payment.status === 'CANCELLED'));
     assert.ok(
       supplierPayments.data.every(
-        (payment) => payment.supplierId === supplierB.id && payment.direction === 'COMPANY_TO_SUPPLIER' && payment.amount === '106.50',
+        (payment) => payment.supplierId === supplierB.id && payment.direction === 'COMPANY_TO_SUPPLIER' && payment.amount === '98.50',
       ),
     );
     const supplierStoreStatementsResponse = await fetch(

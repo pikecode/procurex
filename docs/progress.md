@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M4 settlement/read-model development.
 
-Latest completed milestone: B05 adjustment read endpoints first version.
+Latest completed milestone: B12 difference disposal offset first version.
 
 Latest implementation commit:
 
 ```text
-Add adjustment read endpoints
+Add difference disposal offset support
 ```
 
 The working tree was verified for this commit.
@@ -296,11 +296,14 @@ Current B12 behavior:
 
 - Adds `DifferenceDisposal` and `DifferenceDisposalItem` models.
 - Creates supplier-to-company offline-return difference disposals from F05 RETURN `DiscrepancyReturn` credit items.
+- Creates supplier-to-company OFFSET difference disposals from F05 RETURN credit items to supplier payable settlement items.
 - Calculates disposal amount from returned quantity times the source supplier order item supply unit price.
 - Requires selected credit items to share the same store and supplier, and rejects already disposed credit items.
+- Requires OFFSET target debit items to be completed supplier payable items for the same supplier with enough remaining payable amount.
 - Confirms PENDING disposals with expectedVersion checking and records confirmedAt.
+- Payment previews subtract confirmed OFFSET disposal amounts from target supplier payable items.
 - Uses Idempotency-Key through command records for create and confirm.
-- OFFSET, overpayment, adjustment-driven credit items, and evidence files remain future work.
+- Overpayment, adjustment-driven credit items, direct settlement offsets, and evidence files remain future work.
 
 ## Recommended Next Step
 
@@ -308,8 +311,8 @@ Continue settlement adjustment and difference-disposal polish.
 
 Suggested first version:
 
-- Extend B12 from RETURN-only offline return into OFFSET and overpayment disposal flows.
 - Add persisted adjustment source modeling for historical price changes and post-settlement revisions.
+- Add overpayment disposal flows after payment confirmation can record real overpaid amounts.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 

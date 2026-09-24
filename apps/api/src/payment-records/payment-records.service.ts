@@ -5,8 +5,9 @@ import {
   PaymentRecordDirection,
   PaymentRecordStatus,
   SupplierOrderStatus,
+  DifferenceDisposalStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { PaymentAllocation, PaymentRecord, Shipment, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import type { DifferenceDisposalItem, PaymentAllocation, PaymentRecord, Shipment, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type PaymentDirection = 'STORE_TO_COMPANY' | 'COMPANY_TO_SUPPLIER';
@@ -149,6 +150,13 @@ export class PaymentRecordsService {
       },
     });
     const allocationSummary = summarizeAllocations(allocations);
+    const offsetItems = await this.database.client.differenceDisposalItem.findMany({
+      where: {
+        targetDebitItemId: { in: uniqueIds },
+        disposal: { status: DifferenceDisposalStatus.CONFIRMED },
+      },
+    });
+    const confirmedOffsetSummary = summarizeOffsets(offsetItems);
     const items: PaymentPreviewItemView[] = [];
     const blockedItems: PaymentPreviewBlockedItemView[] = [];
 
@@ -170,7 +178,7 @@ export class PaymentRecordsService {
         });
         continue;
       }
-      items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id)));
+      items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id), confirmedOffsetSummary.get(item.id)));
     }
 
     if (items.length === 0) {
@@ -439,13 +447,15 @@ function toPreviewItem(
   kind: SettlementItemKind,
   order: PreviewOrder,
   allocationSummary: { pendingAmount: Decimal; confirmedAmount: Decimal } | undefined,
+  confirmedOffsetAmount: Decimal | undefined,
 ): PaymentPreviewItemView {
   const goodsAmount = kind === 'STORE_RECEIVABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount);
   const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
   const grossAmount = goodsAmount.plus(freightAmount);
   const pendingAmount = allocationSummary?.pendingAmount ?? new Decimal(0);
   const confirmedAmount = allocationSummary?.confirmedAmount ?? new Decimal(0);
-  const payableAmount = Decimal.max(grossAmount.minus(pendingAmount).minus(confirmedAmount), 0);
+  const offsetAmount = confirmedOffsetAmount ?? new Decimal(0);
+  const payableAmount = Decimal.max(grossAmount.minus(pendingAmount).minus(confirmedAmount).minus(offsetAmount), 0);
   return {
     settlementItemId,
     kind,
@@ -474,6 +484,17 @@ function summarizeAllocations(allocations: PaymentAllocation[]): Map<string, { p
       current.confirmedAmount = current.confirmedAmount.plus(allocation.amount);
     }
     result.set(allocation.settlementItemId, current);
+  }
+  return result;
+}
+
+function summarizeOffsets(items: DifferenceDisposalItem[]): Map<string, Decimal> {
+  const result = new Map<string, Decimal>();
+  for (const item of items) {
+    if (!item.targetDebitItemId) {
+      continue;
+    }
+    result.set(item.targetDebitItemId, (result.get(item.targetDebitItemId) ?? new Decimal(0)).plus(item.amount));
   }
   return result;
 }
