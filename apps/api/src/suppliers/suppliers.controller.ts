@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
-import { SuppliersService, type SupplierView } from './suppliers.service.js';
+import { SuppliersService, type SupplierProductsView, type SupplierView } from './suppliers.service.js';
 import { DeliveryMode, SettlementMode, SupplierStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { validateExpectedVersion, validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
 
@@ -20,6 +20,11 @@ type CreateSupplierBody = {
 type PatchSupplierBody = CreateSupplierBody & {
   expectedVersion?: unknown;
   status?: unknown;
+};
+
+type PutSupplierProductsBody = {
+  expectedVersion?: unknown;
+  productIds?: unknown;
 };
 
 @Controller('suppliers')
@@ -43,6 +48,13 @@ export class SuppliersController {
   @RequireRoles('ADMIN', 'PURCHASER')
   updateSupplier(@Param('id') id: string, @Body() body: PatchSupplierBody): Promise<SupplierView> {
     return this.suppliersService.updateSupplier(id, parsePatchSupplierBody(id, body));
+  }
+
+  @Put(':id/products')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  replaceProducts(@Param('id') id: string, @Body() body: PutSupplierProductsBody): Promise<SupplierProductsView> {
+    const input = parsePutSupplierProductsBody(id, body);
+    return this.suppliersService.replaceSupplierProducts(id, input.expectedVersion, input.productIds);
   }
 }
 
@@ -111,6 +123,32 @@ function parsePatchSupplierBody(id: string, body: PatchSupplierBody): {
     defaultSettlementMode,
     defaultSettlementCycle,
     status,
+  };
+}
+
+function parsePutSupplierProductsBody(id: string, body: PutSupplierProductsBody): { expectedVersion: number; productIds: string[] } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+  ];
+
+  const productIds: string[] = [];
+  if (!Array.isArray(body.productIds)) {
+    issues.push({ field: 'productIds', code: 'INVALID_PRODUCT_IDS', message: 'productIds must be an array' });
+  } else {
+    for (const [index, productId] of body.productIds.entries()) {
+      issues.push(...validateUuid(`productIds.${index}`, productId));
+      if (typeof productId === 'string') {
+        productIds.push(productId);
+      }
+    }
+  }
+
+  throwIfInvalid(issues);
+
+  return {
+    expectedVersion: body.expectedVersion as number,
+    productIds,
   };
 }
 

@@ -64,6 +64,8 @@ assertIncludes(apiDesign, '`GET/POST /stores`、`GET/PATCH /stores/{id}`', 'api 
 assertIncludes(storesController, "@Controller('stores')", 'stores controller');
 assertIncludes(apiDesign, '`GET/POST /suppliers`、`GET/PATCH /suppliers/{id}`', 'api design');
 assertIncludes(suppliersController, "@Controller('suppliers')", 'suppliers controller');
+assertIncludes(apiDesign, '`GET/PUT /suppliers/{id}/products`', 'api design');
+assertIncludes(suppliersController, "@Put(':id/products')", 'suppliers controller');
 assertIncludes(apiDesign, '`GET/POST /products`', 'api design');
 assertIncludes(catalogController, "@Post('products')", 'catalog controller');
 assertIncludes(catalogController, "@Post('categories')", 'catalog controller');

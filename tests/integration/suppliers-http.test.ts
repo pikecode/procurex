@@ -174,3 +174,104 @@ test('suppliers endpoint creates, lists and disables suppliers with purchaser ro
     await prisma.$disconnect();
   }
 });
+
+test('supplier product endpoint replaces product bindings atomically', async () => {
+  const prisma = createClient();
+  const runId = Date.now();
+  const purchaserUsername = `it_supplier_products_${runId}`;
+  const supplierCode = `SUPP${runId}`;
+  const categoryCode = `SUPPCAT${runId}`;
+  const unitCode = `SUPPUNIT${runId}`;
+  const sku = `SUPPSKU${runId}`;
+  const { app, baseUrl } = await createTestApp();
+
+  try {
+    const purchaserRole = await prisma.role.upsert({
+      where: { code: 'PURCHASER' },
+      update: {},
+      create: { code: 'PURCHASER', name: 'Purchaser' },
+    });
+    await prisma.user.create({
+      data: {
+        username: purchaserUsername,
+        displayName: 'Integration Supplier Products',
+        passwordHash: await hashPassword('correct-password'),
+        roles: { create: [{ roleId: purchaserRole.id }] },
+      },
+    });
+
+    const [category, unit] = await Promise.all([
+      prisma.category.create({ data: { code: categoryCode, name: 'Supplier Product Category' } }),
+      prisma.unit.create({ data: { code: unitCode, name: 'box' } }),
+    ]);
+    const product = await prisma.product.create({
+      data: {
+        sku,
+        name: 'Supplier Product',
+        categoryId: category.id,
+        baseUnitId: unit.id,
+      },
+    });
+
+    const token = await login(baseUrl, purchaserUsername);
+    const created = await fetch(`${baseUrl}/suppliers`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        code: supplierCode,
+        name: 'Supplier Product Binder',
+        deliveryMode: DeliveryMode.SELF,
+        defaultSettlementMode: SettlementMode.COMPANY_TERM,
+        defaultSettlementCycle: 'MONTHLY',
+      }),
+    });
+    assert.equal(created.status, 201);
+    const createdBody = (await created.json()) as { data: { id: string; version: number } };
+
+    const conflict = await fetch(`${baseUrl}/suppliers/${createdBody.data.id}/products`, {
+      method: 'PUT',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'x-trace-id': 'trace-supplier-products-conflict',
+      },
+      body: JSON.stringify({ expectedVersion: 1, productIds: [product.id] }),
+    });
+    assert.equal(conflict.status, 409);
+
+    const bound = await fetch(`${baseUrl}/suppliers/${createdBody.data.id}/products`, {
+      method: 'PUT',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'x-trace-id': 'trace-supplier-products-bind',
+      },
+      body: JSON.stringify({ expectedVersion: createdBody.data.version, productIds: [product.id, product.id] }),
+    });
+    assert.equal(bound.status, 200);
+    const boundBody = (await bound.json()) as { data: { supplierId: string; productIds: string[]; version: number }; traceId: string };
+    assert.equal(boundBody.traceId, 'trace-supplier-products-bind');
+    assert.equal(boundBody.data.supplierId, createdBody.data.id);
+    assert.deepEqual(boundBody.data.productIds, [product.id]);
+    assert.ok(boundBody.data.version >= createdBody.data.version);
+
+    const relation = await prisma.supplierProduct.findUnique({
+      where: { supplierId_productId: { supplierId: createdBody.data.id, productId: product.id } },
+    });
+    assert.equal(relation?.supplyEnabled, true);
+  } finally {
+    await app.close();
+    await prisma.supplierProduct.deleteMany({ where: { supplier: { code: supplierCode } } });
+    await prisma.supplier.deleteMany({ where: { code: supplierCode } });
+    await prisma.product.deleteMany({ where: { sku } });
+    await prisma.category.deleteMany({ where: { code: categoryCode } });
+    await prisma.unit.deleteMany({ where: { code: unitCode } });
+    await prisma.userSession.deleteMany({ where: { user: { username: purchaserUsername } } });
+    await prisma.userRole.deleteMany({ where: { user: { username: purchaserUsername } } });
+    await prisma.user.deleteMany({ where: { username: purchaserUsername } });
+    await prisma.$disconnect();
+  }
+});

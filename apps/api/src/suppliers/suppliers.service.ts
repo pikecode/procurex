@@ -18,6 +18,12 @@ export type SupplierView = {
   updatedAt: string;
 };
 
+export type SupplierProductsView = {
+  supplierId: string;
+  productIds: string[];
+  version: number;
+};
+
 export type CreateSupplierInput = {
   code: string;
   name: string;
@@ -91,6 +97,69 @@ export class SuppliersService {
     });
 
     return toSupplierView(updated);
+  }
+
+  async replaceSupplierProducts(id: string, expectedVersion: number, productIds: string[]): Promise<SupplierProductsView> {
+    const supplier = await this.database.client.supplier.findUnique({ where: { id } });
+    if (!supplier) {
+      throw new NotFoundException({
+        code: 'SUPPLIER_NOT_FOUND',
+        message: 'Supplier was not found',
+      });
+    }
+
+    const version = supplierVersion(supplier);
+    if (version !== expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Supplier version has changed',
+        details: { expectedVersion, currentVersion: version },
+      });
+    }
+
+    const uniqueProductIds = [...new Set(productIds)];
+    const products = await this.database.client.product.findMany({
+      where: { id: { in: uniqueProductIds } },
+      select: { id: true },
+    });
+    if (products.length !== uniqueProductIds.length) {
+      throw new NotFoundException({
+        code: 'PRODUCT_NOT_FOUND',
+        message: 'One or more products were not found',
+      });
+    }
+
+    await this.database.client.$transaction([
+      this.database.client.supplierProduct.deleteMany({
+        where: {
+          supplierId: id,
+          productId: { notIn: uniqueProductIds },
+        },
+      }),
+      ...uniqueProductIds.map((productId) =>
+        this.database.client.supplierProduct.upsert({
+          where: { supplierId_productId: { supplierId: id, productId } },
+          update: { supplyEnabled: true },
+          create: { supplierId: id, productId },
+        }),
+      ),
+    ]);
+
+    const current = await this.database.client.supplierProduct.findMany({
+      where: { supplierId: id, supplyEnabled: true },
+      orderBy: { productId: 'asc' },
+      select: { productId: true },
+    });
+    const updatedSupplier = await this.database.client.supplier.update({
+      where: { id },
+      data: {},
+    });
+
+    return {
+      supplierId: id,
+      productIds: current.map((item) => item.productId),
+      version: supplierVersion(updatedSupplier),
+    };
   }
 }
 
