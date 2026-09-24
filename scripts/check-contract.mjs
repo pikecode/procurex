@@ -124,6 +124,8 @@ assertIncludes(apiDesign, '`POST /shipments/{id}/receipts`', 'api design');
 assertIncludes(shipmentsController, "@Post(':id/receipts')", 'shipments controller');
 assertIncludes(apiDesign, '`POST /discrepancies/{id}/resolve`', 'api design');
 assertIncludes(discrepanciesController, "@Post(':id/resolve')", 'discrepancies controller');
+assertIncludes(prismaSchema, 'model ReplenishmentGap', 'prisma schema');
+assertIncludes(prismaSchema, 'enum ReplenishmentGapStatus', 'prisma schema');
 assertIncludes(apiDesign, '`POST /supplier-orders/{id}/freight-confirmations`', 'api design');
 assertIncludes(supplierOrdersController, "@Post(':id/freight-confirmations')", 'supplier orders controller');
 assertIncludes(apiDesign, '`POST /freight-confirmations/{id}/confirm`', 'api design');

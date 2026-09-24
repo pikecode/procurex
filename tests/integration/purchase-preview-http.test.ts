@@ -1258,6 +1258,130 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     });
     assert.equal(persistedFreight.status, 'CONFIRMED');
 
+    const orderBeforeReplenishmentShipment = await prisma.supplierOrder.findUniqueOrThrow({
+      where: { id: supplierBOrderAfterReallocate.id },
+    });
+    const createReplenishmentShipmentResponse = await fetch(`${baseUrl}/supplier-orders/${supplierBOrderAfterReallocate.id}/shipments`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'idempotency-key': 'create-replenishment-shipment-once',
+        'x-trace-id': 'trace-create-replenishment-shipment',
+      },
+      body: JSON.stringify({
+        expectedVersion: orderBeforeReplenishmentShipment.version,
+        freight: '0.00',
+        items: [
+          {
+            orderItemId: productAOrderItem.id,
+            shipQuantity: '3.000000',
+            permanentlyReduceQuantity: '0.000000',
+          },
+        ],
+      }),
+    });
+    assert.equal(createReplenishmentShipmentResponse.status, 201);
+    const replenishmentShipment = (await createReplenishmentShipmentResponse.json()) as {
+      data: {
+        id: string;
+        kind: string;
+        items: Array<{ id: string; orderItemId: string; quantity: string }>;
+      };
+    };
+    assert.equal(replenishmentShipment.data.kind, 'REPLENISHMENT');
+    const replenishmentProductA = replenishmentShipment.data.items.find((item) => item.orderItemId === productAOrderItem.id);
+    assert.equal(replenishmentProductA?.quantity, '3');
+    const orderAfterReplenishmentShipment = await prisma.supplierOrder.findUniqueOrThrow({
+      where: { id: supplierBOrderAfterReallocate.id },
+    });
+    const createReplenishmentReceipt = async () => {
+      const response = await fetch(`${baseUrl}/shipments/${replenishmentShipment.data.id}/receipts`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'create-replenishment-receipt-once',
+          'x-trace-id': 'trace-create-replenishment-receipt',
+        },
+        body: JSON.stringify({
+          expectedOrderVersion: orderAfterReplenishmentShipment.version,
+          expectedReceiptRevision: 0,
+          items: [
+            {
+              shipmentItemId: replenishmentProductA!.id,
+              receivedQuantity: '2.000000',
+            },
+          ],
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as { data: { id: string; shipmentId: string } };
+    };
+    const replenishmentReceipt = await createReplenishmentReceipt();
+    const replenishmentReceiptReplay = await createReplenishmentReceipt();
+    assert.deepEqual(replenishmentReceiptReplay.data, replenishmentReceipt.data);
+    const replenishmentDiscrepancy = await prisma.discrepancy.findFirstOrThrow({
+      where: {
+        orderItemId: productAOrderItem.id,
+        receiptItem: { receiptId: replenishmentReceipt.data.id },
+        status: 'OPEN',
+      },
+    });
+    assert.equal(replenishmentDiscrepancy.missingQuantity.toString(), '1');
+    const resolveReplenishmentDiscrepancy = async () => {
+      const response = await fetch(`${baseUrl}/discrepancies/${replenishmentDiscrepancy.id}/resolve`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'resolve-replenishment-discrepancy-once',
+          'x-trace-id': 'trace-resolve-replenishment-discrepancy',
+        },
+        body: JSON.stringify({
+          expectedVersion: replenishmentDiscrepancy.version,
+          action: 'REPLENISH',
+          reason: 'Supplier will replenish shortage',
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          status: string;
+          version: number;
+          resolvedAt: string | null;
+          replenishmentGap: {
+            id: string;
+            discrepancyId: string;
+            orderItemId: string;
+            quantity: string;
+            remainingQuantity: string;
+            status: string;
+            version: number;
+          } | null;
+        };
+      };
+    };
+    const replenishmentResolution = await resolveReplenishmentDiscrepancy();
+    const replenishmentResolutionReplay = await resolveReplenishmentDiscrepancy();
+    assert.deepEqual(replenishmentResolutionReplay.data, replenishmentResolution.data);
+    assert.equal(replenishmentResolution.data.id, replenishmentDiscrepancy.id);
+    assert.equal(replenishmentResolution.data.status, 'REPLENISH_PENDING');
+    assert.equal(replenishmentResolution.data.version, 2);
+    assert.equal(replenishmentResolution.data.resolvedAt, null);
+    assert.equal(replenishmentResolution.data.replenishmentGap?.discrepancyId, replenishmentDiscrepancy.id);
+    assert.equal(replenishmentResolution.data.replenishmentGap?.orderItemId, productAOrderItem.id);
+    assert.equal(replenishmentResolution.data.replenishmentGap?.quantity, '1');
+    assert.equal(replenishmentResolution.data.replenishmentGap?.remainingQuantity, '1');
+    assert.equal(replenishmentResolution.data.replenishmentGap?.status, 'PENDING');
+    assert.equal(replenishmentResolution.data.replenishmentGap?.version, 1);
+    const persistedGap = await prisma.replenishmentGap.findUniqueOrThrow({
+      where: { discrepancyId: replenishmentDiscrepancy.id },
+    });
+    assert.equal(persistedGap.status, 'PENDING');
+    assert.equal(persistedGap.remainingQuantity.toString(), '1');
+
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
     });
@@ -1271,6 +1395,9 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
     await prisma.freightConfirmation.deleteMany({
       where: { supplierOrder: { request: { store: { code: storeCode } } } },
+    });
+    await prisma.replenishmentGap.deleteMany({
+      where: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } },
     });
     await prisma.discrepancyAction.deleteMany({ where: { discrepancy: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } } } });
     await prisma.discrepancy.deleteMany({ where: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } } });

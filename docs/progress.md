@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: F06/F07 freight confirmation flow.
+Latest completed milestone: F05 REPLENISH gap tracking.
 
 Latest implementation commit:
 
 ```text
-Add freight confirmation flow
+Add replenishment gap tracking
 ```
 
 The working tree was clean after this commit.
@@ -101,8 +101,9 @@ Current F05 behavior:
 
 - Creates an OPEN discrepancy automatically when a receipt item is short.
 - Implements `POST /discrepancies/{id}/resolve`.
-- Supports ACCEPT resolution in this version.
-- Persists a discrepancy action record and marks the discrepancy RESOLVED.
+- Supports ACCEPT and REPLENISH resolution in this version.
+- ACCEPT persists a discrepancy action record and marks the discrepancy RESOLVED.
+- REPLENISH persists a discrepancy action record, marks the discrepancy REPLENISH_PENDING, and creates a replenishment gap with pending quantity.
 - Uses Idempotency-Key through command records.
 
 Current F06/F07 behavior:
@@ -117,19 +118,19 @@ Current F06/F07 behavior:
 
 - Current access control is role-based. Supplier-user and store-user data-scope binding is not implemented yet.
 - Funding logic is still a first pass. It records stored-value summaries but does not yet implement the complete immutable allocation/ledger behavior described in the long-term design.
-- F03 stores permanently reduced quantity on shipment items, but full fulfillment gap and discrepancy models are not implemented yet.
+- F03 stores permanently reduced quantity on shipment items, but shipment consumption of replenishment gaps is not implemented yet.
 - F04 currently supports first receipt creation only. Receipt revision replacement is not implemented yet.
-- F05 currently supports ACCEPT only. REPLENISH and RETURN require replenishment gap and return models.
-- Replenishment gaps, shipment usage of confirmed freight, settlement, and reconciliation remain future work.
+- F05 currently supports ACCEPT and REPLENISH. RETURN still requires a return model.
+- Shipment gap allocation, shipment usage of confirmed freight, settlement, and reconciliation remain future work.
 - Frontend pages are not implemented yet.
 
 ## Recommended Next Step
 
-Implement replenishment gap tracking or O11 funding reconciliation.
+Implement shipment gap allocation or O11 funding reconciliation.
 
 Suggested first version:
 
-- If continuing discrepancy work, add fulfillment gap models and support REPLENISH.
+- If continuing discrepancy work, add `gapAllocations` to shipment preview/create and consume replenishment gaps.
 - If continuing freight work, wire confirmed freight confirmations into replenishment shipment creation and mark used.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.

@@ -1,6 +1,10 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { DiscrepancyActionType, DiscrepancyStatus } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { Discrepancy } from '../../../../packages/backend/generated/prisma/client.js';
+import {
+  DiscrepancyActionType,
+  DiscrepancyStatus,
+  ReplenishmentGapStatus,
+} from '../../../../packages/backend/generated/prisma/enums.js';
+import type { Discrepancy, ReplenishmentGap } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type ResolveDiscrepancyInput = {
@@ -18,6 +22,19 @@ export type DiscrepancyView = {
   version: number;
   resolvedAt: string | null;
   createdAt: string;
+  replenishmentGap: ReplenishmentGapView | null;
+};
+
+export type ReplenishmentGapView = {
+  id: string;
+  discrepancyId: string;
+  orderItemId: string;
+  quantity: string;
+  remainingQuantity: string;
+  status: ReplenishmentGapStatus;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 @Injectable()
@@ -25,7 +42,10 @@ export class DiscrepanciesService {
   constructor(private readonly database: DatabaseService) {}
 
   async resolve(id: string, input: ResolveDiscrepancyInput): Promise<DiscrepancyView> {
-    const discrepancy = await this.database.client.discrepancy.findUnique({ where: { id } });
+    const discrepancy = await this.database.client.discrepancy.findUnique({
+      where: { id },
+      include: { replenishmentGap: true },
+    });
     if (!discrepancy) {
       throw new NotFoundException({
         code: 'DISCREPANCY_NOT_FOUND',
@@ -53,10 +73,10 @@ export class DiscrepanciesService {
       });
     }
 
-    if (input.action !== DiscrepancyActionType.ACCEPT) {
+    if (input.action === DiscrepancyActionType.RETURN) {
       throw new ConflictException({
         code: 'DISCREPANCY_ACTION_NOT_SUPPORTED',
-        message: 'Only ACCEPT discrepancy resolution is supported in this version',
+        message: 'RETURN discrepancy resolution is not supported in this version',
         details: { action: input.action },
       });
     }
@@ -70,13 +90,25 @@ export class DiscrepanciesService {
         },
       });
 
+      if (input.action === DiscrepancyActionType.REPLENISH) {
+        await tx.replenishmentGap.create({
+          data: {
+            discrepancyId: discrepancy.id,
+            orderItemId: discrepancy.orderItemId,
+            quantity: discrepancy.missingQuantity,
+            remainingQuantity: discrepancy.missingQuantity,
+          },
+        });
+      }
+
       return tx.discrepancy.update({
         where: { id: discrepancy.id },
         data: {
-          status: DiscrepancyStatus.RESOLVED,
-          resolvedAt: new Date(),
+          status: input.action === DiscrepancyActionType.REPLENISH ? DiscrepancyStatus.REPLENISH_PENDING : DiscrepancyStatus.RESOLVED,
+          resolvedAt: input.action === DiscrepancyActionType.ACCEPT ? new Date() : undefined,
           version: { increment: 1 },
         },
+        include: { replenishmentGap: true },
       });
     });
 
@@ -84,7 +116,7 @@ export class DiscrepanciesService {
   }
 }
 
-function toDiscrepancyView(discrepancy: Discrepancy): DiscrepancyView {
+function toDiscrepancyView(discrepancy: Discrepancy & { replenishmentGap?: ReplenishmentGap | null }): DiscrepancyView {
   return {
     id: discrepancy.id,
     receiptItemId: discrepancy.receiptItemId,
@@ -94,5 +126,20 @@ function toDiscrepancyView(discrepancy: Discrepancy): DiscrepancyView {
     version: discrepancy.version,
     resolvedAt: discrepancy.resolvedAt?.toISOString() ?? null,
     createdAt: discrepancy.createdAt.toISOString(),
+    replenishmentGap: discrepancy.replenishmentGap ? toReplenishmentGapView(discrepancy.replenishmentGap) : null,
+  };
+}
+
+function toReplenishmentGapView(gap: ReplenishmentGap): ReplenishmentGapView {
+  return {
+    id: gap.id,
+    discrepancyId: gap.discrepancyId,
+    orderItemId: gap.orderItemId,
+    quantity: gap.quantity.toString(),
+    remainingQuantity: gap.remainingQuantity.toString(),
+    status: gap.status,
+    version: gap.version,
+    createdAt: gap.createdAt.toISOString(),
+    updatedAt: gap.updatedAt.toISOString(),
   };
 }
