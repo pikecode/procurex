@@ -1,6 +1,6 @@
 generator client {
-  provider = "prisma-client"
-  output = "../packages/backend/generated/prisma"
+  provider     = "prisma-client"
+  output       = "../packages/backend/generated/prisma"
   moduleFormat = "cjs"
 }
 
@@ -56,6 +56,21 @@ enum PaymentAllocationState {
   RESERVED
   CONFIRMED
   RELEASED
+}
+
+enum DifferenceDisposalMethod {
+  OFFSET
+  OFFLINE_RETURN
+}
+
+enum DifferenceDisposalStatus {
+  PENDING
+  CONFIRMED
+}
+
+enum DifferenceDisposalDirection {
+  SUPPLIER_TO_COMPANY
+  COMPANY_TO_STORE
 }
 
 enum FulfillmentStatus {
@@ -143,14 +158,14 @@ enum CommandStatus {
 }
 
 model User {
-  id           String     @id @default(uuid()) @db.Uuid
-  phone        String?    @unique @db.VarChar(32)
-  username     String     @unique @db.VarChar(80)
-  displayName  String     @db.VarChar(120)
-  passwordHash String?    @db.VarChar(200)
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime   @updatedAt @db.Timestamptz(6)
+  id           String          @id @default(uuid()) @db.Uuid
+  phone        String?         @unique @db.VarChar(32)
+  username     String          @unique @db.VarChar(80)
+  displayName  String          @db.VarChar(120)
+  passwordHash String?         @db.VarChar(200)
+  status       UserStatus      @default(ACTIVE)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime        @updatedAt @db.Timestamptz(6)
   roles        UserRole[]
   commands     CommandRecord[]
   sessions     UserSession[]
@@ -233,19 +248,19 @@ model RolePermission {
 }
 
 model Store {
-  id             String                 @id @default(uuid()) @db.Uuid
-  code           String                 @unique @db.VarChar(80)
-  name           String                 @db.VarChar(200)
-  contactName    String?                @db.VarChar(120)
-  contactPhone   String?                @db.VarChar(32)
-  address        String?                @db.VarChar(300)
-  status         StoreStatus            @default(ACTIVE)
-  createdAt      DateTime               @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime               @updatedAt @db.Timestamptz(6)
-  bindings       StoreTemplateBinding[]
-  accounts       StoreAccount[]
-  requests       PurchaseRequest[]
-  supplierOrders SupplierOrder[]
+  id                String                 @id @default(uuid()) @db.Uuid
+  code              String                 @unique @db.VarChar(80)
+  name              String                 @db.VarChar(200)
+  contactName       String?                @db.VarChar(120)
+  contactPhone      String?                @db.VarChar(32)
+  address           String?                @db.VarChar(300)
+  status            StoreStatus            @default(ACTIVE)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(6)
+  bindings          StoreTemplateBinding[]
+  accounts          StoreAccount[]
+  requests          PurchaseRequest[]
+  supplierOrders    SupplierOrder[]
   rechargeDocuments RechargeDocument[]
   clearingDocuments ClearingDocument[]
 }
@@ -291,23 +306,23 @@ model Unit {
 }
 
 model Product {
-  id             String                  @id @default(uuid()) @db.Uuid
-  sku            String                  @unique @db.VarChar(100)
-  name           String                  @db.VarChar(240)
-  categoryId     String                  @db.Uuid
-  baseUnitId     String                  @db.Uuid
-  minOrderQty    Decimal                 @default(1) @db.Decimal(20, 6)
-  orderMultiple  Decimal                 @default(1) @db.Decimal(20, 6)
-  isActive       Boolean                 @default(true)
-  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime                @updatedAt @db.Timestamptz(6)
-  category       Category                @relation(fields: [categoryId], references: [id])
-  baseUnit       Unit                    @relation(fields: [baseUnitId], references: [id])
-  conversion     ProductUnitConversion?
-  suppliers      SupplierProduct[]
-  templateItems  TemplateItem[]
-  requestItems   RequestItem[]
-  orderItems     OrderItem[]
+  id            String                 @id @default(uuid()) @db.Uuid
+  sku           String                 @unique @db.VarChar(100)
+  name          String                 @db.VarChar(240)
+  categoryId    String                 @db.Uuid
+  baseUnitId    String                 @db.Uuid
+  minOrderQty   Decimal                @default(1) @db.Decimal(20, 6)
+  orderMultiple Decimal                @default(1) @db.Decimal(20, 6)
+  isActive      Boolean                @default(true)
+  createdAt     DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime               @updatedAt @db.Timestamptz(6)
+  category      Category               @relation(fields: [categoryId], references: [id])
+  baseUnit      Unit                   @relation(fields: [baseUnitId], references: [id])
+  conversion    ProductUnitConversion?
+  suppliers     SupplierProduct[]
+  templateItems TemplateItem[]
+  requestItems  RequestItem[]
+  orderItems    OrderItem[]
 }
 
 model ProductUnitConversion {
@@ -336,15 +351,15 @@ model SupplierProduct {
 }
 
 model OrderTemplate {
-  id           String                    @id @default(uuid()) @db.Uuid
-  code         String                    @unique @db.VarChar(80)
-  name         String                    @db.VarChar(200)
-  isArchived   Boolean                   @default(false)
-  createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime                  @updatedAt @db.Timestamptz(6)
-  bindings     StoreTemplateBinding[]
-  items        TemplateItem[]
-  settings     TemplateSupplierSetting[]
+  id         String                    @id @default(uuid()) @db.Uuid
+  code       String                    @unique @db.VarChar(80)
+  name       String                    @db.VarChar(200)
+  isArchived Boolean                   @default(false)
+  createdAt  DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime                  @updatedAt @db.Timestamptz(6)
+  bindings   StoreTemplateBinding[]
+  items      TemplateItem[]
+  settings   TemplateSupplierSetting[]
 }
 
 model StoreTemplateBinding {
@@ -361,15 +376,15 @@ model StoreTemplateBinding {
 }
 
 model TemplateItem {
-  id            String                 @id @default(uuid()) @db.Uuid
-  templateId    String                 @db.Uuid
-  productId     String                 @db.Uuid
-  sortOrder     Int                    @default(0)
-  isEnabled     Boolean                @default(true)
-  createdAt     DateTime               @default(now()) @db.Timestamptz(6)
-  template      OrderTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  product       Product                @relation(fields: [productId], references: [id])
-  suppliers     TemplateItemSupplier[]
+  id         String                 @id @default(uuid()) @db.Uuid
+  templateId String                 @db.Uuid
+  productId  String                 @db.Uuid
+  sortOrder  Int                    @default(0)
+  isEnabled  Boolean                @default(true)
+  createdAt  DateTime               @default(now()) @db.Timestamptz(6)
+  template   OrderTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  product    Product                @relation(fields: [productId], references: [id])
+  suppliers  TemplateItemSupplier[]
 
   @@unique([templateId, productId])
 }
@@ -387,26 +402,26 @@ model TemplateItemSupplier {
 }
 
 model TemplateSupplierSetting {
-  id             String         @id @default(uuid()) @db.Uuid
-  templateId     String         @db.Uuid
-  supplierId     String         @db.Uuid
-  settlementMode SettlementMode
-  settlementCycle String        @db.VarChar(40)
-  createdAt      DateTime       @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime       @updatedAt @db.Timestamptz(6)
-  template       OrderTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  supplier       Supplier       @relation(fields: [supplierId], references: [id])
+  id              String         @id @default(uuid()) @db.Uuid
+  templateId      String         @db.Uuid
+  supplierId      String         @db.Uuid
+  settlementMode  SettlementMode
+  settlementCycle String         @db.VarChar(40)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(6)
+  template        OrderTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  supplier        Supplier       @relation(fields: [supplierId], references: [id])
 
   @@unique([templateId, supplierId])
 }
 
 model PriceScope {
-  id            String         @id @default(uuid()) @db.Uuid
-  productId     String         @db.Uuid
-  supplierId    String         @db.Uuid
-  createdAt     DateTime       @default(now()) @db.Timestamptz(6)
-  supplier      Supplier       @relation(fields: [supplierId], references: [id])
-  versions      PriceVersion[]
+  id         String         @id @default(uuid()) @db.Uuid
+  productId  String         @db.Uuid
+  supplierId String         @db.Uuid
+  createdAt  DateTime       @default(now()) @db.Timestamptz(6)
+  supplier   Supplier       @relation(fields: [supplierId], references: [id])
+  versions   PriceVersion[]
 
   @@unique([productId, supplierId])
 }
@@ -450,20 +465,20 @@ model PurchaseRequest {
 }
 
 model RequestItem {
-  id                String          @id @default(uuid()) @db.Uuid
-  requestId         String          @db.Uuid
-  productId         String          @db.Uuid
-  supplierId        String          @db.Uuid
-  priceVersionId    String?         @db.Uuid
-  quantity          Decimal         @db.Decimal(20, 6)
-  salesUnitPrice    Decimal         @db.Decimal(20, 6)
-  supplyUnitPrice   Decimal         @db.Decimal(20, 6)
-  salesLineAmount   Decimal         @db.Decimal(20, 2)
-  supplyLineAmount  Decimal         @db.Decimal(20, 2)
-  createdAt         DateTime        @default(now()) @db.Timestamptz(6)
-  request           PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  product           Product         @relation(fields: [productId], references: [id])
-  supplier          Supplier        @relation(fields: [supplierId], references: [id])
+  id               String          @id @default(uuid()) @db.Uuid
+  requestId        String          @db.Uuid
+  productId        String          @db.Uuid
+  supplierId       String          @db.Uuid
+  priceVersionId   String?         @db.Uuid
+  quantity         Decimal         @db.Decimal(20, 6)
+  salesUnitPrice   Decimal         @db.Decimal(20, 6)
+  supplyUnitPrice  Decimal         @db.Decimal(20, 6)
+  salesLineAmount  Decimal         @db.Decimal(20, 2)
+  supplyLineAmount Decimal         @db.Decimal(20, 2)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(6)
+  request          PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  product          Product         @relation(fields: [productId], references: [id])
+  supplier         Supplier        @relation(fields: [supplierId], references: [id])
 
   @@index([requestId])
   @@index([productId])
@@ -471,90 +486,90 @@ model RequestItem {
 }
 
 model SupplierOrder {
-  id                String              @id @default(uuid()) @db.Uuid
-  supplierOrderNo   String              @unique @db.VarChar(80)
-  requestId         String              @db.Uuid
-  storeId           String              @db.Uuid
-  supplierId        String              @db.Uuid
-  status            SupplierOrderStatus @default(DRAFT)
-  fulfillmentStatus FulfillmentStatus   @default(PENDING)
-  firstShippedAt    DateTime?           @db.Timestamptz(6)
-  pushedAt          DateTime?           @db.Timestamptz(6)
-  rejectedAt        DateTime?           @db.Timestamptz(6)
-  rejectedReason    String?             @db.VarChar(300)
-  salesGoodsAmount  Decimal             @default(0) @db.Decimal(20, 2)
-  supplyGoodsAmount Decimal             @default(0) @db.Decimal(20, 2)
-  version           Int                 @default(1)
-  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime            @updatedAt @db.Timestamptz(6)
-  request           PurchaseRequest     @relation(fields: [requestId], references: [id])
-  store             Store               @relation(fields: [storeId], references: [id])
-  supplier          Supplier            @relation(fields: [supplierId], references: [id])
-  items             OrderItem[]
-  shipments         Shipment[]
+  id                   String                @id @default(uuid()) @db.Uuid
+  supplierOrderNo      String                @unique @db.VarChar(80)
+  requestId            String                @db.Uuid
+  storeId              String                @db.Uuid
+  supplierId           String                @db.Uuid
+  status               SupplierOrderStatus   @default(DRAFT)
+  fulfillmentStatus    FulfillmentStatus     @default(PENDING)
+  firstShippedAt       DateTime?             @db.Timestamptz(6)
+  pushedAt             DateTime?             @db.Timestamptz(6)
+  rejectedAt           DateTime?             @db.Timestamptz(6)
+  rejectedReason       String?               @db.VarChar(300)
+  salesGoodsAmount     Decimal               @default(0) @db.Decimal(20, 2)
+  supplyGoodsAmount    Decimal               @default(0) @db.Decimal(20, 2)
+  version              Int                   @default(1)
+  createdAt            DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime              @updatedAt @db.Timestamptz(6)
+  request              PurchaseRequest       @relation(fields: [requestId], references: [id])
+  store                Store                 @relation(fields: [storeId], references: [id])
+  supplier             Supplier              @relation(fields: [supplierId], references: [id])
+  items                OrderItem[]
+  shipments            Shipment[]
   freightConfirmations FreightConfirmation[]
-  fundingAllocations FundingAllocation[]
-  paymentAllocations PaymentAllocation[]
+  fundingAllocations   FundingAllocation[]
+  paymentAllocations   PaymentAllocation[]
 
   @@index([requestId])
   @@index([supplierId, firstShippedAt])
 }
 
 model OrderItem {
-  id                String        @id @default(uuid()) @db.Uuid
-  supplierOrderId   String        @db.Uuid
-  productId         String        @db.Uuid
-  quantity          Decimal       @db.Decimal(20, 6)
-  shippedQuantity   Decimal       @default(0) @db.Decimal(20, 6)
-  receivedQuantity  Decimal       @default(0) @db.Decimal(20, 6)
-  salesUnitPrice    Decimal       @db.Decimal(20, 6)
-  supplyUnitPrice   Decimal       @db.Decimal(20, 6)
-  salesLineAmount   Decimal       @db.Decimal(20, 2)
-  supplyLineAmount  Decimal       @db.Decimal(20, 2)
-  createdAt         DateTime      @default(now()) @db.Timestamptz(6)
-  supplierOrder     SupplierOrder @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
-  product           Product       @relation(fields: [productId], references: [id])
-  shipmentItems     ShipmentItem[]
-  discrepancies     Discrepancy[]
-  replenishmentGaps ReplenishmentGap[]
+  id                 String              @id @default(uuid()) @db.Uuid
+  supplierOrderId    String              @db.Uuid
+  productId          String              @db.Uuid
+  quantity           Decimal             @db.Decimal(20, 6)
+  shippedQuantity    Decimal             @default(0) @db.Decimal(20, 6)
+  receivedQuantity   Decimal             @default(0) @db.Decimal(20, 6)
+  salesUnitPrice     Decimal             @db.Decimal(20, 6)
+  supplyUnitPrice    Decimal             @db.Decimal(20, 6)
+  salesLineAmount    Decimal             @db.Decimal(20, 2)
+  supplyLineAmount   Decimal             @db.Decimal(20, 2)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  supplierOrder      SupplierOrder       @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
+  product            Product             @relation(fields: [productId], references: [id])
+  shipmentItems      ShipmentItem[]
+  discrepancies      Discrepancy[]
+  replenishmentGaps  ReplenishmentGap[]
   discrepancyReturns DiscrepancyReturn[]
 
   @@unique([supplierOrderId, productId])
 }
 
 model Shipment {
-  id              String         @id @default(uuid()) @db.Uuid
-  shipmentNo      String         @unique @db.VarChar(80)
-  supplierOrderId String         @db.Uuid
-  sequence        Int
-  kind            ShipmentKind
-  shippedAt       DateTime       @default(now()) @db.Timestamptz(6)
-  trackingNo      String?        @db.VarChar(100)
-  freight         Decimal        @default(0) @db.Decimal(20, 2)
-  freightConfirmationId String?  @unique @db.Uuid
-  createdAt       DateTime       @default(now()) @db.Timestamptz(6)
-  supplierOrder   SupplierOrder  @relation(fields: [supplierOrderId], references: [id])
-  freightConfirmation FreightConfirmation? @relation(fields: [freightConfirmationId], references: [id])
-  items           ShipmentItem[]
-  receipts        Receipt[]
+  id                    String               @id @default(uuid()) @db.Uuid
+  shipmentNo            String               @unique @db.VarChar(80)
+  supplierOrderId       String               @db.Uuid
+  sequence              Int
+  kind                  ShipmentKind
+  shippedAt             DateTime             @default(now()) @db.Timestamptz(6)
+  trackingNo            String?              @db.VarChar(100)
+  freight               Decimal              @default(0) @db.Decimal(20, 2)
+  freightConfirmationId String?              @unique @db.Uuid
+  createdAt             DateTime             @default(now()) @db.Timestamptz(6)
+  supplierOrder         SupplierOrder        @relation(fields: [supplierOrderId], references: [id])
+  freightConfirmation   FreightConfirmation? @relation(fields: [freightConfirmationId], references: [id])
+  items                 ShipmentItem[]
+  receipts              Receipt[]
 
   @@unique([supplierOrderId, sequence])
   @@index([supplierOrderId, shippedAt])
 }
 
 model ShipmentItem {
-  id                  String    @id @default(uuid()) @db.Uuid
-  shipmentId          String    @db.Uuid
-  orderItemId         String    @db.Uuid
-  quantity            Decimal   @db.Decimal(20, 6)
-  permanentlyReduced  Decimal   @default(0) @db.Decimal(20, 6)
-  salesPriceSnapshot  Decimal   @db.Decimal(20, 6)
-  supplyPriceSnapshot Decimal   @db.Decimal(20, 6)
-  salesLineAmount     Decimal   @db.Decimal(20, 2)
-  supplyLineAmount    Decimal   @db.Decimal(20, 2)
-  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
-  shipment            Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  orderItem           OrderItem @relation(fields: [orderItemId], references: [id])
+  id                  String                  @id @default(uuid()) @db.Uuid
+  shipmentId          String                  @db.Uuid
+  orderItemId         String                  @db.Uuid
+  quantity            Decimal                 @db.Decimal(20, 6)
+  permanentlyReduced  Decimal                 @default(0) @db.Decimal(20, 6)
+  salesPriceSnapshot  Decimal                 @db.Decimal(20, 6)
+  supplyPriceSnapshot Decimal                 @db.Decimal(20, 6)
+  salesLineAmount     Decimal                 @db.Decimal(20, 2)
+  supplyLineAmount    Decimal                 @db.Decimal(20, 2)
+  createdAt           DateTime                @default(now()) @db.Timestamptz(6)
+  shipment            Shipment                @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  orderItem           OrderItem               @relation(fields: [orderItemId], references: [id])
   receiptItems        ReceiptItem[]
   gapAllocations      ShipmentGapAllocation[]
 
@@ -576,48 +591,48 @@ model ShipmentGapAllocation {
 }
 
 model Receipt {
-  id           String        @id @default(uuid()) @db.Uuid
-  receiptNo    String        @unique @db.VarChar(80)
-  shipmentId   String        @db.Uuid
-  revision     Int
-  isCurrent    Boolean       @default(true)
-  submittedAt  DateTime      @default(now()) @db.Timestamptz(6)
-  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
-  shipment     Shipment      @relation(fields: [shipmentId], references: [id])
-  items        ReceiptItem[]
+  id          String        @id @default(uuid()) @db.Uuid
+  receiptNo   String        @unique @db.VarChar(80)
+  shipmentId  String        @db.Uuid
+  revision    Int
+  isCurrent   Boolean       @default(true)
+  submittedAt DateTime      @default(now()) @db.Timestamptz(6)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(6)
+  shipment    Shipment      @relation(fields: [shipmentId], references: [id])
+  items       ReceiptItem[]
 
   @@unique([shipmentId, revision])
   @@index([shipmentId, isCurrent])
 }
 
 model ReceiptItem {
-  id              String       @id @default(uuid()) @db.Uuid
-  receiptId       String       @db.Uuid
-  shipmentItemId  String       @db.Uuid
-  receivedQuantity Decimal     @db.Decimal(20, 6)
-  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
-  receipt         Receipt      @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  shipmentItem    ShipmentItem @relation(fields: [shipmentItemId], references: [id])
-  discrepancy     Discrepancy?
+  id               String       @id @default(uuid()) @db.Uuid
+  receiptId        String       @db.Uuid
+  shipmentItemId   String       @db.Uuid
+  receivedQuantity Decimal      @db.Decimal(20, 6)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(6)
+  receipt          Receipt      @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  shipmentItem     ShipmentItem @relation(fields: [shipmentItemId], references: [id])
+  discrepancy      Discrepancy?
 
   @@unique([receiptId, shipmentItemId])
   @@index([shipmentItemId])
 }
 
 model Discrepancy {
-  id              String              @id @default(uuid()) @db.Uuid
-  receiptItemId   String              @unique @db.Uuid
-  orderItemId     String              @db.Uuid
-  missingQuantity Decimal             @db.Decimal(20, 6)
-  status          DiscrepancyStatus   @default(OPEN)
-  version         Int                 @default(1)
-  resolvedAt      DateTime?           @db.Timestamptz(6)
-  createdAt       DateTime            @default(now()) @db.Timestamptz(6)
-  receiptItem     ReceiptItem         @relation(fields: [receiptItemId], references: [id])
-  orderItem       OrderItem           @relation(fields: [orderItemId], references: [id])
-  actions         DiscrepancyAction[]
+  id               String              @id @default(uuid()) @db.Uuid
+  receiptItemId    String              @unique @db.Uuid
+  orderItemId      String              @db.Uuid
+  missingQuantity  Decimal             @db.Decimal(20, 6)
+  status           DiscrepancyStatus   @default(OPEN)
+  version          Int                 @default(1)
+  resolvedAt       DateTime?           @db.Timestamptz(6)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(6)
+  receiptItem      ReceiptItem         @relation(fields: [receiptItemId], references: [id])
+  orderItem        OrderItem           @relation(fields: [orderItemId], references: [id])
+  actions          DiscrepancyAction[]
   replenishmentGap ReplenishmentGap?
-  returnRecord    DiscrepancyReturn?
+  returnRecord     DiscrepancyReturn?
 
   @@index([orderItemId])
   @@index([status])
@@ -635,30 +650,31 @@ model DiscrepancyAction {
 }
 
 model DiscrepancyReturn {
-  id            String      @id @default(uuid()) @db.Uuid
-  discrepancyId String      @unique @db.Uuid
-  orderItemId   String      @db.Uuid
-  quantity      Decimal     @db.Decimal(20, 6)
-  reason        String?     @db.VarChar(300)
-  createdAt     DateTime    @default(now()) @db.Timestamptz(6)
-  discrepancy   Discrepancy @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
-  orderItem     OrderItem   @relation(fields: [orderItemId], references: [id])
+  id                      String                   @id @default(uuid()) @db.Uuid
+  discrepancyId           String                   @unique @db.Uuid
+  orderItemId             String                   @db.Uuid
+  quantity                Decimal                  @db.Decimal(20, 6)
+  reason                  String?                  @db.VarChar(300)
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(6)
+  discrepancy             Discrepancy              @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
+  orderItem               OrderItem                @relation(fields: [orderItemId], references: [id])
+  differenceDisposalItems DifferenceDisposalItem[]
 
   @@index([orderItemId, createdAt])
 }
 
 model ReplenishmentGap {
-  id                String                 @id @default(uuid()) @db.Uuid
-  discrepancyId     String                 @unique @db.Uuid
-  orderItemId       String                 @db.Uuid
-  quantity          Decimal                @db.Decimal(20, 6)
-  remainingQuantity Decimal                @db.Decimal(20, 6)
-  status            ReplenishmentGapStatus @default(PENDING)
-  version           Int                    @default(1)
-  createdAt         DateTime               @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime               @updatedAt @db.Timestamptz(6)
-  discrepancy       Discrepancy            @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
-  orderItem         OrderItem              @relation(fields: [orderItemId], references: [id])
+  id                  String                  @id @default(uuid()) @db.Uuid
+  discrepancyId       String                  @unique @db.Uuid
+  orderItemId         String                  @db.Uuid
+  quantity            Decimal                 @db.Decimal(20, 6)
+  remainingQuantity   Decimal                 @db.Decimal(20, 6)
+  status              ReplenishmentGapStatus  @default(PENDING)
+  version             Int                     @default(1)
+  createdAt           DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime                @updatedAt @db.Timestamptz(6)
+  discrepancy         Discrepancy             @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
+  orderItem           OrderItem               @relation(fields: [orderItemId], references: [id])
   shipmentAllocations ShipmentGapAllocation[]
 
   @@index([orderItemId, status])
@@ -674,25 +690,25 @@ model FreightConfirmation {
   version         Int                       @default(1)
   confirmedAt     DateTime?                 @db.Timestamptz(6)
   rejectedAt      DateTime?                 @db.Timestamptz(6)
-  usedAt           DateTime?                 @db.Timestamptz(6)
+  usedAt          DateTime?                 @db.Timestamptz(6)
   createdAt       DateTime                  @default(now()) @db.Timestamptz(6)
   supplierOrder   SupplierOrder             @relation(fields: [supplierOrderId], references: [id])
-  shipment         Shipment?
+  shipment        Shipment?
 
   @@index([supplierOrderId, status])
 }
 
 model StoreAccount {
-  id             String          @id @default(uuid()) @db.Uuid
-  storeId        String          @db.Uuid
-  balance        Decimal         @default(0) @db.Decimal(20, 2)
-  creditLimit    Decimal         @default(0) @db.Decimal(20, 2)
-  creditUsed     Decimal         @default(0) @db.Decimal(20, 2)
-  version        Int             @default(1)
-  createdAt      DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime        @updatedAt @db.Timestamptz(6)
-  store          Store           @relation(fields: [storeId], references: [id])
-  ledgers        AccountLedger[]
+  id                 String              @id @default(uuid()) @db.Uuid
+  storeId            String              @db.Uuid
+  balance            Decimal             @default(0) @db.Decimal(20, 2)
+  creditLimit        Decimal             @default(0) @db.Decimal(20, 2)
+  creditUsed         Decimal             @default(0) @db.Decimal(20, 2)
+  version            Int                 @default(1)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(6)
+  store              Store               @relation(fields: [storeId], references: [id])
+  ledgers            AccountLedger[]
   fundingAllocations FundingAllocation[]
 
   @@unique([storeId])
@@ -761,24 +777,24 @@ model ClearingItem {
 }
 
 model PaymentRecord {
-  id            String                 @id @default(uuid()) @db.Uuid
-  paymentNo     String                 @unique @db.VarChar(80)
-  direction     PaymentRecordDirection
-  storeId       String?                @db.Uuid
-  supplierId    String?                @db.Uuid
-  amount        Decimal                @db.Decimal(20, 2)
-  businessDate  DateTime               @db.Date
-  status        PaymentRecordStatus    @default(PENDING)
-  remark        String?                @db.VarChar(300)
-  rejectedReason String?               @db.VarChar(300)
-  cancelledReason String?              @db.VarChar(300)
-  version       Int                    @default(1)
-  confirmedAt   DateTime?              @db.Timestamptz(6)
-  rejectedAt    DateTime?              @db.Timestamptz(6)
-  cancelledAt   DateTime?              @db.Timestamptz(6)
-  createdAt     DateTime               @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime               @updatedAt @db.Timestamptz(6)
-  allocations   PaymentAllocation[]
+  id              String                 @id @default(uuid()) @db.Uuid
+  paymentNo       String                 @unique @db.VarChar(80)
+  direction       PaymentRecordDirection
+  storeId         String?                @db.Uuid
+  supplierId      String?                @db.Uuid
+  amount          Decimal                @db.Decimal(20, 2)
+  businessDate    DateTime               @db.Date
+  status          PaymentRecordStatus    @default(PENDING)
+  remark          String?                @db.VarChar(300)
+  rejectedReason  String?                @db.VarChar(300)
+  cancelledReason String?                @db.VarChar(300)
+  version         Int                    @default(1)
+  confirmedAt     DateTime?              @db.Timestamptz(6)
+  rejectedAt      DateTime?              @db.Timestamptz(6)
+  cancelledAt     DateTime?              @db.Timestamptz(6)
+  createdAt       DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime               @updatedAt @db.Timestamptz(6)
+  allocations     PaymentAllocation[]
 
   @@index([direction, status, businessDate])
   @@index([storeId, status])
@@ -802,19 +818,56 @@ model PaymentAllocation {
   @@index([supplierOrderId])
 }
 
-model AccountLedger {
-  id             String           @id @default(uuid()) @db.Uuid
-  accountId      String           @db.Uuid
-  direction      LedgerDirection
-  amount         Decimal          @db.Decimal(20, 2)
-  balanceAfter   Decimal          @db.Decimal(20, 2)
-  sourceType     LedgerSourceType
-  sourceId       String           @db.Uuid
-  note           String?          @db.VarChar(300)
-  occurredAt     DateTime         @default(now()) @db.Timestamptz(6)
-  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
-  account        StoreAccount     @relation(fields: [accountId], references: [id])
+model DifferenceDisposal {
+  id           String                      @id @default(uuid()) @db.Uuid
+  disposalNo   String                      @unique @db.VarChar(80)
+  direction    DifferenceDisposalDirection
+  method       DifferenceDisposalMethod
+  storeId      String?                     @db.Uuid
+  supplierId   String?                     @db.Uuid
+  amount       Decimal                     @db.Decimal(20, 2)
+  businessDate DateTime                    @db.Date
+  status       DifferenceDisposalStatus    @default(PENDING)
+  reason       String?                     @db.VarChar(300)
+  version      Int                         @default(1)
+  confirmedAt  DateTime?                   @db.Timestamptz(6)
+  createdAt    DateTime                    @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                    @updatedAt @db.Timestamptz(6)
+  items        DifferenceDisposalItem[]
 
-  @@index([accountId, occurredAt])
+  @@index([direction, status, businessDate])
+  @@index([storeId, status])
+  @@index([supplierId, status])
+}
+
+model DifferenceDisposalItem {
+  id                String             @id @default(uuid()) @db.Uuid
+  disposalId        String             @db.Uuid
+  creditItemId      String             @db.Uuid
+  targetDebitItemId String?            @db.VarChar(300)
+  amount            Decimal            @db.Decimal(20, 2)
+  sourceVersion     Int
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
+  disposal          DifferenceDisposal @relation(fields: [disposalId], references: [id], onDelete: Cascade)
+  discrepancyReturn DiscrepancyReturn  @relation(fields: [creditItemId], references: [id])
+
+  @@unique([creditItemId])
+  @@index([disposalId])
+}
+
+model AccountLedger {
+  id           String           @id @default(uuid()) @db.Uuid
+  accountId    String           @db.Uuid
+  direction    LedgerDirection
+  amount       Decimal          @db.Decimal(20, 2)
+  balanceAfter Decimal          @db.Decimal(20, 2)
+  sourceType   LedgerSourceType
+  sourceId     String           @db.Uuid
+  note         String?          @db.VarChar(300)
+  occurredAt   DateTime         @default(now()) @db.Timestamptz(6)
+  createdAt    DateTime         @default(now()) @db.Timestamptz(6)
+  account      StoreAccount     @relation(fields: [accountId], references: [id])
+
   @@unique([sourceType, sourceId, direction])
+  @@index([accountId, occurredAt])
 }

@@ -5,6 +5,7 @@ import { ClearingsModule } from './clearings/clearings.module.js';
 import { CommandsModule } from './commands/commands.module.js';
 import { TraceIdMiddleware } from './common/trace-id.middleware.js';
 import { DatabaseModule } from './database/database.module.js';
+import { DifferenceDisposalsModule } from './difference-disposals/difference-disposals.module.js';
 import { DiscrepanciesModule } from './discrepancies/discrepancies.module.js';
 import { FreightConfirmationsModule } from './freight-confirmations/freight-confirmations.module.js';
 import { HealthController } from './health.controller.js';
@@ -38,6 +39,7 @@ import { UsersModule } from './users/users.module.js';
     PurchaseRequestsModule,
     SupplierOrdersModule,
     ShipmentsModule,
+    DifferenceDisposalsModule,
     DiscrepanciesModule,
     FreightConfirmationsModule,
     RechargesModule,

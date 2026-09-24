@@ -4,17 +4,17 @@ Last updated: 2026-09-24
 
 ## Current Position
 
-The backend is currently entering M4 settlement/read-model development.
+The backend is currently in M4 settlement/read-model development.
 
-Latest completed milestone: B11 payment record read endpoints.
+Latest completed milestone: B12 difference disposal offline return first version.
 
 Latest implementation commit:
 
 ```text
-Add payment record read endpoints
+Add difference disposal offline return
 ```
 
-The working tree was clean after this commit.
+The working tree was verified for this commit.
 
 ## Verification Baseline
 
@@ -24,7 +24,7 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count at that point: 26 integration tests passing.
+Current integration coverage count: 26 integration tests passing.
 
 ## Completed Areas
 
@@ -207,6 +207,7 @@ Implemented interfaces:
 - B09 `POST /payment-records/{id}/reject`
 - B10 `POST /payment-records/{id}/cancel`
 - B11 `GET /payment-records`, `GET /payment-records/{id}`
+- B12 `POST /difference-disposals`, `POST /difference-disposals/{id}/confirm`, `GET /difference-disposals/{id}`
 
 Current B01 behavior:
 
@@ -280,22 +281,32 @@ Current B11 behavior:
 - Returns payment record details with allocation rows and allocation states.
 - Keeps role-based access only in this version; participant data-scope filtering remains future work.
 
+Current B12 behavior:
+
+- Adds `DifferenceDisposal` and `DifferenceDisposalItem` models.
+- Creates supplier-to-company offline-return difference disposals from F05 RETURN `DiscrepancyReturn` credit items.
+- Calculates disposal amount from returned quantity times the source supplier order item supply unit price.
+- Requires selected credit items to share the same store and supplier, and rejects already disposed credit items.
+- Confirms PENDING disposals with expectedVersion checking and records confirmedAt.
+- Uses Idempotency-Key through command records for create and confirm.
+- OFFSET, overpayment, adjustment-driven credit items, and evidence files remain future work.
+
 ## Recommended Next Step
 
-Start settlement difference disposal or continue payment lifecycle polish.
+Continue settlement adjustment and difference-disposal polish.
 
 Suggested first version:
 
-- If moving into payment work, add any remaining payment lifecycle polish around overpayments and difference disposal.
-- If continuing fulfillment finance linkage, connect RETURN discrepancy records to settlement/payment difference disposal.
+- Add B05 adjustment read endpoints so adjustment-driven differences can be listed and traced.
+- Extend B12 from RETURN-only offline return into OFFSET and overpayment disposal flows.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:
 
-1. Difference disposal for negative adjustments and overpayments.
+1. Negative adjustment and overpayment credit source modeling.
 2. Payment lifecycle edge cases around overpayment handling.
-3. Settlement difference disposal for accepted, replenished, and returned discrepancies.
+3. Evidence-file linkage and participant data-scope filtering.
 
 ## Where To Look
 

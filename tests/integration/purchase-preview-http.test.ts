@@ -711,6 +711,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
   const prisma = createClient();
   const runId = Date.now();
   const purchaserUsername = `it_confirm_purchaser_${runId}`;
+  const financeUsername = `it_confirm_finance_${runId}`;
   const storeCode = `CONFSTORE${runId}`;
   const templateCode = `CONFTPL${runId}`;
   const categoryCode = `CONFCAT${runId}`;
@@ -737,12 +738,25 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       update: {},
       create: { code: 'STORE', name: 'Store' },
     });
+    const hqFinanceRole = await prisma.role.upsert({
+      where: { code: 'HQ_FINANCE' },
+      update: {},
+      create: { code: 'HQ_FINANCE', name: 'HQ Finance' },
+    });
     const user = await prisma.user.create({
       data: {
         username: purchaserUsername,
         displayName: 'Integration Confirm Purchaser',
         passwordHash: await hashPassword('correct-password'),
         roles: { create: [{ roleId: purchaserRole.id }, { roleId: supplierRole.id }, { roleId: storeRole.id }] },
+      },
+    });
+    await prisma.user.create({
+      data: {
+        username: financeUsername,
+        displayName: 'Integration Confirm Finance',
+        passwordHash: await hashPassword('correct-password'),
+        roles: { create: [{ roleId: hqFinanceRole.id }] },
       },
     });
 
@@ -844,6 +858,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     ]);
 
     const token = await login(baseUrl, purchaserUsername);
+    const financeToken = await login(baseUrl, financeUsername);
     const createResponse = await fetch(`${baseUrl}/purchase-requests`, {
       method: 'POST',
       headers: {
@@ -1663,6 +1678,96 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     });
     assert.equal(completedOrderAfterReturn.status, 'COMPLETED');
     assert.equal(completedOrderAfterReturn.fulfillmentStatus, 'COMPLETED');
+    const createDifferenceDisposal = async () => {
+      const response = await fetch(`${baseUrl}/difference-disposals`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${financeToken}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'create-difference-disposal-once',
+          'x-trace-id': 'trace-create-difference-disposal',
+        },
+        body: JSON.stringify({
+          method: 'OFFLINE_RETURN',
+          creditItemIds: [persistedReturn.id],
+          amount: '8.00',
+          businessDate: '2026-09-24',
+          reason: 'Supplier returned shortage value offline',
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          disposalNo: string;
+          direction: string;
+          method: string;
+          storeId: string | null;
+          supplierId: string | null;
+          amount: string;
+          businessDate: string;
+          status: string;
+          reason: string | null;
+          version: number;
+          confirmedAt: string | null;
+          items: Array<{ creditItemId: string; targetDebitItemId: string | null; amount: string; sourceVersion: number }>;
+        };
+      };
+    };
+    const differenceDisposal = await createDifferenceDisposal();
+    const differenceDisposalReplay = await createDifferenceDisposal();
+    assert.deepEqual(differenceDisposalReplay.data, differenceDisposal.data);
+    assert.ok(differenceDisposal.data.disposalNo);
+    assert.equal(differenceDisposal.data.direction, 'SUPPLIER_TO_COMPANY');
+    assert.equal(differenceDisposal.data.method, 'OFFLINE_RETURN');
+    assert.equal(differenceDisposal.data.storeId, store.id);
+    assert.equal(differenceDisposal.data.supplierId, supplierB.id);
+    assert.equal(differenceDisposal.data.amount, '8.00');
+    assert.equal(differenceDisposal.data.businessDate, '2026-09-24');
+    assert.equal(differenceDisposal.data.status, 'PENDING');
+    assert.equal(differenceDisposal.data.reason, 'Supplier returned shortage value offline');
+    assert.equal(differenceDisposal.data.version, 1);
+    assert.equal(differenceDisposal.data.confirmedAt, null);
+    assert.equal(differenceDisposal.data.items[0]?.creditItemId, persistedReturn.id);
+    assert.equal(differenceDisposal.data.items[0]?.targetDebitItemId, null);
+    assert.equal(differenceDisposal.data.items[0]?.amount, '8.00');
+    assert.equal(differenceDisposal.data.items[0]?.sourceVersion, completedOrderAfterReturn.version);
+    const confirmDifferenceDisposal = async () => {
+      const response = await fetch(`${baseUrl}/difference-disposals/${differenceDisposal.data.id}/confirm`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${financeToken}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'confirm-difference-disposal-once',
+          'x-trace-id': 'trace-confirm-difference-disposal',
+        },
+        body: JSON.stringify({ expectedVersion: differenceDisposal.data.version }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: { id: string; status: string; version: number; confirmedAt: string | null; amount: string };
+      };
+    };
+    const confirmedDifferenceDisposal = await confirmDifferenceDisposal();
+    const confirmedDifferenceDisposalReplay = await confirmDifferenceDisposal();
+    assert.deepEqual(confirmedDifferenceDisposalReplay.data, confirmedDifferenceDisposal.data);
+    assert.equal(confirmedDifferenceDisposal.data.id, differenceDisposal.data.id);
+    assert.equal(confirmedDifferenceDisposal.data.status, 'CONFIRMED');
+    assert.equal(confirmedDifferenceDisposal.data.version, 2);
+    assert.equal(confirmedDifferenceDisposal.data.amount, '8.00');
+    assert.ok(confirmedDifferenceDisposal.data.confirmedAt);
+    const differenceDisposalDetailResponse = await fetch(`${baseUrl}/difference-disposals/${differenceDisposal.data.id}`, {
+      headers: { authorization: `Bearer ${financeToken}` },
+    });
+    assert.equal(differenceDisposalDetailResponse.status, 200);
+    const differenceDisposalDetail = (await differenceDisposalDetailResponse.json()) as {
+      data: { id: string; status: string; amount: string; items: Array<{ creditItemId: string; amount: string }> };
+    };
+    assert.equal(differenceDisposalDetail.data.id, differenceDisposal.data.id);
+    assert.equal(differenceDisposalDetail.data.status, 'CONFIRMED');
+    assert.equal(differenceDisposalDetail.data.amount, '8.00');
+    assert.equal(differenceDisposalDetail.data.items[0]?.creditItemId, persistedReturn.id);
+    assert.equal(differenceDisposalDetail.data.items[0]?.amount, '8.00');
     const storeStatementsResponse = await fetch(`${baseUrl}/store-statements?storeId=${store.id}&supplierId=${supplierB.id}`, {
       headers: { authorization: `Bearer ${token}` },
     });
@@ -2282,6 +2387,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
   } finally {
     await app.close();
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
+    await prisma.commandRecord.deleteMany({ where: { actor: { username: financeUsername } } });
     await prisma.paymentAllocation.deleteMany({
       where: { supplierOrder: { request: { store: { code: storeCode } } } },
     });
@@ -2292,6 +2398,12 @@ test('purchase request confirm splits supplier orders once per idempotency key',
           { supplierId: { in: (await prisma.supplier.findMany({ where: { code: { in: [supplierCodeA, supplierCodeB] } }, select: { id: true } })).map((supplier) => supplier.id) } },
         ],
       },
+    });
+    await prisma.differenceDisposalItem.deleteMany({
+      where: { discrepancyReturn: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } } },
+    });
+    await prisma.differenceDisposal.deleteMany({
+      where: { storeId: { in: (await prisma.store.findMany({ where: { code: storeCode }, select: { id: true } })).map((store) => store.id) } },
     });
     await prisma.freightConfirmation.deleteMany({
       where: { supplierOrder: { request: { store: { code: storeCode } } } },
@@ -2328,8 +2440,9 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     await prisma.category.deleteMany({ where: { code: categoryCode } });
     await prisma.unit.deleteMany({ where: { code: unitCode } });
     await prisma.userSession.deleteMany({ where: { user: { username: purchaserUsername } } });
-    await prisma.userRole.deleteMany({ where: { user: { username: purchaserUsername } } });
-    await prisma.user.deleteMany({ where: { username: purchaserUsername } });
+    await prisma.userSession.deleteMany({ where: { user: { username: financeUsername } } });
+    await prisma.userRole.deleteMany({ where: { user: { username: { in: [purchaserUsername, financeUsername] } } } });
+    await prisma.user.deleteMany({ where: { username: { in: [purchaserUsername, financeUsername] } } });
     await prisma.$disconnect();
   }
 });

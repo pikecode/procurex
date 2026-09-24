@@ -26,6 +26,7 @@ const [
   suppliersController,
   catalogController,
   clearingsController,
+  differenceDisposalsController,
   discrepanciesController,
   freightConfirmationsController,
   paymentRecordsController,
@@ -52,6 +53,7 @@ const [
     readProjectFile('apps/api/src/suppliers/suppliers.controller.ts'),
   readProjectFile('apps/api/src/catalog/catalog.controller.ts'),
   readProjectFile('apps/api/src/clearings/clearings.controller.ts'),
+  readProjectFile('apps/api/src/difference-disposals/difference-disposals.controller.ts'),
   readProjectFile('apps/api/src/discrepancies/discrepancies.controller.ts'),
   readProjectFile('apps/api/src/freight-confirmations/freight-confirmations.controller.ts'),
   readProjectFile('apps/api/src/payment-records/payment-records.controller.ts'),
@@ -138,6 +140,13 @@ assertIncludes(apiDesign, '`POST /payment-records/{id}/cancel`', 'api design');
 assertIncludes(paymentRecordsController, "@Post(':id/cancel')", 'payment records controller');
 assertIncludes(prismaSchema, 'model PaymentRecord', 'prisma schema');
 assertIncludes(prismaSchema, 'model PaymentAllocation', 'prisma schema');
+assertIncludes(apiDesign, '`POST /difference-disposals`', 'api design');
+assertIncludes(differenceDisposalsController, "@Controller('difference-disposals')", 'difference disposals controller');
+assertIncludes(differenceDisposalsController, '@Post()', 'difference disposals controller');
+assertIncludes(differenceDisposalsController, "@Post(':id/confirm')", 'difference disposals controller');
+assertIncludes(differenceDisposalsController, "@Get(':id')", 'difference disposals controller');
+assertIncludes(prismaSchema, 'model DifferenceDisposal', 'prisma schema');
+assertIncludes(prismaSchema, 'model DifferenceDisposalItem', 'prisma schema');
 assertIncludes(apiDesign, '`GET/POST /suppliers`、`GET/PATCH /suppliers/{id}`', 'api design');
 assertIncludes(suppliersController, "@Controller('suppliers')", 'suppliers controller');
 assertIncludes(apiDesign, '`GET/PUT /suppliers/{id}/products`', 'api design');
