@@ -131,6 +131,11 @@ test('pricing HTTP endpoint publishes prices and lists versions', async () => {
     const processedBody = (await processed.json()) as { data: { status: string; orders: unknown[] } };
     assert.equal(processedBody.data.status, 'SUCCEEDED');
     assert.deepEqual(processedBody.data.orders, []);
+    const repeated = await fetch(`${baseUrl}/jobs/${first.data.runId}/process`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(repeated.status, 409);
     const second = await publish('12.000000', '9.000000', '2026-09-10T00:00:00.000Z');
     assert.equal(second.data.scopeId, first.data.scopeId);
     assert.equal(second.data.revision, 2);
