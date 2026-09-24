@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently entering M4 settlement/read-model development.
 
-Latest completed milestone: B10 payment cancellation.
+Latest completed milestone: B11 payment record read endpoints.
 
 Latest implementation commit:
 
 ```text
-Add payment cancellation
+Add payment record read endpoints
 ```
 
 The working tree was clean after this commit.
@@ -206,6 +206,7 @@ Implemented interfaces:
 - B08 `POST /payment-records/{id}/confirm`
 - B09 `POST /payment-records/{id}/reject`
 - B10 `POST /payment-records/{id}/cancel`
+- B11 `GET /payment-records`, `GET /payment-records/{id}`
 
 Current B01 behavior:
 
@@ -272,21 +273,28 @@ Current B10 behavior:
 - Later payment previews ignore RELEASED allocations, so cancelled items become payable again.
 - Uses Idempotency-Key through command records.
 
+Current B11 behavior:
+
+- Lists payment records ordered by creation time.
+- Supports filtering by direction, status, storeId, and supplierId.
+- Returns payment record details with allocation rows and allocation states.
+- Keeps role-based access only in this version; participant data-scope filtering remains future work.
+
 ## Recommended Next Step
 
-Start payment record read endpoints.
+Start settlement difference disposal or continue payment lifecycle polish.
 
 Suggested first version:
 
-- If moving into payment work, add payment record list/detail endpoints.
+- If moving into payment work, add any remaining payment lifecycle polish around overpayments and difference disposal.
 - If continuing fulfillment finance linkage, connect RETURN discrepancy records to settlement/payment difference disposal.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:
 
-1. Payment record list/detail endpoints.
-2. Difference disposal for negative adjustments and overpayments.
+1. Difference disposal for negative adjustments and overpayments.
+2. Payment lifecycle edge cases around overpayment handling.
 3. Settlement difference disposal for accepted, replenished, and returned discrepancies.
 
 ## Where To Look

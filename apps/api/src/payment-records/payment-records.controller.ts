@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -7,7 +7,7 @@ import { RolesGuard } from '../auth/roles.guard.js';
 import { CommandsService } from '../commands/commands.service.js';
 import { getOrCreateTraceId } from '../common/request-context.js';
 import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contract.js';
-import { PaymentRecordDirection } from '../../../../packages/backend/generated/prisma/enums.js';
+import { PaymentRecordDirection, PaymentRecordStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import {
   validateDecimalString,
   validateExpectedVersion,
@@ -16,6 +16,7 @@ import {
 } from '../../../../packages/domain/src/validation.js';
 import {
   type CreatePaymentRecordInput,
+  type ListPaymentRecordsInput,
   type PaymentPreviewView,
   type PaymentRecordView,
   PaymentRecordsService,
@@ -23,6 +24,13 @@ import {
 
 type PreviewBody = {
   settlementItemIds?: unknown;
+};
+
+type ListQuery = {
+  direction?: unknown;
+  status?: unknown;
+  storeId?: unknown;
+  supplierId?: unknown;
 };
 
 type CreateBody = {
@@ -53,6 +61,19 @@ export class PaymentRecordsController {
     private readonly paymentRecordsService: PaymentRecordsService,
     private readonly commandsService: CommandsService,
   ) {}
+
+  @Get()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+  list(@Query() query: ListQuery): Promise<PaymentRecordView[]> {
+    return this.paymentRecordsService.list(parseListQuery(query));
+  }
+
+  @Get(':id')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+  get(@Param('id') id: string): Promise<PaymentRecordView> {
+    throwIfInvalid(validateUuid('id', id));
+    return this.paymentRecordsService.get(id);
+  }
 
   @Post('preview')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
@@ -188,6 +209,36 @@ export class PaymentRecordsController {
   }
 }
 
+function parseListQuery(query: ListQuery): ListPaymentRecordsInput {
+  const issues: ValidationIssue[] = [];
+  let direction: PaymentRecordDirection | undefined;
+  let status: PaymentRecordStatus | undefined;
+  let storeId: string | undefined;
+  let supplierId: string | undefined;
+
+  if (query.direction !== undefined) {
+    direction = optionalDirection(query.direction, issues);
+  }
+  if (query.status !== undefined) {
+    status = optionalStatus(query.status, issues);
+  }
+  if (query.storeId !== undefined) {
+    issues.push(...validateUuid('storeId', query.storeId));
+    if (typeof query.storeId === 'string') {
+      storeId = query.storeId;
+    }
+  }
+  if (query.supplierId !== undefined) {
+    issues.push(...validateUuid('supplierId', query.supplierId));
+    if (typeof query.supplierId === 'string') {
+      supplierId = query.supplierId;
+    }
+  }
+
+  throwIfInvalid(issues);
+  return { direction, status, storeId, supplierId };
+}
+
 function parsePreviewBody(body: PreviewBody): string[] {
   const issues: ValidationIssue[] = [];
   if (!Array.isArray(body.settlementItemIds) || body.settlementItemIds.length === 0) {
@@ -297,6 +348,14 @@ function parseCancelBody(id: string, body: CancelBody): { id: string; expectedVe
 }
 
 function requiredDirection(value: unknown, issues: ValidationIssue[]): PaymentRecordDirection | undefined {
+  const direction = optionalDirection(value, issues);
+  if (direction) {
+    return direction;
+  }
+  return undefined;
+}
+
+function optionalDirection(value: unknown, issues: ValidationIssue[]): PaymentRecordDirection | undefined {
   if (value === PaymentRecordDirection.STORE_TO_COMPANY || value === PaymentRecordDirection.COMPANY_TO_SUPPLIER) {
     return value;
   }
@@ -304,6 +363,23 @@ function requiredDirection(value: unknown, issues: ValidationIssue[]): PaymentRe
     field: 'direction',
     code: 'INVALID_PAYMENT_DIRECTION',
     message: 'direction must be STORE_TO_COMPANY or COMPANY_TO_SUPPLIER',
+  });
+  return undefined;
+}
+
+function optionalStatus(value: unknown, issues: ValidationIssue[]): PaymentRecordStatus | undefined {
+  if (
+    value === PaymentRecordStatus.PENDING ||
+    value === PaymentRecordStatus.CONFIRMED ||
+    value === PaymentRecordStatus.REJECTED ||
+    value === PaymentRecordStatus.CANCELLED
+  ) {
+    return value;
+  }
+  issues.push({
+    field: 'status',
+    code: 'INVALID_PAYMENT_STATUS',
+    message: 'status is invalid',
   });
   return undefined;
 }

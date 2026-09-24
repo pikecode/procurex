@@ -32,6 +32,13 @@ export type CreatePaymentRecordInput = {
   remark?: string;
 };
 
+export type ListPaymentRecordsInput = {
+  direction?: PaymentRecordDirection;
+  status?: PaymentRecordStatus;
+  storeId?: string;
+  supplierId?: string;
+};
+
 export type CreatePaymentRecordItemInput = {
   settlementItemId: string;
   expectedVersion: number;
@@ -95,6 +102,36 @@ type PreviewOrder = SupplierOrder & { shipments: Shipment[] };
 @Injectable()
 export class PaymentRecordsService {
   constructor(private readonly database: DatabaseService) {}
+
+  async list(input: ListPaymentRecordsInput): Promise<PaymentRecordView[]> {
+    const payments = await this.database.client.paymentRecord.findMany({
+      where: {
+        direction: input.direction,
+        status: input.status,
+        storeId: input.storeId,
+        supplierId: input.supplierId,
+      },
+      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+
+    return payments.map(toPaymentRecordView);
+  }
+
+  async get(id: string): Promise<PaymentRecordView> {
+    const payment = await this.database.client.paymentRecord.findUnique({
+      where: { id },
+      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+    });
+    if (!payment) {
+      throw new NotFoundException({
+        code: 'PAYMENT_RECORD_NOT_FOUND',
+        message: 'Payment record was not found',
+      });
+    }
+
+    return toPaymentRecordView(payment);
+  }
 
   async preview(settlementItemIds: string[]): Promise<PaymentPreviewView> {
     const uniqueIds = [...new Set(settlementItemIds)];

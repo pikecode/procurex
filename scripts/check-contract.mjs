@@ -125,6 +125,8 @@ assertIncludes(supplierStoreStatementsController, '@Get()', 'supplier store stat
 assertIncludes(supplierStoreStatementsController, "@Get(':id')", 'supplier store statements controller');
 assertIncludes(apiDesign, '`POST /payment-records/preview`', 'api design');
 assertIncludes(paymentRecordsController, "@Controller('payment-records')", 'payment records controller');
+assertIncludes(paymentRecordsController, '@Get()', 'payment records controller');
+assertIncludes(paymentRecordsController, "@Get(':id')", 'payment records controller');
 assertIncludes(paymentRecordsController, "@Post('preview')", 'payment records controller');
 assertIncludes(apiDesign, '`POST /payment-records`', 'api design');
 assertIncludes(paymentRecordsController, '@Post()', 'payment records controller');

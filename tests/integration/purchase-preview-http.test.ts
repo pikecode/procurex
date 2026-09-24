@@ -1891,6 +1891,23 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(storePaymentPreviewAfterConfirm.data.items[0]?.payableAmount, '0.00');
     assert.equal(storePaymentPreviewAfterConfirm.data.items[0]?.pendingPaymentAmount, '0.00');
     assert.equal(storePaymentPreviewAfterConfirm.data.items[0]?.confirmedPaidAmount, '138.50');
+    const storePaymentDetailResponse = await fetch(`${baseUrl}/payment-records/${storePayment.data.id}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(storePaymentDetailResponse.status, 200);
+    const storePaymentDetail = (await storePaymentDetailResponse.json()) as {
+      data: {
+        id: string;
+        status: string;
+        amount: string;
+        allocations: Array<{ settlementItemId: string; state: string }>;
+      };
+    };
+    assert.equal(storePaymentDetail.data.id, storePayment.data.id);
+    assert.equal(storePaymentDetail.data.status, 'CONFIRMED');
+    assert.equal(storePaymentDetail.data.amount, '138.50');
+    assert.equal(storePaymentDetail.data.allocations[0]?.settlementItemId, storePaymentPreview.data.items[0]?.settlementItemId);
+    assert.equal(storePaymentDetail.data.allocations[0]?.state, 'CONFIRMED');
     const supplierStatementsResponse = await fetch(`${baseUrl}/supplier-statements?supplierId=${supplierB.id}`, {
       headers: { authorization: `Bearer ${token}` },
     });
@@ -2180,6 +2197,20 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierPaymentPreviewAfterCancel.data.items[0]?.payableAmount, '106.50');
     assert.equal(supplierPaymentPreviewAfterCancel.data.items[0]?.pendingPaymentAmount, '0.00');
     assert.equal(supplierPaymentPreviewAfterCancel.data.items[0]?.confirmedPaidAmount, '0.00');
+    const supplierPaymentsResponse = await fetch(`${baseUrl}/payment-records?supplierId=${supplierB.id}&direction=COMPANY_TO_SUPPLIER`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(supplierPaymentsResponse.status, 200);
+    const supplierPayments = (await supplierPaymentsResponse.json()) as {
+      data: Array<{ id: string; supplierId: string | null; direction: string; status: string; amount: string }>;
+    };
+    assert.ok(supplierPayments.data.some((payment) => payment.id === supplierPayment.data.id && payment.status === 'REJECTED'));
+    assert.ok(supplierPayments.data.some((payment) => payment.id === supplierPaymentForCancel.data.id && payment.status === 'CANCELLED'));
+    assert.ok(
+      supplierPayments.data.every(
+        (payment) => payment.supplierId === supplierB.id && payment.direction === 'COMPANY_TO_SUPPLIER' && payment.amount === '106.50',
+      ),
+    );
     const supplierStoreStatementsResponse = await fetch(
       `${baseUrl}/supplier-store-statements?supplierId=${supplierB.id}&storeId=${store.id}`,
       {
