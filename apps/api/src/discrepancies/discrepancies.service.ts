@@ -2,10 +2,13 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import {
   DiscrepancyActionType,
   DiscrepancyStatus,
+  FulfillmentStatus,
   ReplenishmentGapStatus,
+  SupplierOrderStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
 import type { Discrepancy, ReplenishmentGap } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
 
 export type ResolveDiscrepancyInput = {
   expectedVersion: number;
@@ -101,7 +104,7 @@ export class DiscrepanciesService {
         });
       }
 
-      return tx.discrepancy.update({
+      const updated = await tx.discrepancy.update({
         where: { id: discrepancy.id },
         data: {
           status: input.action === DiscrepancyActionType.REPLENISH ? DiscrepancyStatus.REPLENISH_PENDING : DiscrepancyStatus.RESOLVED,
@@ -110,6 +113,29 @@ export class DiscrepanciesService {
         },
         include: { replenishmentGap: true },
       });
+
+      const orderItem = await tx.orderItem.findUniqueOrThrow({
+        where: { id: discrepancy.orderItemId },
+        select: { supplierOrderId: true },
+      });
+      const orderItems = await tx.orderItem.findMany({
+        where: { supplierOrderId: orderItem.supplierOrderId },
+        include: {
+          shipmentItems: true,
+          discrepancies: { include: { replenishmentGap: true } },
+        },
+      });
+      const nextFulfillmentStatus = resolveSupplierOrderFulfillmentStatus(orderItems);
+      await tx.supplierOrder.update({
+        where: { id: orderItem.supplierOrderId },
+        data: {
+          fulfillmentStatus: nextFulfillmentStatus,
+          status: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : undefined,
+          version: { increment: 1 },
+        },
+      });
+
+      return updated;
     });
 
     return toDiscrepancyView(resolved);

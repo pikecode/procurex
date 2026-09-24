@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: A03 store credit limit update.
+Latest completed milestone: fulfillment completion status.
 
 Latest implementation commit:
 
 ```text
-Add store credit limit update
+Add fulfillment completion status
 ```
 
 The working tree was clean after this commit.
@@ -102,7 +102,8 @@ Current F04 behavior:
 - Requires receipt items to cover all shipment items exactly once.
 - Validates received quantity is between zero and shipped quantity.
 - Updates `OrderItem.receivedQuantity`.
-- Updates supplier order fulfillment status based on shipped, received, and permanently reduced quantities.
+- Updates supplier order fulfillment status based on received quantity, permanently reduced quantity, accepted discrepancies, and replenishment gaps.
+- Marks supplier orders COMPLETED once all effective quantities are satisfied and no blocking discrepancies or gaps remain.
 - Uses Idempotency-Key through command records.
 
 Current F05 behavior:
@@ -112,6 +113,7 @@ Current F05 behavior:
 - Supports ACCEPT and REPLENISH resolution in this version.
 - ACCEPT persists a discrepancy action record and marks the discrepancy RESOLVED.
 - REPLENISH persists a discrepancy action record, marks the discrepancy REPLENISH_PENDING, and creates a replenishment gap with pending quantity.
+- Resolving discrepancies recalculates supplier order fulfillment status.
 - Uses Idempotency-Key through command records.
 
 Current F06/F07 behavior:
@@ -163,11 +165,11 @@ Current A03 behavior:
 
 ## Recommended Next Step
 
-Tighten fulfillment completion after all discrepancies and gaps are closed, or start A04/A05 clearing previews.
+Start A04/A05 clearing previews, or add receipt revision replacement.
 
 Suggested first version:
 
-- If continuing fulfillment work, tighten completion status after all discrepancies and gaps are closed.
+- If continuing fulfillment work, add receipt revision replacement.
 - If continuing finance work, add A04/A05 clearing previews and clearing documents.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.

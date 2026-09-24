@@ -2,8 +2,9 @@ import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import { FulfillmentStatus, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { Receipt, ReceiptItem, Shipment, ShipmentItem } from '../../../../packages/backend/generated/prisma/client.js';
+import type { Receipt, ReceiptItem } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
 
 export type CreateReceiptInput = {
   expectedOrderVersion: number;
@@ -146,14 +147,17 @@ export class ShipmentsService {
 
       const orderItems = await tx.orderItem.findMany({
         where: { supplierOrderId: shipment.supplierOrderId },
-        include: { shipmentItems: true },
+        include: {
+          shipmentItems: true,
+          discrepancies: { include: { replenishmentGap: true } },
+        },
       });
-      const nextFulfillmentStatus = resolveFulfillmentStatus(orderItems);
+      const nextFulfillmentStatus = resolveSupplierOrderFulfillmentStatus(orderItems);
       await tx.supplierOrder.update({
         where: { id: shipment.supplierOrderId },
         data: {
           fulfillmentStatus: nextFulfillmentStatus,
-          status: nextFulfillmentStatus === FulfillmentStatus.RECEIVED ? SupplierOrderStatus.SHIPPED : shipment.supplierOrder.status,
+          status: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : shipment.supplierOrder.status,
           version: { increment: 1 },
         },
       });
@@ -166,20 +170,6 @@ export class ShipmentsService {
 
     return toReceiptView(receipt);
   }
-}
-
-function resolveFulfillmentStatus(orderItems: Array<{ quantity: Decimal; shippedQuantity: Decimal; receivedQuantity: Decimal; shipmentItems: ShipmentItem[] }>): FulfillmentStatus {
-  const allHandled = orderItems.every((item) => {
-    const reduced = item.shipmentItems.reduce((sum, shipmentItem) => sum.plus(shipmentItem.permanentlyReduced), new Decimal(0));
-    return new Decimal(item.shippedQuantity).plus(reduced).gte(item.quantity);
-  });
-  const allShippedReceived = orderItems.every((item) => new Decimal(item.receivedQuantity).gte(item.shippedQuantity));
-
-  if (allHandled && allShippedReceived) {
-    return FulfillmentStatus.RECEIVED;
-  }
-
-  return FulfillmentStatus.PARTIAL_SHIPPED;
 }
 
 function toReceiptView(receipt: Receipt & { items: ReceiptItem[] }): ReceiptView {

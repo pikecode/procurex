@@ -1266,6 +1266,9 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     const discrepancyActions = await prisma.discrepancyAction.findMany({ where: { discrepancyId: discrepancy.id } });
     assert.equal(discrepancyActions.length, 1);
     assert.equal(discrepancyActions[0]?.action, 'ACCEPT');
+    const orderAfterAcceptedDiscrepancy = await prisma.supplierOrder.findUniqueOrThrow({
+      where: { id: supplierBOrderAfterReallocate.id },
+    });
 
     const createFreightConfirmation = async () => {
       const response = await fetch(`${baseUrl}/supplier-orders/${supplierBOrderAfterReallocate.id}/freight-confirmations`, {
@@ -1277,7 +1280,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
           'x-trace-id': 'trace-create-freight-confirmation',
         },
         body: JSON.stringify({
-          expectedVersion: orderAfterReceipt.version,
+          expectedVersion: orderAfterAcceptedDiscrepancy.version,
           amount: '18.50',
           reason: 'Extra replenishment freight',
         }),
@@ -1523,6 +1526,40 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(usedFreight.status, 'USED');
     assert.ok(usedFreight.usedAt);
     assert.equal(usedFreight.version, 3);
+    const orderBeforeGapReceipt = await prisma.supplierOrder.findUniqueOrThrow({
+      where: { id: supplierBOrderAfterReallocate.id },
+    });
+    const createGapReceipt = async () => {
+      const response = await fetch(`${baseUrl}/shipments/${gapShipment.data.id}/receipts`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'create-gap-receipt-once',
+          'x-trace-id': 'trace-create-gap-receipt',
+        },
+        body: JSON.stringify({
+          expectedOrderVersion: orderBeforeGapReceipt.version,
+          expectedReceiptRevision: 0,
+          items: [
+            {
+              shipmentItemId: gapShipmentProductA!.id,
+              receivedQuantity: '1.000000',
+            },
+          ],
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as { data: { id: string; shipmentId: string } };
+    };
+    const gapReceipt = await createGapReceipt();
+    const gapReceiptReplay = await createGapReceipt();
+    assert.deepEqual(gapReceiptReplay.data, gapReceipt.data);
+    const completedOrder = await prisma.supplierOrder.findUniqueOrThrow({
+      where: { id: supplierBOrderAfterReallocate.id },
+    });
+    assert.equal(completedOrder.status, 'COMPLETED');
+    assert.equal(completedOrder.fulfillmentStatus, 'COMPLETED');
 
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
