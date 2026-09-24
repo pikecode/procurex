@@ -137,6 +137,8 @@ assertIncludes(freightConfirmationsController, "@Post(':id/confirm')", 'freight 
 assertIncludes(freightConfirmationsController, "@Post(':id/reject')", 'freight confirmations controller');
 assertIncludes(apiDesign, '`POST /purchase-requests/{id}/reallocate`', 'api design');
 assertIncludes(purchaseRequestsController, "@Post(':id/reallocate')", 'purchase requests controller');
+assertIncludes(apiDesign, '`POST /supplier-orders/{id}/reconcile-funding`', 'api design');
+assertIncludes(supplierOrdersController, "@Post(':id/reconcile-funding')", 'supplier orders controller');
 assertIncludes(apiDesign, '`GET/POST /templates`', 'api design');
 assertIncludes(templatesController, "@Controller('templates')", 'templates controller');
 assertIncludes(templatesController, "@Put(':id/stores')", 'templates controller');

@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: F06/F07 freight confirmation usage.
+Latest completed milestone: O11 supplier order funding reconciliation.
 
 Latest implementation commit:
 
 ```text
-Add shipment freight confirmation usage
+Add supplier order funding reconciliation
 ```
 
 The working tree was clean after this commit.
@@ -66,10 +66,14 @@ Implemented interfaces:
 - O08 `POST /purchase-requests/{id}/reject`
 - O09 `POST /supplier-orders/{id}/reject`
 - O10 `POST /purchase-requests/{id}/reallocate`
-
-Not yet implemented:
-
 - O11 `POST /supplier-orders/{id}/reconcile-funding`
+
+Current O11 behavior:
+
+- Re-evaluates the supplier order's purchase request against the store account balance.
+- Refreshes paid and shortfall amounts on the purchase request.
+- Marks the purchase request PAID and CONFIRMED when the refreshed stored-value funding is sufficient.
+- Uses Idempotency-Key through command records.
 
 ### Supplier Orders And Fulfillment
 
@@ -122,7 +126,7 @@ Current F06/F07 behavior:
 ## Known Boundaries
 
 - Current access control is role-based. Supplier-user and store-user data-scope binding is not implemented yet.
-- Funding logic is still a first pass. It records stored-value summaries but does not yet implement the complete immutable allocation/ledger behavior described in the long-term design.
+- Funding logic is still a first pass. It records stored-value summaries and O11 reconciliation results but does not yet implement the complete immutable allocation/ledger behavior described in the long-term design.
 - F03 stores permanently reduced quantity on shipment items. Replenishment gap allocation is supported when the caller provides explicit `gapAllocations`.
 - F04 currently supports first receipt creation only. Receipt revision replacement is not implemented yet.
 - F05 currently supports ACCEPT and REPLENISH. RETURN still requires a return model.
@@ -131,12 +135,12 @@ Current F06/F07 behavior:
 
 ## Recommended Next Step
 
-Implement O11 funding reconciliation or tighten fulfillment completion after all discrepancies and gaps are closed.
+Tighten fulfillment completion after all discrepancies and gaps are closed, or start A01 account read endpoints.
 
 Suggested first version:
 
 - If continuing fulfillment work, tighten completion status after all discrepancies and gaps are closed.
-- If continuing finance work, implement O11 funding reconciliation for supplier orders.
+- If continuing finance work, add account/ledger read endpoints before deeper settlement work.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 

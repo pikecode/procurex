@@ -1,9 +1,12 @@
 import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
+import { evaluateStoredValueFunding } from '../../../../packages/domain/src/funding.js';
+import { toMoney } from '../../../../packages/domain/src/money.js';
 import {
   FreightConfirmationStatus,
   FulfillmentStatus,
+  PaymentStatus,
   PurchaseRequestStatus,
   ReplenishmentGapStatus,
   ShipmentKind,
@@ -66,6 +69,26 @@ export type RejectSupplierOrderResult = {
   fulfillmentStatus: FulfillmentStatus;
   version: number;
   rejectedAt: string | null;
+};
+
+export type ReconcileSupplierOrderFundingResult = {
+  supplierOrderId: string;
+  supplierOrderVersion: number;
+  requestId: string;
+  requestStatus: PurchaseRequestStatus;
+  requestVersion: number;
+  paymentStatus: PaymentStatus;
+  paidAmount: string;
+  shortfallAmount: string;
+  funding: {
+    stored: {
+      required: string;
+      paid: string;
+      available: string;
+      shortfall: string;
+    };
+    canConfirm: boolean;
+  };
 };
 
 export type ShipmentPreviewInput = {
@@ -490,6 +513,65 @@ export class SupplierOrdersService {
     return toRejectSupplierOrderResult(rejected);
   }
 
+  async reconcileFunding(id: string, expectedVersion: number): Promise<ReconcileSupplierOrderFundingResult> {
+    const order = await this.database.client.supplierOrder.findUnique({
+      where: { id },
+      include: { request: true },
+    });
+    if (!order) {
+      throw new NotFoundException({
+        code: 'SUPPLIER_ORDER_NOT_FOUND',
+        message: 'Supplier order was not found',
+      });
+    }
+
+    if (order.version !== expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Supplier order version has changed',
+        details: { expectedVersion, currentVersion: order.version },
+      });
+    }
+
+    if (order.request.status === PurchaseRequestStatus.CANCELED) {
+      throw new ConflictException({
+        code: 'PURCHASE_REQUEST_NOT_RECONCILABLE',
+        message: 'Purchase request cannot reconcile funding in its current status',
+        details: { status: order.request.status },
+      });
+    }
+
+    const account = await this.database.client.storeAccount.findUnique({ where: { storeId: order.request.storeId } });
+    const available = toMoney(account?.balance ?? 0);
+    const funding = evaluateStoredValueFunding(available, order.request.salesGoodsAmount);
+    const nextRequestStatus =
+      funding.canConfirm && order.request.status === PurchaseRequestStatus.PENDING_FUNDS
+        ? PurchaseRequestStatus.CONFIRMED
+        : order.request.status;
+
+    const updated = await this.database.client.$transaction(async (tx) => {
+      const request = await tx.purchaseRequest.update({
+        where: { id: order.requestId },
+        data: {
+          status: nextRequestStatus,
+          paymentStatus: funding.canConfirm ? PaymentStatus.PAID : PaymentStatus.UNPAID,
+          paidAmount: funding.paidAmount.toFixed(2),
+          shortfallAmount: funding.shortfallAmount.toFixed(2),
+          version: { increment: 1 },
+        },
+      });
+
+      const supplierOrder = await tx.supplierOrder.update({
+        where: { id: order.id },
+        data: { version: { increment: 1 } },
+      });
+
+      return { request, supplierOrder };
+    });
+
+    return toReconcileSupplierOrderFundingResult(updated.supplierOrder, updated.request, available);
+  }
+
   private async validateFreightConfirmation(
     supplierOrderId: string,
     freight: string,
@@ -545,6 +627,33 @@ export class SupplierOrdersService {
 
     return confirmation.id;
   }
+}
+
+function toReconcileSupplierOrderFundingResult(
+  order: SupplierOrder,
+  request: { id: string; status: PurchaseRequestStatus; paymentStatus: PaymentStatus; salesGoodsAmount: Decimal; paidAmount: Decimal; shortfallAmount: Decimal; version: number },
+  available: Decimal,
+): ReconcileSupplierOrderFundingResult {
+  const canConfirm = request.paymentStatus === PaymentStatus.PAID;
+  return {
+    supplierOrderId: order.id,
+    supplierOrderVersion: order.version,
+    requestId: request.id,
+    requestStatus: request.status,
+    requestVersion: request.version,
+    paymentStatus: request.paymentStatus,
+    paidAmount: request.paidAmount.toFixed(2),
+    shortfallAmount: request.shortfallAmount.toFixed(2),
+    funding: {
+      stored: {
+        required: request.salesGoodsAmount.toFixed(2),
+        paid: request.paidAmount.toFixed(2),
+        available: available.toFixed(2),
+        shortfall: request.shortfallAmount.toFixed(2),
+      },
+      canConfirm,
+    },
+  };
 }
 
 function toSupplierOrderSummaryView(order: SupplierOrder): SupplierOrderSummaryView {

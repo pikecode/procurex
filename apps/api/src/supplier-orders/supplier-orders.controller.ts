@@ -12,6 +12,7 @@ import {
   type FreightConfirmationView,
 } from '../freight-confirmations/freight-confirmations.service.js';
 import {
+  type ReconcileSupplierOrderFundingResult,
   type RejectSupplierOrderResult,
   type ShipmentPreviewInput,
   type ShipmentPreviewView,
@@ -38,6 +39,10 @@ type ListQuery = {
 type RejectBody = {
   expectedVersion?: unknown;
   reason?: unknown;
+};
+
+type ReconcileFundingBody = {
+  expectedVersion?: unknown;
 };
 
 type ShipmentPreviewBody = {
@@ -178,6 +183,38 @@ export class SupplierOrdersController {
 
     return result;
   }
+
+  @Post(':id/reconcile-funding')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  async reconcileFunding(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Body() body: ReconcileFundingBody,
+  ): Promise<ReconcileSupplierOrderFundingResult> {
+    const input = parseReconcileFundingBody(id, body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'supplier-order.funding.reconcile',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, ...body } as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as ReconcileSupplierOrderFundingResult;
+    }
+
+    const result = await this.supplierOrdersService.reconcileFunding(input.id, input.expectedVersion);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'SupplierOrder',
+      resourceId: result.supplierOrderId,
+      responseBody: result as never,
+    });
+
+    return result;
+  }
 }
 
 function parseListQuery(query: ListQuery): ListSupplierOrdersInput {
@@ -217,6 +254,16 @@ function parseRejectBody(id: string, body: RejectBody): { id: string; expectedVe
 
   throwIfInvalid(issues);
   return { id, expectedVersion: body.expectedVersion as number, reason: reason! };
+}
+
+function parseReconcileFundingBody(id: string, body: ReconcileFundingBody): { id: string; expectedVersion: number } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+  ];
+
+  throwIfInvalid(issues);
+  return { id, expectedVersion: body.expectedVersion as number };
 }
 
 function parseCreateFreightConfirmationBody(

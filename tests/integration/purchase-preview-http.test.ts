@@ -202,12 +202,17 @@ test('purchase request create persists request once per idempotency key', async 
       update: {},
       create: { code: 'STORE', name: 'Store' },
     });
+    const purchaserRole = await prisma.role.upsert({
+      where: { code: 'PURCHASER' },
+      update: {},
+      create: { code: 'PURCHASER', name: 'Purchaser' },
+    });
     const user = await prisma.user.create({
       data: {
         username: storeUsername,
         displayName: 'Integration Create Store',
         passwordHash: await hashPassword('correct-password'),
-        roles: { create: [{ roleId: storeRole.id }] },
+        roles: { create: [{ roleId: storeRole.id }, { roleId: purchaserRole.id }] },
       },
     });
 
@@ -317,6 +322,80 @@ test('purchase request create persists request once per idempotency key', async 
     assert.equal(detailBody.data.items[0]?.salesLineAmount, '120.00');
     assert.deepEqual(detailBody.data.supplierOrders, []);
 
+    const supplierOrder = await prisma.supplierOrder.create({
+      data: {
+        supplierOrderNo: `CREQSO${runId}`,
+        requestId: first.data.id,
+        storeId: store.id,
+        supplierId: supplier.id,
+        status: 'PUSHED',
+        fulfillmentStatus: 'PENDING',
+        pushedAt: new Date(),
+        salesGoodsAmount: '120.00',
+        supplyGoodsAmount: '90.00',
+      },
+    });
+    await prisma.orderItem.create({
+      data: {
+        supplierOrderId: supplierOrder.id,
+        productId: product.id,
+        quantity: '10.000000',
+        salesUnitPrice: '12.000000',
+        supplyUnitPrice: '9.000000',
+        salesLineAmount: '120.00',
+        supplyLineAmount: '90.00',
+      },
+    });
+    const reconcileFunding = async (idempotencyKey: string, expectedVersion: number) => {
+      const response = await fetch(`${baseUrl}/supplier-orders/${supplierOrder.id}/reconcile-funding`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': idempotencyKey,
+          'x-trace-id': 'trace-reconcile-funding',
+        },
+        body: JSON.stringify({ expectedVersion }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          supplierOrderId: string;
+          supplierOrderVersion: number;
+          requestId: string;
+          requestStatus: string;
+          requestVersion: number;
+          paymentStatus: string;
+          paidAmount: string;
+          shortfallAmount: string;
+          funding: { stored: { required: string; paid: string; available: string; shortfall: string }; canConfirm: boolean };
+        };
+      };
+    };
+    const insufficientFunding = await reconcileFunding('reconcile-funding-still-short', supplierOrder.version);
+    const insufficientReplay = await reconcileFunding('reconcile-funding-still-short', supplierOrder.version);
+    assert.deepEqual(insufficientReplay.data, insufficientFunding.data);
+    assert.equal(insufficientFunding.data.supplierOrderId, supplierOrder.id);
+    assert.equal(insufficientFunding.data.requestId, first.data.id);
+    assert.equal(insufficientFunding.data.requestStatus, 'PENDING_FUNDS');
+    assert.equal(insufficientFunding.data.paymentStatus, 'UNPAID');
+    assert.equal(insufficientFunding.data.paidAmount, '0.00');
+    assert.equal(insufficientFunding.data.shortfallAmount, '20.00');
+    assert.deepEqual(insufficientFunding.data.funding, {
+      stored: { required: '120.00', paid: '0.00', available: '100.00', shortfall: '20.00' },
+      canConfirm: false,
+    });
+    await prisma.storeAccount.update({ where: { storeId: store.id }, data: { balance: '150.00' } });
+    const reconciledFunding = await reconcileFunding('reconcile-funding-after-recharge', insufficientFunding.data.supplierOrderVersion);
+    assert.equal(reconciledFunding.data.requestStatus, 'CONFIRMED');
+    assert.equal(reconciledFunding.data.paymentStatus, 'PAID');
+    assert.equal(reconciledFunding.data.paidAmount, '120.00');
+    assert.equal(reconciledFunding.data.shortfallAmount, '0.00');
+    assert.deepEqual(reconciledFunding.data.funding, {
+      stored: { required: '120.00', paid: '120.00', available: '150.00', shortfall: '0.00' },
+      canConfirm: true,
+    });
+
     const requests = await prisma.purchaseRequest.findMany({ where: { storeId: store.id } });
     assert.equal(requests.length, 1);
     const items = await prisma.requestItem.findMany({ where: { requestId: first.data.id } });
@@ -329,6 +408,8 @@ test('purchase request create persists request once per idempotency key', async 
   } finally {
     await app.close();
     await prisma.commandRecord.deleteMany({ where: { actor: { username: storeUsername } } });
+    await prisma.orderItem.deleteMany({ where: { supplierOrder: { request: { store: { code: storeCode } } } } });
+    await prisma.supplierOrder.deleteMany({ where: { request: { store: { code: storeCode } } } });
     await prisma.requestItem.deleteMany({ where: { request: { store: { code: storeCode } } } });
     await prisma.purchaseRequest.deleteMany({ where: { store: { code: storeCode } } });
     await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: supplierCode } } } });
