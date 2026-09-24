@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently entering M4 settlement/read-model development.
 
-Latest completed milestone: B07 payment record creation.
+Latest completed milestone: B08 payment confirmation.
 
 Latest implementation commit:
 
 ```text
-Add payment record creation
+Add payment confirmation
 ```
 
 The working tree was clean after this commit.
@@ -203,6 +203,7 @@ Implemented interfaces:
 - B03 `GET /supplier-store-statements`, `GET /supplier-store-statements/{id}`
 - B06 `POST /payment-records/preview`
 - B07 `POST /payment-records`
+- B08 `POST /payment-records/{id}/confirm`
 
 Current B01 behavior:
 
@@ -245,21 +246,29 @@ Current B07 behavior:
 - Creates RESERVED payment allocations so later previews show pending payment amounts and no remaining payable amount for the same items.
 - Uses Idempotency-Key through command records.
 
+Current B08 behavior:
+
+- Confirms PENDING payment records with expectedVersion checking.
+- Marks the payment record CONFIRMED and increments its version.
+- Converts RESERVED allocations to CONFIRMED.
+- Later payment previews show confirmed paid amounts and no remaining payable amount for confirmed items.
+- Uses Idempotency-Key through command records.
+
 ## Recommended Next Step
 
-Start payment confirmation, rejection, and cancellation.
+Start payment rejection and cancellation.
 
 Suggested first version:
 
-- If moving into payment work, add payment confirmation to convert RESERVED allocations to CONFIRMED.
+- If moving into payment work, add payment rejection/cancellation to release RESERVED allocations.
 - If continuing fulfillment finance linkage, connect RETURN discrepancy records to settlement/payment difference disposal.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:
 
-1. Payment confirmation.
-2. Payment rejection and cancellation.
+1. Payment rejection and cancellation.
+2. Payment record list/detail endpoints.
 3. Settlement difference disposal for accepted, replenished, and returned discrepancies.
 
 ## Where To Look

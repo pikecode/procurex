@@ -256,6 +256,51 @@ export class PaymentRecordsService {
 
     return toPaymentRecordView(payment);
   }
+
+  async confirm(id: string, expectedVersion: number): Promise<PaymentRecordView> {
+    const payment = await this.database.client.paymentRecord.findUnique({
+      where: { id },
+      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+    });
+    if (!payment) {
+      throw new NotFoundException({
+        code: 'PAYMENT_RECORD_NOT_FOUND',
+        message: 'Payment record was not found',
+      });
+    }
+    if (payment.version !== expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Payment record version has changed',
+        details: { expectedVersion, currentVersion: payment.version },
+      });
+    }
+    if (payment.status !== PaymentRecordStatus.PENDING) {
+      throw new ConflictException({
+        code: 'PAYMENT_RECORD_NOT_CONFIRMABLE',
+        message: 'Payment record cannot be confirmed in its current status',
+        details: { status: payment.status },
+      });
+    }
+
+    const confirmed = await this.database.client.paymentRecord.update({
+      where: { id },
+      data: {
+        status: PaymentRecordStatus.CONFIRMED,
+        confirmedAt: new Date(),
+        version: { increment: 1 },
+        allocations: {
+          updateMany: {
+            where: { state: PaymentAllocationState.RESERVED },
+            data: { state: PaymentAllocationState.CONFIRMED },
+          },
+        },
+      },
+      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+    });
+
+    return toPaymentRecordView(confirmed);
+  }
 }
 
 function toPreviewItem(

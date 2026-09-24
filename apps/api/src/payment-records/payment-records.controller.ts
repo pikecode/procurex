@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -11,6 +11,7 @@ import { PaymentRecordDirection } from '../../../../packages/backend/generated/p
 import {
   validateDecimalString,
   validateExpectedVersion,
+  validateUuid,
   type ValidationIssue,
 } from '../../../../packages/domain/src/validation.js';
 import {
@@ -29,6 +30,10 @@ type CreateBody = {
   items?: unknown;
   businessDate?: unknown;
   remark?: unknown;
+};
+
+type ConfirmBody = {
+  expectedVersion?: unknown;
 };
 
 @Controller('payment-records')
@@ -66,6 +71,38 @@ export class PaymentRecordsController {
     }
 
     const result = await this.paymentRecordsService.create(input);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'PaymentRecord',
+      resourceId: result.id,
+      responseBody: result as never,
+    });
+
+    return result;
+  }
+
+  @Post(':id/confirm')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'SUPPLIER')
+  async confirm(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Body() body: ConfirmBody,
+  ): Promise<PaymentRecordView> {
+    const input = parseConfirmBody(id, body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'payment-record.confirm',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, ...body } as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as PaymentRecordView;
+    }
+
+    const result = await this.paymentRecordsService.confirm(input.id, input.expectedVersion);
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'PaymentRecord',
@@ -151,6 +188,16 @@ function parseCreateBody(body: CreateBody): CreatePaymentRecordInput {
     businessDate: businessDate!,
     remark,
   };
+}
+
+function parseConfirmBody(id: string, body: ConfirmBody): { id: string; expectedVersion: number } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+  ];
+
+  throwIfInvalid(issues);
+  return { id, expectedVersion: body.expectedVersion as number };
 }
 
 function requiredDirection(value: unknown, issues: ValidationIssue[]): PaymentRecordDirection | undefined {
