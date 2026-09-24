@@ -651,12 +651,17 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       update: {},
       create: { code: 'SUPPLIER', name: 'Supplier' },
     });
+    const storeRole = await prisma.role.upsert({
+      where: { code: 'STORE' },
+      update: {},
+      create: { code: 'STORE', name: 'Store' },
+    });
     const user = await prisma.user.create({
       data: {
         username: purchaserUsername,
         displayName: 'Integration Confirm Purchaser',
         passwordHash: await hashPassword('correct-password'),
-        roles: { create: [{ roleId: purchaserRole.id }, { roleId: supplierRole.id }] },
+        roles: { create: [{ roleId: purchaserRole.id }, { roleId: supplierRole.id }, { roleId: storeRole.id }] },
       },
     });
 
@@ -1052,7 +1057,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         sequence: number;
         kind: string;
         freight: string;
-        items: Array<{ orderItemId: string; quantity: string; permanentlyReduced: string; salesLineAmount: string }>;
+        items: Array<{ id: string; orderItemId: string; quantity: string; permanentlyReduced: string; salesLineAmount: string }>;
       };
     };
     assert.equal(createdShipment.data.supplierOrderId, supplierBOrderAfterReallocate.id);
@@ -1101,6 +1106,50 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(shippedItems.find((item) => item.id === productBOrderItem.id)?.shippedQuantity.toString(), '2');
     const persistedShipments = await prisma.shipment.findMany({ where: { supplierOrderId: supplierBOrderAfterReallocate.id } });
     assert.equal(persistedShipments.length, 1);
+    const createReceipt = async () => {
+      const response = await fetch(`${baseUrl}/shipments/${createdShipment.data.id}/receipts`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'create-receipt-once',
+          'x-trace-id': 'trace-create-receipt',
+        },
+        body: JSON.stringify({
+          expectedOrderVersion: shippedOrder.version,
+          expectedReceiptRevision: 0,
+          items: createdShipment.data.items.map((item) => ({
+            shipmentItemId: item.id,
+            receivedQuantity: item.quantity,
+          })),
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          shipmentId: string;
+          revision: number;
+          isCurrent: boolean;
+          items: Array<{ shipmentItemId: string; receivedQuantity: string }>;
+        };
+      };
+    };
+    const receipt = await createReceipt();
+    const receiptReplay = await createReceipt();
+    assert.deepEqual(receiptReplay.data, receipt.data);
+    assert.equal(receipt.data.shipmentId, createdShipment.data.id);
+    assert.equal(receipt.data.revision, 1);
+    assert.equal(receipt.data.isCurrent, true);
+    assert.equal(receipt.data.items.length, 2);
+    assert.equal(receipt.data.items.find((item) => item.shipmentItemId === shippedProductA?.id)?.receivedQuantity, '6');
+    const receivedItems = await prisma.orderItem.findMany({ where: { supplierOrderId: supplierBOrderAfterReallocate.id } });
+    assert.equal(receivedItems.find((item) => item.id === productAOrderItem.id)?.receivedQuantity.toString(), '6');
+    assert.equal(receivedItems.find((item) => item.id === productBOrderItem.id)?.receivedQuantity.toString(), '2');
+    const orderAfterReceipt = await prisma.supplierOrder.findUniqueOrThrow({ where: { id: supplierBOrderAfterReallocate.id } });
+    assert.equal(orderAfterReceipt.fulfillmentStatus, 'PARTIAL_SHIPPED');
+    const persistedReceipts = await prisma.receipt.findMany({ where: { shipmentId: createdShipment.data.id } });
+    assert.equal(persistedReceipts.length, 1);
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
     });
@@ -1112,6 +1161,8 @@ test('purchase request confirm splits supplier orders once per idempotency key',
   } finally {
     await app.close();
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
+    await prisma.receiptItem.deleteMany({ where: { receipt: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } } });
+    await prisma.receipt.deleteMany({ where: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } });
     await prisma.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } });
     await prisma.shipment.deleteMany({ where: { supplierOrder: { request: { store: { code: storeCode } } } } });
     await prisma.orderItem.deleteMany({ where: { supplierOrder: { request: { store: { code: storeCode } } } } });

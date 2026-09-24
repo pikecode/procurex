@@ -7,6 +7,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health.controller.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { PurchaseRequestsModule } from './purchase-requests/purchase-requests.module.js';
+import { ShipmentsModule } from './shipments/shipments.module.js';
 import { StoresModule } from './stores/stores.module.js';
 import { SupplierOrdersModule } from './supplier-orders/supplier-orders.module.js';
 import { SuppliersModule } from './suppliers/suppliers.module.js';
@@ -26,6 +27,7 @@ import { UsersModule } from './users/users.module.js';
     TemplatesModule,
     PurchaseRequestsModule,
     SupplierOrdersModule,
+    ShipmentsModule,
   ],
   controllers: [HealthController],
 })
