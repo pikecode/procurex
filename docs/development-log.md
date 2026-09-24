@@ -91,3 +91,10 @@
 1. 本次不实现完整业务接口和前端页面。
 2. 本次不生成生产迁移并不写入真实业务数据。
 3. npm audit 报告需要单独评估，不在本次直接使用强制升级。
+## 2026-09-25
+
+- Fixed P02 processing status: a price-change run is FAILED if any order item fails; added integration coverage for an order completed before processing.
+- Payment preview now blocks completed orders whose purchase request still has a positive funding shortfall.
+- Purchase confirmation now recalculates current item total against current store balance and refuses to split orders when funds are short.
+- Left account balances and ledgers untouched by price adjustments because the requirements define no refund or reversal flow.
+- Verification: build, 8 unit tests, 26 integration tests, contract check, and `git diff --check` passed.

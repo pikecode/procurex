@@ -795,6 +795,17 @@ export class PurchaseRequestsService {
       });
     }
 
+    const currentSalesAmount = request.items.reduce((sum, item) => sum.plus(item.salesLineAmount), toMoney(0));
+    const account = await this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } });
+    const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), currentSalesAmount);
+    if (!funding.canConfirm) {
+      throw new ConflictException({
+        code: 'PURCHASE_REQUEST_FUNDING_SHORTFALL',
+        message: 'Current store balance does not cover the purchase request',
+        details: { required: currentSalesAmount.toFixed(2), available: toMoney(account?.balance ?? 0).toFixed(2), shortfall: funding.shortfallAmount.toFixed(2) },
+      });
+    }
+
     const supplierGroups = new Map<string, typeof request.items>();
     for (const item of request.items) {
       const group = supplierGroups.get(item.supplierId) ?? [];

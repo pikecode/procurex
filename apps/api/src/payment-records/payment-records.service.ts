@@ -140,7 +140,7 @@ export class PaymentRecordsService {
     const supplierOrderIds = decoded.map((item) => item.decoded.supplierOrderId);
     const orders = await this.database.client.supplierOrder.findMany({
       where: { id: { in: supplierOrderIds } },
-      include: { shipments: true },
+      include: { shipments: true, request: { select: { shortfallAmount: true } } },
     });
     const ordersById = new Map(orders.map((order) => [order.id, order]));
     const allocations = await this.database.client.paymentAllocation.findMany({
@@ -175,6 +175,14 @@ export class PaymentRecordsService {
           settlementItemId: item.id,
           code: 'SETTLEMENT_ITEM_NOT_PAYABLE',
           message: 'Settlement item source order is not completed',
+        });
+        continue;
+      }
+      if (new Decimal(order.request.shortfallAmount).greaterThan(0)) {
+        blockedItems.push({
+          settlementItemId: item.id,
+          code: 'UNRESOLVED_FUNDING_SHORTFALL',
+          message: 'Purchase request has an unresolved funding shortfall',
         });
         continue;
       }

@@ -267,7 +267,8 @@ export class PricingService {
           data: { status: 'SUCCEEDED', salesDelta, supplyDelta },
         });
       }
-      await tx.priceChangeRun.update({ where: { id }, data: { status: 'SUCCEEDED' } });
+      const failedOrders = await tx.priceChangeRunOrder.count({ where: { runId: id, status: 'FAILED' } });
+      await tx.priceChangeRun.update({ where: { id }, data: { status: failedOrders ? 'FAILED' : 'SUCCEEDED' } });
     });
     return this.getRun(id);
   }

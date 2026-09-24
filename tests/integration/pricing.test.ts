@@ -97,6 +97,20 @@ test('pricing service returns latest version effective at business time', async 
       },
       include: { items: true },
     });
+    const staleOrder = await prisma.supplierOrder.create({
+      data: {
+        supplierOrderNo: `PRICESTALE${runId}`,
+        requestId: request.id,
+        storeId: store.id,
+        supplierId: supplier.id,
+        status: SupplierOrderStatus.PUSHED,
+        fulfillmentStatus: FulfillmentStatus.PENDING,
+        firstShippedAt: new Date('2026-09-15T00:00:00.000Z'),
+        salesGoodsAmount: '10.00',
+        supplyGoodsAmount: '8.00',
+        items: { create: { productId: product.id, quantity: '1', salesUnitPrice: '10', supplyUnitPrice: '8', salesLineAmount: '10.00', supplyLineAmount: '8.00' } },
+      },
+    });
     const latest = await service.publishPrice({
       productId: product.id,
       supplierId: supplier.id,
@@ -105,11 +119,15 @@ test('pricing service returns latest version effective at business time', async 
       effectiveAt: new Date('2026-09-10T00:00:00.000Z'),
       reason: 'Price increase',
     });
+    await prisma.supplierOrder.update({ where: { id: staleOrder.id }, data: { status: SupplierOrderStatus.COMPLETED } });
     const processed = await service.processRun(latest.runId!);
-    assert.equal(processed.status, 'SUCCEEDED');
-    assert.equal(processed.orders[0]?.supplierOrderId, order.id);
-    assert.equal(processed.orders[0]?.adjustment?.previousSalesPrice, '10');
-    assert.equal(processed.orders[0]?.adjustment?.newSalesPrice, '12');
+    assert.equal(processed.status, 'FAILED');
+    assert.equal(processed.orders.find((item) => item.supplierOrderId === order.id)?.status, 'SUCCEEDED');
+    assert.equal(processed.orders.find((item) => item.supplierOrderId === order.id)?.supplierOrderId, order.id);
+    assert.equal(processed.orders.find((item) => item.supplierOrderId === staleOrder.id)?.status, 'FAILED');
+    const succeededOrder = processed.orders.find((item) => item.supplierOrderId === order.id);
+    assert.equal(succeededOrder?.adjustment?.previousSalesPrice, '10');
+    assert.equal(succeededOrder?.adjustment?.newSalesPrice, '12');
     const updatedOrder = await prisma.supplierOrder.findUnique({ where: { id: order.id }, include: { items: true } });
     assert.equal(updatedOrder?.items[0]?.salesLineAmount.toString(), '120');
     assert.equal(updatedOrder?.items[0]?.supplyLineAmount.toString(), '90');

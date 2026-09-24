@@ -6,17 +6,21 @@ Last updated: 2026-09-25
 
 The backend is currently in M4 settlement/read-model development.
 
-Latest completed milestone: P02 pending run processing and order price adjustment persistence.
+Latest completed milestone: P02 adjustment sources in statements, with failure and funding guards tightened.
 
 Latest committed implementation:
 
 ```text
+b30d662 Guard price processing and funding checks
+1c23421 Refresh M4 progress after price statement work
 6c7fbb8 Test statement price adjustment links
 3a6a1e3 Link price adjustments from statements
 b976b3f Expose price adjustment sources
 ```
 
-The working tree was verified clean after these commits.
+The last committed implementation is recorded in git; the current change is pending verification and commit.
+
+Recommended next step: continue M4 from `docs/development-plan.md`; review P03/reporting and notification scope before moving to M5.
 
 ## Verification Baseline
 
@@ -26,7 +30,9 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count: 26 integration tests passing.
+Current integration coverage count: 26 integration tests passing before the current change.
+
+Current change: price-change runs now report FAILED when any child order fails; payment preview blocks orders whose purchase request has an unresolved positive funding shortfall; purchase confirmation recalculates funding from current item amounts and current account balance before splitting. No balance or ledger mutation is added to price adjustments.
 
 ## Completed Areas
 
