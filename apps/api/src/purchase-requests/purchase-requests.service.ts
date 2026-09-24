@@ -307,7 +307,6 @@ export class PurchaseRequestsService {
     const supplyGoodsAmount = pricedItems.reduce((sum, item) => sum.plus(item.supplyLineAmount), toMoney(0));
     const account = await this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } });
     const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), salesGoodsAmount);
-
     const updated = await this.database.client.$transaction(async (tx) => {
       await tx.requestItem.deleteMany({ where: { requestId: request.id } });
       await tx.requestItem.createMany({
@@ -572,6 +571,13 @@ export class PurchaseRequestsService {
     const supplyGoodsAmount = replacementItems.reduce((sum, item) => sum.plus(item.supplyLineAmount), toMoney(0));
     const account = await this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } });
     const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), salesGoodsAmount);
+    const reassignmentSupplierIds = [...new Set(pricedAssignments.filter((item) => !item.assignment.cancel).map((item) => item.assignment.supplierId!))];
+    const reassignmentSuppliers = await this.database.client.supplier.findMany({ where: { id: { in: reassignmentSupplierIds } } });
+    const reassignmentSuppliersById = new Map(reassignmentSuppliers.map((supplier) => [supplier.id, supplier]));
+    const reassignmentSettings = await this.database.client.templateSupplierSetting.findMany({
+      where: { templateId: request.templateId, supplierId: { in: reassignmentSupplierIds } },
+    });
+    const reassignmentSettingsBySupplier = new Map(reassignmentSettings.map((setting) => [setting.supplierId, setting]));
 
     const updated = await this.database.client.$transaction(async (tx) => {
       for (const priced of pricedAssignments) {
@@ -604,6 +610,8 @@ export class PurchaseRequestsService {
               requestId: request.id,
               storeId: request.storeId,
               supplierId: priced.assignment.supplierId!,
+              settlementMode: reassignmentSettingsBySupplier.get(priced.assignment.supplierId!)?.settlementMode ?? reassignmentSuppliersById.get(priced.assignment.supplierId!)!.defaultSettlementMode,
+              settlementCycleSnapshot: reassignmentSettingsBySupplier.get(priced.assignment.supplierId!)?.settlementCycle ?? reassignmentSuppliersById.get(priced.assignment.supplierId!)!.defaultSettlementCycle,
               status: SupplierOrderStatus.PUSHED,
               fulfillmentStatus: FulfillmentStatus.PENDING,
               pushedAt: new Date(),
@@ -793,6 +801,12 @@ export class PurchaseRequestsService {
       group.push(item);
       supplierGroups.set(item.supplierId, group);
     }
+    const suppliers = await this.database.client.supplier.findMany({ where: { id: { in: [...supplierGroups.keys()] } } });
+    const suppliersById = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
+    const settings = await this.database.client.templateSupplierSetting.findMany({
+      where: { templateId: request.templateId, supplierId: { in: [...supplierGroups.keys()] } },
+    });
+    const settingsBySupplier = new Map(settings.map((setting) => [setting.supplierId, setting]));
 
     const supplierOrderIds = await this.database.client.$transaction(async (tx) => {
       const createdOrderIds: string[] = [];
@@ -806,6 +820,8 @@ export class PurchaseRequestsService {
             requestId: request.id,
             storeId: request.storeId,
             supplierId,
+            settlementMode: settingsBySupplier.get(supplierId)?.settlementMode ?? suppliersById.get(supplierId)!.defaultSettlementMode,
+            settlementCycleSnapshot: settingsBySupplier.get(supplierId)?.settlementCycle ?? suppliersById.get(supplierId)!.defaultSettlementCycle,
             status: SupplierOrderStatus.PUSHED,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             pushedAt: new Date(),

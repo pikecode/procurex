@@ -151,6 +151,7 @@ assertIncludes(apiDesign, '`POST /payment-records/{id}/cancel`', 'api design');
 assertIncludes(paymentRecordsController, "@Post(':id/cancel')", 'payment records controller');
 assertIncludes(prismaSchema, 'model PaymentRecord', 'prisma schema');
 assertIncludes(prismaSchema, 'model PaymentAllocation', 'prisma schema');
+assertIncludes(prismaSchema, 'settlementCycleSnapshot String', 'supplier order settlement snapshot');
 assertIncludes(apiDesign, '`POST /difference-disposals`', 'api design');
 assertIncludes(differenceDisposalsController, "@Controller('difference-disposals')", 'difference disposals controller');
 assertIncludes(differenceDisposalsController, '@Post()', 'difference disposals controller');

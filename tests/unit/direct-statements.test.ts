@@ -12,7 +12,7 @@ test('direct statements group completed supplier-term orders and include freight
           return [{
             id: 'order-1', supplierOrderNo: 'SO-1', storeId: 'store-1', supplierId: 'supplier-1', version: 3,
             salesGoodsAmount: '120.00', firstShippedAt: new Date('2026-09-10T00:00:00.000Z'),
-            supplier: { defaultSettlementMode: 'SUPPLIER_TERM', defaultSettlementCycle: 'MONTHLY' },
+            settlementMode: 'SUPPLIER_TERM', settlementCycleSnapshot: 'MONTHLY',
             shipments: [{ freight: '5.00' }],
           }];
         },
@@ -21,7 +21,7 @@ test('direct statements group completed supplier-term orders and include freight
   } as any);
 
   const [statement] = await service.list({ storeId: 'store-1' });
-  assert.equal(query.where.supplier.defaultSettlementMode, 'SUPPLIER_TERM');
+  assert.equal(query.where.settlementMode, 'SUPPLIER_TERM');
   assert.equal(statement?.type, 'DIRECT');
   assert.equal(statement?.goodsAmount, '120.00');
   assert.equal(statement?.freightAmount, '5.00');

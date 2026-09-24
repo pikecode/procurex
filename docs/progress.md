@@ -6,15 +6,15 @@ Last updated: 2026-09-24
 
 The backend is currently in M4 settlement/read-model development.
 
-Latest completed milestone: B04 direct settlement statement read model first version.
+Latest completed milestone: supplier order settlement configuration snapshots.
 
-Latest implementation commit:
+Latest committed implementation:
 
 ```text
-Add direct settlement statement read model
+38fe2ae Add direct settlement statement read model
 ```
 
-The working tree was verified for this commit.
+Settlement snapshot changes are implemented and verified in the current working tree; they have not been committed yet.
 
 ## Verification Baseline
 
@@ -311,16 +311,22 @@ Current B04 behavior:
 - Groups completed supplier orders for suppliers currently configured with `SUPPLIER_TERM` by store, supplier, cycle, and first shipment period.
 - Uses sales goods amount plus shipment freight as the direct settlement total.
 - Returns source order lines, stable direct settlement item IDs, source revision, and OPEN payment summary fields.
-- The current schema has no supplier-order settlement snapshot, so template-level historical overrides are not distinguishable here; direct statements use the supplier's current default settlement mode.
+- Supplier order settlement mode and cycle are snapshotted at order creation; B04 filters and groups on these values, so later supplier configuration changes do not move historical orders.
+
+Current settlement snapshot behavior:
+
+- Adds `settlementMode` and `settlementCycleSnapshot` to supplier orders, with legacy rows defaulted to `COMPANY_TERM` and `MONTHLY`.
+- Purchase confirmation and newly created reallocation orders snapshot the template override when present, otherwise the supplier defaults.
+- Existing target orders retain their original snapshot when more items are reallocated into them.
 
 ## Recommended Next Step
 
-Continue settlement adjustment and historical price persistence.
+Continue historical price persistence and adjustment modeling.
 
 Suggested first version:
 
 - Add persisted adjustment source modeling for historical price changes and post-settlement revisions.
-- Add order settlement snapshots before expanding direct statement payment flows.
+- Add historical price adjustment jobs and persisted source revisions.
 - Add overpayment disposal flows after payment confirmation can record real overpaid amounts.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.

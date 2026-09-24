@@ -72,7 +72,7 @@ export class DirectStatementsService {
         supplierId: input.supplierId,
         status: SupplierOrderStatus.COMPLETED,
         firstShippedAt: { not: null },
-        supplier: { defaultSettlementMode: SettlementMode.SUPPLIER_TERM },
+        settlementMode: SettlementMode.SUPPLIER_TERM,
       },
       include: { supplier: true, shipments: true },
       orderBy: [{ firstShippedAt: 'desc' }, { id: 'desc' }],
@@ -80,7 +80,7 @@ export class DirectStatementsService {
     const groups = new Map<string, StatementGroup>();
     for (const order of orders) {
       if (!order.firstShippedAt) continue;
-      const cycle = normalizeCycle(order.supplier.defaultSettlementCycle);
+      const cycle = normalizeCycle(order.settlementCycleSnapshot);
       if (input.cycle && input.cycle !== cycle) continue;
       const period = settlementPeriod(cycle, order.firstShippedAt);
       const periodEndExclusive = addOneDay(period.endDate);

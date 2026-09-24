@@ -491,6 +491,8 @@ model SupplierOrder {
   requestId            String                @db.Uuid
   storeId              String                @db.Uuid
   supplierId           String                @db.Uuid
+  settlementMode       SettlementMode       @default(COMPANY_TERM)
+  settlementCycleSnapshot String             @default("MONTHLY") @db.VarChar(40)
   status               SupplierOrderStatus   @default(DRAFT)
   fulfillmentStatus    FulfillmentStatus     @default(PENDING)
   firstShippedAt       DateTime?             @db.Timestamptz(6)
