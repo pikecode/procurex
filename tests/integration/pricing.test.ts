@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { DeliveryMode, FulfillmentStatus, PurchaseRequestStatus, SettlementMode, SupplierOrderStatus } from '../../packages/backend/generated/prisma/enums.js';
 import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
 import { PricingService } from '../../apps/api/src/pricing/pricing.service.js';
+import { SupplierStatementsService } from '../../apps/api/src/supplier-statements/supplier-statements.service.js';
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public';
@@ -113,6 +114,13 @@ test('pricing service returns latest version effective at business time', async 
     assert.equal(updatedOrder?.items[0]?.salesLineAmount.toString(), '120');
     assert.equal(updatedOrder?.items[0]?.supplyLineAmount.toString(), '90');
     assert.equal((await prisma.priceChangeAdjustment.count({ where: { runId: latest.runId } })), 1);
+    await prisma.supplierOrder.update({ where: { id: order.id }, data: { status: SupplierOrderStatus.COMPLETED } });
+    const statement = (await new SupplierStatementsService({ client: prisma } as never).list({ supplierId: supplier.id }))[0];
+    assert.ok(statement);
+    const statementDetail = await new SupplierStatementsService({ client: prisma } as never).get(statement.id);
+    const statementLine = statementDetail.lines.find((line) => line.supplierOrderId === order.id);
+    assert.equal(statementLine?.goodsAmount, '90.00');
+    assert.equal(statementLine?.priceAdjustments[0]?.supplyDelta, '10.00');
     const adjustments = await service.listAdjustments(latest.runId!);
     assert.equal(adjustments.length, 1);
     assert.equal(adjustments[0]?.salesDelta, '20');
