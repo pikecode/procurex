@@ -1751,6 +1751,89 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(storePaymentPreview.data.items[0]?.sourceVersion, completedOrderAfterReturn.version);
     assert.equal(storePaymentPreview.data.items[0]?.payableAmount, '138.50');
     assert.equal(storePaymentPreview.data.blockedItems.length, 0);
+    const createStorePayment = async () => {
+      const response = await fetch(`${baseUrl}/payment-records`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'create-store-payment-once',
+          'x-trace-id': 'trace-create-store-payment',
+        },
+        body: JSON.stringify({
+          direction: 'STORE_TO_COMPANY',
+          businessDate: '2026-09-24',
+          remark: 'Store pays company for completed order',
+          items: [
+            {
+              settlementItemId: storePaymentPreview.data.items[0]!.settlementItemId,
+              expectedVersion: storePaymentPreview.data.items[0]!.sourceVersion,
+              expectedAmount: storePaymentPreview.data.items[0]!.payableAmount,
+            },
+          ],
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          paymentNo: string;
+          direction: string;
+          channel: string;
+          storeId: string | null;
+          supplierId: string | null;
+          amount: string;
+          businessDate: string;
+          status: string;
+          remark: string | null;
+          version: number;
+          allocations: Array<{ settlementItemId: string; supplierOrderId: string; amount: string; sourceVersion: number; state: string }>;
+        };
+      };
+    };
+    const storePayment = await createStorePayment();
+    const storePaymentReplay = await createStorePayment();
+    assert.deepEqual(storePaymentReplay.data, storePayment.data);
+    assert.ok(storePayment.data.paymentNo);
+    assert.equal(storePayment.data.direction, 'STORE_TO_COMPANY');
+    assert.equal(storePayment.data.channel, 'COMPANY');
+    assert.equal(storePayment.data.storeId, store.id);
+    assert.equal(storePayment.data.supplierId, null);
+    assert.equal(storePayment.data.amount, '138.50');
+    assert.equal(storePayment.data.businessDate, '2026-09-24');
+    assert.equal(storePayment.data.status, 'PENDING');
+    assert.equal(storePayment.data.remark, 'Store pays company for completed order');
+    assert.equal(storePayment.data.version, 1);
+    assert.equal(storePayment.data.allocations[0]?.settlementItemId, storePaymentPreview.data.items[0]?.settlementItemId);
+    assert.equal(storePayment.data.allocations[0]?.supplierOrderId, supplierBOrderAfterReallocate.id);
+    assert.equal(storePayment.data.allocations[0]?.amount, '138.50');
+    assert.equal(storePayment.data.allocations[0]?.sourceVersion, completedOrderAfterReturn.version);
+    assert.equal(storePayment.data.allocations[0]?.state, 'RESERVED');
+    const storePaymentPreviewAfterReserveResponse = await fetch(`${baseUrl}/payment-records/preview`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        settlementItemIds: [storeStatementDetail.data.lines[0]!.settlementItemId],
+      }),
+    });
+    assert.equal(storePaymentPreviewAfterReserveResponse.status, 201);
+    const storePaymentPreviewAfterReserve = (await storePaymentPreviewAfterReserveResponse.json()) as {
+      data: {
+        totalPayableAmount: string;
+        totalPendingPaymentAmount: string;
+        totalConfirmedPaidAmount: string;
+        items: Array<{ payableAmount: string; pendingPaymentAmount: string; confirmedPaidAmount: string }>;
+      };
+    };
+    assert.equal(storePaymentPreviewAfterReserve.data.totalPayableAmount, '0.00');
+    assert.equal(storePaymentPreviewAfterReserve.data.totalPendingPaymentAmount, '138.50');
+    assert.equal(storePaymentPreviewAfterReserve.data.totalConfirmedPaidAmount, '0.00');
+    assert.equal(storePaymentPreviewAfterReserve.data.items[0]?.payableAmount, '0.00');
+    assert.equal(storePaymentPreviewAfterReserve.data.items[0]?.pendingPaymentAmount, '138.50');
+    assert.equal(storePaymentPreviewAfterReserve.data.items[0]?.confirmedPaidAmount, '0.00');
     const supplierStatementsResponse = await fetch(`${baseUrl}/supplier-statements?supplierId=${supplierB.id}`, {
       headers: { authorization: `Bearer ${token}` },
     });
@@ -1907,6 +1990,17 @@ test('purchase request confirm splits supplier orders once per idempotency key',
   } finally {
     await app.close();
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
+    await prisma.paymentAllocation.deleteMany({
+      where: { supplierOrder: { request: { store: { code: storeCode } } } },
+    });
+    await prisma.paymentRecord.deleteMany({
+      where: {
+        OR: [
+          { storeId: { in: (await prisma.store.findMany({ where: { code: storeCode }, select: { id: true } })).map((store) => store.id) } },
+          { supplierId: { in: (await prisma.supplier.findMany({ where: { code: { in: [supplierCodeA, supplierCodeB] } }, select: { id: true } })).map((supplier) => supplier.id) } },
+        ],
+      },
+    });
     await prisma.freightConfirmation.deleteMany({
       where: { supplierOrder: { request: { store: { code: storeCode } } } },
     });

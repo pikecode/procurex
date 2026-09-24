@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently entering M4 settlement/read-model development.
 
-Latest completed milestone: B06 payment preview endpoint.
+Latest completed milestone: B07 payment record creation.
 
 Latest implementation commit:
 
 ```text
-Add payment preview endpoint
+Add payment record creation
 ```
 
 The working tree was clean after this commit.
@@ -202,6 +202,7 @@ Implemented interfaces:
 - B02 `GET /supplier-statements`, `GET /supplier-statements/{id}`
 - B03 `GET /supplier-store-statements`, `GET /supplier-store-statements/{id}`
 - B06 `POST /payment-records/preview`
+- B07 `POST /payment-records`
 
 Current B01 behavior:
 
@@ -234,23 +235,31 @@ Current B06 behavior:
 - Supplier total and supplier-store statement lines share supplier payable IDs and preview as `COMPANY_TO_SUPPLIER` items using supply amount plus shipment freight.
 - Validates selected items are completed, share the same payment direction, and belong to the same paying/receiving subject.
 - Returns payable amount, pending amount, confirmed paid amount, source version, and blocked items.
-- Does not create payment records or reserve allocations yet.
+- Includes existing RESERVED allocations as pending amounts.
+
+Current B07 behavior:
+
+- Adds `PaymentRecord` and `PaymentAllocation` models.
+- Creates a PENDING payment record from previewed settlement item IDs.
+- Validates selected items share direction and subject, source versions match, and expected amounts match current payable amounts.
+- Creates RESERVED payment allocations so later previews show pending payment amounts and no remaining payable amount for the same items.
+- Uses Idempotency-Key through command records.
 
 ## Recommended Next Step
 
-Start payment record creation and allocation reservation.
+Start payment confirmation, rejection, and cancellation.
 
 Suggested first version:
 
-- If moving into payment work, create payment records from previewed statement lines and reserve allocations.
+- If moving into payment work, add payment confirmation to convert RESERVED allocations to CONFIRMED.
 - If continuing fulfillment finance linkage, connect RETURN discrepancy records to settlement/payment difference disposal.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:
 
-1. Payment record creation and allocation reservation.
-2. Payment confirmation, rejection, and cancellation.
+1. Payment confirmation.
+2. Payment rejection and cancellation.
 3. Settlement difference disposal for accepted, replenished, and returned discrepancies.
 
 ## Where To Look

@@ -1,7 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { Shipment, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import {
+  PaymentAllocationState,
+  PaymentRecordDirection,
+  PaymentRecordStatus,
+  SupplierOrderStatus,
+} from '../../../../packages/backend/generated/prisma/enums.js';
+import type { PaymentAllocation, PaymentRecord, Shipment, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type PaymentDirection = 'STORE_TO_COMPANY' | 'COMPANY_TO_SUPPLIER';
@@ -9,7 +14,7 @@ export type PaymentChannel = 'COMPANY';
 export type SettlementItemKind = 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE';
 
 export type PaymentPreviewView = {
-  direction: PaymentDirection;
+  direction: PaymentRecordDirection;
   channel: PaymentChannel;
   storeId: string | null;
   supplierId: string | null;
@@ -18,6 +23,45 @@ export type PaymentPreviewView = {
   totalConfirmedPaidAmount: string;
   items: PaymentPreviewItemView[];
   blockedItems: PaymentPreviewBlockedItemView[];
+};
+
+export type CreatePaymentRecordInput = {
+  direction: PaymentRecordDirection;
+  items: CreatePaymentRecordItemInput[];
+  businessDate: Date;
+  remark?: string;
+};
+
+export type CreatePaymentRecordItemInput = {
+  settlementItemId: string;
+  expectedVersion: number;
+  expectedAmount: string;
+};
+
+export type PaymentRecordView = {
+  id: string;
+  paymentNo: string;
+  direction: PaymentRecordDirection;
+  channel: PaymentChannel;
+  storeId: string | null;
+  supplierId: string | null;
+  amount: string;
+  businessDate: string;
+  status: PaymentRecordStatus;
+  remark: string | null;
+  version: number;
+  createdAt: string;
+  allocations: PaymentAllocationView[];
+};
+
+export type PaymentAllocationView = {
+  id: string;
+  settlementItemId: string;
+  supplierOrderId: string;
+  amount: string;
+  sourceVersion: number;
+  state: PaymentAllocationState;
+  createdAt: string;
 };
 
 export type PaymentPreviewItemView = {
@@ -59,6 +103,13 @@ export class PaymentRecordsService {
       include: { shipments: true },
     });
     const ordersById = new Map(orders.map((order) => [order.id, order]));
+    const allocations = await this.database.client.paymentAllocation.findMany({
+      where: {
+        settlementItemId: { in: uniqueIds },
+        state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] },
+      },
+    });
+    const allocationSummary = summarizeAllocations(allocations);
     const items: PaymentPreviewItemView[] = [];
     const blockedItems: PaymentPreviewBlockedItemView[] = [];
 
@@ -80,7 +131,7 @@ export class PaymentRecordsService {
         });
         continue;
       }
-      items.push(toPreviewItem(item.id, item.decoded.kind, order));
+      items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id)));
     }
 
     if (items.length === 0) {
@@ -116,23 +167,109 @@ export class PaymentRecordsService {
     }
 
     const totalPayableAmount = items.reduce((sum, item) => sum.plus(item.payableAmount), new Decimal(0));
+    const totalPendingPaymentAmount = items.reduce((sum, item) => sum.plus(item.pendingPaymentAmount), new Decimal(0));
+    const totalConfirmedPaidAmount = items.reduce((sum, item) => sum.plus(item.confirmedPaidAmount), new Decimal(0));
     return {
       direction,
       channel: 'COMPANY',
       storeId,
       supplierId,
       totalPayableAmount: totalPayableAmount.toFixed(2),
-      totalPendingPaymentAmount: '0.00',
-      totalConfirmedPaidAmount: '0.00',
+      totalPendingPaymentAmount: totalPendingPaymentAmount.toFixed(2),
+      totalConfirmedPaidAmount: totalConfirmedPaidAmount.toFixed(2),
       items,
       blockedItems,
     };
   }
+
+  async create(input: CreatePaymentRecordInput): Promise<PaymentRecordView> {
+    const preview = await this.preview(input.items.map((item) => item.settlementItemId));
+    if (preview.blockedItems.length > 0) {
+      throw new ConflictException({
+        code: 'PAYMENT_PREVIEW_BLOCKED',
+        message: 'Some settlement items cannot be paid',
+        details: { blockedItems: preview.blockedItems },
+      });
+    }
+    if (preview.direction !== input.direction) {
+      throw new ConflictException({
+        code: 'PAYMENT_DIRECTION_MISMATCH',
+        message: 'Payment direction does not match selected settlement items',
+      });
+    }
+
+    const previewItemsById = new Map(preview.items.map((item) => [item.settlementItemId, item]));
+    for (const item of input.items) {
+      const previewItem = previewItemsById.get(item.settlementItemId);
+      if (!previewItem) {
+        throw new ConflictException({
+          code: 'SETTLEMENT_ITEM_NOT_FOUND',
+          message: 'Settlement item was not found in payment preview',
+        });
+      }
+      if (previewItem.sourceVersion !== item.expectedVersion) {
+        throw new ConflictException({
+          code: 'SETTLEMENT_ITEM_VERSION_CONFLICT',
+          message: 'Settlement item source version has changed',
+          details: { settlementItemId: item.settlementItemId, expectedVersion: item.expectedVersion, currentVersion: previewItem.sourceVersion },
+        });
+      }
+      if (!new Decimal(previewItem.payableAmount).eq(item.expectedAmount)) {
+        throw new ConflictException({
+          code: 'SETTLEMENT_ITEM_AMOUNT_CHANGED',
+          message: 'Settlement item payable amount has changed',
+          details: { settlementItemId: item.settlementItemId, expectedAmount: item.expectedAmount, currentAmount: previewItem.payableAmount },
+        });
+      }
+      if (new Decimal(item.expectedAmount).lte(0)) {
+        throw new ConflictException({
+          code: 'SETTLEMENT_ITEM_NOT_PAYABLE',
+          message: 'Settlement item has no payable amount',
+        });
+      }
+    }
+
+    const amount = input.items.reduce((sum, item) => sum.plus(item.expectedAmount), new Decimal(0));
+    const payment = await this.database.client.paymentRecord.create({
+      data: {
+        paymentNo: makePaymentNo(),
+        direction: input.direction,
+        storeId: preview.storeId,
+        supplierId: preview.supplierId,
+        amount: amount.toFixed(2),
+        businessDate: input.businessDate,
+        remark: input.remark,
+        allocations: {
+          create: input.items.map((item) => {
+            const previewItem = previewItemsById.get(item.settlementItemId)!;
+            return {
+              settlementItemId: item.settlementItemId,
+              supplierOrderId: previewItem.supplierOrderId,
+              amount: item.expectedAmount,
+              sourceVersion: item.expectedVersion,
+            };
+          }),
+        },
+      },
+      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+    });
+
+    return toPaymentRecordView(payment);
+  }
 }
 
-function toPreviewItem(settlementItemId: string, kind: SettlementItemKind, order: PreviewOrder): PaymentPreviewItemView {
+function toPreviewItem(
+  settlementItemId: string,
+  kind: SettlementItemKind,
+  order: PreviewOrder,
+  allocationSummary: { pendingAmount: Decimal; confirmedAmount: Decimal } | undefined,
+): PaymentPreviewItemView {
   const goodsAmount = kind === 'STORE_RECEIVABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount);
   const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
+  const grossAmount = goodsAmount.plus(freightAmount);
+  const pendingAmount = allocationSummary?.pendingAmount ?? new Decimal(0);
+  const confirmedAmount = allocationSummary?.confirmedAmount ?? new Decimal(0);
+  const payableAmount = Decimal.max(grossAmount.minus(pendingAmount).minus(confirmedAmount), 0);
   return {
     settlementItemId,
     kind,
@@ -141,14 +278,32 @@ function toPreviewItem(settlementItemId: string, kind: SettlementItemKind, order
     storeId: order.storeId,
     supplierId: order.supplierId,
     sourceVersion: order.version,
-    payableAmount: goodsAmount.plus(freightAmount).toFixed(2),
-    pendingPaymentAmount: '0.00',
-    confirmedPaidAmount: '0.00',
+    payableAmount: payableAmount.toFixed(2),
+    pendingPaymentAmount: pendingAmount.toFixed(2),
+    confirmedPaidAmount: confirmedAmount.toFixed(2),
   };
 }
 
-function directionForKind(kind: SettlementItemKind): PaymentDirection {
-  return kind === 'STORE_RECEIVABLE' ? 'STORE_TO_COMPANY' : 'COMPANY_TO_SUPPLIER';
+function summarizeAllocations(allocations: PaymentAllocation[]): Map<string, { pendingAmount: Decimal; confirmedAmount: Decimal }> {
+  const result = new Map<string, { pendingAmount: Decimal; confirmedAmount: Decimal }>();
+  for (const allocation of allocations) {
+    const current = result.get(allocation.settlementItemId) ?? {
+      pendingAmount: new Decimal(0),
+      confirmedAmount: new Decimal(0),
+    };
+    if (allocation.state === PaymentAllocationState.RESERVED) {
+      current.pendingAmount = current.pendingAmount.plus(allocation.amount);
+    }
+    if (allocation.state === PaymentAllocationState.CONFIRMED) {
+      current.confirmedAmount = current.confirmedAmount.plus(allocation.amount);
+    }
+    result.set(allocation.settlementItemId, current);
+  }
+  return result;
+}
+
+function directionForKind(kind: SettlementItemKind): PaymentRecordDirection {
+  return kind === 'STORE_RECEIVABLE' ? PaymentRecordDirection.STORE_TO_COMPANY : PaymentRecordDirection.COMPANY_TO_SUPPLIER;
 }
 
 function decodeSettlementItemId(id: string): DecodedSettlementItemId {
@@ -170,4 +325,38 @@ function decodeSettlementItemId(id: string): DecodedSettlementItemId {
     code: 'INVALID_SETTLEMENT_ITEM_ID',
     message: 'Settlement item id is invalid',
   });
+}
+
+function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllocation[] }): PaymentRecordView {
+  return {
+    id: payment.id,
+    paymentNo: payment.paymentNo,
+    direction: payment.direction,
+    channel: 'COMPANY',
+    storeId: payment.storeId,
+    supplierId: payment.supplierId,
+    amount: payment.amount.toFixed(2),
+    businessDate: payment.businessDate.toISOString().slice(0, 10),
+    status: payment.status,
+    remark: payment.remark,
+    version: payment.version,
+    createdAt: payment.createdAt.toISOString(),
+    allocations: payment.allocations.map(toPaymentAllocationView),
+  };
+}
+
+function toPaymentAllocationView(allocation: PaymentAllocation): PaymentAllocationView {
+  return {
+    id: allocation.id,
+    settlementItemId: allocation.settlementItemId,
+    supplierOrderId: allocation.supplierOrderId,
+    amount: allocation.amount.toFixed(2),
+    sourceVersion: allocation.sourceVersion,
+    state: allocation.state,
+    createdAt: allocation.createdAt.toISOString(),
+  };
+}
+
+function makePaymentNo(): string {
+  return `PAY-${Date.now()}-${Math.floor(Math.random() * 1_000_000).toString().padStart(6, '0')}`;
 }

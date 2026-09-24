@@ -126,6 +126,10 @@ assertIncludes(supplierStoreStatementsController, "@Get(':id')", 'supplier store
 assertIncludes(apiDesign, '`POST /payment-records/preview`', 'api design');
 assertIncludes(paymentRecordsController, "@Controller('payment-records')", 'payment records controller');
 assertIncludes(paymentRecordsController, "@Post('preview')", 'payment records controller');
+assertIncludes(apiDesign, '`POST /payment-records`', 'api design');
+assertIncludes(paymentRecordsController, '@Post()', 'payment records controller');
+assertIncludes(prismaSchema, 'model PaymentRecord', 'prisma schema');
+assertIncludes(prismaSchema, 'model PaymentAllocation', 'prisma schema');
 assertIncludes(apiDesign, '`GET/POST /suppliers`、`GET/PATCH /suppliers/{id}`', 'api design');
 assertIncludes(suppliersController, "@Controller('suppliers')", 'suppliers controller');
 assertIncludes(apiDesign, '`GET/PUT /suppliers/{id}/products`', 'api design');

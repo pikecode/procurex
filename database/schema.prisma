@@ -40,6 +40,24 @@ enum PaymentStatus {
   PAID
 }
 
+enum PaymentRecordDirection {
+  STORE_TO_COMPANY
+  COMPANY_TO_SUPPLIER
+}
+
+enum PaymentRecordStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
+enum PaymentAllocationState {
+  RESERVED
+  CONFIRMED
+  RELEASED
+}
+
 enum FulfillmentStatus {
   PENDING
   PARTIAL_SHIPPED
@@ -476,6 +494,7 @@ model SupplierOrder {
   shipments         Shipment[]
   freightConfirmations FreightConfirmation[]
   fundingAllocations FundingAllocation[]
+  paymentAllocations PaymentAllocation[]
 
   @@index([requestId])
   @@index([supplierId, firstShippedAt])
@@ -739,6 +758,46 @@ model ClearingItem {
 
   @@index([clearingId])
   @@index([fundingAllocationId])
+}
+
+model PaymentRecord {
+  id            String                 @id @default(uuid()) @db.Uuid
+  paymentNo     String                 @unique @db.VarChar(80)
+  direction     PaymentRecordDirection
+  storeId       String?                @db.Uuid
+  supplierId    String?                @db.Uuid
+  amount        Decimal                @db.Decimal(20, 2)
+  businessDate  DateTime               @db.Date
+  status        PaymentRecordStatus    @default(PENDING)
+  remark        String?                @db.VarChar(300)
+  version       Int                    @default(1)
+  confirmedAt   DateTime?              @db.Timestamptz(6)
+  rejectedAt    DateTime?              @db.Timestamptz(6)
+  cancelledAt   DateTime?              @db.Timestamptz(6)
+  createdAt     DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime               @updatedAt @db.Timestamptz(6)
+  allocations   PaymentAllocation[]
+
+  @@index([direction, status, businessDate])
+  @@index([storeId, status])
+  @@index([supplierId, status])
+}
+
+model PaymentAllocation {
+  id               String                 @id @default(uuid()) @db.Uuid
+  paymentId        String                 @db.Uuid
+  settlementItemId String                 @db.VarChar(300)
+  supplierOrderId  String                 @db.Uuid
+  amount           Decimal                @db.Decimal(20, 2)
+  sourceVersion    Int
+  state            PaymentAllocationState @default(RESERVED)
+  createdAt        DateTime               @default(now()) @db.Timestamptz(6)
+  payment          PaymentRecord          @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  supplierOrder    SupplierOrder          @relation(fields: [supplierOrderId], references: [id])
+
+  @@unique([paymentId, settlementItemId])
+  @@index([settlementItemId, state])
+  @@index([supplierOrderId])
 }
 
 model AccountLedger {

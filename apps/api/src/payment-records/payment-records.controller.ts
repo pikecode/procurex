@@ -1,24 +1,79 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard.js';
+import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
+import { type AuthenticatedSession } from '../auth/auth.service.js';
+import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
-import { throwIfInvalid } from '../common/request-contract.js';
-import { type ValidationIssue } from '../../../../packages/domain/src/validation.js';
-import { type PaymentPreviewView, PaymentRecordsService } from './payment-records.service.js';
+import { CommandsService } from '../commands/commands.service.js';
+import { getOrCreateTraceId } from '../common/request-context.js';
+import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contract.js';
+import { PaymentRecordDirection } from '../../../../packages/backend/generated/prisma/enums.js';
+import {
+  validateDecimalString,
+  validateExpectedVersion,
+  type ValidationIssue,
+} from '../../../../packages/domain/src/validation.js';
+import {
+  type CreatePaymentRecordInput,
+  type PaymentPreviewView,
+  type PaymentRecordView,
+  PaymentRecordsService,
+} from './payment-records.service.js';
 
 type PreviewBody = {
   settlementItemIds?: unknown;
 };
 
+type CreateBody = {
+  direction?: unknown;
+  items?: unknown;
+  businessDate?: unknown;
+  remark?: unknown;
+};
+
 @Controller('payment-records')
 @UseGuards(AuthGuard, RolesGuard)
 export class PaymentRecordsController {
-  constructor(private readonly paymentRecordsService: PaymentRecordsService) {}
+  constructor(
+    private readonly paymentRecordsService: PaymentRecordsService,
+    private readonly commandsService: CommandsService,
+  ) {}
 
   @Post('preview')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
   preview(@Body() body: PreviewBody): Promise<PaymentPreviewView> {
     return this.paymentRecordsService.preview(parsePreviewBody(body));
+  }
+
+  @Post()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  async create(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Body() body: CreateBody,
+  ): Promise<PaymentRecordView> {
+    const input = parseCreateBody(body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'payment-record.create',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: body as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as PaymentRecordView;
+    }
+
+    const result = await this.paymentRecordsService.create(input);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'PaymentRecord',
+      resourceId: result.id,
+      responseBody: result as never,
+    });
+
+    return result;
   }
 }
 
@@ -47,4 +102,101 @@ function parsePreviewBody(body: PreviewBody): string[] {
 
   throwIfInvalid(issues);
   return settlementItemIds;
+}
+
+function parseCreateBody(body: CreateBody): CreatePaymentRecordInput {
+  const issues: ValidationIssue[] = [];
+  const direction = requiredDirection(body.direction, issues);
+  const items: CreatePaymentRecordInput['items'] = [];
+
+  if (!Array.isArray(body.items) || body.items.length === 0) {
+    issues.push({ field: 'items', code: 'INVALID_PAYMENT_ITEMS', message: 'items must be a non-empty array' });
+  } else {
+    const seen = new Set<string>();
+    for (const [index, item] of body.items.entries()) {
+      if (!isRecord(item)) {
+        issues.push({ field: `items.${index}`, code: 'INVALID_PAYMENT_ITEM', message: 'item must be an object' });
+        continue;
+      }
+      const settlementItemId = optionalNonEmptyString(`items.${index}.settlementItemId`, item.settlementItemId, issues);
+      issues.push(...validateExpectedVersion(`items.${index}.expectedVersion`, item.expectedVersion));
+      issues.push(...validateDecimalString(`items.${index}.expectedAmount`, item.expectedAmount, 2));
+      if (settlementItemId) {
+        if (seen.has(settlementItemId)) {
+          issues.push({
+            field: `items.${index}.settlementItemId`,
+            code: 'DUPLICATE_SETTLEMENT_ITEM_ID',
+            message: 'settlement item ids must not repeat',
+          });
+        }
+        seen.add(settlementItemId);
+      }
+      if (settlementItemId && typeof item.expectedVersion === 'number' && typeof item.expectedAmount === 'string') {
+        items.push({
+          settlementItemId,
+          expectedVersion: item.expectedVersion,
+          expectedAmount: item.expectedAmount,
+        });
+      }
+    }
+  }
+
+  const businessDate = requiredDate('businessDate', body.businessDate, issues);
+  const remark = optionalString('remark', body.remark, issues);
+
+  throwIfInvalid(issues);
+  return {
+    direction: direction!,
+    items,
+    businessDate: businessDate!,
+    remark,
+  };
+}
+
+function requiredDirection(value: unknown, issues: ValidationIssue[]): PaymentRecordDirection | undefined {
+  if (value === PaymentRecordDirection.STORE_TO_COMPANY || value === PaymentRecordDirection.COMPANY_TO_SUPPLIER) {
+    return value;
+  }
+  issues.push({
+    field: 'direction',
+    code: 'INVALID_PAYMENT_DIRECTION',
+    message: 'direction must be STORE_TO_COMPANY or COMPANY_TO_SUPPLIER',
+  });
+  return undefined;
+}
+
+function optionalNonEmptyString(field: string, value: unknown, issues: ValidationIssue[]): string | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    issues.push({ field, code: 'REQUIRED_STRING', message: `${field} is required` });
+    return undefined;
+  }
+  return value;
+}
+
+function optionalString(field: string, value: unknown, issues: ValidationIssue[]): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    issues.push({ field, code: 'INVALID_STRING', message: `${field} must be a non-empty string` });
+    return undefined;
+  }
+  return value.trim();
+}
+
+function requiredDate(field: string, value: unknown, issues: ValidationIssue[]): Date | undefined {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    issues.push({ field, code: 'INVALID_DATE', message: `${field} must be YYYY-MM-DD` });
+    return undefined;
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) {
+    issues.push({ field, code: 'INVALID_DATE', message: `${field} is invalid` });
+    return undefined;
+  }
+  return date;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
