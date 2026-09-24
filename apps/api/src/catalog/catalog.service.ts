@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Category, Product, Unit } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { PricingService } from '../pricing/pricing.service.js';
 
 export type CategoryView = {
   id: string;
@@ -30,6 +31,22 @@ export type ProductView = {
   version: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type StoreCatalogView = {
+  storeId: string;
+  templateId: string;
+  items: Array<{
+    product: ProductView;
+    sortOrder: number;
+    suppliers: Array<{
+      supplierId: string;
+      priority: number;
+      salesPrice: string | null;
+      supplyPrice: string | null;
+      priceVersionId: string | null;
+    }>;
+  }>;
 };
 
 export type CreateCategoryInput = {
@@ -65,7 +82,10 @@ export type UpdateProductInput = {
 
 @Injectable()
 export class CatalogService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly pricingService: PricingService,
+  ) {}
 
   async listCategories(): Promise<CategoryView[]> {
     const categories = await this.database.client.category.findMany({ orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] });
@@ -137,6 +157,74 @@ export class CatalogService {
       },
     });
     return toProductView(updated);
+  }
+
+  async readStoreCatalog(storeId: string, at = new Date()): Promise<StoreCatalogView> {
+    const binding = await this.database.client.storeTemplateBinding.findFirst({
+      where: {
+        storeId,
+        expiredAt: null,
+        template: { isArchived: false },
+      },
+      include: {
+        template: {
+          include: {
+            items: {
+              where: { isEnabled: true, product: { isActive: true } },
+              orderBy: [{ sortOrder: 'asc' }, { productId: 'asc' }],
+              include: {
+                product: true,
+                suppliers: {
+                  orderBy: [{ priority: 'asc' }, { supplierId: 'asc' }],
+                  include: { supplier: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!binding) {
+      throw new NotFoundException({
+        code: 'STORE_TEMPLATE_NOT_FOUND',
+        message: 'Store does not have an active template',
+      });
+    }
+
+    return {
+      storeId,
+      templateId: binding.templateId,
+      items: await Promise.all(
+        binding.template.items.map(async (item) => ({
+          product: toProductView(item.product),
+          sortOrder: item.sortOrder,
+          suppliers: await Promise.all(
+            item.suppliers.map(async (supplier) => {
+              const price = await this.tryGetEffectivePrice(item.productId, supplier.supplierId, at);
+              return {
+                supplierId: supplier.supplierId,
+                priority: supplier.priority,
+                salesPrice: price?.salesPrice ?? null,
+                supplyPrice: price?.supplyPrice ?? null,
+                priceVersionId: price?.versionId ?? null,
+              };
+            }),
+          ),
+        })),
+      ),
+    };
+  }
+
+  private async tryGetEffectivePrice(productId: string, supplierId: string, at: Date): Promise<{ salesPrice: string; supplyPrice: string; versionId: string } | null> {
+    try {
+      return await this.pricingService.getEffectivePrice(productId, supplierId, at);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   private async requireCategory(id: string): Promise<void> {

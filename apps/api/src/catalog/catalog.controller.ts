@@ -3,7 +3,7 @@ import { AuthGuard } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
-import { CatalogService, type CategoryView, type ProductView, type UnitView } from './catalog.service.js';
+import { CatalogService, type CategoryView, type ProductView, type StoreCatalogView, type UnitView } from './catalog.service.js';
 import {
   validateDecimalString,
   validateExpectedVersion,
@@ -68,6 +68,13 @@ export class CatalogController {
   @RequireRoles('ADMIN', 'PURCHASER')
   updateProduct(@Param('id') id: string, @Body() body: PatchProductBody): Promise<ProductView> {
     return this.catalogService.updateProduct(id, parsePatchProductBody(id, body));
+  }
+
+  @Get('stores/:id/catalog')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  readStoreCatalog(@Param('id') id: string): Promise<StoreCatalogView> {
+    throwIfInvalid(validateUuid('id', id));
+    return this.catalogService.readStoreCatalog(id);
   }
 }
 

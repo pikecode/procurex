@@ -76,6 +76,8 @@ assertIncludes(apiDesign, '`GET/POST /products`', 'api design');
 assertIncludes(catalogController, "@Post('products')", 'catalog controller');
 assertIncludes(catalogController, "@Post('categories')", 'catalog controller');
 assertIncludes(catalogController, "@Post('units')", 'catalog controller');
+assertIncludes(apiDesign, '`GET /stores/{id}/catalog`', 'api design');
+assertIncludes(catalogController, "@Get('stores/:id/catalog')", 'catalog controller');
 assertIncludes(apiDesign, '`POST /prices/impact-preview`', 'api design');
 assertIncludes(pricingService, 'getEffectivePrice', 'pricing service');
 assertIncludes(apiDesign, '`POST /price-changes`', 'api design');

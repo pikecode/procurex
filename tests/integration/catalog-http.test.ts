@@ -7,6 +7,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { AppModule } from '../../apps/api/src/app.module.js';
 import { ApiExceptionFilter } from '../../apps/api/src/common/api-exception.filter.js';
 import { ResponseEnvelopeInterceptor } from '../../apps/api/src/common/response-envelope.interceptor.js';
+import { DeliveryMode, SettlementMode } from '../../packages/backend/generated/prisma/enums.js';
 import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
 import { hashPassword } from '../../packages/domain/src/password.js';
 
@@ -158,6 +159,138 @@ test('catalog endpoints create and archive basic product data', async () => {
   } finally {
     await app.close();
     await prisma.product.deleteMany({ where: { sku } });
+    await prisma.category.deleteMany({ where: { code: categoryCode } });
+    await prisma.unit.deleteMany({ where: { code: unitCode } });
+    await prisma.userSession.deleteMany({ where: { user: { username: purchaserUsername } } });
+    await prisma.userRole.deleteMany({ where: { user: { username: purchaserUsername } } });
+    await prisma.user.deleteMany({ where: { username: purchaserUsername } });
+    await prisma.$disconnect();
+  }
+});
+
+test('store catalog endpoint returns active template products with supplier prices', async () => {
+  const prisma = createClient();
+  const runId = Date.now();
+  const purchaserUsername = `it_store_catalog_${runId}`;
+  const storeCode = `CATSTORE${runId}`;
+  const templateCode = `CATTPL${runId}`;
+  const categoryCode = `CATALOGCAT${runId}`;
+  const unitCode = `CATALOGUNIT${runId}`;
+  const sku = `CATALOGSKU${runId}`;
+  const supplierCode = `CATALOGSUP${runId}`;
+  const { app, baseUrl } = await createTestApp();
+
+  try {
+    const purchaserRole = await prisma.role.upsert({
+      where: { code: 'PURCHASER' },
+      update: {},
+      create: { code: 'PURCHASER', name: 'Purchaser' },
+    });
+    await prisma.user.create({
+      data: {
+        username: purchaserUsername,
+        displayName: 'Integration Store Catalog',
+        passwordHash: await hashPassword('correct-password'),
+        roles: { create: [{ roleId: purchaserRole.id }] },
+      },
+    });
+
+    const [store, category, unit, supplier, template] = await Promise.all([
+      prisma.store.create({ data: { code: storeCode, name: 'Catalog Store' } }),
+      prisma.category.create({ data: { code: categoryCode, name: 'Catalog Category' } }),
+      prisma.unit.create({ data: { code: unitCode, name: 'bag' } }),
+      prisma.supplier.create({
+        data: {
+          code: supplierCode,
+          name: 'Catalog Supplier',
+          deliveryMode: DeliveryMode.SELF,
+          defaultSettlementMode: SettlementMode.COMPANY_TERM,
+          defaultSettlementCycle: 'MONTHLY',
+        },
+      }),
+      prisma.orderTemplate.create({ data: { code: templateCode, name: 'Catalog Template' } }),
+    ]);
+    const product = await prisma.product.create({
+      data: {
+        sku,
+        name: 'Catalog Product',
+        categoryId: category.id,
+        baseUnitId: unit.id,
+        minOrderQty: '2.000000',
+        orderMultiple: '1.000000',
+      },
+    });
+    const templateItem = await prisma.templateItem.create({
+      data: {
+        templateId: template.id,
+        productId: product.id,
+        sortOrder: 7,
+        suppliers: {
+          create: [{ supplierId: supplier.id, priority: 3 }],
+        },
+      },
+    });
+    await prisma.storeTemplateBinding.create({ data: { storeId: store.id, templateId: template.id } });
+    const scope = await prisma.priceScope.create({ data: { productId: product.id, supplierId: supplier.id } });
+    const priceVersion = await prisma.priceVersion.create({
+      data: {
+        scopeId: scope.id,
+        salesPrice: '12.000000',
+        supplyPrice: '9.000000',
+        effectiveAt: new Date('2026-09-01T00:00:00.000Z'),
+      },
+    });
+
+    const token = await login(baseUrl, purchaserUsername);
+    const response = await fetch(`${baseUrl}/stores/${store.id}/catalog`, {
+      headers: {
+        authorization: `Bearer ${token}`,
+        'x-trace-id': 'trace-store-catalog',
+      },
+    });
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as {
+      data: {
+        storeId: string;
+        templateId: string;
+        items: Array<{
+          product: { id: string; sku: string; minOrderQty: string };
+          sortOrder: number;
+          suppliers: Array<{ supplierId: string; priority: number; salesPrice: string | null; supplyPrice: string | null; priceVersionId: string | null }>;
+        }>;
+      };
+      traceId: string;
+    };
+    assert.equal(body.traceId, 'trace-store-catalog');
+    assert.equal(body.data.storeId, store.id);
+    assert.equal(body.data.templateId, template.id);
+    assert.equal(body.data.items.length, 1);
+    assert.equal(body.data.items[0]?.product.id, product.id);
+    assert.equal(body.data.items[0]?.product.sku, sku);
+    assert.equal(body.data.items[0]?.product.minOrderQty, '2');
+    assert.equal(body.data.items[0]?.sortOrder, 7);
+    assert.deepEqual(body.data.items[0]?.suppliers, [
+      {
+        supplierId: supplier.id,
+        priority: 3,
+        salesPrice: '12',
+        supplyPrice: '9',
+        priceVersionId: priceVersion.id,
+      },
+    ]);
+
+    assert.equal(templateItem.productId, product.id);
+  } finally {
+    await app.close();
+    await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: supplierCode } } } });
+    await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });
+    await prisma.storeTemplateBinding.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
+    await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
+    await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
+    await prisma.product.deleteMany({ where: { sku } });
+    await prisma.supplier.deleteMany({ where: { code: supplierCode } });
+    await prisma.store.deleteMany({ where: { code: storeCode } });
     await prisma.category.deleteMany({ where: { code: categoryCode } });
     await prisma.unit.deleteMany({ where: { code: unitCode } });
     await prisma.userSession.deleteMany({ where: { user: { username: purchaserUsername } } });
