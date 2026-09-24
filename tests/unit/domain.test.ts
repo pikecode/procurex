@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { evaluateStoredValueFunding } from '../../packages/domain/src/funding.js';
+import { canonicalJson, requestHash } from '../../packages/domain/src/idempotency.js';
 import { lineAmount, spreadProfit } from '../../packages/domain/src/money.js';
 import { settlementPeriod } from '../../packages/domain/src/settlement-period.js';
 
@@ -40,4 +41,26 @@ test('settlement periods use natural cycles in Asia Shanghai', () => {
     startDate: '2026-02-01',
     endDate: '2026-02-28',
   });
+});
+
+test('idempotency request hash is stable for reordered object keys', () => {
+  const left = {
+    storeId: 'store-a',
+    items: [
+      { productId: 'p-1', quantity: '10.000000' },
+      { quantity: '2.500000', productId: 'p-2' },
+    ],
+    remark: undefined,
+  };
+  const right = {
+    items: [
+      { quantity: '10.000000', productId: 'p-1' },
+      { productId: 'p-2', quantity: '2.500000' },
+    ],
+    storeId: 'store-a',
+  };
+
+  assert.equal(canonicalJson(left), canonicalJson(right));
+  assert.equal(requestHash(left), requestHash(right));
+  assert.match(requestHash(left), /^[a-f0-9]{64}$/);
 });

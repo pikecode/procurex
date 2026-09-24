@@ -13,17 +13,26 @@ function assertIncludes(source, expected, label) {
   }
 }
 
-const [apiDesign, packageJson, apiMain, healthController] = await Promise.all([
+const [apiDesign, packageJson, apiMain, healthController, prismaSchema] = await Promise.all([
   readProjectFile('docs/api-design.md'),
   readProjectFile('package.json'),
   readProjectFile('apps/api/main.ts'),
   readProjectFile('apps/api/src/health.controller.ts'),
+  readProjectFile('database/schema.prisma'),
 ]);
 
 const pkg = JSON.parse(packageJson);
 
 assertIncludes(apiDesign, '基础路径 `/api/v1`', 'api design');
 assertIncludes(apiMain, "app.setGlobalPrefix('api/v1')", 'api bootstrap');
+
+assertIncludes(apiDesign, '成功 | 单对象 `{data, traceId}`', 'api design');
+assertIncludes(apiMain, 'new ResponseEnvelopeInterceptor()', 'api bootstrap');
+assertIncludes(apiMain, 'new ApiExceptionFilter()', 'api bootstrap');
+
+assertIncludes(apiDesign, '`Idempotency-Key` 请求头', 'api design');
+assertIncludes(prismaSchema, 'model CommandRecord', 'prisma schema');
+assertIncludes(prismaSchema, '@@unique([actorUserId, action, idempotencyKey])', 'prisma schema');
 
 assertIncludes(apiDesign, '`GET /health/live`、`GET /health/ready`', 'api design');
 assertIncludes(healthController, "@Get('live')", 'health controller');
