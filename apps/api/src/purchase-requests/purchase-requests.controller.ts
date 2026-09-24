@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -15,9 +15,13 @@ import {
 import {
   PurchaseRequestsService,
   type ConfirmPurchaseRequestResult,
+  type ListPurchaseRequestsInput,
+  type PurchaseRequestDetailView,
+  type PurchaseRequestSummaryView,
   type PurchaseRequestView,
   type RejectPurchaseRequestResult,
 } from './purchase-requests.service.js';
+import { PurchaseRequestStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import {
   validateDecimalString,
   validateExpectedVersion,
@@ -28,6 +32,11 @@ import {
 type PreviewBody = {
   storeId?: unknown;
   items?: unknown;
+};
+
+type ListQuery = {
+  storeId?: unknown;
+  status?: unknown;
 };
 
 type ConfirmBody = {
@@ -47,6 +56,19 @@ export class PurchaseRequestsController {
     private readonly purchaseRequestsService: PurchaseRequestsService,
     private readonly commandsService: CommandsService,
   ) {}
+
+  @Get()
+  @RequireRoles('ADMIN', 'PURCHASER', 'STORE')
+  list(@Query() query: ListQuery): Promise<PurchaseRequestSummaryView[]> {
+    return this.purchaseRequestsService.list(parseListQuery(query));
+  }
+
+  @Get(':id')
+  @RequireRoles('ADMIN', 'PURCHASER', 'STORE')
+  get(@Param('id') id: string): Promise<PurchaseRequestDetailView> {
+    throwIfInvalid(validateUuid('id', id));
+    return this.purchaseRequestsService.get(id);
+  }
 
   @Post('preview')
   @RequireRoles('ADMIN', 'PURCHASER', 'STORE')
@@ -150,6 +172,26 @@ export class PurchaseRequestsController {
   }
 }
 
+function parseListQuery(query: ListQuery): ListPurchaseRequestsInput {
+  const issues: ValidationIssue[] = [];
+  let storeId: string | undefined;
+  let status: PurchaseRequestStatus | undefined;
+
+  if (query.storeId !== undefined) {
+    issues.push(...validateUuid('storeId', query.storeId));
+    if (typeof query.storeId === 'string') {
+      storeId = query.storeId;
+    }
+  }
+
+  if (query.status !== undefined) {
+    status = optionalPurchaseRequestStatus(query.status, issues);
+  }
+
+  throwIfInvalid(issues);
+  return { storeId, status };
+}
+
 function parsePreviewBody(body: PreviewBody): { storeId: string; items: PreviewItemInput[] } {
   const issues: ValidationIssue[] = [...validateUuid('storeId', body.storeId)];
   const items: PreviewItemInput[] = [];
@@ -198,6 +240,26 @@ function parseRejectBody(id: string, body: RejectBody): { id: string; expectedVe
 
   throwIfInvalid(issues);
   return { id, expectedVersion: body.expectedVersion as number, reason: (body.reason as string).trim() };
+}
+
+function optionalPurchaseRequestStatus(value: unknown, issues: ValidationIssue[]): PurchaseRequestStatus | undefined {
+  if (
+    value === PurchaseRequestStatus.PENDING_FUNDS ||
+    value === PurchaseRequestStatus.PENDING_PROCUREMENT ||
+    value === PurchaseRequestStatus.CONFIRMED ||
+    value === PurchaseRequestStatus.PARTIAL_PUSHED ||
+    value === PurchaseRequestStatus.COMPLETED ||
+    value === PurchaseRequestStatus.CANCELED
+  ) {
+    return value;
+  }
+
+  issues.push({
+    field: 'status',
+    code: 'INVALID_PURCHASE_REQUEST_STATUS',
+    message: 'status is invalid',
+  });
+  return undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

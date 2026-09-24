@@ -7,6 +7,7 @@ import {
   PurchaseRequestStatus,
   SupplierOrderStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
+import type { PurchaseRequest, RequestItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import {
   PurchaseRequestPreviewService,
@@ -21,6 +22,58 @@ export type PurchaseRequestView = PurchaseRequestPreview & {
   paymentStatus: PaymentStatus;
   version: number;
   submittedAt: string;
+};
+
+export type PurchaseRequestSummaryView = {
+  id: string;
+  requestNo: string;
+  storeId: string;
+  templateId: string;
+  status: PurchaseRequestStatus;
+  paymentStatus: PaymentStatus;
+  salesGoodsAmount: string;
+  supplyGoodsAmount: string;
+  paidAmount: string;
+  shortfallAmount: string;
+  version: number;
+  submittedAt: string;
+  confirmedAt: string | null;
+  rejectedAt: string | null;
+};
+
+export type PurchaseRequestDetailView = PurchaseRequestSummaryView & {
+  rejectedReason: string | null;
+  items: PurchaseRequestItemView[];
+  supplierOrders: SupplierOrderSummaryView[];
+};
+
+export type PurchaseRequestItemView = {
+  id: string;
+  productId: string;
+  supplierId: string;
+  priceVersionId: string | null;
+  quantity: string;
+  salesUnitPrice: string;
+  supplyUnitPrice: string;
+  salesLineAmount: string;
+  supplyLineAmount: string;
+};
+
+export type SupplierOrderSummaryView = {
+  id: string;
+  supplierOrderNo: string;
+  supplierId: string;
+  status: SupplierOrderStatus;
+  fulfillmentStatus: FulfillmentStatus;
+  salesGoodsAmount: string;
+  supplyGoodsAmount: string;
+  pushedAt: string | null;
+  version: number;
+};
+
+export type ListPurchaseRequestsInput = {
+  storeId?: string;
+  status?: PurchaseRequestStatus;
 };
 
 export type ConfirmPurchaseRequestResult = {
@@ -42,6 +95,36 @@ export class PurchaseRequestsService {
     private readonly database: DatabaseService,
     private readonly previewService: PurchaseRequestPreviewService,
   ) {}
+
+  async list(input: ListPurchaseRequestsInput): Promise<PurchaseRequestSummaryView[]> {
+    const requests = await this.database.client.purchaseRequest.findMany({
+      where: {
+        storeId: input.storeId,
+        status: input.status,
+      },
+      orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+    });
+
+    return requests.map(toPurchaseRequestSummaryView);
+  }
+
+  async get(id: string): Promise<PurchaseRequestDetailView> {
+    const request = await this.database.client.purchaseRequest.findUnique({
+      where: { id },
+      include: {
+        items: { orderBy: { createdAt: 'asc' } },
+        supplierOrders: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+    if (!request) {
+      throw new NotFoundException({
+        code: 'PURCHASE_REQUEST_NOT_FOUND',
+        message: 'Purchase request was not found',
+      });
+    }
+
+    return toPurchaseRequestDetailView(request);
+  }
 
   async create(input: PurchaseRequestPreviewInput): Promise<PurchaseRequestView> {
     const preview = await this.previewService.preview(input);
@@ -238,6 +321,64 @@ export class PurchaseRequestsService {
       rejectedAt: rejected.rejectedAt?.toISOString() ?? null,
     };
   }
+}
+
+function toPurchaseRequestSummaryView(request: PurchaseRequest): PurchaseRequestSummaryView {
+  return {
+    id: request.id,
+    requestNo: request.requestNo,
+    storeId: request.storeId,
+    templateId: request.templateId,
+    status: request.status,
+    paymentStatus: request.paymentStatus,
+    salesGoodsAmount: request.salesGoodsAmount.toFixed(2),
+    supplyGoodsAmount: request.supplyGoodsAmount.toFixed(2),
+    paidAmount: request.paidAmount.toFixed(2),
+    shortfallAmount: request.shortfallAmount.toFixed(2),
+    version: request.version,
+    submittedAt: request.submittedAt.toISOString(),
+    confirmedAt: request.confirmedAt?.toISOString() ?? null,
+    rejectedAt: request.rejectedAt?.toISOString() ?? null,
+  };
+}
+
+function toPurchaseRequestDetailView(
+  request: PurchaseRequest & { items: RequestItem[]; supplierOrders: SupplierOrder[] },
+): PurchaseRequestDetailView {
+  return {
+    ...toPurchaseRequestSummaryView(request),
+    rejectedReason: request.rejectedReason,
+    items: request.items.map(toPurchaseRequestItemView),
+    supplierOrders: request.supplierOrders.map(toSupplierOrderSummaryView),
+  };
+}
+
+function toPurchaseRequestItemView(item: RequestItem): PurchaseRequestItemView {
+  return {
+    id: item.id,
+    productId: item.productId,
+    supplierId: item.supplierId,
+    priceVersionId: item.priceVersionId,
+    quantity: item.quantity.toString(),
+    salesUnitPrice: item.salesUnitPrice.toString(),
+    supplyUnitPrice: item.supplyUnitPrice.toString(),
+    salesLineAmount: item.salesLineAmount.toFixed(2),
+    supplyLineAmount: item.supplyLineAmount.toFixed(2),
+  };
+}
+
+function toSupplierOrderSummaryView(order: SupplierOrder): SupplierOrderSummaryView {
+  return {
+    id: order.id,
+    supplierOrderNo: order.supplierOrderNo,
+    supplierId: order.supplierId,
+    status: order.status,
+    fulfillmentStatus: order.fulfillmentStatus,
+    salesGoodsAmount: order.salesGoodsAmount.toFixed(2),
+    supplyGoodsAmount: order.supplyGoodsAmount.toFixed(2),
+    pushedAt: order.pushedAt?.toISOString() ?? null,
+    version: order.version,
+  };
 }
 
 function makeRequestNo(): string {

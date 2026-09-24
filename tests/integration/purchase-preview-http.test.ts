@@ -244,7 +244,7 @@ test('purchase request create persists request once per idempotency key', async 
     });
     await prisma.storeTemplateBinding.create({ data: { storeId: store.id, templateId: template.id } });
     const scope = await prisma.priceScope.create({ data: { productId: product.id, supplierId: supplier.id } });
-    await prisma.priceVersion.create({
+    const priceVersion = await prisma.priceVersion.create({
       data: {
         scopeId: scope.id,
         salesPrice: '12.000000',
@@ -283,6 +283,39 @@ test('purchase request create persists request once per idempotency key', async 
     assert.equal(first.data.paymentStatus, 'UNPAID');
     assert.equal(first.data.totals.salesGoodsAmount, '120.00');
     assert.equal(first.data.funding.canConfirm, false);
+
+    const listResponse = await fetch(`${baseUrl}/purchase-requests?storeId=${store.id}&status=PENDING_FUNDS`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(listResponse.status, 200);
+    const listBody = (await listResponse.json()) as {
+      data: Array<{ id: string; requestNo: string; status: string; paymentStatus: string; salesGoodsAmount: string }>;
+    };
+    assert.equal(listBody.data.some((request) => request.id === first.data.id), true);
+    const listed = listBody.data.find((request) => request.id === first.data.id);
+    assert.equal(listed?.requestNo, first.data.requestNo);
+    assert.equal(listed?.status, 'PENDING_FUNDS');
+    assert.equal(listed?.paymentStatus, 'UNPAID');
+    assert.equal(listed?.salesGoodsAmount, '120.00');
+
+    const detailResponse = await fetch(`${baseUrl}/purchase-requests/${first.data.id}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(detailResponse.status, 200);
+    const detailBody = (await detailResponse.json()) as {
+      data: {
+        id: string;
+        items: Array<{ productId: string; supplierId: string; priceVersionId: string | null; salesLineAmount: string }>;
+        supplierOrders: unknown[];
+      };
+    };
+    assert.equal(detailBody.data.id, first.data.id);
+    assert.equal(detailBody.data.items.length, 1);
+    assert.equal(detailBody.data.items[0]?.productId, product.id);
+    assert.equal(detailBody.data.items[0]?.supplierId, supplier.id);
+    assert.equal(detailBody.data.items[0]?.priceVersionId, priceVersion.id);
+    assert.equal(detailBody.data.items[0]?.salesLineAmount, '120.00');
+    assert.deepEqual(detailBody.data.supplierOrders, []);
 
     const requests = await prisma.purchaseRequest.findMany({ where: { storeId: store.id } });
     assert.equal(requests.length, 1);
