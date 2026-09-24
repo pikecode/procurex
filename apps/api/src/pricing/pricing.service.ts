@@ -90,4 +90,29 @@ export class PricingService {
       effectiveAt: version.effectiveAt.toISOString(),
     };
   }
+
+  async listVersions(scopeId: string): Promise<PriceQuote[]> {
+    const scope = await this.database.client.priceScope.findUnique({ where: { id: scopeId } });
+    if (!scope) {
+      throw new NotFoundException({
+        code: 'PRICE_SCOPE_NOT_FOUND',
+        message: 'Price scope was not found',
+      });
+    }
+
+    const versions = await this.database.client.priceVersion.findMany({
+      where: { scopeId },
+      orderBy: [{ effectiveAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+    });
+
+    return versions.map((version) => ({
+      scopeId: scope.id,
+      versionId: version.id,
+      productId: scope.productId,
+      supplierId: scope.supplierId,
+      salesPrice: version.salesPrice.toString(),
+      supplyPrice: version.supplyPrice.toString(),
+      effectiveAt: version.effectiveAt.toISOString(),
+    }));
+  }
 }
