@@ -23,6 +23,7 @@ const [
   authController,
   usersController,
   storesController,
+  suppliersController,
 ] = await Promise.all([
   readProjectFile('docs/api-design.md'),
   readProjectFile('package.json'),
@@ -33,6 +34,7 @@ const [
     readProjectFile('apps/api/src/auth/auth.controller.ts'),
     readProjectFile('apps/api/src/users/users.controller.ts'),
     readProjectFile('apps/api/src/stores/stores.controller.ts'),
+    readProjectFile('apps/api/src/suppliers/suppliers.controller.ts'),
   ]);
 
 const pkg = JSON.parse(packageJson);
@@ -58,6 +60,8 @@ assertIncludes(usersController, "@Controller('users')", 'users controller');
 assertIncludes(usersController, "@RequireRoles('ADMIN')", 'users controller');
 assertIncludes(apiDesign, '`GET/POST /stores`、`GET/PATCH /stores/{id}`', 'api design');
 assertIncludes(storesController, "@Controller('stores')", 'stores controller');
+assertIncludes(apiDesign, '`GET/POST /suppliers`、`GET/PATCH /suppliers/{id}`', 'api design');
+assertIncludes(suppliersController, "@Controller('suppliers')", 'suppliers controller');
 
 assertIncludes(apiDesign, '`GET /health/live`、`GET /health/ready`', 'api design');
 assertIncludes(healthController, "@Get('live')", 'health controller');
