@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: fulfillment completion status.
+Latest completed milestone: A06 recharge detail lookup.
 
 Latest implementation commit:
 
 ```text
-Add fulfillment completion status
+Add recharge detail lookup
 ```
 
 The working tree was clean after this commit.
@@ -142,6 +142,7 @@ Implemented interfaces:
 - A01 `GET /stores/{id}/account`, `GET /stores/{id}/ledgers`
 - A02 `POST /stores/{id}/recharges`
 - A03 `PATCH /stores/{id}/credit-limit`
+- A06 `GET /recharges/{id}` (recharge detail only)
 
 Current A01 behavior:
 
@@ -162,6 +163,12 @@ Current A03 behavior:
 - Updates store account credit limit with account-level version checking.
 - Rejects limits below currently used credit.
 - Uses Idempotency-Key through command records.
+
+Current A06 recharge behavior:
+
+- Returns recharge document details by id.
+- Includes the current store account snapshot.
+- Access control is role-based; store-user data-scope binding is not implemented yet.
 
 ## Recommended Next Step
 

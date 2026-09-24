@@ -30,6 +30,7 @@ const [
   pricingService,
   pricingController,
   purchaseRequestsController,
+  rechargesController,
   supplierOrdersController,
   shipmentsController,
   templatesController,
@@ -50,6 +51,7 @@ const [
   readProjectFile('apps/api/src/pricing/pricing.service.ts'),
     readProjectFile('apps/api/src/pricing/pricing.controller.ts'),
     readProjectFile('apps/api/src/purchase-requests/purchase-requests.controller.ts'),
+  readProjectFile('apps/api/src/recharges/recharges.controller.ts'),
     readProjectFile('apps/api/src/supplier-orders/supplier-orders.controller.ts'),
     readProjectFile('apps/api/src/shipments/shipments.controller.ts'),
     readProjectFile('apps/api/src/templates/templates.controller.ts'),
@@ -86,6 +88,9 @@ assertIncludes(storesController, "@Post(':id/recharges')", 'stores controller');
 assertIncludes(prismaSchema, 'model RechargeDocument', 'prisma schema');
 assertIncludes(apiDesign, '`PATCH /stores/{id}/credit-limit`', 'api design');
 assertIncludes(storesController, "@Patch(':id/credit-limit')", 'stores controller');
+assertIncludes(apiDesign, '`GET /recharges/{id}`', 'api design');
+assertIncludes(rechargesController, "@Controller('recharges')", 'recharges controller');
+assertIncludes(rechargesController, "@Get(':id')", 'recharges controller');
 assertIncludes(apiDesign, '`GET/POST /suppliers`、`GET/PATCH /suppliers/{id}`', 'api design');
 assertIncludes(suppliersController, "@Controller('suppliers')", 'suppliers controller');
 assertIncludes(apiDesign, '`GET/PUT /suppliers/{id}/products`', 'api design');

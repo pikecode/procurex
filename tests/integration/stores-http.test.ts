@@ -154,6 +154,37 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(recharge.data.remark, 'Initial recharge');
     assert.equal(recharge.data.account.balance, '320.50');
 
+    const rechargeDetailResponse = await fetch(`${baseUrl}/recharges/${recharge.data.id}`, {
+      headers: {
+        authorization: `Bearer ${storeToken}`,
+        'x-trace-id': 'trace-recharge-detail',
+      },
+    });
+    assert.equal(rechargeDetailResponse.status, 200);
+    const rechargeDetail = (await rechargeDetailResponse.json()) as {
+      data: {
+        id: string;
+        rechargeNo: string;
+        storeId: string;
+        amount: string;
+        businessDate: string;
+        collectionAccountId: string;
+        remark: string | null;
+        account: { id: string; balance: string };
+      };
+      traceId: string;
+    };
+    assert.equal(rechargeDetail.traceId, 'trace-recharge-detail');
+    assert.equal(rechargeDetail.data.id, recharge.data.id);
+    assert.equal(rechargeDetail.data.rechargeNo, recharge.data.rechargeNo);
+    assert.equal(rechargeDetail.data.storeId, createdBody.data.id);
+    assert.equal(rechargeDetail.data.amount, '320.50');
+    assert.equal(rechargeDetail.data.businessDate, '2026-09-24');
+    assert.equal(rechargeDetail.data.collectionAccountId, 'COLLECT-001');
+    assert.equal(rechargeDetail.data.remark, 'Initial recharge');
+    assert.equal(rechargeDetail.data.account.id, recharge.data.account.id);
+    assert.equal(rechargeDetail.data.account.balance, '320.50');
+
     const accountResponse = await fetch(`${baseUrl}/stores/${createdBody.data.id}/account`, {
       headers: {
         authorization: `Bearer ${storeToken}`,

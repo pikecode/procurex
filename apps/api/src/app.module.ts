@@ -9,6 +9,7 @@ import { FreightConfirmationsModule } from './freight-confirmations/freight-conf
 import { HealthController } from './health.controller.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { PurchaseRequestsModule } from './purchase-requests/purchase-requests.module.js';
+import { RechargesModule } from './recharges/recharges.module.js';
 import { ShipmentsModule } from './shipments/shipments.module.js';
 import { StoresModule } from './stores/stores.module.js';
 import { SupplierOrdersModule } from './supplier-orders/supplier-orders.module.js';
@@ -32,6 +33,7 @@ import { UsersModule } from './users/users.module.js';
     ShipmentsModule,
     DiscrepanciesModule,
     FreightConfirmationsModule,
+    RechargesModule,
   ],
   controllers: [HealthController],
 })
