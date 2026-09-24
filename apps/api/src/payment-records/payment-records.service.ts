@@ -143,9 +143,15 @@ export class PaymentRecordsService {
       include: { shipments: true, request: { select: { shortfallAmount: true } } },
     });
     const ordersById = new Map(orders.map((order) => [order.id, order]));
+    const storeReceivableIds = decoded.flatMap(({ decoded: item }) => {
+      const order = ordersById.get(item.supplierOrderId);
+      return item.kind === 'SUPPLIER_PAYABLE' && order?.settlementMode === 'COMPANY_TERM'
+        ? [encodeSettlementItemId('STORE_RECEIVABLE', item.supplierOrderId)]
+        : [];
+    });
     const allocations = await this.database.client.paymentAllocation.findMany({
       where: {
-        settlementItemId: { in: uniqueIds },
+        settlementItemId: { in: [...uniqueIds, ...storeReceivableIds] },
         state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] },
       },
     });
@@ -185,6 +191,18 @@ export class PaymentRecordsService {
           message: 'Purchase request has an unresolved funding shortfall',
         });
         continue;
+      }
+      if (item.decoded.kind === 'SUPPLIER_PAYABLE' && order.settlementMode === 'COMPANY_TERM') {
+        const receivableId = encodeSettlementItemId('STORE_RECEIVABLE', order.id);
+        const storeAmount = new Decimal(order.salesGoodsAmount).plus(order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0)));
+        if ((allocationSummary.get(receivableId)?.confirmedAmount ?? new Decimal(0)).lessThan(storeAmount)) {
+          blockedItems.push({
+            settlementItemId: item.id,
+            code: 'STORE_RECEIVABLE_UNSETTLED',
+            message: 'Store receivable for this company-term order is not fully settled',
+          });
+          continue;
+        }
       }
       items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id), confirmedOffsetSummary.get(item.id)));
     }
@@ -530,6 +548,10 @@ function decodeSettlementItemId(id: string): DecodedSettlementItemId {
     code: 'INVALID_SETTLEMENT_ITEM_ID',
     message: 'Settlement item id is invalid',
   });
+}
+
+function encodeSettlementItemId(kind: SettlementItemKind, supplierOrderId: string): string {
+  return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
 }
 
 function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllocation[] }): PaymentRecordView {

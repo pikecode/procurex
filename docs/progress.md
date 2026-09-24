@@ -11,16 +11,17 @@ Latest completed milestone: P02 adjustment sources in statements, with failure a
 Latest committed implementation:
 
 ```text
-b30d662 Guard price processing and funding checks
+59ae4d3 Enforce settlement funding checks
+5ea495f Guard price processing and funding checks
 1c23421 Refresh M4 progress after price statement work
 6c7fbb8 Test statement price adjustment links
 3a6a1e3 Link price adjustments from statements
 b976b3f Expose price adjustment sources
 ```
 
-The last committed implementation is recorded in git; the current change is pending verification and commit.
+The working tree was clean after the latest commit.
 
-Recommended next step: continue M4 from `docs/development-plan.md`; review P03/reporting and notification scope before moving to M5.
+Recommended next step: continue DEV-406 by adding immutable statement snapshots and post-settlement adjustment items. Existing statement endpoints are dynamic OPEN read models and cannot yet preserve a settled amount after later eligible changes.
 
 ## Verification Baseline
 
@@ -30,9 +31,9 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count: 26 integration tests passing before the current change.
+Current integration coverage count: 26 integration tests passing.
 
-Current change: price-change runs now report FAILED when any child order fails; payment preview blocks orders whose purchase request has an unresolved positive funding shortfall; purchase confirmation recalculates funding from current item amounts and current account balance before splitting. No balance or ledger mutation is added to price adjustments.
+Current verified change: price-change runs now report FAILED when any child order fails; P02 revaluation refreshes purchase-request funding summaries; purchase confirmation recalculates funding from current item amounts and current account balance before splitting. Payment preview blocks unresolved positive shortfalls and company-term supplier payments whose store receivables are not confirmed paid. Price changes do not mutate balances or ledgers.
 
 ## Completed Areas
 
@@ -260,6 +261,7 @@ Current B06 behavior:
 - Validates selected items are completed, share the same payment direction, and belong to the same paying/receiving subject.
 - Returns payable amount, pending amount, confirmed paid amount, source version, and blocked items.
 - Includes existing RESERVED allocations as pending amounts.
+- Blocks positive unresolved purchase funding shortfalls and, for COMPANY_TERM supplier payable items, requires the related store receivable to be fully confirmed paid.
 
 Current B07 behavior:
 
@@ -333,6 +335,7 @@ Current price history behavior:
 - Price versions persist a per-scope monotonic revision; the highest revision wins when effective times match, and publishing appends history in a transaction.
 - P02 now creates a persisted pending price change run linked to the published version; each currently affected execution order is recorded as a pending run item, and `GET /jobs/{id}` exposes the status and deltas.
 - `POST /jobs/{id}/process` applies pending order price changes in one transaction, records before/after prices and amount deltas, updates order/request totals, and marks the run successful.
+- Revaluation refreshes the affected purchase request's funding summary against current store balance in the same transaction; positive shortfalls therefore block payment preview.
 - The database integration test covers a real affected execution order, updated line totals, and persisted price adjustment source; repeated run processing returns 409.
 - `GET /jobs/{id}` returns each processed order's adjustment ID and before/after sales and supply prices.
 - `GET /jobs/{id}/adjustments` returns the persisted per-order adjustment source rows for later statement and payment reconciliation.
@@ -342,22 +345,9 @@ Current price history behavior:
 
 ## Recommended Next Step
 
-Continue historical price revaluation and adjustment modeling.
+Continue DEV-406: create immutable statement snapshots and signed adjustment items for eligible changes after a statement has been settled. Keep dynamic statement totals only for unsettled statements; never synthesize refunds or mutate balances for negative adjustments without a defined disposal record.
 
-Suggested first version:
-
-- Confirm order/request funding, ledger, and payment-preview paths consume updated totals after an eligible pre-completion price revaluation.
-- Add immutable statement snapshots and post-settlement adjustment balances when a supported historical price-change flow can reach settled orders.
-- Add P01 impact preview and asynchronous P02 revaluation with persisted per-order outcomes and adjustments.
-- Add overpayment disposal flows after payment confirmation can record real overpaid amounts.
-- Connect adjustment sources to payment remaining balances and preserve immutable settled statement snapshots.
-- Update `scripts/check-contract.mjs` and `docs/development-log.md`.
-
-After that, continue with:
-
-1. Negative adjustment and overpayment credit source modeling.
-2. Payment lifecycle edge cases around overpayment handling.
-3. Evidence-file linkage and participant data-scope filtering.
+After that, complete B12 overpayment credit handling once payment confirmation can persist real unallocated received amounts, then move to M5 reporting and notifications.
 
 ## Where To Look
 

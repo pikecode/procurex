@@ -1,7 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
+import { evaluateStoredValueFunding } from '../../../../packages/domain/src/funding.js';
 import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
-import { SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import { PaymentStatus, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type PriceQuote = {
@@ -245,9 +246,19 @@ export class PricingService {
           where: { id: order.id },
           data: { salesGoodsAmount: { increment: salesDelta }, supplyGoodsAmount: { increment: supplyDelta }, version: { increment: 1 } },
         });
-        await tx.purchaseRequest.update({
+        const request = await tx.purchaseRequest.update({
           where: { id: order.requestId },
           data: { salesGoodsAmount: { increment: salesDelta }, supplyGoodsAmount: { increment: supplyDelta } },
+        });
+        const account = await tx.storeAccount.findUnique({ where: { storeId: request.storeId } });
+        const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), request.salesGoodsAmount);
+        await tx.purchaseRequest.update({
+          where: { id: request.id },
+          data: {
+            paymentStatus: funding.canConfirm ? PaymentStatus.PAID : PaymentStatus.UNPAID,
+            paidAmount: funding.paidAmount.toFixed(2),
+            shortfallAmount: funding.shortfallAmount.toFixed(2),
+          },
         });
         await tx.priceChangeAdjustment.create({
           data: {

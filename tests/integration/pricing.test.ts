@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { DeliveryMode, FulfillmentStatus, PurchaseRequestStatus, SettlementMode, SupplierOrderStatus } from '../../packages/backend/generated/prisma/enums.js';
 import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
 import { PricingService } from '../../apps/api/src/pricing/pricing.service.js';
+import { PaymentRecordsService } from '../../apps/api/src/payment-records/payment-records.service.js';
 import { SupplierStatementsService } from '../../apps/api/src/supplier-statements/supplier-statements.service.js';
 
 const connectionString =
@@ -79,6 +80,7 @@ test('pricing service returns latest version effective at business time', async 
         requestId: request.id,
         storeId: store.id,
         supplierId: supplier.id,
+        settlementMode: SettlementMode.COMPANY_TERM,
         status: SupplierOrderStatus.PUSHED,
         fulfillmentStatus: FulfillmentStatus.PARTIAL_SHIPPED,
         firstShippedAt: new Date('2026-09-15T00:00:00.000Z'),
@@ -133,6 +135,20 @@ test('pricing service returns latest version effective at business time', async 
     assert.equal(updatedOrder?.items[0]?.supplyLineAmount.toString(), '90');
     assert.equal((await prisma.priceChangeAdjustment.count({ where: { runId: latest.runId } })), 1);
     await prisma.supplierOrder.update({ where: { id: order.id }, data: { status: SupplierOrderStatus.COMPLETED } });
+    const repricedRequest = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id: request.id } });
+    assert.equal(repricedRequest.shortfallAmount.toFixed(2), '120.00');
+    assert.equal(repricedRequest.paymentStatus, 'UNPAID');
+    const storeSettlementItemId = Buffer.from(JSON.stringify({ kind: 'STORE_RECEIVABLE', supplierOrderId: order.id })).toString('base64url');
+    await assert.rejects(
+      new PaymentRecordsService({ client: prisma } as never).preview([storeSettlementItemId]),
+      (error: unknown) => error instanceof NotFoundException && JSON.stringify(error.getResponse()).includes('UNRESOLVED_FUNDING_SHORTFALL'),
+    );
+    await prisma.purchaseRequest.update({ where: { id: request.id }, data: { shortfallAmount: '0.00' } });
+    const supplierSettlementItemId = Buffer.from(JSON.stringify({ kind: 'SUPPLIER_PAYABLE', supplierOrderId: order.id })).toString('base64url');
+    await assert.rejects(
+      new PaymentRecordsService({ client: prisma } as never).preview([supplierSettlementItemId]),
+      (error: unknown) => error instanceof NotFoundException && JSON.stringify(error.getResponse()).includes('STORE_RECEIVABLE_UNSETTLED'),
+    );
     const statement = (await new SupplierStatementsService({ client: prisma } as never).list({ supplierId: supplier.id }))[0];
     assert.ok(statement);
     const statementDetail = await new SupplierStatementsService({ client: prisma } as never).get(statement.id);
