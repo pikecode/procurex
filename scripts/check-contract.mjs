@@ -13,8 +13,17 @@ function assertIncludes(source, expected, label) {
   }
 }
 
-const [apiDesign, packageJson, apiMain, healthController, prismaSchema, validation, authController, usersController] =
-  await Promise.all([
+const [
+  apiDesign,
+  packageJson,
+  apiMain,
+  healthController,
+  prismaSchema,
+  validation,
+  authController,
+  usersController,
+  storesController,
+] = await Promise.all([
   readProjectFile('docs/api-design.md'),
   readProjectFile('package.json'),
   readProjectFile('apps/api/main.ts'),
@@ -23,6 +32,7 @@ const [apiDesign, packageJson, apiMain, healthController, prismaSchema, validati
   readProjectFile('packages/domain/src/validation.ts'),
     readProjectFile('apps/api/src/auth/auth.controller.ts'),
     readProjectFile('apps/api/src/users/users.controller.ts'),
+    readProjectFile('apps/api/src/stores/stores.controller.ts'),
   ]);
 
 const pkg = JSON.parse(packageJson);
@@ -46,6 +56,8 @@ assertIncludes(authController, "@Get('me')", 'auth controller');
 assertIncludes(apiDesign, '`GET/POST /users`、`PATCH /users/{id}`', 'api design');
 assertIncludes(usersController, "@Controller('users')", 'users controller');
 assertIncludes(usersController, "@RequireRoles('ADMIN')", 'users controller');
+assertIncludes(apiDesign, '`GET/POST /stores`、`GET/PATCH /stores/{id}`', 'api design');
+assertIncludes(storesController, "@Controller('stores')", 'stores controller');
 
 assertIncludes(apiDesign, '`GET /health/live`、`GET /health/ready`', 'api design');
 assertIncludes(healthController, "@Get('live')", 'health controller');

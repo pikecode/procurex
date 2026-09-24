@@ -4,10 +4,11 @@ import { CommandsModule } from './commands/commands.module.js';
 import { TraceIdMiddleware } from './common/trace-id.middleware.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health.controller.js';
+import { StoresModule } from './stores/stores.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
-  imports: [DatabaseModule, CommandsModule, AuthModule, UsersModule],
+  imports: [DatabaseModule, CommandsModule, AuthModule, UsersModule, StoresModule],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {
