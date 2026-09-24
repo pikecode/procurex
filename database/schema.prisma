@@ -209,6 +209,7 @@ model Supplier {
   templateSuppliers        TemplateItemSupplier[]
   templateSupplierSettings TemplateSupplierSetting[]
   priceScopes              PriceScope[]
+  requestItems             RequestItem[]
   supplierOrders           SupplierOrder[]
 }
 
@@ -393,6 +394,8 @@ model RequestItem {
   id                String          @id @default(uuid()) @db.Uuid
   requestId         String          @db.Uuid
   productId         String          @db.Uuid
+  supplierId        String          @db.Uuid
+  priceVersionId    String?         @db.Uuid
   quantity          Decimal         @db.Decimal(20, 6)
   salesUnitPrice    Decimal         @db.Decimal(20, 6)
   supplyUnitPrice   Decimal         @db.Decimal(20, 6)
@@ -401,9 +404,11 @@ model RequestItem {
   createdAt         DateTime        @default(now()) @db.Timestamptz(6)
   request           PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   product           Product         @relation(fields: [productId], references: [id])
+  supplier          Supplier        @relation(fields: [supplierId], references: [id])
 
   @@index([requestId])
   @@index([productId])
+  @@index([supplierId])
 }
 
 model SupplierOrder {

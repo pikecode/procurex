@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -12,12 +12,25 @@ import {
   type PurchaseRequestPreview,
   type PreviewItemInput,
 } from './purchase-request-preview.service.js';
-import { PurchaseRequestsService, type PurchaseRequestView } from './purchase-requests.service.js';
-import { validateDecimalString, validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
+import {
+  PurchaseRequestsService,
+  type ConfirmPurchaseRequestResult,
+  type PurchaseRequestView,
+} from './purchase-requests.service.js';
+import {
+  validateDecimalString,
+  validateExpectedVersion,
+  validateUuid,
+  type ValidationIssue,
+} from '../../../../packages/domain/src/validation.js';
 
 type PreviewBody = {
   storeId?: unknown;
   items?: unknown;
+};
+
+type ConfirmBody = {
+  expectedVersion?: unknown;
 };
 
 @Controller('purchase-requests')
@@ -65,6 +78,38 @@ export class PurchaseRequestsController {
 
     return result;
   }
+
+  @Post(':id/confirm')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  async confirm(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Body() body: ConfirmBody,
+  ): Promise<ConfirmPurchaseRequestResult> {
+    const input = parseConfirmBody(id, body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'purchase-request.confirm',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, ...body } as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as ConfirmPurchaseRequestResult;
+    }
+
+    const result = await this.purchaseRequestsService.confirm(input.id, input.expectedVersion);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'PurchaseRequest',
+      resourceId: result.requestId,
+      responseBody: result as never,
+    });
+
+    return result;
+  }
 }
 
 function parsePreviewBody(body: PreviewBody): { storeId: string; items: PreviewItemInput[] } {
@@ -89,6 +134,15 @@ function parsePreviewBody(body: PreviewBody): { storeId: string; items: PreviewI
 
   throwIfInvalid(issues);
   return { storeId: body.storeId as string, items };
+}
+
+function parseConfirmBody(id: string, body: ConfirmBody): { id: string; expectedVersion: number } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+  ];
+  throwIfInvalid(issues);
+  return { id, expectedVersion: body.expectedVersion as number };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
