@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -19,6 +19,7 @@ import {
   type PurchaseRequestDetailView,
   type PurchaseRequestSummaryView,
   type PurchaseRequestView,
+  type ReplacePurchaseRequestItemInput,
   type RejectPurchaseRequestResult,
 } from './purchase-requests.service.js';
 import { PurchaseRequestStatus } from '../../../../packages/backend/generated/prisma/enums.js';
@@ -46,6 +47,12 @@ type ConfirmBody = {
 type RejectBody = {
   expectedVersion?: unknown;
   reason?: unknown;
+};
+
+type PatchItemsBody = {
+  expectedVersion?: unknown;
+  reason?: unknown;
+  items?: unknown;
 };
 
 @Controller('purchase-requests')
@@ -105,6 +112,13 @@ export class PurchaseRequestsController {
     });
 
     return result;
+  }
+
+  @Patch(':id/items')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  replaceItems(@Param('id') id: string, @Body() body: PatchItemsBody): Promise<PurchaseRequestDetailView> {
+    const input = parsePatchItemsBody(id, body);
+    return this.purchaseRequestsService.replaceItems(input.id, input.expectedVersion, input.items);
   }
 
   @Post(':id/confirm')
@@ -225,21 +239,60 @@ function parseConfirmBody(id: string, body: ConfirmBody): { id: string; expected
   return { id, expectedVersion: body.expectedVersion as number };
 }
 
+function parsePatchItemsBody(
+  id: string,
+  body: PatchItemsBody,
+): { id: string; expectedVersion: number; reason: string; items: ReplacePurchaseRequestItemInput[] } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+  ];
+  const reason = requiredReason(body.reason, issues);
+  const items: ReplacePurchaseRequestItemInput[] = [];
+
+  if (!Array.isArray(body.items) || body.items.length === 0) {
+    issues.push({ field: 'items', code: 'INVALID_ITEMS', message: 'items must be a non-empty array' });
+  } else {
+    for (const [index, item] of body.items.entries()) {
+      if (!isRecord(item)) {
+        issues.push({ field: `items.${index}`, code: 'INVALID_ITEM', message: 'item must be an object' });
+        continue;
+      }
+      issues.push(...validateUuid(`items.${index}.productId`, item.productId));
+      issues.push(...validateUuid(`items.${index}.supplierId`, item.supplierId));
+      issues.push(...validateDecimalString(`items.${index}.quantity`, item.quantity, 6));
+      if (typeof item.productId === 'string' && typeof item.supplierId === 'string' && typeof item.quantity === 'string') {
+        items.push({ productId: item.productId, supplierId: item.supplierId, quantity: item.quantity });
+      }
+    }
+  }
+
+  throwIfInvalid(issues);
+  return { id, expectedVersion: body.expectedVersion as number, reason: reason!, items };
+}
+
 function parseRejectBody(id: string, body: RejectBody): { id: string; expectedVersion: number; reason: string } {
   const issues: ValidationIssue[] = [
     ...validateUuid('id', id),
     ...validateExpectedVersion('expectedVersion', body.expectedVersion),
   ];
-  if (typeof body.reason !== 'string' || body.reason.trim().length === 0 || body.reason.length > 300) {
+  const reason = requiredReason(body.reason, issues);
+
+  throwIfInvalid(issues);
+  return { id, expectedVersion: body.expectedVersion as number, reason: reason! };
+}
+
+function requiredReason(value: unknown, issues: ValidationIssue[]): string | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > 300) {
     issues.push({
       field: 'reason',
       code: 'INVALID_REASON',
       message: 'reason must be a non-empty string with 300 characters or fewer',
     });
+    return undefined;
   }
 
-  throwIfInvalid(issues);
-  return { id, expectedVersion: body.expectedVersion as number, reason: (body.reason as string).trim() };
+  return value.trim();
 }
 
 function optionalPurchaseRequestStatus(value: unknown, issues: ValidationIssue[]): PurchaseRequestStatus | undefined {

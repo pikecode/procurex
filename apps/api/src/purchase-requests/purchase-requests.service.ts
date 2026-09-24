@@ -1,6 +1,8 @@
 import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
+import { evaluateStoredValueFunding } from '../../../../packages/domain/src/funding.js';
+import { lineAmount, toMoney, toQuantity } from '../../../../packages/domain/src/money.js';
 import {
   FulfillmentStatus,
   PaymentStatus,
@@ -9,6 +11,7 @@ import {
 } from '../../../../packages/backend/generated/prisma/enums.js';
 import type { PurchaseRequest, RequestItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { PricingService } from '../pricing/pricing.service.js';
 import {
   PurchaseRequestPreviewService,
   type PurchaseRequestPreview,
@@ -76,6 +79,12 @@ export type ListPurchaseRequestsInput = {
   status?: PurchaseRequestStatus;
 };
 
+export type ReplacePurchaseRequestItemInput = {
+  productId: string;
+  supplierId: string;
+  quantity: string;
+};
+
 export type ConfirmPurchaseRequestResult = {
   requestId: string;
   status: PurchaseRequestStatus;
@@ -94,6 +103,7 @@ export class PurchaseRequestsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly previewService: PurchaseRequestPreviewService,
+    private readonly pricingService: PricingService,
   ) {}
 
   async list(input: ListPurchaseRequestsInput): Promise<PurchaseRequestSummaryView[]> {
@@ -171,6 +181,146 @@ export class PurchaseRequestsService {
       version: request.version,
       submittedAt: request.submittedAt.toISOString(),
     };
+  }
+
+  async replaceItems(
+    id: string,
+    expectedVersion: number,
+    items: ReplacePurchaseRequestItemInput[],
+  ): Promise<PurchaseRequestDetailView> {
+    const request = await this.database.client.purchaseRequest.findUnique({
+      where: { id },
+      include: { supplierOrders: true },
+    });
+    if (!request) {
+      throw new NotFoundException({
+        code: 'PURCHASE_REQUEST_NOT_FOUND',
+        message: 'Purchase request was not found',
+      });
+    }
+
+    if (request.version !== expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Purchase request version has changed',
+        details: { expectedVersion, currentVersion: request.version },
+      });
+    }
+
+    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT || request.supplierOrders.length > 0) {
+      throw new ConflictException({
+        code: 'PURCHASE_REQUEST_ITEMS_NOT_EDITABLE',
+        message: 'Purchase request items cannot be edited in its current status',
+        details: { status: request.status },
+      });
+    }
+
+    const duplicateProductId = findDuplicate(items.map((item) => item.productId));
+    if (duplicateProductId) {
+      throw new ConflictException({
+        code: 'DUPLICATE_PURCHASE_REQUEST_PRODUCT',
+        message: 'Purchase request items cannot contain duplicate products',
+        details: { productId: duplicateProductId },
+      });
+    }
+
+    const templateItems = await this.database.client.templateItem.findMany({
+      where: {
+        templateId: request.templateId,
+        isEnabled: true,
+        product: { isActive: true },
+      },
+      include: { suppliers: true },
+    });
+    const allowedSuppliersByProduct = new Map(
+      templateItems.map((item) => [item.productId, new Set(item.suppliers.map((supplier) => supplier.supplierId))]),
+    );
+
+    const pricedItems = await Promise.all(
+      items.map(async (item) => {
+        const allowedSuppliers = allowedSuppliersByProduct.get(item.productId);
+        if (!allowedSuppliers) {
+          throw new ConflictException({
+            code: 'PRODUCT_NOT_IN_TEMPLATE',
+            message: 'Product is not available in the purchase request template',
+            details: { productId: item.productId },
+          });
+        }
+        if (!allowedSuppliers.has(item.supplierId)) {
+          throw new ConflictException({
+            code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT',
+            message: 'Supplier is not allowed for this template product',
+            details: { productId: item.productId, supplierId: item.supplierId },
+          });
+        }
+
+        const quantity = toQuantity(item.quantity);
+        if (quantity.lte(0)) {
+          throw new ConflictException({
+            code: 'INVALID_ITEM_QUANTITY',
+            message: 'Purchase request item quantity must be greater than zero',
+            details: { productId: item.productId },
+          });
+        }
+
+        const price = await this.pricingService.getEffectivePrice(item.productId, item.supplierId, new Date());
+        return {
+          productId: item.productId,
+          supplierId: item.supplierId,
+          priceVersionId: price.versionId,
+          quantity: quantity.toString(),
+          salesUnitPrice: new Decimal(price.salesPrice).toString(),
+          supplyUnitPrice: new Decimal(price.supplyPrice).toString(),
+          salesLineAmount: lineAmount(quantity, price.salesPrice).toFixed(2),
+          supplyLineAmount: lineAmount(quantity, price.supplyPrice).toFixed(2),
+        };
+      }),
+    );
+
+    const salesGoodsAmount = pricedItems.reduce((sum, item) => sum.plus(item.salesLineAmount), toMoney(0));
+    const supplyGoodsAmount = pricedItems.reduce((sum, item) => sum.plus(item.supplyLineAmount), toMoney(0));
+    const account = await this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } });
+    const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), salesGoodsAmount);
+
+    const updated = await this.database.client.$transaction(async (tx) => {
+      await tx.requestItem.deleteMany({ where: { requestId: request.id } });
+      await tx.requestItem.createMany({
+        data: pricedItems.map((item) => ({
+          requestId: request.id,
+          productId: item.productId,
+          supplierId: item.supplierId,
+          priceVersionId: item.priceVersionId,
+          quantity: item.quantity,
+          salesUnitPrice: item.salesUnitPrice,
+          supplyUnitPrice: item.supplyUnitPrice,
+          salesLineAmount: item.salesLineAmount,
+          supplyLineAmount: item.supplyLineAmount,
+        })),
+      });
+
+      await tx.purchaseRequest.update({
+        where: { id: request.id },
+        data: {
+          status: funding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS,
+          paymentStatus: funding.canConfirm ? PaymentStatus.PAID : PaymentStatus.UNPAID,
+          salesGoodsAmount: salesGoodsAmount.toFixed(2),
+          supplyGoodsAmount: supplyGoodsAmount.toFixed(2),
+          paidAmount: funding.paidAmount.toFixed(2),
+          shortfallAmount: funding.shortfallAmount.toFixed(2),
+          version: { increment: 1 },
+        },
+      });
+
+      return tx.purchaseRequest.findUniqueOrThrow({
+        where: { id: request.id },
+        include: {
+          items: { orderBy: { createdAt: 'asc' } },
+          supplierOrders: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+    });
+
+    return toPurchaseRequestDetailView(updated);
   }
 
   async confirm(id: string, expectedVersion: number): Promise<ConfirmPurchaseRequestResult> {
@@ -379,6 +529,17 @@ function toSupplierOrderSummaryView(order: SupplierOrder): SupplierOrderSummaryV
     pushedAt: order.pushedAt?.toISOString() ?? null,
     version: order.version,
   };
+}
+
+function findDuplicate(values: string[]): string | null {
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) {
+      return value;
+    }
+    seen.add(value);
+  }
+  return null;
 }
 
 function makeRequestNo(): string {

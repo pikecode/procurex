@@ -350,6 +350,208 @@ test('purchase request create persists request once per idempotency key', async 
   }
 });
 
+test('purchase request item patch reprices supplier assignments', async () => {
+  const prisma = createClient();
+  const runId = Date.now();
+  const purchaserUsername = `it_patch_purchaser_${runId}`;
+  const storeCode = `PATCHSTORE${runId}`;
+  const templateCode = `PATCHTPL${runId}`;
+  const categoryCode = `PATCHCAT${runId}`;
+  const unitCode = `PATCHUNIT${runId}`;
+  const sku = `PATCHSKU${runId}`;
+  const supplierCodeA = `PATCHSUPA${runId}`;
+  const supplierCodeB = `PATCHSUPB${runId}`;
+  const { app, baseUrl } = await createTestApp();
+
+  try {
+    const purchaserRole = await prisma.role.upsert({
+      where: { code: 'PURCHASER' },
+      update: {},
+      create: { code: 'PURCHASER', name: 'Purchaser' },
+    });
+    await prisma.user.create({
+      data: {
+        username: purchaserUsername,
+        displayName: 'Integration Patch Purchaser',
+        passwordHash: await hashPassword('correct-password'),
+        roles: { create: [{ roleId: purchaserRole.id }] },
+      },
+    });
+
+    const [store, category, unit, supplierA, supplierB, template] = await Promise.all([
+      prisma.store.create({ data: { code: storeCode, name: 'Patch Store' } }),
+      prisma.category.create({ data: { code: categoryCode, name: 'Patch Category' } }),
+      prisma.unit.create({ data: { code: unitCode, name: 'piece' } }),
+      prisma.supplier.create({
+        data: {
+          code: supplierCodeA,
+          name: 'Patch Supplier A',
+          deliveryMode: DeliveryMode.SELF,
+          defaultSettlementMode: SettlementMode.STORED_VALUE,
+          defaultSettlementCycle: 'MONTHLY',
+        },
+      }),
+      prisma.supplier.create({
+        data: {
+          code: supplierCodeB,
+          name: 'Patch Supplier B',
+          deliveryMode: DeliveryMode.SELF,
+          defaultSettlementMode: SettlementMode.STORED_VALUE,
+          defaultSettlementCycle: 'MONTHLY',
+        },
+      }),
+      prisma.orderTemplate.create({ data: { code: templateCode, name: 'Patch Template' } }),
+    ]);
+    const product = await prisma.product.create({
+      data: {
+        sku,
+        name: 'Patch Product',
+        categoryId: category.id,
+        baseUnitId: unit.id,
+      },
+    });
+    await prisma.storeAccount.create({ data: { storeId: store.id, balance: '1000.00' } });
+    await prisma.templateItem.create({
+      data: {
+        templateId: template.id,
+        productId: product.id,
+        suppliers: {
+          create: [
+            { supplierId: supplierA.id, priority: 1 },
+            { supplierId: supplierB.id, priority: 2 },
+          ],
+        },
+      },
+    });
+    await prisma.storeTemplateBinding.create({ data: { storeId: store.id, templateId: template.id } });
+    const [scopeA, scopeB] = await Promise.all([
+      prisma.priceScope.create({ data: { productId: product.id, supplierId: supplierA.id } }),
+      prisma.priceScope.create({ data: { productId: product.id, supplierId: supplierB.id } }),
+    ]);
+    await prisma.priceVersion.create({
+      data: {
+        scopeId: scopeA.id,
+        salesPrice: '12.000000',
+        supplyPrice: '9.000000',
+        effectiveAt: new Date('2026-09-01T00:00:00.000Z'),
+      },
+    });
+    const priceVersionB = await prisma.priceVersion.create({
+      data: {
+        scopeId: scopeB.id,
+        salesPrice: '20.000000',
+        supplyPrice: '15.000000',
+        effectiveAt: new Date('2026-09-01T00:00:00.000Z'),
+      },
+    });
+
+    const token = await login(baseUrl, purchaserUsername);
+    const createResponse = await fetch(`${baseUrl}/purchase-requests`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'idempotency-key': 'patch-create-request',
+        'x-trace-id': 'trace-patch-create',
+      },
+      body: JSON.stringify({
+        storeId: store.id,
+        items: [{ productId: product.id, quantity: '10.000000' }],
+      }),
+    });
+    assert.equal(createResponse.status, 201);
+    const created = (await createResponse.json()) as {
+      data: { id: string; status: string; version: number; totals: { salesGoodsAmount: string } };
+    };
+    assert.equal(created.data.status, 'PENDING_PROCUREMENT');
+    assert.equal(created.data.totals.salesGoodsAmount, '120.00');
+
+    const patchResponse = await fetch(`${baseUrl}/purchase-requests/${created.data.id}/items`, {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'x-trace-id': 'trace-patch-items',
+      },
+      body: JSON.stringify({
+        expectedVersion: created.data.version,
+        reason: 'Use alternate supplier',
+        items: [{ productId: product.id, supplierId: supplierB.id, quantity: '5.000000' }],
+      }),
+    });
+    assert.equal(patchResponse.status, 200);
+    const patched = (await patchResponse.json()) as {
+      data: {
+        id: string;
+        status: string;
+        paymentStatus: string;
+        salesGoodsAmount: string;
+        supplyGoodsAmount: string;
+        paidAmount: string;
+        shortfallAmount: string;
+        version: number;
+        items: Array<{
+          productId: string;
+          supplierId: string;
+          priceVersionId: string | null;
+          quantity: string;
+          salesUnitPrice: string;
+          supplyUnitPrice: string;
+          salesLineAmount: string;
+          supplyLineAmount: string;
+        }>;
+      };
+    };
+    assert.equal(patched.data.id, created.data.id);
+    assert.equal(patched.data.status, 'PENDING_PROCUREMENT');
+    assert.equal(patched.data.paymentStatus, 'PAID');
+    assert.equal(patched.data.salesGoodsAmount, '100.00');
+    assert.equal(patched.data.supplyGoodsAmount, '75.00');
+    assert.equal(patched.data.paidAmount, '100.00');
+    assert.equal(patched.data.shortfallAmount, '0.00');
+    assert.equal(patched.data.version, 2);
+    assert.equal(patched.data.items.length, 1);
+    assert.equal(patched.data.items[0]?.supplierId, supplierB.id);
+    assert.equal(patched.data.items[0]?.priceVersionId, priceVersionB.id);
+    assert.equal(patched.data.items[0]?.quantity, '5');
+    assert.equal(patched.data.items[0]?.salesUnitPrice, '20');
+    assert.equal(patched.data.items[0]?.supplyUnitPrice, '15');
+    assert.equal(patched.data.items[0]?.salesLineAmount, '100.00');
+    assert.equal(patched.data.items[0]?.supplyLineAmount, '75.00');
+
+    const request = await prisma.purchaseRequest.findUniqueOrThrow({
+      where: { id: created.data.id },
+      include: { items: true },
+    });
+    assert.equal(request.version, 2);
+    assert.equal(request.salesGoodsAmount.toString(), '100');
+    assert.equal(request.items.length, 1);
+    assert.equal(request.items[0]?.supplierId, supplierB.id);
+    assert.equal(request.items[0]?.priceVersionId, priceVersionB.id);
+  } finally {
+    await app.close();
+    await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
+    await prisma.requestItem.deleteMany({ where: { request: { store: { code: storeCode } } } });
+    await prisma.purchaseRequest.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: { in: [supplierCodeA, supplierCodeB] } } } } });
+    await prisma.priceScope.deleteMany({ where: { supplier: { code: { in: [supplierCodeA, supplierCodeB] } } } });
+    await prisma.storeAccount.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.storeTemplateBinding.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
+    await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
+    await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
+    await prisma.product.deleteMany({ where: { sku } });
+    await prisma.supplier.deleteMany({ where: { code: { in: [supplierCodeA, supplierCodeB] } } });
+    await prisma.store.deleteMany({ where: { code: storeCode } });
+    await prisma.category.deleteMany({ where: { code: categoryCode } });
+    await prisma.unit.deleteMany({ where: { code: unitCode } });
+    await prisma.userSession.deleteMany({ where: { user: { username: purchaserUsername } } });
+    await prisma.userRole.deleteMany({ where: { user: { username: purchaserUsername } } });
+    await prisma.user.deleteMany({ where: { username: purchaserUsername } });
+    await prisma.$disconnect();
+  }
+});
+
 test('purchase request confirm splits supplier orders once per idempotency key', async () => {
   const prisma = createClient();
   const runId = Date.now();
