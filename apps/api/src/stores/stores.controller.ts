@@ -48,6 +48,12 @@ type CreateRechargeBody = {
   remark?: unknown;
 };
 
+type UpdateCreditLimitBody = {
+  expectedVersion?: unknown;
+  limit?: unknown;
+  reason?: unknown;
+};
+
 @Controller('stores')
 @UseGuards(AuthGuard, RolesGuard)
 export class StoresController {
@@ -108,6 +114,38 @@ export class StoresController {
       commandId: command.command.id,
       resourceType: 'RechargeDocument',
       resourceId: result.id,
+      responseBody: result as never,
+    });
+
+    return result;
+  }
+
+  @Patch(':id/credit-limit')
+  @RequireRoles('ADMIN', 'HQ_FINANCE')
+  async updateCreditLimit(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Body() body: UpdateCreditLimitBody,
+  ): Promise<StoreAccountView> {
+    const input = parseUpdateCreditLimitBody(id, body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'store.credit-limit.update',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, ...body } as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as StoreAccountView;
+    }
+
+    const result = await this.storesService.updateCreditLimit(input.id, input.creditLimit);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'StoreAccount',
+      resourceId: result.id ?? input.id,
       responseBody: result as never,
     });
 
@@ -198,6 +236,28 @@ function parseCreateRechargeBody(
       businessDate: businessDate!,
       collectionAccountId: collectionAccountId!,
       remark,
+    },
+  };
+}
+
+function parseUpdateCreditLimitBody(
+  id: string,
+  body: UpdateCreditLimitBody,
+): { id: string; creditLimit: { expectedVersion: number; limit: string; reason: string } } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+    ...validateDecimalString('limit', body.limit, 2),
+  ];
+  const reason = requiredTrimmedString('reason', body.reason, issues);
+
+  throwIfInvalid(issues);
+  return {
+    id,
+    creditLimit: {
+      expectedVersion: body.expectedVersion as number,
+      limit: body.limit as string,
+      reason: reason!,
     },
   };
 }

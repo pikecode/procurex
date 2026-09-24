@@ -55,6 +55,12 @@ export type CreateRechargeInput = {
   remark?: string;
 };
 
+export type UpdateCreditLimitInput = {
+  expectedVersion: number;
+  limit: string;
+  reason: string;
+};
+
 export type RechargeDocumentView = {
   id: string;
   rechargeNo: string;
@@ -221,6 +227,44 @@ export class StoresService {
     });
 
     return toRechargeDocumentView(result.recharge, result.account);
+  }
+
+  async updateCreditLimit(storeId: string, input: UpdateCreditLimitInput): Promise<StoreAccountView> {
+    await this.assertStoreExists(storeId);
+    const account = await this.database.client.storeAccount.findUnique({ where: { storeId } });
+    if (!account) {
+      throw new NotFoundException({
+        code: 'STORE_ACCOUNT_NOT_FOUND',
+        message: 'Store account was not found',
+      });
+    }
+
+    if (account.version !== input.expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Store account version has changed',
+        details: { expectedVersion: input.expectedVersion, currentVersion: account.version },
+      });
+    }
+
+    const limit = new Decimal(input.limit).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    if (limit.lt(account.creditUsed)) {
+      throw new ConflictException({
+        code: 'CREDIT_LIMIT_BELOW_USED',
+        message: 'Credit limit cannot be lower than currently used credit',
+        details: { creditUsed: account.creditUsed.toFixed(2), limit: limit.toFixed(2) },
+      });
+    }
+
+    const updated = await this.database.client.storeAccount.update({
+      where: { id: account.id },
+      data: {
+        creditLimit: limit.toFixed(2),
+        version: { increment: 1 },
+      },
+    });
+
+    return toStoreAccountView(storeId, updated);
   }
 
   private async assertStoreExists(storeId: string): Promise<void> {

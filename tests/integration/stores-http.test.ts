@@ -182,6 +182,38 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(accountBody.data.creditAvailable, '0.00');
     assert.equal(accountBody.data.version, 1);
 
+    const updateCreditLimit = async () => {
+      const response = await fetch(`${baseUrl}/stores/${createdBody.data.id}/credit-limit`, {
+        method: 'PATCH',
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'update-store-credit-limit-once',
+          'x-trace-id': 'trace-store-credit-limit',
+        },
+        body: JSON.stringify({
+          expectedVersion: accountBody.data.version,
+          limit: '1000.00',
+          reason: 'Opening credit limit',
+        }),
+      });
+      assert.equal(response.status, 200);
+      return (await response.json()) as {
+        data: { id: string; balance: string; creditLimit: string; creditUsed: string; creditAvailable: string; version: number };
+        traceId: string;
+      };
+    };
+    const creditLimit = await updateCreditLimit();
+    const creditLimitReplay = await updateCreditLimit();
+    assert.deepEqual(creditLimitReplay.data, creditLimit.data);
+    assert.equal(creditLimit.traceId, 'trace-store-credit-limit');
+    assert.equal(creditLimit.data.id, recharge.data.account.id);
+    assert.equal(creditLimit.data.balance, '320.50');
+    assert.equal(creditLimit.data.creditLimit, '1000.00');
+    assert.equal(creditLimit.data.creditUsed, '0.00');
+    assert.equal(creditLimit.data.creditAvailable, '1000.00');
+    assert.equal(creditLimit.data.version, 2);
+
     const ledgersResponse = await fetch(
       `${baseUrl}/stores/${createdBody.data.id}/ledgers?occurredFrom=2026-09-24T00:00:00.000Z&occurredTo=2026-09-25T00:00:00.000Z`,
       {

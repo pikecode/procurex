@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: A02 store recharge creation.
+Latest completed milestone: A03 store credit limit update.
 
 Latest implementation commit:
 
 ```text
-Add store recharge creation
+Add store credit limit update
 ```
 
 The working tree was clean after this commit.
@@ -139,6 +139,7 @@ Implemented interfaces:
 
 - A01 `GET /stores/{id}/account`, `GET /stores/{id}/ledgers`
 - A02 `POST /stores/{id}/recharges`
+- A03 `PATCH /stores/{id}/credit-limit`
 
 Current A01 behavior:
 
@@ -154,14 +155,20 @@ Current A02 behavior:
 - Writes a CREDIT account ledger with source type RECHARGE.
 - Uses Idempotency-Key through command records.
 
+Current A03 behavior:
+
+- Updates store account credit limit with account-level version checking.
+- Rejects limits below currently used credit.
+- Uses Idempotency-Key through command records.
+
 ## Recommended Next Step
 
-Implement A03 credit limit updates or tighten fulfillment completion after all discrepancies and gaps are closed.
+Tighten fulfillment completion after all discrepancies and gaps are closed, or start A04/A05 clearing previews.
 
 Suggested first version:
 
 - If continuing fulfillment work, tighten completion status after all discrepancies and gaps are closed.
-- If continuing finance work, add A03 credit limit updates.
+- If continuing finance work, add A04/A05 clearing previews and clearing documents.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 

@@ -84,6 +84,8 @@ assertIncludes(storesController, "@Get(':id/ledgers')", 'stores controller');
 assertIncludes(apiDesign, '`POST /stores/{id}/recharges`', 'api design');
 assertIncludes(storesController, "@Post(':id/recharges')", 'stores controller');
 assertIncludes(prismaSchema, 'model RechargeDocument', 'prisma schema');
+assertIncludes(apiDesign, '`PATCH /stores/{id}/credit-limit`', 'api design');
+assertIncludes(storesController, "@Patch(':id/credit-limit')", 'stores controller');
 assertIncludes(apiDesign, '`GET/POST /suppliers`、`GET/PATCH /suppliers/{id}`', 'api design');
 assertIncludes(suppliersController, "@Controller('suppliers')", 'suppliers controller');
 assertIncludes(apiDesign, '`GET/PUT /suppliers/{id}/products`', 'api design');
