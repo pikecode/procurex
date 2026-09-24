@@ -432,6 +432,7 @@ model PriceVersion {
   salesPrice  Decimal    @db.Decimal(20, 6)
   supplyPrice Decimal    @db.Decimal(20, 6)
   effectiveAt DateTime   @db.Timestamptz(6)
+  reason      String     @default("") @db.VarChar(500)
   createdAt   DateTime   @default(now()) @db.Timestamptz(6)
   scope       PriceScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
 

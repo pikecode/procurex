@@ -6,15 +6,15 @@ Last updated: 2026-09-24
 
 The backend is currently in M4 settlement/read-model development.
 
-Latest completed milestone: supplier order settlement configuration snapshots.
+Latest completed milestone: P01 price impact preview and price change reason persistence.
 
 Latest committed implementation:
 
 ```text
-38fe2ae Add direct settlement statement read model
+7f2d78a Add price impact preview and change reason
 ```
 
-Settlement snapshot changes are implemented and verified in the current working tree; they have not been committed yet.
+The working tree was verified for this commit.
 
 ## Verification Baseline
 
@@ -319,14 +319,20 @@ Current settlement snapshot behavior:
 - Purchase confirmation and newly created reallocation orders snapshot the template override when present, otherwise the supplier defaults.
 - Existing target orders retain their original snapshot when more items are reallocated into them.
 
+Current price history behavior:
+
+- Price versions persist the reason for each change and return it from publish and version history queries.
+- P01 previews the uncompleted orders in the price version's effective interval and returns estimated sales and supply deltas; completed orders are excluded.
+- The current P02 endpoint still publishes one product/supplier version synchronously; asynchronous order revaluation and adjustment generation remain future work.
+
 ## Recommended Next Step
 
-Continue historical price persistence and adjustment modeling.
+Continue historical price revaluation and adjustment modeling.
 
 Suggested first version:
 
 - Add persisted adjustment source modeling for historical price changes and post-settlement revisions.
-- Add historical price adjustment jobs and persisted source revisions.
+- Add P01 impact preview and asynchronous P02 revaluation with persisted per-order outcomes and adjustments.
 - Add overpayment disposal flows after payment confirmation can record real overpaid amounts.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.

@@ -3,7 +3,7 @@ import { AuthGuard } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
-import { PricingService, type PriceQuote } from './pricing.service.js';
+import { PricingService, type PriceImpactPreview, type PriceQuote } from './pricing.service.js';
 import {
   validateDecimalString,
   validateUuid,
@@ -16,6 +16,7 @@ type PriceChangeBody = {
   salesPrice?: unknown;
   supplyPrice?: unknown;
   effectiveAt?: unknown;
+  reason?: unknown;
 };
 
 @Controller()
@@ -26,7 +27,14 @@ export class PricingController {
 
   @Post('price-changes')
   publishPrice(@Body() body: PriceChangeBody): Promise<PriceQuote> {
-    return this.pricingService.publishPrice(parsePriceChangeBody(body));
+    const input = parsePriceChangeBody(body);
+    return this.pricingService.publishPrice({ ...input, reason: input.reason! });
+  }
+
+  @Post('prices/impact-preview')
+  previewImpact(@Body() body: PriceChangeBody): Promise<PriceImpactPreview> {
+    const { reason: _reason, ...input } = parsePriceChangeBody(body, false);
+    return this.pricingService.previewImpact(input);
   }
 
   @Get('price-scopes/:id/versions')
@@ -36,12 +44,13 @@ export class PricingController {
   }
 }
 
-function parsePriceChangeBody(body: PriceChangeBody): {
+function parsePriceChangeBody(body: PriceChangeBody, requireReason = true): {
   productId: string;
   supplierId: string;
   salesPrice: string;
   supplyPrice: string;
   effectiveAt: Date;
+  reason?: string;
 } {
   const issues: ValidationIssue[] = [
     ...validateUuid('productId', body.productId),
@@ -50,6 +59,7 @@ function parsePriceChangeBody(body: PriceChangeBody): {
     ...validateDecimalString('supplyPrice', body.supplyPrice, 6),
   ];
   const effectiveAt = parseEffectiveAt(body.effectiveAt, issues);
+  const reason = requireReason ? requiredReason(body.reason, issues) : undefined;
 
   throwIfInvalid(issues);
 
@@ -59,7 +69,14 @@ function parsePriceChangeBody(body: PriceChangeBody): {
     salesPrice: body.salesPrice as string,
     supplyPrice: body.supplyPrice as string,
     effectiveAt: effectiveAt!,
+    reason,
   };
+}
+
+function requiredReason(value: unknown, issues: ValidationIssue[]): string | undefined {
+  if (typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 500) return value.trim();
+  issues.push({ field: 'reason', code: 'INVALID_REASON', message: 'reason must contain 1 to 500 characters' });
+  return undefined;
 }
 
 function parseEffectiveAt(value: unknown, issues: ValidationIssue[]): Date | undefined {

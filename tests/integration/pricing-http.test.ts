@@ -105,15 +105,17 @@ test('pricing HTTP endpoint publishes prices and lists versions', async () => {
           salesPrice,
           supplyPrice,
           effectiveAt,
+          reason: 'Supplier price update',
         }),
       });
       assert.equal(response.status, 201);
-      return (await response.json()) as { data: { scopeId: string; salesPrice: string; supplyPrice: string }; traceId: string };
+      return (await response.json()) as { data: { scopeId: string; salesPrice: string; supplyPrice: string; reason: string }; traceId: string };
     };
 
     const first = await publish('10.000000', '8.000000', '2026-09-01T00:00:00.000Z');
     assert.equal(first.data.salesPrice, '10');
     assert.equal(first.data.supplyPrice, '8');
+    assert.equal(first.data.reason, 'Supplier price update');
     const second = await publish('12.000000', '9.000000', '2026-09-10T00:00:00.000Z');
     assert.equal(second.data.scopeId, first.data.scopeId);
 
@@ -124,13 +126,13 @@ test('pricing HTTP endpoint publishes prices and lists versions', async () => {
       },
     });
     assert.equal(versions.status, 200);
-    const versionsBody = (await versions.json()) as { data: Array<{ salesPrice: string; supplyPrice: string }>; traceId: string };
+    const versionsBody = (await versions.json()) as { data: Array<{ salesPrice: string; supplyPrice: string; reason: string }>; traceId: string };
     assert.equal(versionsBody.traceId, 'trace-price-versions');
     assert.deepEqual(
-      versionsBody.data.map((version) => [version.salesPrice, version.supplyPrice]),
+      versionsBody.data.map((version) => [version.salesPrice, version.supplyPrice, version.reason]),
       [
-        ['12', '9'],
-        ['10', '8'],
+        ['12', '9', 'Supplier price update'],
+        ['10', '8', 'Supplier price update'],
       ],
     );
   } finally {

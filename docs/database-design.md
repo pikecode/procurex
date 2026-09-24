@@ -96,7 +96,7 @@ erDiagram
 | `template_item_suppliers` | `template_item_id ID`、`supplier_product_id ID`、`priority int`、`removed_at T?` | 同条目供应商唯一；有效优先级唯一；关联商品必须一致 |
 | `template_supplier_settings` | `template_id ID`、`supplier_id ID`、`settlement_override enum?` | template+supplier 唯一；空值继承供应商默认 |
 | `price_scopes` | `kind SUPPLY/SALE`、`product_id ID`、`supplier_id ID`、`template_id ID?`、`revision int` | SUPPLY 模板为空，商品+供应商唯一；SALE 模板非空，三者唯一 |
-| `price_versions` | `scope_id ID`、`effective_at T`、`revision int`、`unit_price Q`、`reason text`、`created_by ID` | scope+revision 唯一；生效时间相同时用最新修订；价格记录追加而非覆盖 |
+| `price_versions` | `scope_id ID`、`effective_at T`、`revision int`、销售/供货单价、`reason text`、`created_by ID` | scope+revision 唯一；生效时间相同时用最新修订；价格记录追加而非覆盖，发布原因随版本持久化 |
 | `price_change_runs` | `document_id ID`、`job_id ID`、`status`、`impact_summary jsonb` | 关联价格发布和重算结果；每次发布记录实际影响 |
 | `price_change_run_versions` | `run_id ID`、`price_version_id ID` | 一次直接账期同价发布可关联两个价格范围版本 |
 

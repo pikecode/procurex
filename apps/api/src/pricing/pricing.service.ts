@@ -1,4 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Decimal } from 'decimal.js';
+import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
+import { SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type PriceQuote = {
@@ -9,6 +12,7 @@ export type PriceQuote = {
   salesPrice: string;
   supplyPrice: string;
   effectiveAt: string;
+  reason: string;
 };
 
 export type PublishPriceInput = {
@@ -17,11 +21,69 @@ export type PublishPriceInput = {
   salesPrice: string;
   supplyPrice: string;
   effectiveAt: Date;
+  reason: string;
+};
+
+export type PriceImpactPreviewInput = Omit<PublishPriceInput, 'reason'>;
+
+export type PriceImpactPreview = {
+  scopeId: string;
+  effectiveAt: string;
+  affectedOrderCount: number;
+  salesDelta: string;
+  supplyDelta: string;
+  orders: Array<{ supplierOrderId: string; supplierOrderNo: string; salesDelta: string; supplyDelta: string }>;
 };
 
 @Injectable()
 export class PricingService {
   constructor(private readonly database: DatabaseService) {}
+
+  async previewImpact(input: PriceImpactPreviewInput): Promise<PriceImpactPreview> {
+    const scope = await this.database.client.priceScope.findUnique({
+      where: { productId_supplierId: { productId: input.productId, supplierId: input.supplierId } },
+      include: { versions: { orderBy: [{ effectiveAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }] } },
+    });
+    if (!scope) {
+      throw new NotFoundException({ code: 'PRICE_SCOPE_NOT_FOUND', message: 'Price scope was not found' });
+    }
+
+    if (scope.versions.some((version) => version.effectiveAt.getTime() === input.effectiveAt.getTime())) {
+      throw new ConflictException({ code: 'PRICE_VERSION_EXISTS', message: 'A price version already exists at this effective time' });
+    }
+    const nextVersion = scope.versions.find((version) => version.effectiveAt > input.effectiveAt);
+    const orders = await this.database.client.supplierOrder.findMany({
+      where: {
+        supplierId: input.supplierId,
+        status: { notIn: [SupplierOrderStatus.COMPLETED, SupplierOrderStatus.CANCELED, SupplierOrderStatus.REJECTED] },
+        items: { some: { productId: input.productId } },
+      },
+      include: {
+        request: { select: { submittedAt: true } },
+        items: { where: { productId: input.productId } },
+      },
+    });
+    const impacted = orders.flatMap((order) => {
+      const baseline = order.firstShippedAt ?? order.request.submittedAt;
+      if (baseline < input.effectiveAt || (nextVersion && baseline >= nextVersion.effectiveAt)) return [];
+      const item = order.items[0];
+      if (!item) return [];
+      return [{
+        supplierOrderId: order.id,
+        supplierOrderNo: order.supplierOrderNo,
+        salesDelta: lineAmount(item.quantity, input.salesPrice).minus(item.salesLineAmount).toFixed(2),
+        supplyDelta: lineAmount(item.quantity, input.supplyPrice).minus(item.supplyLineAmount).toFixed(2),
+      }];
+    });
+    return {
+      scopeId: scope.id,
+      effectiveAt: input.effectiveAt.toISOString(),
+      affectedOrderCount: impacted.length,
+      salesDelta: impacted.reduce((sum, order) => sum.plus(order.salesDelta), toMoney(0)).toFixed(2),
+      supplyDelta: impacted.reduce((sum, order) => sum.plus(order.supplyDelta), toMoney(0)).toFixed(2),
+      orders: impacted,
+    };
+  }
 
   async publishPrice(input: PublishPriceInput): Promise<PriceQuote> {
     const scope = await this.database.client.priceScope.upsert({
@@ -39,6 +101,7 @@ export class PricingService {
         salesPrice: input.salesPrice,
         supplyPrice: input.supplyPrice,
         effectiveAt: input.effectiveAt,
+        reason: input.reason,
       },
     });
 
@@ -50,6 +113,7 @@ export class PricingService {
       salesPrice: version.salesPrice.toString(),
       supplyPrice: version.supplyPrice.toString(),
       effectiveAt: version.effectiveAt.toISOString(),
+      reason: version.reason,
     };
   }
 
@@ -88,6 +152,7 @@ export class PricingService {
       salesPrice: version.salesPrice.toString(),
       supplyPrice: version.supplyPrice.toString(),
       effectiveAt: version.effectiveAt.toISOString(),
+      reason: version.reason,
     };
   }
 
@@ -113,6 +178,7 @@ export class PricingService {
       salesPrice: version.salesPrice.toString(),
       supplyPrice: version.supplyPrice.toString(),
       effectiveAt: version.effectiveAt.toISOString(),
+      reason: version.reason,
     }));
   }
 }

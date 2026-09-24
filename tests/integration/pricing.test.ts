@@ -57,6 +57,7 @@ test('pricing service returns latest version effective at business time', async 
       salesPrice: '10.000000',
       supplyPrice: '8.000000',
       effectiveAt: new Date('2026-09-01T00:00:00.000Z'),
+      reason: 'Initial price',
     });
     const latest = await service.publishPrice({
       productId: product.id,
@@ -64,6 +65,7 @@ test('pricing service returns latest version effective at business time', async 
       salesPrice: '12.000000',
       supplyPrice: '9.000000',
       effectiveAt: new Date('2026-09-10T00:00:00.000Z'),
+      reason: 'Price increase',
     });
 
     const beforeChange = await service.getEffectivePrice(product.id, supplier.id, new Date('2026-09-05T00:00:00.000Z'));
