@@ -1766,6 +1766,64 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierStatementDetail.data.lines[0]?.goodsAmount, '88.00');
     assert.equal(supplierStatementDetail.data.lines[0]?.freightAmount, '18.50');
     assert.equal(supplierStatementDetail.data.lines[0]?.totalAmount, '106.50');
+    const supplierStoreStatementsResponse = await fetch(
+      `${baseUrl}/supplier-store-statements?supplierId=${supplierB.id}&storeId=${store.id}`,
+      {
+        headers: { authorization: `Bearer ${token}` },
+      },
+    );
+    assert.equal(supplierStoreStatementsResponse.status, 200);
+    const supplierStoreStatements = (await supplierStoreStatementsResponse.json()) as {
+      data: Array<{
+        id: string;
+        parentStatementId: string;
+        type: string;
+        storeId: string;
+        supplierId: string;
+        cycle: string;
+        settlementStatus: string;
+        goodsAmount: string;
+        freightAmount: string;
+        totalAmount: string;
+        payableAmount: string;
+        lineCount: number;
+      }>;
+    };
+    const supplierStoreStatement = supplierStoreStatements.data.find((statement) => statement.supplierId === supplierB.id);
+    assert.ok(supplierStoreStatement);
+    assert.equal(supplierStoreStatement.parentStatementId, supplierStatement.id);
+    assert.equal(supplierStoreStatement.type, 'SUPPLIER_STORE');
+    assert.equal(supplierStoreStatement.storeId, store.id);
+    assert.equal(supplierStoreStatement.cycle, 'MONTHLY');
+    assert.equal(supplierStoreStatement.settlementStatus, 'OPEN');
+    assert.equal(supplierStoreStatement.goodsAmount, '88.00');
+    assert.equal(supplierStoreStatement.freightAmount, '18.50');
+    assert.equal(supplierStoreStatement.totalAmount, '106.50');
+    assert.equal(supplierStoreStatement.payableAmount, '106.50');
+    assert.equal(supplierStoreStatement.lineCount, 1);
+    const supplierStoreStatementDetailResponse = await fetch(`${baseUrl}/supplier-store-statements/${supplierStoreStatement.id}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(supplierStoreStatementDetailResponse.status, 200);
+    const supplierStoreStatementDetail = (await supplierStoreStatementDetailResponse.json()) as {
+      data: {
+        id: string;
+        parentStatementId: string;
+        goodsAmount: string;
+        freightAmount: string;
+        totalAmount: string;
+        lines: Array<{ supplierOrderId: string; goodsAmount: string; freightAmount: string; totalAmount: string }>;
+      };
+    };
+    assert.equal(supplierStoreStatementDetail.data.id, supplierStoreStatement.id);
+    assert.equal(supplierStoreStatementDetail.data.parentStatementId, supplierStatement.id);
+    assert.equal(supplierStoreStatementDetail.data.goodsAmount, '88.00');
+    assert.equal(supplierStoreStatementDetail.data.freightAmount, '18.50');
+    assert.equal(supplierStoreStatementDetail.data.totalAmount, '106.50');
+    assert.equal(supplierStoreStatementDetail.data.lines[0]?.supplierOrderId, supplierBOrderAfterReallocate.id);
+    assert.equal(supplierStoreStatementDetail.data.lines[0]?.goodsAmount, '88.00');
+    assert.equal(supplierStoreStatementDetail.data.lines[0]?.freightAmount, '18.50');
+    assert.equal(supplierStoreStatementDetail.data.lines[0]?.totalAmount, '106.50');
 
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
