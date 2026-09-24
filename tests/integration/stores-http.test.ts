@@ -399,6 +399,46 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(clearedAllocation.netPaid.toString(), '240');
     assert.equal(clearedAllocation.creditOutstanding.toString(), '0');
     assert.equal(clearedAllocation.version, 2);
+    const clearingDetailResponse = await fetch(`${baseUrl}/clearings/${clearing.data.id}`, {
+      headers: {
+        authorization: `Bearer ${storeToken}`,
+        'x-trace-id': 'trace-clearing-detail',
+      },
+    });
+    assert.equal(clearingDetailResponse.status, 200);
+    const clearingDetail = (await clearingDetailResponse.json()) as {
+      data: {
+        id: string;
+        clearingNo: string;
+        storeId: string;
+        amount: string;
+        businessDate: string;
+        remark: string | null;
+        items: Array<{ fundingAllocationId: string; amount: string; sourceVersion: number }>;
+        account: { creditUsed: string; creditAvailable: string };
+      };
+      traceId: string;
+    };
+    assert.equal(clearingDetail.traceId, 'trace-clearing-detail');
+    assert.equal(clearingDetail.data.id, clearing.data.id);
+    assert.equal(clearingDetail.data.clearingNo, clearing.data.clearingNo);
+    assert.equal(clearingDetail.data.storeId, createdBody.data.id);
+    assert.equal(clearingDetail.data.amount, '200.00');
+    assert.equal(clearingDetail.data.businessDate, '2026-09-24');
+    assert.equal(clearingDetail.data.remark, 'Clear store credit');
+    assert.deepEqual(clearingDetail.data.items.map((item) => ({
+      fundingAllocationId: item.fundingAllocationId,
+      amount: item.amount,
+      sourceVersion: item.sourceVersion,
+    })), [
+      {
+        fundingAllocationId: fundingAllocation.id,
+        amount: '200.00',
+        sourceVersion: 1,
+      },
+    ]);
+    assert.equal(clearingDetail.data.account.creditUsed, '0.00');
+    assert.equal(clearingDetail.data.account.creditAvailable, '1000.00');
 
     const list = await fetch(`${baseUrl}/stores`, {
       headers: {

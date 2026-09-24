@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
+import { ClearingsModule } from './clearings/clearings.module.js';
 import { CommandsModule } from './commands/commands.module.js';
 import { TraceIdMiddleware } from './common/trace-id.middleware.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -26,6 +27,7 @@ import { UsersModule } from './users/users.module.js';
     StoresModule,
     SuppliersModule,
     CatalogModule,
+    ClearingsModule,
     PricingModule,
     TemplatesModule,
     PurchaseRequestsModule,

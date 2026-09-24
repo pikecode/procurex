@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M3 fulfillment development.
 
-Latest completed milestone: A05 clearing creation.
+Latest completed milestone: A06 clearing detail lookup.
 
 Latest implementation commit:
 
 ```text
-Add clearing creation
+Add clearing detail lookup
 ```
 
 The working tree was clean after this commit.
@@ -144,7 +144,7 @@ Implemented interfaces:
 - A03 `PATCH /stores/{id}/credit-limit`
 - A04 `POST /stores/{id}/clearings/preview`
 - A05 `POST /stores/{id}/clearings`
-- A06 `GET /recharges/{id}` (recharge detail only)
+- A06 `GET /recharges/{id}`, `GET /clearings/{id}`
 
 Current A01 behavior:
 
@@ -172,6 +172,12 @@ Current A06 recharge behavior:
 - Includes the current store account snapshot.
 - Access control is role-based; store-user data-scope binding is not implemented yet.
 
+Current A06 clearing behavior:
+
+- Returns clearing document details by id.
+- Includes clearing items and the current store account snapshot.
+- Access control is role-based; store-user data-scope binding is not implemented yet.
+
 Current A04 behavior:
 
 - Adds the `FundingAllocation` model.
@@ -188,12 +194,12 @@ Current A05 behavior:
 
 ## Recommended Next Step
 
-Add clearing detail lookup, or add receipt revision replacement.
+Add receipt revision replacement, or start statement/payment read models.
 
 Suggested first version:
 
 - If continuing fulfillment work, add receipt revision replacement.
-- If continuing finance work, add `GET /clearings/{id}`.
+- If continuing finance work, start statement/payment read models.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
