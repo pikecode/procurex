@@ -163,6 +163,12 @@ enum PriceChangeRunStatus {
   FAILED
 }
 
+enum PriceChangeRunOrderStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
 model User {
   id           String          @id @default(uuid()) @db.Uuid
   phone        String?         @unique @db.VarChar(32)
@@ -456,6 +462,7 @@ model PriceChangeRun {
   supplyDelta        Decimal              @default(0) @db.Decimal(20, 2)
   createdAt          DateTime             @default(now()) @db.Timestamptz(6)
   versions           PriceChangeRunVersion[]
+  orders             PriceChangeRunOrder[]
 }
 
 model PriceChangeRunVersion {
@@ -466,6 +473,19 @@ model PriceChangeRunVersion {
 
   @@id([runId, priceVersionId])
   @@index([priceVersionId])
+}
+
+model PriceChangeRunOrder {
+  runId           String                    @db.Uuid
+  supplierOrderId String                    @db.Uuid
+  status          PriceChangeRunOrderStatus @default(PENDING)
+  salesDelta      Decimal                   @db.Decimal(20, 2)
+  supplyDelta     Decimal                   @db.Decimal(20, 2)
+  run             PriceChangeRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
+  supplierOrder   SupplierOrder              @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
+
+  @@id([runId, supplierOrderId])
+  @@index([supplierOrderId])
 }
 
 model PurchaseRequest {
@@ -542,6 +562,7 @@ model SupplierOrder {
   freightConfirmations FreightConfirmation[]
   fundingAllocations   FundingAllocation[]
   paymentAllocations   PaymentAllocation[]
+  priceChangeRuns      PriceChangeRunOrder[]
 
   @@index([requestId])
   @@index([supplierId, firstShippedAt])

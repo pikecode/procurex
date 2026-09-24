@@ -24,6 +24,7 @@ export type PriceChangeRunView = {
   salesDelta: string;
   supplyDelta: string;
   priceVersionIds: string[];
+  orders: Array<{ supplierOrderId: string; status: 'PENDING' | 'SUCCEEDED' | 'FAILED'; salesDelta: string; supplyDelta: string }>;
   createdAt: string;
 };
 
@@ -112,9 +113,35 @@ export class PricingService {
           revision: (latest?.revision ?? 0) + 1,
         },
       });
+      const nextVersion = await tx.priceVersion.findFirst({
+        where: { scopeId: scope.id, effectiveAt: { gt: input.effectiveAt } },
+        orderBy: { effectiveAt: 'asc' },
+      });
+      const orders = await tx.supplierOrder.findMany({
+        where: {
+          supplierId: input.supplierId,
+          status: { notIn: [SupplierOrderStatus.COMPLETED, SupplierOrderStatus.CANCELED, SupplierOrderStatus.REJECTED] },
+          items: { some: { productId: input.productId } },
+        },
+        include: { request: { select: { submittedAt: true } }, items: { where: { productId: input.productId } } },
+      });
+      const impacted = orders.flatMap((order) => {
+        const baseline = order.firstShippedAt ?? order.request.submittedAt;
+        const item = order.items[0];
+        if (!item || baseline < input.effectiveAt || (nextVersion && baseline >= nextVersion.effectiveAt)) return [];
+        return [{
+          supplierOrderId: order.id,
+          salesDelta: lineAmount(item.quantity, input.salesPrice).minus(item.salesLineAmount).toFixed(2),
+          supplyDelta: lineAmount(item.quantity, input.supplyPrice).minus(item.supplyLineAmount).toFixed(2),
+        }];
+      });
       const run = await tx.priceChangeRun.create({
         data: {
+          affectedOrderCount: impacted.length,
+          salesDelta: impacted.reduce((sum, order) => sum.plus(order.salesDelta), toMoney(0)).toFixed(2),
+          supplyDelta: impacted.reduce((sum, order) => sum.plus(order.supplyDelta), toMoney(0)).toFixed(2),
           versions: { create: { priceVersionId: version.id } },
+          orders: { create: impacted },
         },
       });
       return {
@@ -128,7 +155,7 @@ export class PricingService {
   async getRun(id: string): Promise<PriceChangeRunView> {
     const run = await this.database.client.priceChangeRun.findUnique({
       where: { id },
-      include: { versions: { select: { priceVersionId: true } } },
+      include: { versions: { select: { priceVersionId: true } }, orders: { orderBy: { supplierOrderId: 'asc' } } },
     });
     if (!run) throw new NotFoundException({ code: 'PRICE_CHANGE_RUN_NOT_FOUND', message: 'Price change run was not found' });
     return {
@@ -138,6 +165,7 @@ export class PricingService {
       salesDelta: run.salesDelta.toString(),
       supplyDelta: run.supplyDelta.toString(),
       priceVersionIds: run.versions.map((version) => version.priceVersionId),
+      orders: run.orders.map((order) => ({ supplierOrderId: order.supplierOrderId, status: order.status, salesDelta: order.salesDelta.toString(), supplyDelta: order.supplyDelta.toString() })),
       createdAt: run.createdAt.toISOString(),
     };
   }
