@@ -18,6 +18,7 @@
 10. 增加运行时契约校验基础，覆盖 UUID、expectedVersion、Idempotency-Key 和十进制字符串规则。
 11. 将 Idempotency-Key 校验接入命令服务，并增加按操作者隔离的命令查询方法。
 12. 开始 M1 身份底座，增加密码哈希、用户会话表和登录/认证/登出服务。
+13. 增加认证 HTTP 接口、Bearer token 守卫和当前用户读取接口。
 
 边界：
 
