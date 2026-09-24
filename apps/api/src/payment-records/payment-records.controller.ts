@@ -41,6 +41,11 @@ type RejectBody = {
   reason?: unknown;
 };
 
+type CancelBody = {
+  expectedVersion?: unknown;
+  reason?: unknown;
+};
+
 @Controller('payment-records')
 @UseGuards(AuthGuard, RolesGuard)
 export class PaymentRecordsController {
@@ -149,6 +154,38 @@ export class PaymentRecordsController {
 
     return result;
   }
+
+  @Post(':id/cancel')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  async cancel(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Body() body: CancelBody,
+  ): Promise<PaymentRecordView> {
+    const input = parseCancelBody(id, body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'payment-record.cancel',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, ...body } as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as PaymentRecordView;
+    }
+
+    const result = await this.paymentRecordsService.cancel(input.id, input.expectedVersion, input.reason);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'PaymentRecord',
+      resourceId: result.id,
+      responseBody: result as never,
+    });
+
+    return result;
+  }
 }
 
 function parsePreviewBody(body: PreviewBody): string[] {
@@ -238,6 +275,17 @@ function parseConfirmBody(id: string, body: ConfirmBody): { id: string; expected
 }
 
 function parseRejectBody(id: string, body: RejectBody): { id: string; expectedVersion: number; reason: string } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+  ];
+  const reason = optionalNonEmptyString('reason', body.reason, issues);
+
+  throwIfInvalid(issues);
+  return { id, expectedVersion: body.expectedVersion as number, reason: reason! };
+}
+
+function parseCancelBody(id: string, body: CancelBody): { id: string; expectedVersion: number; reason: string } {
   const issues: ValidationIssue[] = [
     ...validateUuid('id', id),
     ...validateExpectedVersion('expectedVersion', body.expectedVersion),

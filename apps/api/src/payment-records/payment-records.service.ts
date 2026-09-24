@@ -50,6 +50,7 @@ export type PaymentRecordView = {
   status: PaymentRecordStatus;
   remark: string | null;
   rejectedReason: string | null;
+  cancelledReason: string | null;
   version: number;
   createdAt: string;
   allocations: PaymentAllocationView[];
@@ -348,6 +349,52 @@ export class PaymentRecordsService {
 
     return toPaymentRecordView(rejected);
   }
+
+  async cancel(id: string, expectedVersion: number, reason: string): Promise<PaymentRecordView> {
+    const payment = await this.database.client.paymentRecord.findUnique({
+      where: { id },
+      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+    });
+    if (!payment) {
+      throw new NotFoundException({
+        code: 'PAYMENT_RECORD_NOT_FOUND',
+        message: 'Payment record was not found',
+      });
+    }
+    if (payment.version !== expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Payment record version has changed',
+        details: { expectedVersion, currentVersion: payment.version },
+      });
+    }
+    if (payment.status !== PaymentRecordStatus.PENDING) {
+      throw new ConflictException({
+        code: 'PAYMENT_RECORD_NOT_CANCELLABLE',
+        message: 'Payment record cannot be cancelled in its current status',
+        details: { status: payment.status },
+      });
+    }
+
+    const cancelled = await this.database.client.paymentRecord.update({
+      where: { id },
+      data: {
+        status: PaymentRecordStatus.CANCELLED,
+        cancelledAt: new Date(),
+        cancelledReason: reason,
+        version: { increment: 1 },
+        allocations: {
+          updateMany: {
+            where: { state: PaymentAllocationState.RESERVED },
+            data: { state: PaymentAllocationState.RELEASED },
+          },
+        },
+      },
+      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+    });
+
+    return toPaymentRecordView(cancelled);
+  }
 }
 
 function toPreviewItem(
@@ -432,6 +479,7 @@ function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllo
     status: payment.status,
     remark: payment.remark,
     rejectedReason: payment.rejectedReason,
+    cancelledReason: payment.cancelledReason,
     version: payment.version,
     createdAt: payment.createdAt.toISOString(),
     allocations: payment.allocations.map(toPaymentAllocationView),

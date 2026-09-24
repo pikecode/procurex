@@ -2081,6 +2081,105 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.payableAmount, '106.50');
     assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.pendingPaymentAmount, '0.00');
     assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.confirmedPaidAmount, '0.00');
+    const createSupplierPaymentForCancel = async () => {
+      const response = await fetch(`${baseUrl}/payment-records`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'create-supplier-payment-cancel-once',
+          'x-trace-id': 'trace-create-supplier-payment-cancel',
+        },
+        body: JSON.stringify({
+          direction: 'COMPANY_TO_SUPPLIER',
+          businessDate: '2026-09-24',
+          remark: 'Company payment to cancel',
+          items: [
+            {
+              settlementItemId: supplierPaymentPreview.data.items[0]!.settlementItemId,
+              expectedVersion: supplierPaymentPreview.data.items[0]!.sourceVersion,
+              expectedAmount: supplierPaymentPreviewAfterReject.data.items[0]!.payableAmount,
+            },
+          ],
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          amount: string;
+          status: string;
+          version: number;
+          allocations: Array<{ settlementItemId: string; amount: string; state: string }>;
+        };
+      };
+    };
+    const supplierPaymentForCancel = await createSupplierPaymentForCancel();
+    const supplierPaymentForCancelReplay = await createSupplierPaymentForCancel();
+    assert.deepEqual(supplierPaymentForCancelReplay.data, supplierPaymentForCancel.data);
+    assert.equal(supplierPaymentForCancel.data.amount, '106.50');
+    assert.equal(supplierPaymentForCancel.data.status, 'PENDING');
+    assert.equal(supplierPaymentForCancel.data.allocations[0]?.state, 'RESERVED');
+    const cancelSupplierPayment = async () => {
+      const response = await fetch(`${baseUrl}/payment-records/${supplierPaymentForCancel.data.id}/cancel`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'cancel-supplier-payment-once',
+          'x-trace-id': 'trace-cancel-supplier-payment',
+        },
+        body: JSON.stringify({
+          expectedVersion: supplierPaymentForCancel.data.version,
+          reason: 'Entered by mistake',
+        }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          id: string;
+          status: string;
+          cancelledReason: string | null;
+          version: number;
+          allocations: Array<{ settlementItemId: string; amount: string; state: string }>;
+        };
+      };
+    };
+    const cancelledSupplierPayment = await cancelSupplierPayment();
+    const cancelledSupplierPaymentReplay = await cancelSupplierPayment();
+    assert.deepEqual(cancelledSupplierPaymentReplay.data, cancelledSupplierPayment.data);
+    assert.equal(cancelledSupplierPayment.data.id, supplierPaymentForCancel.data.id);
+    assert.equal(cancelledSupplierPayment.data.status, 'CANCELLED');
+    assert.equal(cancelledSupplierPayment.data.cancelledReason, 'Entered by mistake');
+    assert.equal(cancelledSupplierPayment.data.version, 2);
+    assert.equal(cancelledSupplierPayment.data.allocations[0]?.settlementItemId, supplierPaymentPreview.data.items[0]?.settlementItemId);
+    assert.equal(cancelledSupplierPayment.data.allocations[0]?.amount, '106.50');
+    assert.equal(cancelledSupplierPayment.data.allocations[0]?.state, 'RELEASED');
+    const supplierPaymentPreviewAfterCancelResponse = await fetch(`${baseUrl}/payment-records/preview`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        settlementItemIds: [supplierStatementDetail.data.lines[0]!.settlementItemId],
+      }),
+    });
+    assert.equal(supplierPaymentPreviewAfterCancelResponse.status, 201);
+    const supplierPaymentPreviewAfterCancel = (await supplierPaymentPreviewAfterCancelResponse.json()) as {
+      data: {
+        totalPayableAmount: string;
+        totalPendingPaymentAmount: string;
+        totalConfirmedPaidAmount: string;
+        items: Array<{ payableAmount: string; pendingPaymentAmount: string; confirmedPaidAmount: string }>;
+      };
+    };
+    assert.equal(supplierPaymentPreviewAfterCancel.data.totalPayableAmount, '106.50');
+    assert.equal(supplierPaymentPreviewAfterCancel.data.totalPendingPaymentAmount, '0.00');
+    assert.equal(supplierPaymentPreviewAfterCancel.data.totalConfirmedPaidAmount, '0.00');
+    assert.equal(supplierPaymentPreviewAfterCancel.data.items[0]?.payableAmount, '106.50');
+    assert.equal(supplierPaymentPreviewAfterCancel.data.items[0]?.pendingPaymentAmount, '0.00');
+    assert.equal(supplierPaymentPreviewAfterCancel.data.items[0]?.confirmedPaidAmount, '0.00');
     const supplierStoreStatementsResponse = await fetch(
       `${baseUrl}/supplier-store-statements?supplierId=${supplierB.id}&storeId=${store.id}`,
       {

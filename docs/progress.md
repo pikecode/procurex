@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently entering M4 settlement/read-model development.
 
-Latest completed milestone: B09 payment rejection.
+Latest completed milestone: B10 payment cancellation.
 
 Latest implementation commit:
 
 ```text
-Add payment rejection
+Add payment cancellation
 ```
 
 The working tree was clean after this commit.
@@ -205,6 +205,7 @@ Implemented interfaces:
 - B07 `POST /payment-records`
 - B08 `POST /payment-records/{id}/confirm`
 - B09 `POST /payment-records/{id}/reject`
+- B10 `POST /payment-records/{id}/cancel`
 
 Current B01 behavior:
 
@@ -263,21 +264,29 @@ Current B09 behavior:
 - Later payment previews ignore RELEASED allocations, so rejected items become payable again.
 - Uses Idempotency-Key through command records.
 
+Current B10 behavior:
+
+- Cancels PENDING payment records with expectedVersion checking and a cancellation reason.
+- Marks the payment record CANCELLED and increments its version.
+- Converts RESERVED allocations to RELEASED.
+- Later payment previews ignore RELEASED allocations, so cancelled items become payable again.
+- Uses Idempotency-Key through command records.
+
 ## Recommended Next Step
 
-Start payment cancellation and read endpoints.
+Start payment record read endpoints.
 
 Suggested first version:
 
-- If moving into payment work, add payment cancellation to release RESERVED allocations, then read endpoints.
+- If moving into payment work, add payment record list/detail endpoints.
 - If continuing fulfillment finance linkage, connect RETURN discrepancy records to settlement/payment difference disposal.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:
 
-1. Payment cancellation.
-2. Payment record list/detail endpoints.
+1. Payment record list/detail endpoints.
+2. Difference disposal for negative adjustments and overpayments.
 3. Settlement difference disposal for accepted, replenished, and returned discrepancies.
 
 ## Where To Look
