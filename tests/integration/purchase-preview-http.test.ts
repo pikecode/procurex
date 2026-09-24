@@ -954,6 +954,71 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierBOrderAfterReallocate.salesGoodsAmount.toString(), '120');
     assert.equal(supplierBOrderAfterReallocate.supplyGoodsAmount.toString(), '88');
     assert.equal(supplierBOrderAfterReallocate.items.length, 2);
+    const productAOrderItem = supplierBOrderAfterReallocate.items.find((item) => item.productId === productA.id);
+    const productBOrderItem = supplierBOrderAfterReallocate.items.find((item) => item.productId === productB.id);
+    assert.ok(productAOrderItem);
+    assert.ok(productBOrderItem);
+    const shipmentPreviewResponse = await fetch(`${baseUrl}/supplier-orders/${supplierBOrderAfterReallocate.id}/shipment-preview`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'x-trace-id': 'trace-shipment-preview',
+      },
+      body: JSON.stringify({
+        expectedVersion: supplierBOrderAfterReallocate.version,
+        freight: '0.00',
+        items: [
+          {
+            orderItemId: productAOrderItem.id,
+            shipQuantity: '6.000000',
+            permanentlyReduceQuantity: '1.000000',
+          },
+          {
+            orderItemId: productBOrderItem.id,
+            shipQuantity: '2.000000',
+            permanentlyReduceQuantity: '0.000000',
+          },
+        ],
+      }),
+    });
+    assert.equal(shipmentPreviewResponse.status, 201);
+    const shipmentPreview = (await shipmentPreviewResponse.json()) as {
+      data: {
+        supplierOrderId: string;
+        version: number;
+        totals: {
+          shipQuantity: string;
+          permanentlyReduceQuantity: string;
+          remainingQuantity: string;
+          salesGoodsAmount: string;
+          supplyGoodsAmount: string;
+          freight: string;
+        };
+        items: Array<{
+          orderItemId: string;
+          remainingQuantityBefore: string;
+          remainingQuantityAfter: string;
+          salesLineAmount: string;
+          supplyLineAmount: string;
+        }>;
+      };
+    };
+    assert.equal(shipmentPreview.data.supplierOrderId, supplierBOrderAfterReallocate.id);
+    assert.equal(shipmentPreview.data.version, supplierBOrderAfterReallocate.version);
+    assert.deepEqual(shipmentPreview.data.totals, {
+      shipQuantity: '8',
+      permanentlyReduceQuantity: '1',
+      remainingQuantity: '3',
+      salesGoodsAmount: '76.00',
+      supplyGoodsAmount: '56.00',
+      freight: '0.00',
+    });
+    const previewProductA = shipmentPreview.data.items.find((item) => item.orderItemId === productAOrderItem.id);
+    assert.equal(previewProductA?.remainingQuantityBefore, '10');
+    assert.equal(previewProductA?.remainingQuantityAfter, '3');
+    assert.equal(previewProductA?.salesLineAmount, '66.00');
+    assert.equal(previewProductA?.supplyLineAmount, '48.00');
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
     });

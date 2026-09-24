@@ -9,13 +9,20 @@ import { getOrCreateTraceId } from '../common/request-context.js';
 import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contract.js';
 import {
   type RejectSupplierOrderResult,
+  type ShipmentPreviewInput,
+  type ShipmentPreviewView,
   SupplierOrdersService,
   type ListSupplierOrdersInput,
   type SupplierOrderDetailView,
   type SupplierOrderSummaryView,
 } from './supplier-orders.service.js';
 import { SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
-import { validateExpectedVersion, validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
+import {
+  validateDecimalString,
+  validateExpectedVersion,
+  validateUuid,
+  type ValidationIssue,
+} from '../../../../packages/domain/src/validation.js';
 
 type ListQuery = {
   storeId?: unknown;
@@ -26,6 +33,13 @@ type ListQuery = {
 type RejectBody = {
   expectedVersion?: unknown;
   reason?: unknown;
+};
+
+type ShipmentPreviewBody = {
+  expectedVersion?: unknown;
+  items?: unknown;
+  freight?: unknown;
+  trackingNo?: unknown;
 };
 
 @Controller('supplier-orders')
@@ -47,6 +61,13 @@ export class SupplierOrdersController {
   get(@Param('id') id: string): Promise<SupplierOrderDetailView> {
     throwIfInvalid(validateUuid('id', id));
     return this.supplierOrdersService.get(id);
+  }
+
+  @Post(':id/shipment-preview')
+  @RequireRoles('ADMIN', 'SUPPLIER')
+  shipmentPreview(@Param('id') id: string, @Body() body: ShipmentPreviewBody): Promise<ShipmentPreviewView> {
+    const input = parseShipmentPreviewBody(id, body);
+    return this.supplierOrdersService.shipmentPreview(input.id, input.expectedVersion, input.preview);
   }
 
   @Post(':id/reject')
@@ -121,6 +142,75 @@ function parseRejectBody(id: string, body: RejectBody): { id: string; expectedVe
   return { id, expectedVersion: body.expectedVersion as number, reason: reason! };
 }
 
+function parseShipmentPreviewBody(
+  id: string,
+  body: ShipmentPreviewBody,
+): { id: string; expectedVersion: number; preview: ShipmentPreviewInput } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+  ];
+  const items: ShipmentPreviewInput['items'] = [];
+
+  if (!Array.isArray(body.items) || body.items.length === 0) {
+    issues.push({ field: 'items', code: 'INVALID_ITEMS', message: 'items must be a non-empty array' });
+  } else {
+    const seen = new Set<string>();
+    for (const [index, item] of body.items.entries()) {
+      if (!isRecord(item)) {
+        issues.push({ field: `items.${index}`, code: 'INVALID_ITEM', message: 'item must be an object' });
+        continue;
+      }
+      issues.push(...validateUuid(`items.${index}.orderItemId`, item.orderItemId));
+      issues.push(...validateDecimalString(`items.${index}.shipQuantity`, item.shipQuantity, 6));
+      issues.push(...validateDecimalString(`items.${index}.permanentlyReduceQuantity`, item.permanentlyReduceQuantity, 6));
+      if (typeof item.orderItemId === 'string') {
+        if (seen.has(item.orderItemId)) {
+          issues.push({ field: `items.${index}.orderItemId`, code: 'DUPLICATE_ITEM_ID', message: 'order item ids must not repeat' });
+        }
+        seen.add(item.orderItemId);
+      }
+      if (
+        typeof item.orderItemId === 'string' &&
+        typeof item.shipQuantity === 'string' &&
+        typeof item.permanentlyReduceQuantity === 'string'
+      ) {
+        items.push({
+          orderItemId: item.orderItemId,
+          shipQuantity: item.shipQuantity,
+          permanentlyReduceQuantity: item.permanentlyReduceQuantity,
+        });
+      }
+    }
+  }
+
+  const freight = body.freight === undefined ? '0.00' : body.freight;
+  issues.push(...validateDecimalString('freight', freight, 2));
+  const trackingNo = optionalTrimmedString('trackingNo', body.trackingNo, issues);
+
+  throwIfInvalid(issues);
+  return {
+    id,
+    expectedVersion: body.expectedVersion as number,
+    preview: {
+      items,
+      freight: freight as string,
+      trackingNo,
+    },
+  };
+}
+
+function optionalTrimmedString(field: string, value: unknown, issues: ValidationIssue[]): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    issues.push({ field, code: 'INVALID_STRING', message: `${field} must be a non-empty string` });
+    return undefined;
+  }
+  return value.trim();
+}
+
 function requiredReason(value: unknown, issues: ValidationIssue[]): string | undefined {
   if (typeof value !== 'string' || value.trim().length === 0 || value.length > 300) {
     issues.push({
@@ -132,6 +222,10 @@ function requiredReason(value: unknown, issues: ValidationIssue[]): string | und
   }
 
   return value.trim();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function optionalSupplierOrderStatus(value: unknown, issues: ValidationIssue[]): SupplierOrderStatus | undefined {
