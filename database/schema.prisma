@@ -503,8 +503,10 @@ model Shipment {
   shippedAt       DateTime       @default(now()) @db.Timestamptz(6)
   trackingNo      String?        @db.VarChar(100)
   freight         Decimal        @default(0) @db.Decimal(20, 2)
+  freightConfirmationId String?  @unique @db.Uuid
   createdAt       DateTime       @default(now()) @db.Timestamptz(6)
   supplierOrder   SupplierOrder  @relation(fields: [supplierOrderId], references: [id])
+  freightConfirmation FreightConfirmation? @relation(fields: [freightConfirmationId], references: [id])
   items           ShipmentItem[]
   receipts        Receipt[]
 
@@ -630,8 +632,10 @@ model FreightConfirmation {
   version         Int                       @default(1)
   confirmedAt     DateTime?                 @db.Timestamptz(6)
   rejectedAt      DateTime?                 @db.Timestamptz(6)
+  usedAt           DateTime?                 @db.Timestamptz(6)
   createdAt       DateTime                  @default(now()) @db.Timestamptz(6)
   supplierOrder   SupplierOrder             @relation(fields: [supplierOrderId], references: [id])
+  shipment         Shipment?
 
   @@index([supplierOrderId, status])
 }

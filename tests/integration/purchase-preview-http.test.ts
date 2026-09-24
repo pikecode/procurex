@@ -1395,7 +1395,8 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       },
       body: JSON.stringify({
         expectedVersion: orderBeforeGapShipment.version,
-        freight: '0.00',
+        freight: '18.50',
+        freightConfirmationId: freightConfirmation.data.id,
         items: [
           {
             orderItemId: productAOrderItem.id,
@@ -1411,6 +1412,8 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       data: {
         id: string;
         kind: string;
+        freight: string;
+        freightConfirmationId: string | null;
         items: Array<{
           id: string;
           orderItemId: string;
@@ -1420,6 +1423,8 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       };
     };
     assert.equal(gapShipment.data.kind, 'REPLENISHMENT');
+    assert.equal(gapShipment.data.freight, '18.50');
+    assert.equal(gapShipment.data.freightConfirmationId, freightConfirmation.data.id);
     const gapShipmentProductA = gapShipment.data.items.find((item) => item.orderItemId === productAOrderItem.id);
     assert.equal(gapShipmentProductA?.quantity, '1');
     assert.deepEqual(gapShipmentProductA?.gapAllocations, [{ gapId: persistedGap.id, quantity: '1' }]);
@@ -1433,6 +1438,10 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(persistedGapAllocations.length, 1);
     assert.equal(persistedGapAllocations[0]?.shipmentItemId, gapShipmentProductA?.id);
     assert.equal(persistedGapAllocations[0]?.quantity.toString(), '1');
+    const usedFreight = await prisma.freightConfirmation.findUniqueOrThrow({ where: { id: freightConfirmation.data.id } });
+    assert.equal(usedFreight.status, 'USED');
+    assert.ok(usedFreight.usedAt);
+    assert.equal(usedFreight.version, 3);
 
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },

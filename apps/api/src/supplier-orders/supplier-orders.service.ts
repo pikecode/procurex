@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import {
+  FreightConfirmationStatus,
   FulfillmentStatus,
   PurchaseRequestStatus,
   ReplenishmentGapStatus,
@@ -70,6 +71,7 @@ export type RejectSupplierOrderResult = {
 export type ShipmentPreviewInput = {
   items: ShipmentPreviewItemInput[];
   freight: string;
+  freightConfirmationId?: string;
   trackingNo?: string;
 };
 
@@ -97,6 +99,7 @@ export type ShipmentPreviewView = {
     supplyGoodsAmount: string;
     freight: string;
   };
+  freightConfirmationId: string | null;
 };
 
 export type ShipmentView = {
@@ -108,6 +111,7 @@ export type ShipmentView = {
   shippedAt: string;
   trackingNo: string | null;
   freight: string;
+  freightConfirmationId: string | null;
   items: ShipmentItemView[];
 };
 
@@ -213,6 +217,7 @@ export class SupplierOrdersService {
       });
     }
 
+    const freightConfirmationId = await this.validateFreightConfirmation(order.id, input.freight, input.freightConfirmationId);
     const orderItemsById = new Map(order.items.map((item) => [item.id, item]));
     const requestedGapIds = input.items.flatMap((item) => item.gapAllocations?.map((allocation) => allocation.gapId) ?? []);
     const gaps = requestedGapIds.length
@@ -327,6 +332,7 @@ export class SupplierOrdersService {
         supplyGoodsAmount: supplyGoodsAmount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
         freight: new Decimal(input.freight).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
       },
+      freightConfirmationId,
     };
   }
 
@@ -350,8 +356,20 @@ export class SupplierOrdersService {
           kind,
           trackingNo: input.trackingNo,
           freight: preview.totals.freight,
+          freightConfirmationId: preview.freightConfirmationId,
         },
       });
+
+      if (preview.freightConfirmationId) {
+        await tx.freightConfirmation.update({
+          where: { id: preview.freightConfirmationId },
+          data: {
+            status: FreightConfirmationStatus.USED,
+            usedAt: new Date(),
+            version: { increment: 1 },
+          },
+        });
+      }
 
       for (const previewItem of preview.items) {
         const orderItem = orderItemsById.get(previewItem.orderItemId)!;
@@ -471,6 +489,62 @@ export class SupplierOrdersService {
 
     return toRejectSupplierOrderResult(rejected);
   }
+
+  private async validateFreightConfirmation(
+    supplierOrderId: string,
+    freight: string,
+    freightConfirmationId: string | undefined,
+  ): Promise<string | null> {
+    const freightAmount = new Decimal(freight).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    if (freightAmount.eq(0)) {
+      if (freightConfirmationId) {
+        throw new ConflictException({
+          code: 'FREIGHT_CONFIRMATION_NOT_REQUIRED',
+          message: 'Freight confirmation cannot be used for zero freight',
+        });
+      }
+      return null;
+    }
+
+    if (!freightConfirmationId) {
+      throw new ConflictException({
+        code: 'FREIGHT_CONFIRMATION_REQUIRED',
+        message: 'Non-zero shipment freight requires a confirmed freight confirmation',
+      });
+    }
+
+    const confirmation = await this.database.client.freightConfirmation.findUnique({ where: { id: freightConfirmationId } });
+    if (!confirmation) {
+      throw new ConflictException({
+        code: 'FREIGHT_CONFIRMATION_NOT_FOUND',
+        message: 'Freight confirmation was not found',
+        details: { freightConfirmationId },
+      });
+    }
+    if (confirmation.supplierOrderId !== supplierOrderId) {
+      throw new ConflictException({
+        code: 'FREIGHT_CONFIRMATION_ORDER_MISMATCH',
+        message: 'Freight confirmation does not belong to this supplier order',
+        details: { freightConfirmationId },
+      });
+    }
+    if (confirmation.status !== FreightConfirmationStatus.CONFIRMED) {
+      throw new ConflictException({
+        code: 'FREIGHT_CONFIRMATION_NOT_USABLE',
+        message: 'Freight confirmation must be confirmed before it can be used',
+        details: { freightConfirmationId, status: confirmation.status },
+      });
+    }
+    if (!new Decimal(confirmation.amount).eq(freightAmount)) {
+      throw new ConflictException({
+        code: 'FREIGHT_CONFIRMATION_AMOUNT_MISMATCH',
+        message: 'Freight confirmation amount must match shipment freight',
+        details: { freightConfirmationId, freight: freightAmount.toFixed(2), amount: confirmation.amount.toFixed(2) },
+      });
+    }
+
+    return confirmation.id;
+  }
 }
 
 function toSupplierOrderSummaryView(order: SupplierOrder): SupplierOrderSummaryView {
@@ -537,6 +611,7 @@ function toShipmentView(
     shippedAt: shipment.shippedAt.toISOString(),
     trackingNo: shipment.trackingNo,
     freight: shipment.freight.toFixed(2),
+    freightConfirmationId: shipment.freightConfirmationId,
     items: shipment.items.map((item) => ({
       id: item.id,
       orderItemId: item.orderItemId,

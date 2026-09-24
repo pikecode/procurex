@@ -44,6 +44,7 @@ type ShipmentPreviewBody = {
   expectedVersion?: unknown;
   items?: unknown;
   freight?: unknown;
+  freightConfirmationId?: unknown;
   trackingNo?: unknown;
 };
 
@@ -287,6 +288,9 @@ function parseShipmentPreviewBody(
 
   const freight = body.freight === undefined ? '0.00' : body.freight;
   issues.push(...validateDecimalString('freight', freight, 2));
+  if (body.freightConfirmationId !== undefined) {
+    issues.push(...validateUuid('freightConfirmationId', body.freightConfirmationId));
+  }
   const trackingNo = optionalTrimmedString('trackingNo', body.trackingNo, issues);
 
   throwIfInvalid(issues);
@@ -296,6 +300,7 @@ function parseShipmentPreviewBody(
     preview: {
       items,
       freight: freight as string,
+      freightConfirmationId: typeof body.freightConfirmationId === 'string' ? body.freightConfirmationId : undefined,
       trackingNo,
     },
   };

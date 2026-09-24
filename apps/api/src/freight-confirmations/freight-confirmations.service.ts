@@ -26,6 +26,7 @@ export type FreightConfirmationView = {
   version: number;
   confirmedAt: string | null;
   rejectedAt: string | null;
+  usedAt: string | null;
   createdAt: string;
 };
 
@@ -134,6 +135,7 @@ function toFreightConfirmationView(confirmation: FreightConfirmation): FreightCo
     version: confirmation.version,
     confirmedAt: confirmation.confirmedAt?.toISOString() ?? null,
     rejectedAt: confirmation.rejectedAt?.toISOString() ?? null,
+    usedAt: confirmation.usedAt?.toISOString() ?? null,
     createdAt: confirmation.createdAt.toISOString(),
   };
 }
