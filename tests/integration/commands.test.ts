@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { CommandStatus } from '../../packages/backend/generated/prisma/enums.js';
 import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
@@ -159,6 +159,77 @@ test('commands service reports processing and failed command states', async () =
   } finally {
     await prisma.commandRecord.deleteMany({ where: { actor: { username } } });
     await prisma.user.deleteMany({ where: { username } });
+    await prisma.$disconnect();
+  }
+});
+
+test('commands service validates idempotency keys and scopes command lookup to actor', async () => {
+  const prisma = createClient();
+  const service = createService(prisma);
+  const ownerUsername = `it_command_owner_${Date.now()}`;
+  const otherUsername = `it_command_other_${Date.now()}`;
+
+  try {
+    const [owner, other] = await Promise.all([
+      prisma.user.create({
+        data: {
+          username: ownerUsername,
+          displayName: 'Integration Command Owner',
+        },
+      }),
+      prisma.user.create({
+        data: {
+          username: otherUsername,
+          displayName: 'Integration Command Other',
+        },
+      }),
+    ]);
+
+    await assert.rejects(
+      service.begin({
+        actorUserId: owner.id,
+        action: 'purchase-request.create',
+        idempotencyKey: '',
+        requestBody: { storeId: 'store-a' },
+        traceId: 'trace-command-invalid-key',
+      }),
+      (error: unknown) =>
+        error instanceof BadRequestException &&
+        typeof error.getResponse() === 'object' &&
+        error.getStatus() === 400,
+    );
+
+    const started = await service.begin({
+      actorUserId: owner.id,
+      action: 'purchase-request.create',
+      idempotencyKey: 'lookup-key',
+      requestBody: { storeId: 'store-a' },
+      traceId: 'trace-command-lookup',
+    });
+    assert.equal(started.state, 'started');
+
+    const byKey = await service.findByKey({
+      actorUserId: owner.id,
+      action: 'purchase-request.create',
+      idempotencyKey: 'lookup-key',
+    });
+    assert.equal(byKey?.id, started.command.id);
+
+    const byId = await service.findById(owner.id, started.command.id);
+    assert.equal(byId?.id, started.command.id);
+
+    assert.equal(await service.findById(other.id, started.command.id), null);
+    assert.equal(
+      await service.findByKey({
+        actorUserId: other.id,
+        action: 'purchase-request.create',
+        idempotencyKey: 'lookup-key',
+      }),
+      null,
+    );
+  } finally {
+    await prisma.commandRecord.deleteMany({ where: { actor: { username: { in: [ownerUsername, otherUsername] } } } });
+    await prisma.user.deleteMany({ where: { username: { in: [ownerUsername, otherUsername] } } });
     await prisma.$disconnect();
   }
 });

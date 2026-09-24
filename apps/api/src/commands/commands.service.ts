@@ -1,8 +1,9 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { CommandStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { Prisma } from '../../../../packages/backend/generated/prisma/client.js';
 import type { CommandRecord } from '../../../../packages/backend/generated/prisma/client.js';
 import { requestHash } from '../../../../packages/domain/src/idempotency.js';
+import { validateIdempotencyKey } from '../../../../packages/domain/src/validation.js';
 import { DatabaseService } from '../database/database.service.js';
 
 type JsonBody = null | boolean | number | string | JsonBody[] | { [key: string]: JsonBody | undefined };
@@ -34,6 +35,12 @@ export type FailCommandInput = {
   errorBody: JsonBody;
 };
 
+export type FindCommandByKeyInput = {
+  actorUserId: string;
+  action: string;
+  idempotencyKey: string;
+};
+
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
@@ -41,6 +48,8 @@ export class CommandsService {
   constructor(private readonly database: DatabaseService) {}
 
   async begin(input: BeginCommandInput): Promise<BeginCommandResult> {
+    this.assertValidIdempotencyKey(input.idempotencyKey);
+
     const hash = requestHash(input.requestBody);
     const existing = await this.findExisting(input);
 
@@ -95,6 +104,20 @@ export class CommandsService {
     });
   }
 
+  async findByKey(input: FindCommandByKeyInput): Promise<CommandRecord | null> {
+    this.assertValidIdempotencyKey(input.idempotencyKey);
+    return this.findExisting(input);
+  }
+
+  async findById(actorUserId: string, commandId: string): Promise<CommandRecord | null> {
+    return this.database.client.commandRecord.findFirst({
+      where: {
+        id: commandId,
+        actorUserId,
+      },
+    });
+  }
+
   private async findExisting(input: Pick<BeginCommandInput, 'actorUserId' | 'action' | 'idempotencyKey'>): Promise<CommandRecord | null> {
     return this.database.client.commandRecord.findUnique({
       where: {
@@ -123,6 +146,17 @@ export class CommandsService {
         return { state: 'failed', command };
       default:
         return { state: 'processing', command };
+    }
+  }
+
+  private assertValidIdempotencyKey(idempotencyKey: unknown): void {
+    const issues = validateIdempotencyKey(idempotencyKey);
+    if (issues.length > 0) {
+      throw new BadRequestException({
+        code: issues[0]?.code ?? 'BAD_REQUEST',
+        message: 'Request validation failed',
+        details: { issues },
+      });
     }
   }
 }

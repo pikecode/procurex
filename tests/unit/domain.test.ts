@@ -3,7 +3,14 @@ import test from 'node:test';
 import { evaluateStoredValueFunding } from '../../packages/domain/src/funding.js';
 import { canonicalJson, requestHash } from '../../packages/domain/src/idempotency.js';
 import { lineAmount, spreadProfit } from '../../packages/domain/src/money.js';
+import { hashPassword, verifyPassword } from '../../packages/domain/src/password.js';
 import { settlementPeriod } from '../../packages/domain/src/settlement-period.js';
+import {
+  validateDecimalString,
+  validateExpectedVersion,
+  validateIdempotencyKey,
+  validateUuid,
+} from '../../packages/domain/src/validation.js';
 
 test('line amount rounds per line and profit excludes freight', () => {
   assert.equal(lineAmount('10', '12').toFixed(2), '120.00');
@@ -63,4 +70,30 @@ test('idempotency request hash is stable for reordered object keys', () => {
   assert.equal(canonicalJson(left), canonicalJson(right));
   assert.equal(requestHash(left), requestHash(right));
   assert.match(requestHash(left), /^[a-f0-9]{64}$/);
+});
+
+test('contract validation covers uuid, version, idempotency key and decimal strings', () => {
+  assert.deepEqual(validateUuid('storeId', '11111111-1111-4111-8111-111111111111'), []);
+  assert.equal(validateUuid('storeId', 'store-a')[0]?.code, 'INVALID_UUID');
+
+  assert.deepEqual(validateExpectedVersion('expectedVersion', 1), []);
+  assert.equal(validateExpectedVersion('expectedVersion', 0)[0]?.code, 'INVALID_EXPECTED_VERSION');
+
+  assert.deepEqual(validateIdempotencyKey('create-order-1'), []);
+  assert.equal(validateIdempotencyKey('')[0]?.code, 'MISSING_IDEMPOTENCY_KEY');
+  assert.equal(validateIdempotencyKey('x'.repeat(129))[0]?.code, 'IDEMPOTENCY_KEY_TOO_LONG');
+
+  assert.deepEqual(validateDecimalString('amount', '12.34', 2), []);
+  assert.equal(validateDecimalString('amount', '12.345', 2)[0]?.code, 'DECIMAL_SCALE_EXCEEDED');
+  assert.equal(validateDecimalString('amount', 12.34, 2)[0]?.code, 'INVALID_DECIMAL_STRING');
+  assert.equal(validateDecimalString('amount', '1e3', 2)[0]?.code, 'INVALID_DECIMAL_STRING');
+});
+
+test('password hashing verifies matching password only', async () => {
+  const storedHash = await hashPassword('correct-password');
+
+  assert.match(storedHash, /^scrypt\$/);
+  assert.equal(await verifyPassword('correct-password', storedHash), true);
+  assert.equal(await verifyPassword('wrong-password', storedHash), false);
+  assert.equal(await verifyPassword('correct-password', null), false);
 });
