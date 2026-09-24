@@ -108,6 +108,8 @@ assertIncludes(apiDesign, '`GET /supplier-orders`、`GET /supplier-orders/{id}`'
 assertIncludes(supplierOrdersController, "@Controller('supplier-orders')", 'supplier orders controller');
 assertIncludes(supplierOrdersController, '@Get()', 'supplier orders controller');
 assertIncludes(supplierOrdersController, "@Get(':id')", 'supplier orders controller');
+assertIncludes(apiDesign, '`POST /supplier-orders/{id}/reject`', 'api design');
+assertIncludes(supplierOrdersController, "@Post(':id/reject')", 'supplier orders controller');
 assertIncludes(apiDesign, '`GET/POST /templates`', 'api design');
 assertIncludes(templatesController, "@Controller('templates')", 'templates controller');
 assertIncludes(templatesController, "@Put(':id/stores')", 'templates controller');

@@ -1,5 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { FulfillmentStatus, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  FulfillmentStatus,
+  PurchaseRequestStatus,
+  SupplierOrderStatus,
+} from '../../../../packages/backend/generated/prisma/enums.js';
 import type { OrderItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
@@ -21,6 +25,7 @@ export type SupplierOrderSummaryView = {
   supplyGoodsAmount: string;
   pushedAt: string | null;
   firstShippedAt: string | null;
+  rejectedAt: string | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -40,6 +45,15 @@ export type SupplierOrderItemView = {
   supplyUnitPrice: string;
   salesLineAmount: string;
   supplyLineAmount: string;
+};
+
+export type RejectSupplierOrderResult = {
+  supplierOrderId: string;
+  requestId: string;
+  status: SupplierOrderStatus;
+  fulfillmentStatus: FulfillmentStatus;
+  version: number;
+  rejectedAt: string | null;
 };
 
 @Injectable()
@@ -73,6 +87,65 @@ export class SupplierOrdersService {
 
     return toSupplierOrderDetailView(order);
   }
+
+  async reject(id: string, expectedVersion: number, reason: string): Promise<RejectSupplierOrderResult> {
+    const order = await this.database.client.supplierOrder.findUnique({ where: { id } });
+    if (!order) {
+      throw new NotFoundException({
+        code: 'SUPPLIER_ORDER_NOT_FOUND',
+        message: 'Supplier order was not found',
+      });
+    }
+
+    if (order.version !== expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Supplier order version has changed',
+        details: { expectedVersion, currentVersion: order.version },
+      });
+    }
+
+    if (order.status === SupplierOrderStatus.REJECTED) {
+      return toRejectSupplierOrderResult(order);
+    }
+
+    if (
+      order.firstShippedAt ||
+      order.fulfillmentStatus !== FulfillmentStatus.PENDING ||
+      (order.status !== SupplierOrderStatus.PUSHED && order.status !== SupplierOrderStatus.ACCEPTED)
+    ) {
+      throw new ConflictException({
+        code: 'SUPPLIER_ORDER_NOT_REJECTABLE',
+        message: 'Supplier order cannot be rejected in its current status',
+        details: { status: order.status, fulfillmentStatus: order.fulfillmentStatus },
+      });
+    }
+
+    const rejected = await this.database.client.$transaction(async (tx) => {
+      const updated = await tx.supplierOrder.update({
+        where: { id: order.id },
+        data: {
+          status: SupplierOrderStatus.REJECTED,
+          fulfillmentStatus: FulfillmentStatus.CANCELED,
+          rejectedAt: new Date(),
+          rejectedReason: reason,
+          version: { increment: 1 },
+        },
+      });
+
+      await tx.purchaseRequest.update({
+        where: { id: order.requestId },
+        data: {
+          status: PurchaseRequestStatus.PARTIAL_PUSHED,
+          version: { increment: 1 },
+        },
+      });
+
+      return updated;
+    });
+
+    return toRejectSupplierOrderResult(rejected);
+  }
 }
 
 function toSupplierOrderSummaryView(order: SupplierOrder): SupplierOrderSummaryView {
@@ -88,9 +161,21 @@ function toSupplierOrderSummaryView(order: SupplierOrder): SupplierOrderSummaryV
     supplyGoodsAmount: order.supplyGoodsAmount.toFixed(2),
     pushedAt: order.pushedAt?.toISOString() ?? null,
     firstShippedAt: order.firstShippedAt?.toISOString() ?? null,
+    rejectedAt: order.rejectedAt?.toISOString() ?? null,
     version: order.version,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+  };
+}
+
+function toRejectSupplierOrderResult(order: SupplierOrder): RejectSupplierOrderResult {
+  return {
+    supplierOrderId: order.id,
+    requestId: order.requestId,
+    status: order.status,
+    fulfillmentStatus: order.fulfillmentStatus,
+    version: order.version,
+    rejectedAt: order.rejectedAt?.toISOString() ?? null,
   };
 }
 

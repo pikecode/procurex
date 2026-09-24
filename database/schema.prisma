@@ -423,6 +423,8 @@ model SupplierOrder {
   fulfillmentStatus FulfillmentStatus   @default(PENDING)
   firstShippedAt    DateTime?           @db.Timestamptz(6)
   pushedAt          DateTime?           @db.Timestamptz(6)
+  rejectedAt        DateTime?           @db.Timestamptz(6)
+  rejectedReason    String?             @db.VarChar(300)
   salesGoodsAmount  Decimal             @default(0) @db.Decimal(20, 2)
   supplyGoodsAmount Decimal             @default(0) @db.Decimal(20, 2)
   version           Int                 @default(1)

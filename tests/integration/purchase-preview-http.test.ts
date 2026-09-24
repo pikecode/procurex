@@ -646,12 +646,17 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       update: {},
       create: { code: 'PURCHASER', name: 'Purchaser' },
     });
+    const supplierRole = await prisma.role.upsert({
+      where: { code: 'SUPPLIER' },
+      update: {},
+      create: { code: 'SUPPLIER', name: 'Supplier' },
+    });
     const user = await prisma.user.create({
       data: {
         username: purchaserUsername,
         displayName: 'Integration Confirm Purchaser',
         passwordHash: await hashPassword('correct-password'),
-        roles: { create: [{ roleId: purchaserRole.id }] },
+        roles: { create: [{ roleId: purchaserRole.id }, { roleId: supplierRole.id }] },
       },
     });
 
@@ -850,10 +855,55 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierOrderDetail.data.items[0]?.quantity, '10');
     assert.equal(supplierOrderDetail.data.items[0]?.salesLineAmount, '120.00');
     assert.equal(supplierOrderDetail.data.items[0]?.supplyLineAmount, '90.00');
+
+    const rejectSupplierOrder = async () => {
+      const response = await fetch(`${baseUrl}/supplier-orders/${supplierOrderA.id}/reject`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'reject-supplier-order-once',
+          'x-trace-id': 'trace-reject-supplier-order',
+        },
+        body: JSON.stringify({ expectedVersion: supplierOrderA.version, reason: 'Out of stock' }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: {
+          supplierOrderId: string;
+          requestId: string;
+          status: string;
+          fulfillmentStatus: string;
+          version: number;
+          rejectedAt: string | null;
+        };
+      };
+    };
+
+    const rejectedOrder = await rejectSupplierOrder();
+    const rejectedOrderReplay = await rejectSupplierOrder();
+    assert.deepEqual(rejectedOrderReplay.data, rejectedOrder.data);
+    assert.equal(rejectedOrder.data.supplierOrderId, supplierOrderA.id);
+    assert.equal(rejectedOrder.data.requestId, created.data.id);
+    assert.equal(rejectedOrder.data.status, 'REJECTED');
+    assert.equal(rejectedOrder.data.fulfillmentStatus, 'CANCELED');
+    assert.equal(rejectedOrder.data.version, 2);
+    assert.ok(rejectedOrder.data.rejectedAt);
+
+    const rejectedSupplierOrder = await prisma.supplierOrder.findUniqueOrThrow({ where: { id: supplierOrderA.id } });
+    assert.equal(rejectedSupplierOrder.status, 'REJECTED');
+    assert.equal(rejectedSupplierOrder.fulfillmentStatus, 'CANCELED');
+    assert.equal(rejectedSupplierOrder.rejectedReason, 'Out of stock');
+    const requestAfterSupplierReject = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id: created.data.id } });
+    assert.equal(requestAfterSupplierReject.status, 'PARTIAL_PUSHED');
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
     });
     assert.equal(commands.length, 1);
+    const rejectCommands = await prisma.commandRecord.findMany({
+      where: { actorUserId: user.id, action: 'supplier-order.reject', idempotencyKey: 'reject-supplier-order-once' },
+    });
+    assert.equal(rejectCommands.length, 1);
   } finally {
     await app.close();
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
