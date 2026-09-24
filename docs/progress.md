@@ -4,14 +4,14 @@ Last updated: 2026-09-24
 
 ## Current Position
 
-The backend is currently in M3 fulfillment development.
+The backend is currently entering M4 settlement/read-model development.
 
-Latest completed milestone: F05 RETURN discrepancy handling.
+Latest completed milestone: B01 store statement read endpoint.
 
 Latest implementation commit:
 
 ```text
-Add discrepancy return resolution
+Add store statement read endpoint
 ```
 
 The working tree was clean after this commit.
@@ -194,22 +194,37 @@ Current A05 behavior:
 - Writes a DEBIT account ledger with source type CLEARING.
 - Uses Idempotency-Key through command records.
 
+### Settlement Read Models
+
+Implemented interfaces:
+
+- B01 `GET /store-statements`, `GET /store-statements/{id}`
+
+Current B01 behavior:
+
+- Dynamically groups completed supplier orders into store-side statements by store, supplier, settlement cycle, and first shipment period.
+- Uses the store sales amount plus shipment freight as the store statement total.
+- Returns open statement summaries with goods amount, freight amount, total amount, payable amount, and line count.
+- Returns statement details with source supplier order lines and source revision.
+- Keeps payment and settlement status as an OPEN read model in this first version; allocation and confirmed payment are future work.
+
 ## Recommended Next Step
 
-Start statement/payment read models or settlement difference disposal.
+Continue settlement read models or start payment preview/allocation.
 
 Suggested first version:
 
-- If continuing finance work, start statement/payment read models.
+- If continuing finance work, add supplier total/store statement read endpoints.
+- If moving into payment work, add payment preview over statement lines before creating payment records.
 - If continuing fulfillment finance linkage, connect RETURN discrepancy records to settlement/payment difference disposal.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 
 After that, continue with:
 
-1. Statement/payment read models.
-2. Settlement difference disposal for accepted, replenished, and returned discrepancies.
-3. Frontend pages for purchase, fulfillment, and finance operations.
+1. Supplier total and supplier-store statement read endpoints.
+2. Payment preview, payment record creation, and confirmation.
+3. Settlement difference disposal for accepted, replenished, and returned discrepancies.
 
 ## Where To Look
 

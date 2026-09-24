@@ -1663,6 +1663,57 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     });
     assert.equal(completedOrderAfterReturn.status, 'COMPLETED');
     assert.equal(completedOrderAfterReturn.fulfillmentStatus, 'COMPLETED');
+    const storeStatementsResponse = await fetch(`${baseUrl}/store-statements?storeId=${store.id}&supplierId=${supplierB.id}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(storeStatementsResponse.status, 200);
+    const storeStatements = (await storeStatementsResponse.json()) as {
+      data: Array<{
+        id: string;
+        type: string;
+        storeId: string;
+        supplierId: string;
+        cycle: string;
+        settlementStatus: string;
+        goodsAmount: string;
+        freightAmount: string;
+        totalAmount: string;
+        payableAmount: string;
+        lineCount: number;
+      }>;
+    };
+    const storeStatement = storeStatements.data.find((statement) => statement.supplierId === supplierB.id);
+    assert.ok(storeStatement);
+    assert.equal(storeStatement.type, 'STORE');
+    assert.equal(storeStatement.storeId, store.id);
+    assert.equal(storeStatement.cycle, 'MONTHLY');
+    assert.equal(storeStatement.settlementStatus, 'OPEN');
+    assert.equal(storeStatement.goodsAmount, '120.00');
+    assert.equal(storeStatement.freightAmount, '18.50');
+    assert.equal(storeStatement.totalAmount, '138.50');
+    assert.equal(storeStatement.payableAmount, '138.50');
+    assert.equal(storeStatement.lineCount, 1);
+    const storeStatementDetailResponse = await fetch(`${baseUrl}/store-statements/${storeStatement.id}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(storeStatementDetailResponse.status, 200);
+    const storeStatementDetail = (await storeStatementDetailResponse.json()) as {
+      data: {
+        id: string;
+        goodsAmount: string;
+        freightAmount: string;
+        totalAmount: string;
+        lines: Array<{ supplierOrderId: string; goodsAmount: string; freightAmount: string; totalAmount: string }>;
+      };
+    };
+    assert.equal(storeStatementDetail.data.id, storeStatement.id);
+    assert.equal(storeStatementDetail.data.goodsAmount, '120.00');
+    assert.equal(storeStatementDetail.data.freightAmount, '18.50');
+    assert.equal(storeStatementDetail.data.totalAmount, '138.50');
+    assert.equal(storeStatementDetail.data.lines[0]?.supplierOrderId, supplierBOrderAfterReallocate.id);
+    assert.equal(storeStatementDetail.data.lines[0]?.goodsAmount, '120.00');
+    assert.equal(storeStatementDetail.data.lines[0]?.freightAmount, '18.50');
+    assert.equal(storeStatementDetail.data.lines[0]?.totalAmount, '138.50');
 
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
