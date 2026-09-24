@@ -1,4 +1,5 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { AdjustmentsModule } from './adjustments/adjustments.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { ClearingsModule } from './clearings/clearings.module.js';
@@ -26,6 +27,7 @@ import { UsersModule } from './users/users.module.js';
 @Module({
   imports: [
     DatabaseModule,
+    AdjustmentsModule,
     CommandsModule,
     AuthModule,
     UsersModule,

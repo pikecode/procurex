@@ -6,12 +6,12 @@ Last updated: 2026-09-24
 
 The backend is currently in M4 settlement/read-model development.
 
-Latest completed milestone: B12 difference disposal offline return first version.
+Latest completed milestone: B05 adjustment read endpoints first version.
 
 Latest implementation commit:
 
 ```text
-Add difference disposal offline return
+Add adjustment read endpoints
 ```
 
 The working tree was verified for this commit.
@@ -201,6 +201,7 @@ Implemented interfaces:
 - B01 `GET /store-statements`, `GET /store-statements/{id}`
 - B02 `GET /supplier-statements`, `GET /supplier-statements/{id}`
 - B03 `GET /supplier-store-statements`, `GET /supplier-store-statements/{id}`
+- B05 `GET /adjustments`, `GET /adjustments/{id}`
 - B06 `POST /payment-records/preview`
 - B07 `POST /payment-records`
 - B08 `POST /payment-records/{id}/confirm`
@@ -232,6 +233,16 @@ Current B03 behavior:
 - Returns `parentStatementId` pointing to the matching supplier total statement for the same supplier and period.
 - Returns supplier-store statement details with source supplier order lines and source revision.
 - Keeps payment and settlement status as an OPEN read model in this first version; shared settlement item IDs are future work.
+
+Current B05 behavior:
+
+- Dynamically exposes F05 RETURN `DiscrepancyReturn` records as supplier payable decrease adjustments.
+- Calculates adjustment amount from returned quantity times source supplier order item supply unit price.
+- Returns original supplier statement ID and original period based on the source order first shipped time.
+- Returns actual adjustment period based on the return record creation time.
+- Supports filtering by storeId, supplierId, cycle, actual period, and processingStatus.
+- Marks adjustments DISPOSED when linked to a confirmed `DifferenceDisposal`, otherwise PENDING_DISPOSAL.
+- Store receivable adjustments, direct settlement adjustments, price-change adjustments, and persisted adjustment documents remain future work.
 
 Current B06 behavior:
 
@@ -297,8 +308,8 @@ Continue settlement adjustment and difference-disposal polish.
 
 Suggested first version:
 
-- Add B05 adjustment read endpoints so adjustment-driven differences can be listed and traced.
 - Extend B12 from RETURN-only offline return into OFFSET and overpayment disposal flows.
+- Add persisted adjustment source modeling for historical price changes and post-settlement revisions.
 - Add integration coverage to the existing purchase/supplier flow test.
 - Update `scripts/check-contract.mjs` and `docs/development-log.md`.
 

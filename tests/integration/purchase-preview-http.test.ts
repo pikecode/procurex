@@ -1768,6 +1768,63 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(differenceDisposalDetail.data.amount, '8.00');
     assert.equal(differenceDisposalDetail.data.items[0]?.creditItemId, persistedReturn.id);
     assert.equal(differenceDisposalDetail.data.items[0]?.amount, '8.00');
+    const adjustmentsResponse = await fetch(`${baseUrl}/adjustments?storeId=${store.id}&supplierId=${supplierB.id}`, {
+      headers: { authorization: `Bearer ${financeToken}` },
+    });
+    assert.equal(adjustmentsResponse.status, 200);
+    const adjustments = (await adjustmentsResponse.json()) as {
+      data: Array<{
+        id: string;
+        type: string;
+        direction: string;
+        storeId: string;
+        supplierId: string;
+        supplierOrderId: string;
+        sourceReturnId: string;
+        sourceDiscrepancyId: string;
+        originalStatementId: string;
+        goodsAdjustmentAmount: string;
+        freightAdjustmentAmount: string;
+        adjustmentAmount: string;
+        pendingReturnOrOffsetAmount: string;
+        processingStatus: string;
+      }>;
+    };
+    const returnAdjustment = adjustments.data.find((adjustment) => adjustment.sourceReturnId === persistedReturn.id);
+    assert.ok(returnAdjustment);
+    assert.equal(returnAdjustment.type, 'RETURN_SHORTAGE');
+    assert.equal(returnAdjustment.direction, 'SUPPLIER_PAYABLE_DECREASE');
+    assert.equal(returnAdjustment.storeId, store.id);
+    assert.equal(returnAdjustment.supplierId, supplierB.id);
+    assert.equal(returnAdjustment.supplierOrderId, supplierBOrderAfterReallocate.id);
+    assert.equal(returnAdjustment.sourceDiscrepancyId, returnDiscrepancy.id);
+    assert.ok(returnAdjustment.originalStatementId);
+    assert.equal(returnAdjustment.goodsAdjustmentAmount, '-8.00');
+    assert.equal(returnAdjustment.freightAdjustmentAmount, '0.00');
+    assert.equal(returnAdjustment.adjustmentAmount, '-8.00');
+    assert.equal(returnAdjustment.pendingReturnOrOffsetAmount, '0.00');
+    assert.equal(returnAdjustment.processingStatus, 'DISPOSED');
+    const adjustmentDetailResponse = await fetch(`${baseUrl}/adjustments/${returnAdjustment.id}`, {
+      headers: { authorization: `Bearer ${financeToken}` },
+    });
+    assert.equal(adjustmentDetailResponse.status, 200);
+    const adjustmentDetail = (await adjustmentDetailResponse.json()) as {
+      data: {
+        id: string;
+        processingStatus: string;
+        lines: Array<{ orderItemId: string; quantity: string; unitSupplyPrice: string; supplyAdjustmentAmount: string }>;
+        disposal: { disposalId: string; status: string; amount: string } | null;
+      };
+    };
+    assert.equal(adjustmentDetail.data.id, returnAdjustment.id);
+    assert.equal(adjustmentDetail.data.processingStatus, 'DISPOSED');
+    assert.equal(adjustmentDetail.data.lines[0]?.orderItemId, productAOrderItem.id);
+    assert.equal(adjustmentDetail.data.lines[0]?.quantity, '1');
+    assert.equal(adjustmentDetail.data.lines[0]?.unitSupplyPrice, '8.00');
+    assert.equal(adjustmentDetail.data.lines[0]?.supplyAdjustmentAmount, '-8.00');
+    assert.equal(adjustmentDetail.data.disposal?.disposalId, differenceDisposal.data.id);
+    assert.equal(adjustmentDetail.data.disposal?.status, 'CONFIRMED');
+    assert.equal(adjustmentDetail.data.disposal?.amount, '8.00');
     const storeStatementsResponse = await fetch(`${baseUrl}/store-statements?storeId=${store.id}&supplierId=${supplierB.id}`, {
       headers: { authorization: `Bearer ${token}` },
     });

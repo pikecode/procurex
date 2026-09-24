@@ -17,6 +17,7 @@ const [
   apiDesign,
   packageJson,
   apiMain,
+  adjustmentsController,
   healthController,
   prismaSchema,
   validation,
@@ -44,6 +45,7 @@ const [
   readProjectFile('docs/api-design.md'),
   readProjectFile('package.json'),
   readProjectFile('apps/api/main.ts'),
+  readProjectFile('apps/api/src/adjustments/adjustments.controller.ts'),
   readProjectFile('apps/api/src/health.controller.ts'),
   readProjectFile('database/schema.prisma'),
   readProjectFile('packages/domain/src/validation.ts'),
@@ -125,6 +127,10 @@ assertIncludes(apiDesign, '`GET /supplier-store-statements`、`GET /supplier-sto
 assertIncludes(supplierStoreStatementsController, "@Controller('supplier-store-statements')", 'supplier store statements controller');
 assertIncludes(supplierStoreStatementsController, '@Get()', 'supplier store statements controller');
 assertIncludes(supplierStoreStatementsController, "@Get(':id')", 'supplier store statements controller');
+assertIncludes(apiDesign, '`GET /adjustments`、`GET /adjustments/{id}`', 'api design');
+assertIncludes(adjustmentsController, "@Controller('adjustments')", 'adjustments controller');
+assertIncludes(adjustmentsController, '@Get()', 'adjustments controller');
+assertIncludes(adjustmentsController, "@Get(':id')", 'adjustments controller');
 assertIncludes(apiDesign, '`POST /payment-records/preview`', 'api design');
 assertIncludes(paymentRecordsController, "@Controller('payment-records')", 'payment records controller');
 assertIncludes(paymentRecordsController, '@Get()', 'payment records controller');
