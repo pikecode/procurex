@@ -527,3 +527,153 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     await prisma.$disconnect();
   }
 });
+
+test('purchase request reject cancels request once per idempotency key', async () => {
+  const prisma = createClient();
+  const runId = Date.now();
+  const purchaserUsername = `it_reject_purchaser_${runId}`;
+  const storeCode = `REJSTORE${runId}`;
+  const templateCode = `REJTPL${runId}`;
+  const categoryCode = `REJCAT${runId}`;
+  const unitCode = `REJUNIT${runId}`;
+  const sku = `REJSKU${runId}`;
+  const supplierCode = `REJSUP${runId}`;
+  const { app, baseUrl } = await createTestApp();
+
+  try {
+    const purchaserRole = await prisma.role.upsert({
+      where: { code: 'PURCHASER' },
+      update: {},
+      create: { code: 'PURCHASER', name: 'Purchaser' },
+    });
+    const user = await prisma.user.create({
+      data: {
+        username: purchaserUsername,
+        displayName: 'Integration Reject Purchaser',
+        passwordHash: await hashPassword('correct-password'),
+        roles: { create: [{ roleId: purchaserRole.id }] },
+      },
+    });
+
+    const [store, category, unit, supplier, template] = await Promise.all([
+      prisma.store.create({ data: { code: storeCode, name: 'Reject Store' } }),
+      prisma.category.create({ data: { code: categoryCode, name: 'Reject Category' } }),
+      prisma.unit.create({ data: { code: unitCode, name: 'piece' } }),
+      prisma.supplier.create({
+        data: {
+          code: supplierCode,
+          name: 'Reject Supplier',
+          deliveryMode: DeliveryMode.SELF,
+          defaultSettlementMode: SettlementMode.STORED_VALUE,
+          defaultSettlementCycle: 'MONTHLY',
+        },
+      }),
+      prisma.orderTemplate.create({ data: { code: templateCode, name: 'Reject Template' } }),
+    ]);
+    const product = await prisma.product.create({
+      data: {
+        sku,
+        name: 'Reject Product',
+        categoryId: category.id,
+        baseUnitId: unit.id,
+      },
+    });
+    await prisma.storeAccount.create({ data: { storeId: store.id, balance: '1000.00' } });
+    await prisma.templateItem.create({
+      data: {
+        templateId: template.id,
+        productId: product.id,
+        suppliers: { create: [{ supplierId: supplier.id, priority: 1 }] },
+      },
+    });
+    await prisma.storeTemplateBinding.create({ data: { storeId: store.id, templateId: template.id } });
+    const scope = await prisma.priceScope.create({ data: { productId: product.id, supplierId: supplier.id } });
+    await prisma.priceVersion.create({
+      data: {
+        scopeId: scope.id,
+        salesPrice: '12.000000',
+        supplyPrice: '9.000000',
+        effectiveAt: new Date('2026-09-01T00:00:00.000Z'),
+      },
+    });
+
+    const token = await login(baseUrl, purchaserUsername);
+    const createResponse = await fetch(`${baseUrl}/purchase-requests`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'idempotency-key': 'reject-create-request',
+        'x-trace-id': 'trace-reject-create',
+      },
+      body: JSON.stringify({
+        storeId: store.id,
+        items: [{ productId: product.id, quantity: '10.000000' }],
+      }),
+    });
+    assert.equal(createResponse.status, 201);
+    const created = (await createResponse.json()) as {
+      data: { id: string; status: string; paymentStatus: string; version: number };
+    };
+    assert.equal(created.data.status, 'PENDING_PROCUREMENT');
+    assert.equal(created.data.paymentStatus, 'PAID');
+
+    const reject = async () => {
+      const response = await fetch(`${baseUrl}/purchase-requests/${created.data.id}/reject`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          'idempotency-key': 'reject-request-once',
+          'x-trace-id': 'trace-reject-request',
+        },
+        body: JSON.stringify({ expectedVersion: created.data.version, reason: 'Supplier capacity changed' }),
+      });
+      assert.equal(response.status, 201);
+      return (await response.json()) as {
+        data: { requestId: string; status: string; version: number; rejectedAt: string | null };
+      };
+    };
+
+    const first = await reject();
+    const second = await reject();
+    assert.deepEqual(second.data, first.data);
+    assert.equal(first.data.requestId, created.data.id);
+    assert.equal(first.data.status, 'CANCELED');
+    assert.equal(first.data.version, 2);
+    assert.ok(first.data.rejectedAt);
+
+    const request = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id: created.data.id } });
+    assert.equal(request.status, 'CANCELED');
+    assert.equal(request.version, 2);
+    assert.equal(request.rejectedReason, 'Supplier capacity changed');
+    assert.ok(request.rejectedAt);
+    const supplierOrderCount = await prisma.supplierOrder.count({ where: { requestId: created.data.id } });
+    assert.equal(supplierOrderCount, 0);
+    const commands = await prisma.commandRecord.findMany({
+      where: { actorUserId: user.id, action: 'purchase-request.reject', idempotencyKey: 'reject-request-once' },
+    });
+    assert.equal(commands.length, 1);
+  } finally {
+    await app.close();
+    await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
+    await prisma.requestItem.deleteMany({ where: { request: { store: { code: storeCode } } } });
+    await prisma.purchaseRequest.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: supplierCode } } } });
+    await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });
+    await prisma.storeAccount.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.storeTemplateBinding.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
+    await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
+    await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
+    await prisma.product.deleteMany({ where: { sku } });
+    await prisma.supplier.deleteMany({ where: { code: supplierCode } });
+    await prisma.store.deleteMany({ where: { code: storeCode } });
+    await prisma.category.deleteMany({ where: { code: categoryCode } });
+    await prisma.unit.deleteMany({ where: { code: unitCode } });
+    await prisma.userSession.deleteMany({ where: { user: { username: purchaserUsername } } });
+    await prisma.userRole.deleteMany({ where: { user: { username: purchaserUsername } } });
+    await prisma.user.deleteMany({ where: { username: purchaserUsername } });
+    await prisma.$disconnect();
+  }
+});

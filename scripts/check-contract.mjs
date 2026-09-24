@@ -91,6 +91,8 @@ assertIncludes(apiDesign, '`POST /purchase-requests`', 'api design');
 assertIncludes(purchaseRequestsController, '@Post()', 'purchase requests controller');
 assertIncludes(apiDesign, '`POST /purchase-requests/{id}/confirm`', 'api design');
 assertIncludes(purchaseRequestsController, "@Post(':id/confirm')", 'purchase requests controller');
+assertIncludes(apiDesign, '`POST /purchase-requests/{id}/reject`', 'api design');
+assertIncludes(purchaseRequestsController, "@Post(':id/reject')", 'purchase requests controller');
 assertIncludes(apiDesign, '`GET/POST /templates`', 'api design');
 assertIncludes(templatesController, "@Controller('templates')", 'templates controller');
 assertIncludes(templatesController, "@Put(':id/stores')", 'templates controller');

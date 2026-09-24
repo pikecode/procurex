@@ -16,6 +16,7 @@ import {
   PurchaseRequestsService,
   type ConfirmPurchaseRequestResult,
   type PurchaseRequestView,
+  type RejectPurchaseRequestResult,
 } from './purchase-requests.service.js';
 import {
   validateDecimalString,
@@ -31,6 +32,11 @@ type PreviewBody = {
 
 type ConfirmBody = {
   expectedVersion?: unknown;
+};
+
+type RejectBody = {
+  expectedVersion?: unknown;
+  reason?: unknown;
 };
 
 @Controller('purchase-requests')
@@ -110,6 +116,38 @@ export class PurchaseRequestsController {
 
     return result;
   }
+
+  @Post(':id/reject')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  async reject(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Body() body: RejectBody,
+  ): Promise<RejectPurchaseRequestResult> {
+    const input = parseRejectBody(id, body);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.id,
+      action: 'purchase-request.reject',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, ...body } as never,
+      traceId: getOrCreateTraceId(request),
+    });
+
+    if (command.state === 'replay' || command.state === 'failed') {
+      return command.command.responseBody as RejectPurchaseRequestResult;
+    }
+
+    const result = await this.purchaseRequestsService.reject(input.id, input.expectedVersion, input.reason);
+    await this.commandsService.succeed({
+      commandId: command.command.id,
+      resourceType: 'PurchaseRequest',
+      resourceId: result.requestId,
+      responseBody: result as never,
+    });
+
+    return result;
+  }
 }
 
 function parsePreviewBody(body: PreviewBody): { storeId: string; items: PreviewItemInput[] } {
@@ -143,6 +181,23 @@ function parseConfirmBody(id: string, body: ConfirmBody): { id: string; expected
   ];
   throwIfInvalid(issues);
   return { id, expectedVersion: body.expectedVersion as number };
+}
+
+function parseRejectBody(id: string, body: RejectBody): { id: string; expectedVersion: number; reason: string } {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+  ];
+  if (typeof body.reason !== 'string' || body.reason.trim().length === 0 || body.reason.length > 300) {
+    issues.push({
+      field: 'reason',
+      code: 'INVALID_REASON',
+      message: 'reason must be a non-empty string with 300 characters or fewer',
+    });
+  }
+
+  throwIfInvalid(issues);
+  return { id, expectedVersion: body.expectedVersion as number, reason: (body.reason as string).trim() };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

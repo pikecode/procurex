@@ -29,6 +29,13 @@ export type ConfirmPurchaseRequestResult = {
   supplierOrderIds: string[];
 };
 
+export type RejectPurchaseRequestResult = {
+  requestId: string;
+  status: PurchaseRequestStatus;
+  version: number;
+  rejectedAt: string | null;
+};
+
 @Injectable()
 export class PurchaseRequestsService {
   constructor(
@@ -177,6 +184,58 @@ export class PurchaseRequestsService {
       requestId: request.id,
       status: PurchaseRequestStatus.CONFIRMED,
       supplierOrderIds: supplierOrderIds.sort(),
+    };
+  }
+
+  async reject(id: string, expectedVersion: number, reason: string): Promise<RejectPurchaseRequestResult> {
+    const request = await this.database.client.purchaseRequest.findUnique({ where: { id } });
+    if (!request) {
+      throw new NotFoundException({
+        code: 'PURCHASE_REQUEST_NOT_FOUND',
+        message: 'Purchase request was not found',
+      });
+    }
+
+    if (request.version !== expectedVersion) {
+      throw new ConflictException({
+        code: 'VERSION_CONFLICT',
+        message: 'Purchase request version has changed',
+        details: { expectedVersion, currentVersion: request.version },
+      });
+    }
+
+    if (request.status === PurchaseRequestStatus.CANCELED) {
+      return {
+        requestId: request.id,
+        status: request.status,
+        version: request.version,
+        rejectedAt: request.rejectedAt?.toISOString() ?? null,
+      };
+    }
+
+    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT) {
+      throw new ConflictException({
+        code: 'PURCHASE_REQUEST_NOT_REJECTABLE',
+        message: 'Purchase request cannot be rejected in its current status',
+        details: { status: request.status },
+      });
+    }
+
+    const rejected = await this.database.client.purchaseRequest.update({
+      where: { id: request.id },
+      data: {
+        status: PurchaseRequestStatus.CANCELED,
+        rejectedAt: new Date(),
+        rejectedReason: reason,
+        version: { increment: 1 },
+      },
+    });
+
+    return {
+      requestId: rejected.id,
+      status: rejected.status,
+      version: rejected.version,
+      rejectedAt: rejected.rejectedAt?.toISOString() ?? null,
     };
   }
 }
