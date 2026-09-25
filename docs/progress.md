@@ -30,6 +30,10 @@ Direct supplier-term statements now use their B04 settlement item ID with the B0
 
 Recommended next step: complete W11 role acceptance and begin M5 notifications/export operational review. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
 
+## Progress Metrics
+
+The project uses two fixed metrics. **Core backend implementation: about 70%–75%** — the previously reported figure, covering the main API, data models, migrations, permissions, settlement reads/payments, fulfillment, pricing, reports, and exports already implemented. **Full release acceptance: about 40%–45%** — the stricter figure, also requiring all role pages, complete M4 adjustment handling, notifications, audit/reconciliation, task recovery, regression evidence, and M6 deployment/launch acceptance. The difference is scope, not a regression; future updates must label which metric they use.
+
 ## Verification Baseline
 
 The latest completed stage passed:
