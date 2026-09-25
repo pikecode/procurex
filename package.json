@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start:api": "node --env-file-if-exists=.env dist/apps/api/main.js",
+    "start:web": "python3 -m http.server 4173 --directory apps/web",
     "start:worker": "node --env-file-if-exists=.env dist/apps/worker/main.js",
     "db:up": "docker compose -f infra/compose/compose.yaml up -d --wait",
     "db:stop": "docker compose -f infra/compose/compose.yaml stop",

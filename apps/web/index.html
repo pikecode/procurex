@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProcureX · 报表</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <aside class="sidebar"><div class="brand"><span class="mark">P</span><span>ProcureX<small>采购协同平台</small></span></div><div class="nav-label">工作台</div><a class="nav-item" href="#">总览</a><a class="nav-item" href="#">订货与履约</a><a class="nav-item" href="#">财务结算</a><a class="nav-item active" href="#reports">报表与分析</a><div class="side-foot"><span class="pulse"></span>系统运行正常</div></aside>
+  <main class="main">
+    <header class="topbar"><div class="crumb">工作台 <span>/</span> 报表与分析</div><div class="profile"><span id="identity">未登录</span><button id="logout" class="quiet hidden">退出</button><span class="avatar">P</span></div></header>
+    <section class="page-head"><div><div class="eyebrow">经营数据</div><h1>报表与分析</h1><p>查看订货表现、商品流转与经营差额，帮助团队及时掌握业务状态。</p></div><div class="updated"><span class="pulse"></span>数据实时更新</div></section>
+    <section id="login" class="login-card"><div><h2>登录管理后台</h2><p>使用 ProcureX 账号查看授权报表。</p></div><form id="login-form"><input name="username" placeholder="用户名" required><input name="password" type="password" placeholder="密码" required><button class="primary">登录</button></form><div id="login-error" class="error"></div></section>
+    <section id="workspace" class="hidden">
+      <div class="tabs" role="tablist"><button class="tab active" data-report="order-amounts">订货金额<span>R01</span></button><button class="tab" data-report="product-quantities">商品数量<span>R02</span></button><button class="tab" data-report="profit">商品差额<span>R03</span></button></div>
+      <div class="filter-card"><div><label for="from">开始日期</label><input id="from" type="date"></div><div><label for="to">结束日期</label><input id="to" type="date"></div><div class="scope-filter hidden" id="company-filters"><label for="storeId">门店 ID（可选）</label><input id="storeId" placeholder="全部门店"></div><div class="scope-filter hidden" id="supplier-filter"><label for="supplierId">供应商 ID（可选）</label><input id="supplierId" placeholder="全部供应商"></div><button id="run" class="primary"><span>⌕</span> 查询报表</button></div>
+      <div id="notice" class="notice hidden"></div>
+      <div class="summary-head"><div><h2 id="report-title">完成订货金额</h2><p id="report-desc">按订单完成日期统计，包含全部结算方式。</p></div><div class="asof" id="asof"></div></div>
+      <div id="summary" class="summary-grid"></div>
+      <section class="data-card"><div class="data-head"><div><h3 id="table-title">月度趋势</h3><p>金额单位：人民币（CNY）</p></div><button id="download" class="secondary">↓ <span>导出 CSV</span></button></div><div class="table-wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table><div id="empty" class="empty hidden"><span>◌</span><strong>暂无符合条件的数据</strong><small>调整日期范围后再试试</small></div></div></section>
+      <footer>统计口径按业务日期计算 · 所有金额以人民币计价</footer>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -6,12 +6,12 @@ Last updated: 2026-09-25
 
 The backend has started M5 reporting development; M4 settlement adjustments remain incomplete.
 
-Latest completed implementation: DEV-501 R01-R03 reporting API first backend slice.
+Latest completed implementation: W11 initial report page over DEV-501 R01-R03 APIs.
 
 Latest committed implementation:
 
 ```text
-568a3e1 Add initial reporting endpoints
+86f7afa Enforce report account scopes
 062e65a Enable direct supplier payments
 72ea185 Verify settled statement snapshots persist
 e132c1d Snapshot confirmed settlement item amounts
@@ -27,7 +27,7 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Recommended next step: complete DEV-501 report scope and contract coverage, then add the W11 interface. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
+Recommended next step: complete W11 usability/role review and implement R04 asynchronous exports. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
 
 ## Verification Baseline
 
@@ -44,6 +44,8 @@ Current verified change: price-change runs now report FAILED when any child orde
 DEV-501 R01-R03 backend slice is implemented. `completedAt` is persisted and written when fulfillment becomes complete; existing completed orders are backfilled by migration. R01 reports completed-order amounts by completion month, R02 final received quantities by completion date with a three-month limit, and R03 completed non-direct order profit by first shipment date with freight separate. Date filtering uses Asia/Shanghai day boundaries; completed order prices are frozen by P02's completed-order exclusion. Local migration, build, 10 unit tests, 26 integration tests, contract check, and diff check passed.
 
 Report access now accepts store and supplier roles for R01/R02 and forces their bound `UserScope` into the query. R03 remains company-only. I05 `PATCH /users/{id}` can assign one COMPANY, STORE, or SUPPLIER scope; the scope is included in login authentication context. The scope migration is deployed locally.
+
+W11 first usable web screen is implemented in `apps/web`: login, R01-R03 tabs, date/entity filters, KPI summaries, result tables, empty/error states, and CSV download. Start with `npm run start:web`; API CORS permits the local web origin. Export job queue (R04) is not implemented, so CSV is a direct download of the currently displayed report. Static page delivery and JavaScript syntax were checked locally.
 
 Statement and adjustment period grouping now uses the supplier order's settlement cycle snapshot, so changing supplier defaults does not move historical orders.
 
