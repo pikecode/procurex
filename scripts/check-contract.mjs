@@ -90,6 +90,8 @@ assertIncludes(prismaSchema, '@@unique([actorUserId, action, idempotencyKey])', 
 assertIncludes(validation, 'validateIdempotencyKey', 'domain validation');
 assertIncludes(validation, 'validateDecimalString', 'domain validation');
 assertIncludes(prismaSchema, 'model UserSession', 'prisma schema');
+assertIncludes(prismaSchema, 'model UserScope', 'user scope schema');
+assertIncludes(prismaSchema, 'enum UserScopeType', 'user scope enum');
 assertIncludes(apiDesign, '`POST /auth/login`', 'api design');
 assertIncludes(authController, "@Post('auth/login')", 'auth controller');
 assertIncludes(authController, "@Get('me')", 'auth controller');

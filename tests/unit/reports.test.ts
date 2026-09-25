@@ -33,6 +33,7 @@ test('reports use final received quantities, split freight, and exclude direct o
 
 test('report filters reject impossible dates and product quantity ranges beyond three months', () => {
   const controller = new ReportsController({} as any);
-  assert.throws(() => controller.orderAmounts({ from: '2026-02-31', to: '2026-03-01' }), BadRequestException);
-  assert.throws(() => controller.productQuantities({ from: '2026-01-01', to: '2026-05-01' }), BadRequestException);
+  const request = { auth: { user: { roles: ['PURCHASER'] } } } as any;
+  assert.throws(() => controller.orderAmounts({ from: '2026-02-31', to: '2026-03-01' }, request), BadRequestException);
+  assert.throws(() => controller.productQuantities({ from: '2026-01-01', to: '2026-05-01' }, request), BadRequestException);
 });

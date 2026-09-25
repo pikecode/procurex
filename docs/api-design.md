@@ -77,7 +77,7 @@ Blocker = { code, message, itemId? }
 | I02 | `POST /auth/wechat-session` | 一次性平台 code；返回已绑定账号会话或短期绑定状态 | 服务端校验平台 code；不把 openid 作为登录凭证直接信任 |
 | I03 | `POST /auth/bind-wechat` | 绑定会话、已有账号认证信息 | 绑定方式技术验证后锁定；已有身份禁止被他人覆盖 |
 | I04 | `POST /auth/refresh`、`POST /auth/logout`、`GET /me` | 轮换、撤销、本人信息 | Web 安全 Cookie+CSRF，小程序令牌；权限变更及时失效 |
-| I05 | `GET/POST /users`、`PATCH /users/{id}` | 账号、状态、角色、合法数据范围、expectedVersion | ADMIN；停用撤销会话，不返回 passwordHash |
+| I05 | `GET/POST /users`、`PATCH /users/{id}` | 账号、状态、角色、合法数据范围、expectedVersion；scope 为 COMPANY 或绑定一个 storeId/supplierId | ADMIN；停用撤销会话，不返回 passwordHash |
 | I06 | `POST /files/upload-sessions` | purpose、filename、mimeType、sizeBytes、可选业务对象；返回短期上传凭据 | 登录且具有对应用途权限；业务对象先校验范围 |
 | I07 | `POST /files/{id}/complete`、`GET /files/{id}/download` | 服务端验证完成；授权下载地址 | 真实类型、大小、对象存在与归属；凭证 READY 后才可提交单据 |
 | I08 | `GET /notifications`、`POST /notifications/{id}/read` | 分页消息及已读 | 只可操作本人消息 |

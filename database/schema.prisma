@@ -13,6 +13,12 @@ enum UserStatus {
   DISABLED
 }
 
+enum UserScopeType {
+  COMPANY
+  STORE
+  SUPPLIER
+}
+
 enum StoreStatus {
   ACTIVE
   DISABLED
@@ -182,6 +188,20 @@ model User {
   roles        UserRole[]
   commands     CommandRecord[]
   sessions     UserSession[]
+  scopes       UserScope[]
+}
+
+model UserScope {
+  id         String         @id @default(uuid()) @db.Uuid
+  userId     String         @unique @db.Uuid
+  scopeType  UserScopeType
+  storeId    String?        @db.Uuid
+  supplierId String?        @db.Uuid
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store      Store?         @relation(fields: [storeId], references: [id])
+  supplier   Supplier?      @relation(fields: [supplierId], references: [id])
+  @@index([storeId])
+  @@index([supplierId])
 }
 
 model UserSession {
@@ -276,6 +296,7 @@ model Store {
   supplierOrders    SupplierOrder[]
   rechargeDocuments RechargeDocument[]
   clearingDocuments ClearingDocument[]
+  userScopes        UserScope[]
 }
 
 model Supplier {
@@ -296,6 +317,7 @@ model Supplier {
   priceScopes              PriceScope[]
   requestItems             RequestItem[]
   supplierOrders           SupplierOrder[]
+  userScopes               UserScope[]
 }
 
 model Category {

@@ -20,6 +20,7 @@ export type LoginResult = {
     username: string;
     displayName: string;
     roles: string[];
+    scope?: { type: string; storeId?: string; supplierId?: string };
   };
 };
 
@@ -37,7 +38,7 @@ export class AuthService {
   async login(input: LoginInput): Promise<LoginResult> {
     const user = await this.database.client.user.findUnique({
       where: { username: input.username },
-      include: { roles: { include: { role: true } } },
+      include: { roles: { include: { role: true } }, scopes: true },
     });
 
     if (!user || user.status !== UserStatus.ACTIVE || !(await verifyPassword(input.password, user.passwordHash))) {
@@ -65,6 +66,7 @@ export class AuthService {
         username: user.username,
         displayName: user.displayName,
         roles: user.roles.map((entry) => entry.role.code).sort(),
+        scope: toScope(user.scopes[0]),
       },
     };
   }
@@ -72,7 +74,7 @@ export class AuthService {
   async authenticate(accessToken: string): Promise<AuthenticatedSession | null> {
     const session = await this.database.client.userSession.findUnique({
       where: { tokenHash: tokenHash(accessToken) },
-      include: { user: { include: { roles: { include: { role: true } } } } },
+      include: { user: { include: { roles: { include: { role: true } }, scopes: true } } },
     });
 
     if (!session || session.revokedAt || session.expiresAt <= new Date() || session.user.status !== UserStatus.ACTIVE) {
@@ -91,6 +93,7 @@ export class AuthService {
         username: session.user.username,
         displayName: session.user.displayName,
         roles: session.user.roles.map((entry) => entry.role.code).sort(),
+        scope: toScope(session.user.scopes[0]),
       },
     };
   }
@@ -106,6 +109,10 @@ export class AuthService {
       },
     });
   }
+}
+
+function toScope(scope?: { scopeType: string; storeId: string | null; supplierId: string | null }) {
+  return scope ? { type: scope.scopeType, ...(scope.storeId ? { storeId: scope.storeId } : {}), ...(scope.supplierId ? { supplierId: scope.supplierId } : {}) } : undefined;
 }
 
 export function tokenHash(accessToken: string): string {

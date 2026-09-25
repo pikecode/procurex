@@ -94,6 +94,7 @@
 ## 2026-09-25
 
 - Hardened DEV-501 report date validation against impossible calendar dates and added coverage for the R02 maximum range. Verification: build, 11 unit tests, contract check, and `git diff --check` passed.
+- Added the first data-scope slice for DEV-501: `UserScope` migration, admin account scope assignment through I05, scope in authenticated sessions, and forced store/supplier filtering for R01/R02. R03 remains restricted to company roles.
 
 - Started M5 DEV-501 with R01-R03 reporting endpoints. Added `SupplierOrder.completedAt`, completion-time writes for receipt/discrepancy completion, and a migration backfill for existing completed orders. Reports use Asia/Shanghai date boundaries and persisted amount fields; R02 enforces the three-month limit and R03 excludes supplier direct-term orders with freight separate.
 - Verification: migration deployed locally, build, 10 unit tests, 26 integration tests, contract check, and `git diff --check` passed. Remaining: store/supplier report scopes, static report route checks, and W11 UI.

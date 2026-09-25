@@ -1,5 +1,5 @@
-import { BadRequestException, Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard.js';
+import { BadRequestException, Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { ReportsService, type ReportFilters } from './reports.service.js';
@@ -10,17 +10,17 @@ export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Get('order-amounts')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER')
-  orderAmounts(@Query() query: Record<string, unknown>) { return this.reports.orderAmounts(parseFilters(query)); }
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+  orderAmounts(@Query() query: Record<string, unknown>, @Req() request: AuthenticatedRequest) { return this.reports.orderAmounts(scopedFilters(parseFilters(query), request)); }
 
   @Get('product-quantities')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER')
-  productQuantities(@Query() query: Record<string, unknown>) {
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+  productQuantities(@Query() query: Record<string, unknown>, @Req() request: AuthenticatedRequest) {
     const filters = parseFilters(query, true);
     if (filters.from && filters.to && addMonths(filters.from, 3) < filters.to) {
       throw new BadRequestException({ code: 'REPORT_RANGE_TOO_LARGE', message: 'Date range cannot exceed three months' });
     }
-    return this.reports.productQuantities(filters);
+    return this.reports.productQuantities(scopedFilters(filters, request));
   }
 
   @Get('profit')
@@ -35,6 +35,21 @@ function parseFilters(query: Record<string, unknown>, requiredRange = false): Re
     throw new BadRequestException({ code: 'INVALID_REPORT_RANGE', message: 'from and to must be valid dates with from not after to' });
   }
   return { from, to, storeId: optionalId('storeId', query.storeId), supplierId: optionalId('supplierId', query.supplierId), productId: optionalId('productId', query.productId) };
+}
+
+function scopedFilters(filters: ReportFilters, request: AuthenticatedRequest): ReportFilters {
+  const roles = request.auth?.user.roles ?? [];
+  if (roles.includes('STORE') || roles.includes('STORE_FINANCE')) {
+    const storeId = request.auth?.user.scope?.storeId;
+    if (!storeId || (filters.storeId && filters.storeId !== storeId)) throw new BadRequestException({ code: 'SCOPE_MISMATCH', message: 'Report is outside the current store scope' });
+    return { ...filters, storeId };
+  }
+  if (roles.includes('SUPPLIER')) {
+    const supplierId = request.auth?.user.scope?.supplierId;
+    if (!supplierId || (filters.supplierId && filters.supplierId !== supplierId)) throw new BadRequestException({ code: 'SCOPE_MISMATCH', message: 'Report is outside the current supplier scope' });
+    return { ...filters, supplierId };
+  }
+  return filters;
 }
 
 function parseDate(name: string, value: unknown): string | undefined {
