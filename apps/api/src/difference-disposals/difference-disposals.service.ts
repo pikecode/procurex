@@ -62,12 +62,12 @@ type TargetOrder = SupplierOrder & { shipments: Shipment[] };
 export class DifferenceDisposalsService {
   constructor(private readonly database: DatabaseService) {}
 
-  async get(id: string): Promise<DifferenceDisposalView> {
+  async get(id: string, scope?: { type?: string; storeId?: string; supplierId?: string }): Promise<DifferenceDisposalView> {
     const disposal = await this.database.client.differenceDisposal.findUnique({
       where: { id },
       include: { items: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!disposal) {
+    if (!disposal || (scope?.type === 'STORE' && disposal.storeId !== scope.storeId) || (scope?.type === 'SUPPLIER' && disposal.supplierId !== scope.supplierId)) {
       throw new NotFoundException({
         code: 'DIFFERENCE_DISPOSAL_NOT_FOUND',
         message: 'Difference disposal was not found',
@@ -246,12 +246,12 @@ export class DifferenceDisposalsService {
     return result;
   }
 
-  async confirm(id: string, input: ConfirmDifferenceDisposalInput): Promise<DifferenceDisposalView> {
+  async confirm(id: string, input: ConfirmDifferenceDisposalInput, scope?: { type?: string; storeId?: string; supplierId?: string }): Promise<DifferenceDisposalView> {
     const disposal = await this.database.client.differenceDisposal.findUnique({
       where: { id },
       include: { items: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!disposal) {
+    if (!disposal || (scope?.type === 'STORE' && disposal.storeId !== scope.storeId) || (scope?.type === 'SUPPLIER' && disposal.supplierId !== scope.supplierId)) {
       throw new NotFoundException({
         code: 'DIFFERENCE_DISPOSAL_NOT_FOUND',
         message: 'Difference disposal was not found',

@@ -43,9 +43,9 @@ export class DifferenceDisposalsController {
 
   @Get(':id')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'SUPPLIER')
-  get(@Param('id') id: string): Promise<DifferenceDisposalView> {
+  get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<DifferenceDisposalView> {
     throwIfInvalid(validateUuid('id', id));
-    return this.differenceDisposalsService.get(id);
+    return this.differenceDisposalsService.get(id, request.auth?.user.scope);
   }
 
   @Post()
@@ -100,7 +100,7 @@ export class DifferenceDisposalsController {
       return command.command.responseBody as DifferenceDisposalView;
     }
 
-    const result = await this.differenceDisposalsService.confirm(input.id, { expectedVersion: input.expectedVersion });
+    const result = await this.differenceDisposalsService.confirm(input.id, { expectedVersion: input.expectedVersion }, auth.user.scope);
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'DifferenceDisposal',

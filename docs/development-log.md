@@ -98,6 +98,7 @@
 - Implemented R04 persisted export jobs: async CSV generation, status lookup, owner-only download, seven-day expiry, and a W11 client that polls before downloading. API polling resumes queued rows after restart, and status/download recheck current report role and scope.
 - Verification: migration status up to date, build, 12 unit tests, 26 integration tests, contract check, JavaScript syntax, and `git diff --check` passed.
 - Hardened R04 queue processing with atomic QUEUED to PROCESSING claims, expired snapshot cleanup, and a regression check that a queued job is claimed once. Verification: migration applied, build, 13 unit tests, 26 integration tests, contract check, JavaScript syntax, and `git diff --check` passed.
+- Hardened DEV-406 adjustment and difference-disposal reads/confirmation with authenticated store/supplier scope checks; added a cross-scope regression test.
 
 - Hardened DEV-501 report date validation against impossible calendar dates and added coverage for the R02 maximum range. Verification: build, 11 unit tests, contract check, and `git diff --check` passed.
 - Added the first data-scope slice for DEV-501: `UserScope` migration, admin account scope assignment through I05, scope in authenticated sessions, and forced store/supplier filtering for R01/R02. R03 remains restricted to company roles.

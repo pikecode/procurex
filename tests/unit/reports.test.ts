@@ -3,6 +3,8 @@ import test from 'node:test';
 import { ReportsService } from '../../apps/api/src/reports/reports.service.js';
 import { BadRequestException } from '@nestjs/common';
 import { ReportsController } from '../../apps/api/src/reports/reports.controller.js';
+import { AdjustmentsController } from '../../apps/api/src/adjustments/adjustments.controller.js';
+import { ForbiddenException } from '@nestjs/common';
 
 test('reports use final received quantities, split freight, and exclude direct orders from profit', async () => {
   const queries: any[] = [];
@@ -55,4 +57,10 @@ test('export worker claims queued jobs once', async () => {
   } } } as any);
   await (service as any).processQueuedExports();
   assert.equal(updates[0].where.status, 'QUEUED');
+});
+
+test('adjustment queries cannot cross a bound account scope', async () => {
+  const controller = new AdjustmentsController({ list: async () => [] } as any);
+  const request = { auth: { user: { scope: { type: 'STORE', storeId: '00000000-0000-4000-8000-000000000001' } } } } as any;
+  assert.throws(() => controller.list({ storeId: '00000000-0000-4000-8000-000000000002' }, request), ForbiddenException);
 });

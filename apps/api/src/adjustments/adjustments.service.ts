@@ -96,9 +96,9 @@ export class AdjustmentsService {
     return rows.map(toSummaryView);
   }
 
-  async get(id: string): Promise<AdjustmentDetailView> {
+  async get(id: string, scope?: { type?: string; storeId?: string; supplierId?: string }): Promise<AdjustmentDetailView> {
     const key = decodeAdjustmentId(id);
-    const rows = await this.loadRows({ storeId: key.storeId, supplierId: key.supplierId });
+    const rows = await this.loadRows({ storeId: scope?.type === 'STORE' ? scope.storeId : key.storeId, supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId });
     const row = rows.find((item) => encodeAdjustmentId(item.id, item.orderItem.supplierOrder.storeId, item.orderItem.supplierOrder.supplierId) === id);
     if (!row) {
       throw new NotFoundException({
