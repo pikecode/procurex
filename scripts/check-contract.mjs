@@ -42,6 +42,7 @@ const [
   supplierStatementsController,
   shipmentsController,
   templatesController,
+  reportsController,
 ] = await Promise.all([
   readProjectFile('docs/api-design.md'),
   readProjectFile('package.json'),
@@ -70,7 +71,8 @@ const [
   readProjectFile('apps/api/src/supplier-store-statements/supplier-store-statements.controller.ts'),
   readProjectFile('apps/api/src/supplier-statements/supplier-statements.controller.ts'),
     readProjectFile('apps/api/src/shipments/shipments.controller.ts'),
-    readProjectFile('apps/api/src/templates/templates.controller.ts'),
+  readProjectFile('apps/api/src/templates/templates.controller.ts'),
+  readProjectFile('apps/api/src/reports/reports.controller.ts'),
   ]);
 
 const pkg = JSON.parse(packageJson);
@@ -216,6 +218,13 @@ assertIncludes(supplierOrdersController, 'freightConfirmationId', 'supplier orde
 assertIncludes(apiDesign, '`POST /supplier-orders/{id}/shipments`', 'api design');
 assertIncludes(supplierOrdersController, "@Post(':id/shipments')", 'supplier orders controller');
 assertIncludes(supplierOrdersController, 'gapAllocations', 'supplier orders controller');
+assertIncludes(apiDesign, '`GET /reports/order-amounts`', 'api design');
+assertIncludes(apiDesign, '`GET /reports/product-quantities`', 'api design');
+assertIncludes(apiDesign, '`GET /reports/profit`', 'api design');
+assertIncludes(reportsController, "@Get('order-amounts')", 'reports controller');
+assertIncludes(reportsController, "@Get('product-quantities')", 'reports controller');
+assertIncludes(reportsController, "@Get('profit')", 'reports controller');
+assertIncludes(reportsController, "@RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER')", 'reports controller');
 assertIncludes(prismaSchema, 'model ShipmentGapAllocation', 'prisma schema');
 assertIncludes(prismaSchema, 'freightConfirmationId String?', 'prisma schema');
 assertIncludes(apiDesign, '`POST /shipments/{id}/receipts`', 'api design');

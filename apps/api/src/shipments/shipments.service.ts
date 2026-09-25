@@ -192,6 +192,7 @@ export class ShipmentsService {
         data: {
           fulfillmentStatus: nextFulfillmentStatus,
           status: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : SupplierOrderStatus.PARTIAL_SHIPPED,
+          completedAt: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? new Date() : null,
           version: { increment: 1 },
         },
       });

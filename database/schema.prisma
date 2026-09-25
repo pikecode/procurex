@@ -567,6 +567,7 @@ model SupplierOrder {
   settlementCycleSnapshot String             @default("MONTHLY") @db.VarChar(40)
   status               SupplierOrderStatus   @default(DRAFT)
   fulfillmentStatus    FulfillmentStatus     @default(PENDING)
+  completedAt          DateTime?             @db.Timestamptz(6)
   firstShippedAt       DateTime?             @db.Timestamptz(6)
   pushedAt             DateTime?             @db.Timestamptz(6)
   rejectedAt           DateTime?             @db.Timestamptz(6)

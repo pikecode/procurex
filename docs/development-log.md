@@ -93,6 +93,9 @@
 3. npm audit 报告需要单独评估，不在本次直接使用强制升级。
 ## 2026-09-25
 
+- Started M5 DEV-501 with R01-R03 reporting endpoints. Added `SupplierOrder.completedAt`, completion-time writes for receipt/discrepancy completion, and a migration backfill for existing completed orders. Reports use Asia/Shanghai date boundaries and persisted amount fields; R02 enforces the three-month limit and R03 excludes supplier direct-term orders with freight separate.
+- Verification: migration deployed locally, build, 10 unit tests, 26 integration tests, contract check, and `git diff --check` passed. Remaining: store/supplier report scopes, static report route checks, and W11 UI.
+
 - Added the direct `STORE_TO_SUPPLIER` payment direction. B04 direct statement IDs now work with B06-B08 payment preview, registration, and confirmation; direct payments preserve the supplier as payee and persist/read amount snapshots.
 - Added database integration assertions that confirm a statement snapshot is persisted with goods and freight split, then remains visible in the statement and payment preview after the source order amount changes.
 - Verification: build, 9 unit tests, and 26 integration tests passed.

@@ -4,14 +4,15 @@ Last updated: 2026-09-25
 
 ## Current Position
 
-The backend is currently in M4 settlement/read-model development.
+The backend has started M5 reporting development; M4 settlement adjustments remain incomplete.
 
-Latest completed milestone: DEV-406 settlement item snapshots for confirmed payments.
+Latest completed implementation: DEV-501 R01-R03 reporting API first backend slice.
 
 Latest committed implementation:
 
 ```text
-7f96c9d Enable direct supplier payments
+568a3e1 Add initial reporting endpoints
+062e65a Enable direct supplier payments
 72ea185 Verify settled statement snapshots persist
 e132c1d Snapshot confirmed settlement item amounts
 59ae4d3 Enforce settlement funding checks
@@ -26,7 +27,7 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Recommended next step: extend the snapshot from settlement items to formal statement status and add post-settlement price adjustment items. Current B05 return adjustments and B12 disposals remain the only persisted adjustment sources.
+Recommended next step: complete DEV-501 report scope and contract coverage, then add the W11 interface. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
 
 ## Verification Baseline
 
@@ -36,9 +37,11 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count: 26 integration tests passing; unit coverage is 9 tests.
+Current integration coverage count: 26 integration tests passing; unit coverage is 10 tests.
 
 Current verified change: price-change runs now report FAILED when any child order fails; P02 revaluation refreshes purchase-request funding summaries; purchase confirmation recalculates funding from current item amounts and current account balance before splitting. Payment preview blocks unresolved positive shortfalls and company-term supplier payments whose store receivables are not confirmed paid. Price changes do not mutate balances or ledgers.
+
+DEV-501 R01-R03 backend slice is implemented. `completedAt` is persisted and written when fulfillment becomes complete; existing completed orders are backfilled by migration. R01 reports completed-order amounts by completion month, R02 final received quantities by completion date with a three-month limit, and R03 completed non-direct order profit by first shipment date with freight separate. Date filtering uses Asia/Shanghai day boundaries; completed order prices are frozen by P02's completed-order exclusion. Local migration, build, 10 unit tests, 26 integration tests, contract check, and diff check passed.
 
 Statement and adjustment period grouping now uses the supplier order's settlement cycle snapshot, so changing supplier defaults does not move historical orders.
 
@@ -352,9 +355,7 @@ Current price history behavior:
 
 ## Recommended Next Step
 
-Continue DEV-406: create immutable statement snapshots and signed adjustment items for eligible changes after a statement has been settled. Keep dynamic statement totals only for unsettled statements; never synthesize refunds or mutate balances for negative adjustments without a defined disposal record.
-
-After that, complete B12 overpayment credit handling once payment confirmation can persist real unallocated received amounts, then move to M5 reporting and notifications.
+Complete DEV-501 role/data-scope behavior and API contract checks, then implement W11. Current report routes are company-role-only; store and supplier account data-scope binding is not implemented. Keep R03 restricted to PURCHASER/HQ_FINANCE/ADMIN.
 
 ## Where To Look
 

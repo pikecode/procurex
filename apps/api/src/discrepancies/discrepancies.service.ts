@@ -143,6 +143,7 @@ export class DiscrepanciesService {
         data: {
           fulfillmentStatus: nextFulfillmentStatus,
           status: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : undefined,
+          completedAt: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? new Date() : undefined,
           version: { increment: 1 },
         },
       });
