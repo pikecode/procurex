@@ -219,7 +219,7 @@ A02 不自动采购确认，A05 不变履约状态。清账按所选来源全部
 
 | 编号 | 方法与路径 | 请求/结果 | 权限 |
 |---|---|---|---|
-| B06 | `POST /payment-records/preview` | settlementItemIds；返回同主体可付金额、已预占、来源版本和阻断项 | 该方向付款登记角色 |
+| B06 | `POST /payment-records/preview` | settlementItemIds；返回同主体可付金额、已预占、来源版本和阻断项；直接账期使用 `STORE_TO_SUPPLIER` | 该方向付款登记角色 |
 | B07 | `POST /payment-records` | direction、items[{settlementItemId,expectedVersion,expectedAmount}]、businessDate、evidenceFileIds、remark?；201 待收款确认记录 | 门店侧登记对公司/供应商付款；HQ_FINANCE/ADMIN 登记公司付供应商 |
 | B08 | `POST /payment-records/{id}/confirm` | expectedVersion；返回有效核销和任何多付款待处置额 | STORE_TO_COMPANY 仅 HQ_FINANCE/ADMIN；其他方向 SUPPLIER/ADMIN |
 | B09 | `POST /payment-records/{id}/reject` | expectedVersion、reason；保留登记，释放预占 | 对应收款确认角色；仅待确认 |

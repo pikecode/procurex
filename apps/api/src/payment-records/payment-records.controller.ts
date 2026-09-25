@@ -356,13 +356,13 @@ function requiredDirection(value: unknown, issues: ValidationIssue[]): PaymentRe
 }
 
 function optionalDirection(value: unknown, issues: ValidationIssue[]): PaymentRecordDirection | undefined {
-  if (value === PaymentRecordDirection.STORE_TO_COMPANY || value === PaymentRecordDirection.COMPANY_TO_SUPPLIER) {
+  if (value === PaymentRecordDirection.STORE_TO_COMPANY || value === PaymentRecordDirection.COMPANY_TO_SUPPLIER || value === PaymentRecordDirection.STORE_TO_SUPPLIER) {
     return value;
   }
   issues.push({
     field: 'direction',
     code: 'INVALID_PAYMENT_DIRECTION',
-    message: 'direction must be STORE_TO_COMPANY or COMPANY_TO_SUPPLIER',
+    message: 'direction must be STORE_TO_COMPANY, COMPANY_TO_SUPPLIER, or STORE_TO_SUPPLIER',
   });
   return undefined;
 }

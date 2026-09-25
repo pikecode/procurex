@@ -11,8 +11,8 @@ import type { DifferenceDisposalItem, PaymentAllocation, PaymentRecord, Shipment
 import { DatabaseService } from '../database/database.service.js';
 
 export type PaymentDirection = 'STORE_TO_COMPANY' | 'COMPANY_TO_SUPPLIER';
-export type PaymentChannel = 'COMPANY';
-export type SettlementItemKind = 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE';
+export type PaymentChannel = 'COMPANY' | 'DIRECT';
+export type SettlementItemKind = 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT';
 
 export type PaymentPreviewView = {
   direction: PaymentRecordDirection;
@@ -188,6 +188,10 @@ export class PaymentRecordsService {
         });
         continue;
       }
+      if ((item.decoded.kind === 'DIRECT') !== (order.settlementMode === 'SUPPLIER_TERM')) {
+        blockedItems.push({ settlementItemId: item.id, code: 'SETTLEMENT_CHANNEL_MISMATCH', message: 'Settlement item does not match its order settlement mode' });
+        continue;
+      }
       if (new Decimal(order.request.shortfallAmount).greaterThan(0)) {
         blockedItems.push({
           settlementItemId: item.id,
@@ -220,8 +224,8 @@ export class PaymentRecordsService {
     }
 
     const direction = directionForKind(items[0]!.kind);
-    const storeId = direction === 'STORE_TO_COMPANY' ? items[0]!.storeId : null;
-    const supplierId = direction === 'COMPANY_TO_SUPPLIER' ? items[0]!.supplierId : null;
+    const storeId = direction !== 'COMPANY_TO_SUPPLIER' ? items[0]!.storeId : null;
+    const supplierId = direction !== 'STORE_TO_COMPANY' ? items[0]!.supplierId : null;
     for (const item of items) {
       if (directionForKind(item.kind) !== direction) {
         throw new ConflictException({
@@ -242,13 +246,16 @@ export class PaymentRecordsService {
         });
       }
     }
+    if (direction === PaymentRecordDirection.STORE_TO_SUPPLIER && items.some((item) => item.storeId !== storeId || item.supplierId !== supplierId)) {
+      throw new ConflictException({ code: 'PAYMENT_PARTICIPANT_MISMATCH', message: 'Direct payment items must share the same store and supplier' });
+    }
 
     const totalPayableAmount = items.reduce((sum, item) => sum.plus(item.payableAmount), new Decimal(0));
     const totalPendingPaymentAmount = items.reduce((sum, item) => sum.plus(item.pendingPaymentAmount), new Decimal(0));
     const totalConfirmedPaidAmount = items.reduce((sum, item) => sum.plus(item.confirmedPaidAmount), new Decimal(0));
     return {
       direction,
-      channel: 'COMPANY',
+      channel: direction === PaymentRecordDirection.STORE_TO_SUPPLIER ? 'DIRECT' : 'COMPANY',
       storeId,
       supplierId,
       totalPayableAmount: totalPayableAmount.toFixed(2),
@@ -383,7 +390,7 @@ export class PaymentRecordsService {
         data: result.allocations.map((allocation) => {
           const order = ordersById.get(allocation.supplierOrderId)!;
           const kind = decodeSettlementItemId(allocation.settlementItemId).kind;
-          const goodsAmount = kind === 'STORE_RECEIVABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount);
+          const goodsAmount = kind !== 'SUPPLIER_PAYABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount);
           const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
           return {
             settlementItemId: allocation.settlementItemId,
@@ -504,7 +511,7 @@ function toPreviewItem(
   confirmedOffsetAmount: Decimal | undefined,
   snapshot?: { goodsAmount: import('decimal.js').Decimal; freightAmount: import('decimal.js').Decimal; totalAmount: import('decimal.js').Decimal; sourceVersion: number },
 ): PaymentPreviewItemView {
-  const goodsAmount = snapshot?.goodsAmount ?? (kind === 'STORE_RECEIVABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount));
+  const goodsAmount = snapshot?.goodsAmount ?? (kind !== 'SUPPLIER_PAYABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount));
   const freightAmount = snapshot?.freightAmount ?? order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
   const grossAmount = snapshot?.totalAmount ?? goodsAmount.plus(freightAmount);
   const pendingAmount = allocationSummary?.pendingAmount ?? new Decimal(0);
@@ -555,7 +562,7 @@ function summarizeOffsets(items: DifferenceDisposalItem[]): Map<string, Decimal>
 }
 
 function directionForKind(kind: SettlementItemKind): PaymentRecordDirection {
-  return kind === 'STORE_RECEIVABLE' ? PaymentRecordDirection.STORE_TO_COMPANY : PaymentRecordDirection.COMPANY_TO_SUPPLIER;
+  return kind === 'STORE_RECEIVABLE' ? PaymentRecordDirection.STORE_TO_COMPANY : kind === 'DIRECT' ? PaymentRecordDirection.STORE_TO_SUPPLIER : PaymentRecordDirection.COMPANY_TO_SUPPLIER;
 }
 
 function decodeSettlementItemId(id: string): DecodedSettlementItemId {
@@ -565,7 +572,7 @@ function decodeSettlementItemId(id: string): DecodedSettlementItemId {
       supplierOrderId?: unknown;
     };
     if (
-      (parsed.kind === 'STORE_RECEIVABLE' || parsed.kind === 'SUPPLIER_PAYABLE') &&
+      (parsed.kind === 'STORE_RECEIVABLE' || parsed.kind === 'SUPPLIER_PAYABLE' || parsed.kind === 'DIRECT') &&
       typeof parsed.supplierOrderId === 'string'
     ) {
       return { kind: parsed.kind, supplierOrderId: parsed.supplierOrderId };
@@ -588,7 +595,7 @@ function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllo
     id: payment.id,
     paymentNo: payment.paymentNo,
     direction: payment.direction,
-    channel: 'COMPANY',
+    channel: payment.direction === PaymentRecordDirection.STORE_TO_SUPPLIER ? 'DIRECT' : 'COMPANY',
     storeId: payment.storeId,
     supplierId: payment.supplierId,
     amount: payment.amount.toFixed(2),

@@ -78,6 +78,10 @@ export class DirectStatementsService {
       include: { supplier: true, shipments: true, priceChangeRuns: { include: { adjustment: true }, where: { status: 'SUCCEEDED' } } },
       orderBy: [{ firstShippedAt: 'desc' }, { id: 'desc' }],
     });
+    const snapshots = await this.database.client.settlementItemSnapshot?.findMany({
+      where: { settlementItemId: { in: orders.map((order) => encodeSettlementItemId(order.id)) } },
+    }) ?? [];
+    const snapshotsById = new Map(snapshots.map((snapshot) => [snapshot.settlementItemId, snapshot]));
     const groups = new Map<string, StatementGroup>();
     for (const order of orders) {
       if (!order.firstShippedAt) continue;
@@ -92,20 +96,20 @@ export class DirectStatementsService {
         type: 'DIRECT', storeId: order.storeId, supplierId: order.supplierId, cycle, periodKey,
         periodStart: period.startDate, periodEndExclusive, lines: [],
       };
-      group.lines.push(toLineView(order));
+      group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId(order.id))));
       groups.set(key, group);
     }
     return [...groups.values()].sort((a, b) => b.periodStart.localeCompare(a.periodStart) || a.storeId.localeCompare(b.storeId));
   }
 }
 
-function toLineView(order: StatementOrder): DirectStatementLineView {
-  const goodsAmount = new Decimal(order.salesGoodsAmount);
-  const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
+function toLineView(order: StatementOrder, snapshot?: { goodsAmount: import('decimal.js').Decimal; freightAmount: import('decimal.js').Decimal; totalAmount: import('decimal.js').Decimal; sourceVersion: number }): DirectStatementLineView {
+  const goodsAmount = snapshot?.goodsAmount ?? new Decimal(order.salesGoodsAmount);
+  const freightAmount = snapshot?.freightAmount ?? order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
   return {
     settlementItemId: encodeSettlementItemId(order.id), supplierOrderId: order.id, supplierOrderNo: order.supplierOrderNo,
-    goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount: goodsAmount.plus(freightAmount).toFixed(2),
-    sourceRevision: order.version, firstShippedAt: order.firstShippedAt!.toISOString(),
+    goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount: (snapshot?.totalAmount ?? goodsAmount.plus(freightAmount)).toFixed(2),
+    sourceRevision: snapshot?.sourceVersion ?? order.version, firstShippedAt: order.firstShippedAt!.toISOString(),
     priceAdjustments: (order.priceChangeRuns ?? []).flatMap(({ runId, adjustment }) => adjustment ? [{ id: adjustment.id, runId, orderItemId: adjustment.orderItemId, salesDelta: adjustment.salesDelta.toFixed(2), supplyDelta: adjustment.supplyDelta.toFixed(2), createdAt: adjustment.createdAt.toISOString() }] : []),
   };
 }

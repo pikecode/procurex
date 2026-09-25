@@ -11,7 +11,9 @@ Latest completed milestone: DEV-406 settlement item snapshots for confirmed paym
 Latest committed implementation:
 
 ```text
-7a4433b Snapshot confirmed settlement item amounts
+7f96c9d Enable direct supplier payments
+72ea185 Verify settled statement snapshots persist
+e132c1d Snapshot confirmed settlement item amounts
 59ae4d3 Enforce settlement funding checks
 5ea495f Guard price processing and funding checks
 1c23421 Refresh M4 progress after price statement work
@@ -21,6 +23,8 @@ b976b3f Expose price adjustment sources
 ```
 
 Confirmed payment allocations now create immutable settlement item amount snapshots in one transaction. Store, supplier total, and supplier-store statement lines and later payment previews read those snapshots, while items without a confirmed payment remain dynamic. Snapshot rows cascade with test data cleanup.
+
+Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
 Recommended next step: extend the snapshot from settlement items to formal statement status and add post-settlement price adjustment items. Current B05 return adjustments and B12 disposals remain the only persisted adjustment sources.
 

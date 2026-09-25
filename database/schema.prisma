@@ -43,6 +43,7 @@ enum PaymentStatus {
 enum PaymentRecordDirection {
   STORE_TO_COMPANY
   COMPANY_TO_SUPPLIER
+  STORE_TO_SUPPLIER
 }
 
 enum PaymentRecordStatus {
