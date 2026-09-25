@@ -37,7 +37,7 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count: 26 integration tests passing; unit coverage is 10 tests.
+Current integration coverage count: 26 integration tests passing; unit coverage is 11 tests.
 
 Current verified change: price-change runs now report FAILED when any child order fails; P02 revaluation refreshes purchase-request funding summaries; purchase confirmation recalculates funding from current item amounts and current account balance before splitting. Payment preview blocks unresolved positive shortfalls and company-term supplier payments whose store receivables are not confirmed paid. Price changes do not mutate balances or ledgers.
 

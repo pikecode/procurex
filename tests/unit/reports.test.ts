@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ReportsService } from '../../apps/api/src/reports/reports.service.js';
+import { BadRequestException } from '@nestjs/common';
+import { ReportsController } from '../../apps/api/src/reports/reports.controller.js';
 
 test('reports use final received quantities, split freight, and exclude direct orders from profit', async () => {
   const queries: any[] = [];
@@ -27,4 +29,10 @@ test('reports use final received quantities, split freight, and exclude direct o
   assert.equal(profit.totals.freightAmount, '5.00');
   assert.equal(queries[2]?.where.settlementMode.not, 'SUPPLIER_TERM');
   assert.equal(queries[2]?.where.firstShippedAt.gte.toISOString(), '2026-08-31T16:00:00.000Z');
+});
+
+test('report filters reject impossible dates and product quantity ranges beyond three months', () => {
+  const controller = new ReportsController({} as any);
+  assert.throws(() => controller.orderAmounts({ from: '2026-02-31', to: '2026-03-01' }), BadRequestException);
+  assert.throws(() => controller.productQuantities({ from: '2026-01-01', to: '2026-05-01' }), BadRequestException);
 });

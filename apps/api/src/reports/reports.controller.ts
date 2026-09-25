@@ -39,7 +39,7 @@ function parseFilters(query: Record<string, unknown>, requiredRange = false): Re
 
 function parseDate(name: string, value: unknown): string | undefined {
   if (value === undefined) return undefined;
-  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`))) return value;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value) return value;
   throw new BadRequestException({ code: 'INVALID_REPORT_DATE', message: `${name} must be YYYY-MM-DD` });
 }
 
