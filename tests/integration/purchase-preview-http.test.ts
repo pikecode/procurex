@@ -2032,6 +2032,15 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(confirmedStorePayment.data.allocations[0]?.settlementItemId, storePaymentPreview.data.items[0]?.settlementItemId);
     assert.equal(confirmedStorePayment.data.allocations[0]?.amount, '138.50');
     assert.equal(confirmedStorePayment.data.allocations[0]?.state, 'CONFIRMED');
+    const storeSnapshot = await prisma.settlementItemSnapshot.findUnique({
+      where: { settlementItemId: storePaymentPreview.data.items[0]!.settlementItemId },
+    });
+    assert.equal(storeSnapshot?.goodsAmount.toFixed(2), '120.00');
+    assert.equal(storeSnapshot?.freightAmount.toFixed(2), '18.50');
+    await prisma.supplierOrder.update({
+      where: { id: storeStatementDetail.data.lines[0]!.supplierOrderId },
+      data: { salesGoodsAmount: '121.00' },
+    });
     const storePaymentPreviewAfterConfirmResponse = await fetch(`${baseUrl}/payment-records/preview`, {
       method: 'POST',
       headers: {
@@ -2057,6 +2066,20 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(storePaymentPreviewAfterConfirm.data.items[0]?.payableAmount, '0.00');
     assert.equal(storePaymentPreviewAfterConfirm.data.items[0]?.pendingPaymentAmount, '0.00');
     assert.equal(storePaymentPreviewAfterConfirm.data.items[0]?.confirmedPaidAmount, '138.50');
+    const settledStoreStatementResponse = await fetch(`${baseUrl}/store-statements/${storeStatement.id}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(settledStoreStatementResponse.status, 200);
+    const settledStoreStatement = (await settledStoreStatementResponse.json()) as {
+      data: { goodsAmount: string; totalAmount: string; lines: Array<{ goodsAmount: string; totalAmount: string }> };
+    };
+    assert.equal(settledStoreStatement.data.goodsAmount, '120.00');
+    assert.equal(settledStoreStatement.data.totalAmount, '138.50');
+    assert.equal(settledStoreStatement.data.lines[0]?.goodsAmount, '120.00');
+    await prisma.supplierOrder.update({
+      where: { id: storeStatementDetail.data.lines[0]!.supplierOrderId },
+      data: { salesGoodsAmount: '120.00' },
+    });
     const storePaymentDetailResponse = await fetch(`${baseUrl}/payment-records/${storePayment.data.id}`, {
       headers: { authorization: `Bearer ${token}` },
     });

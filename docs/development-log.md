@@ -93,6 +93,8 @@
 3. npm audit 报告需要单独评估，不在本次直接使用强制升级。
 ## 2026-09-25
 
+- Added database integration assertions that confirm a statement snapshot is persisted with goods and freight split, then remains visible in the statement and payment preview after the source order amount changes.
+- Verification: build, 9 unit tests, and 26 integration tests passed.
 - Added `SettlementItemSnapshot` persistence. Payment confirmation now records the confirmed settlement item's goods, freight, total amount, and source version atomically; later payment previews and store/supplier statement lines use the immutable amount after eligible order changes.
 - Added the database migration and cascade cleanup relation. Verification: build, 9 unit tests, 26 integration tests, and migration deploy passed.
 
