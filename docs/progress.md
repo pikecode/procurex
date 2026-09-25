@@ -11,7 +11,7 @@ Latest completed implementation: R04 persisted report exports over the W11 R01-R
 Latest committed implementation:
 
 ```text
-TBD (current R04 work)
+7365e9d Add persisted report exports
 ea129f6 Build initial W11 reporting screen
 062e65a Enable direct supplier payments
 72ea185 Verify settled statement snapshots persist
@@ -28,7 +28,7 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Recommended next step: harden export worker recovery/retention and complete W11 role acceptance. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
+Recommended next step: complete W11 role acceptance and begin M5 notifications/export operational review. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
 
 ## Verification Baseline
 
@@ -48,7 +48,7 @@ Report access now accepts store and supplier roles for R01/R02 and forces their 
 
 W11 first usable web screen is implemented in `apps/web`: login, R01-R03 tabs, date/entity filters, KPI summaries, result tables, empty/error states, and CSV export. Start with `npm run start:web`; API CORS permits the local web origin.
 
-R04 creates a persisted export job (202), processes queued CSV jobs asynchronously, exposes status and owner-only download routes, rechecks the current report role and bound account scope, and expires snapshots after seven days. The API polls queued jobs after restart; storage is database text rather than private object storage.
+R04 creates a persisted export job (202), claims queued CSV jobs atomically with PROCESSING status, exposes status and owner-only download routes, rechecks the current report role and bound account scope, and expires snapshots after seven days. The API polls queued jobs after restart and cleans expired content; storage is database text rather than private object storage.
 
 Statement and adjustment period grouping now uses the supplier order's settlement cycle snapshot, so changing supplier defaults does not move historical orders.
 

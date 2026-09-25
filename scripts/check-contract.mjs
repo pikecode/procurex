@@ -232,6 +232,8 @@ assertIncludes(apiDesign, '`POST /exports`', 'api design');
 assertIncludes(exportsController, "@Controller('exports')", 'exports controller');
 assertIncludes(exportsController, '@HttpCode(202)', 'exports controller');
 assertIncludes(exportsController, '@Get(\':id/download\')', 'exports controller');
+assertIncludes(prismaSchema, 'model ExportJob', 'export job schema');
+assertIncludes(prismaSchema, 'PROCESSING', 'export processing status');
 assertIncludes(reportsController, "@RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER')", 'reports controller');
 assertIncludes(prismaSchema, 'model ShipmentGapAllocation', 'prisma schema');
 assertIncludes(prismaSchema, 'freightConfirmationId String?', 'prisma schema');

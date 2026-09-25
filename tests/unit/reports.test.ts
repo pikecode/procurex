@@ -45,3 +45,14 @@ test('export status and downloads recheck current report role and saved scope', 
   assert.equal(await service.exportContent('job', 'user', ['PURCHASER'], { type: 'STORE', storeId: 'store' }), null);
   assert.equal(await service.exportContent('job', 'user', ['PURCHASER'], { type: 'COMPANY' }), 'private');
 });
+
+test('export worker claims queued jobs once', async () => {
+  const updates: any[] = [];
+  const service = new ReportsService({ client: { exportJob: {
+    findMany: async () => [{ id: 'job', reportType: 'order-amounts', filters: {}, expiresAt: new Date(Date.now() + 60000), createdAt: new Date() }],
+    updateMany: async (query: any) => { updates.push(query); return { count: 1 }; },
+    update: async () => ({}),
+  } } } as any);
+  await (service as any).processQueuedExports();
+  assert.equal(updates[0].where.status, 'QUEUED');
+});

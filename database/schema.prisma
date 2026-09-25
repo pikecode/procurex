@@ -21,6 +21,7 @@ enum UserScopeType {
 
 enum ExportJobStatus {
   QUEUED
+  PROCESSING
   READY
   FAILED
 }

@@ -12,7 +12,7 @@ export class ReportsService implements OnModuleInit {
   constructor(private readonly database: DatabaseService) {}
 
   onModuleInit() {
-    const timer = setInterval(() => { void this.processQueuedExports(); }, 5000);
+    const timer = setInterval(() => { void this.processQueuedExports(); void this.expireExports(); }, 5000);
     timer.unref();
   }
 
@@ -36,7 +36,14 @@ export class ReportsService implements OnModuleInit {
 
   private async processQueuedExports() {
     const jobs = await this.database.client.exportJob.findMany({ where: { status: 'QUEUED', expiresAt: { gt: new Date() } }, take: 5, orderBy: { createdAt: 'asc' } });
-    await Promise.all(jobs.map((job) => this.generateExport(job.id, job.reportType as ReportType, job.filters as ReportFilters)));
+    await Promise.all(jobs.map(async (job) => {
+      const claimed = await this.database.client.exportJob.updateMany({ where: { id: job.id, status: 'QUEUED' }, data: { status: 'PROCESSING' } });
+      if (claimed.count === 1) await this.generateExport(job.id, job.reportType as ReportType, job.filters as ReportFilters);
+    }));
+  }
+
+  private async expireExports() {
+    await this.database.client.exportJob.updateMany({ where: { expiresAt: { lte: new Date() }, status: { in: ['QUEUED', 'READY', 'FAILED'] } }, data: { status: 'FAILED', csvContent: null, errorMessage: 'Export expired' } });
   }
 
   private async generateExport(id: string, type: ReportType, filters: ReportFilters) {
