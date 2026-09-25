@@ -37,3 +37,11 @@ test('report filters reject impossible dates and product quantity ranges beyond 
   assert.throws(() => controller.orderAmounts({ from: '2026-02-31', to: '2026-03-01' }, request), BadRequestException);
   assert.throws(() => controller.productQuantities({ from: '2026-01-01', to: '2026-05-01' }, request), BadRequestException);
 });
+
+test('export status and downloads recheck current report role and saved scope', async () => {
+  const row = { id: 'job', requestedById: 'user', reportType: 'profit', permissionScope: { type: 'COMPANY' }, expiresAt: new Date(Date.now() + 60000), status: 'READY', csvContent: 'private' };
+  const service = new ReportsService({ client: { exportJob: { findFirst: async () => row } } } as any);
+  assert.equal(await service.exportStatus('job', 'user', ['STORE'], { type: 'STORE', storeId: 'store' }), null);
+  assert.equal(await service.exportContent('job', 'user', ['PURCHASER'], { type: 'STORE', storeId: 'store' }), null);
+  assert.equal(await service.exportContent('job', 'user', ['PURCHASER'], { type: 'COMPANY' }), 'private');
+});

@@ -26,6 +26,7 @@ export class ReportsController {
   @Get('profit')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER')
   profit(@Query() query: Record<string, unknown>) { return this.reports.profit(parseFilters(query)); }
+
 }
 
 function parseFilters(query: Record<string, unknown>, requiredRange = false): ReportFilters {

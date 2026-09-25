@@ -19,6 +19,12 @@ enum UserScopeType {
   SUPPLIER
 }
 
+enum ExportJobStatus {
+  QUEUED
+  READY
+  FAILED
+}
+
 enum StoreStatus {
   ACTIVE
   DISABLED
@@ -189,6 +195,7 @@ model User {
   commands     CommandRecord[]
   sessions     UserSession[]
   scopes       UserScope[]
+  exportJobs   ExportJob[]
 }
 
 model UserScope {
@@ -202,6 +209,24 @@ model UserScope {
   supplier   Supplier?      @relation(fields: [supplierId], references: [id])
   @@index([storeId])
   @@index([supplierId])
+}
+
+model ExportJob {
+  id              String          @id @default(uuid()) @db.Uuid
+  requestedById   String          @db.Uuid
+  reportType      String          @db.VarChar(40)
+  filters         Json
+  permissionScope Json
+  asOf            DateTime        @db.Timestamptz(6)
+  status          ExportJobStatus @default(QUEUED)
+  csvContent      String?         @db.Text
+  errorMessage    String?         @db.VarChar(500)
+  expiresAt       DateTime        @db.Timestamptz(6)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
+  requestedBy     User            @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  @@index([requestedById, createdAt])
+  @@index([status, expiresAt])
 }
 
 model UserSession {

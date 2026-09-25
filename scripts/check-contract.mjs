@@ -43,6 +43,7 @@ const [
   shipmentsController,
   templatesController,
   reportsController,
+  exportsController,
 ] = await Promise.all([
   readProjectFile('docs/api-design.md'),
   readProjectFile('package.json'),
@@ -73,6 +74,7 @@ const [
     readProjectFile('apps/api/src/shipments/shipments.controller.ts'),
   readProjectFile('apps/api/src/templates/templates.controller.ts'),
   readProjectFile('apps/api/src/reports/reports.controller.ts'),
+  readProjectFile('apps/api/src/reports/exports.controller.ts'),
   ]);
 
 const pkg = JSON.parse(packageJson);
@@ -226,6 +228,10 @@ assertIncludes(apiDesign, '`GET /reports/profit`', 'api design');
 assertIncludes(reportsController, "@Get('order-amounts')", 'reports controller');
 assertIncludes(reportsController, "@Get('product-quantities')", 'reports controller');
 assertIncludes(reportsController, "@Get('profit')", 'reports controller');
+assertIncludes(apiDesign, '`POST /exports`', 'api design');
+assertIncludes(exportsController, "@Controller('exports')", 'exports controller');
+assertIncludes(exportsController, '@HttpCode(202)', 'exports controller');
+assertIncludes(exportsController, '@Get(\':id/download\')', 'exports controller');
 assertIncludes(reportsController, "@RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER')", 'reports controller');
 assertIncludes(prismaSchema, 'model ShipmentGapAllocation', 'prisma schema');
 assertIncludes(prismaSchema, 'freightConfirmationId String?', 'prisma schema');

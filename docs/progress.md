@@ -6,12 +6,13 @@ Last updated: 2026-09-25
 
 The backend has started M5 reporting development; M4 settlement adjustments remain incomplete.
 
-Latest completed implementation: W11 initial report page over DEV-501 R01-R03 APIs.
+Latest completed implementation: R04 persisted report exports over the W11 R01-R03 page.
 
 Latest committed implementation:
 
 ```text
-86f7afa Enforce report account scopes
+TBD (current R04 work)
+ea129f6 Build initial W11 reporting screen
 062e65a Enable direct supplier payments
 72ea185 Verify settled statement snapshots persist
 e132c1d Snapshot confirmed settlement item amounts
@@ -27,7 +28,7 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Recommended next step: complete W11 usability/role review and implement R04 asynchronous exports. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
+Recommended next step: harden export worker recovery/retention and complete W11 role acceptance. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
 
 ## Verification Baseline
 
@@ -37,7 +38,7 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count: 26 integration tests passing; unit coverage is 11 tests.
+Current integration coverage count: 26 integration tests passing; unit coverage is 12 tests.
 
 Current verified change: price-change runs now report FAILED when any child order fails; P02 revaluation refreshes purchase-request funding summaries; purchase confirmation recalculates funding from current item amounts and current account balance before splitting. Payment preview blocks unresolved positive shortfalls and company-term supplier payments whose store receivables are not confirmed paid. Price changes do not mutate balances or ledgers.
 
@@ -45,7 +46,9 @@ DEV-501 R01-R03 backend slice is implemented. `completedAt` is persisted and wri
 
 Report access now accepts store and supplier roles for R01/R02 and forces their bound `UserScope` into the query. R03 remains company-only. I05 `PATCH /users/{id}` can assign one COMPANY, STORE, or SUPPLIER scope; the scope is included in login authentication context. The scope migration is deployed locally.
 
-W11 first usable web screen is implemented in `apps/web`: login, R01-R03 tabs, date/entity filters, KPI summaries, result tables, empty/error states, and CSV download. Start with `npm run start:web`; API CORS permits the local web origin. Export job queue (R04) is not implemented, so CSV is a direct download of the currently displayed report. Static page delivery and JavaScript syntax were checked locally.
+W11 first usable web screen is implemented in `apps/web`: login, R01-R03 tabs, date/entity filters, KPI summaries, result tables, empty/error states, and CSV export. Start with `npm run start:web`; API CORS permits the local web origin.
+
+R04 creates a persisted export job (202), processes queued CSV jobs asynchronously, exposes status and owner-only download routes, rechecks the current report role and bound account scope, and expires snapshots after seven days. The API polls queued jobs after restart; storage is database text rather than private object storage.
 
 Statement and adjustment period grouping now uses the supplier order's settlement cycle snapshot, so changing supplier defaults does not move historical orders.
 

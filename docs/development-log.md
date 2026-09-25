@@ -95,6 +95,8 @@
 
 - Added initial W11 browser report screen with login/session, R01-R03 tabs, filters, summaries, tables, empty/error states, and current-result CSV download. Added local `start:web` and API CORS origin. R04 asynchronous export jobs remain pending. Verification: browser assets reviewed, build and API suites run below.
 - Verified `npm run build`, 11 unit tests, 26 integration tests, contract check, JS syntax, `git diff --check`, and local static HTTP delivery of the page and script.
+- Implemented R04 persisted export jobs: async CSV generation, status lookup, owner-only download, seven-day expiry, and a W11 client that polls before downloading. API polling resumes queued rows after restart, and status/download recheck current report role and scope.
+- Verification: migration status up to date, build, 12 unit tests, 26 integration tests, contract check, JavaScript syntax, and `git diff --check` passed.
 
 - Hardened DEV-501 report date validation against impossible calendar dates and added coverage for the R02 maximum range. Verification: build, 11 unit tests, contract check, and `git diff --check` passed.
 - Added the first data-scope slice for DEV-501: `UserScope` migration, admin account scope assignment through I05, scope in authenticated sessions, and forced store/supplier filtering for R01/R02. R03 remains restricted to company roles.
