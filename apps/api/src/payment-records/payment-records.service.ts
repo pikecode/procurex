@@ -163,10 +163,10 @@ export class PaymentRecordsService {
     const offsetItems = await this.database.client.differenceDisposalItem.findMany({
       where: {
         targetDebitItemId: { in: uniqueIds },
-        disposal: { status: DifferenceDisposalStatus.CONFIRMED },
+        disposal: { status: { in: [DifferenceDisposalStatus.PENDING, DifferenceDisposalStatus.CONFIRMED] } },
       },
     });
-    const confirmedOffsetSummary = summarizeOffsets(offsetItems);
+    const reservedOffsetSummary = summarizeOffsets(offsetItems);
     const items: PaymentPreviewItemView[] = [];
     const blockedItems: PaymentPreviewBlockedItemView[] = [];
 
@@ -212,7 +212,7 @@ export class PaymentRecordsService {
           continue;
         }
       }
-      items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id), confirmedOffsetSummary.get(item.id), snapshotsById.get(item.id)));
+      items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id), reservedOffsetSummary.get(item.id), snapshotsById.get(item.id)));
     }
 
     if (items.length === 0) {
@@ -508,7 +508,7 @@ function toPreviewItem(
   kind: SettlementItemKind,
   order: PreviewOrder,
   allocationSummary: { pendingAmount: Decimal; confirmedAmount: Decimal } | undefined,
-  confirmedOffsetAmount: Decimal | undefined,
+  reservedOffsetAmount: Decimal | undefined,
   snapshot?: { goodsAmount: import('decimal.js').Decimal; freightAmount: import('decimal.js').Decimal; totalAmount: import('decimal.js').Decimal; sourceVersion: number },
 ): PaymentPreviewItemView {
   const goodsAmount = snapshot?.goodsAmount ?? (kind !== 'SUPPLIER_PAYABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount));
@@ -516,7 +516,8 @@ function toPreviewItem(
   const grossAmount = snapshot?.totalAmount ?? goodsAmount.plus(freightAmount);
   const pendingAmount = allocationSummary?.pendingAmount ?? new Decimal(0);
   const confirmedAmount = allocationSummary?.confirmedAmount ?? new Decimal(0);
-  const offsetAmount = confirmedOffsetAmount ?? new Decimal(0);
+  // Pending offsets reserve payable balance; confirmed offsets consume it.
+  const offsetAmount = reservedOffsetAmount ?? new Decimal(0);
   const payableAmount = Decimal.max(grossAmount.minus(pendingAmount).minus(confirmedAmount).minus(offsetAmount), 0);
   return {
     settlementItemId,

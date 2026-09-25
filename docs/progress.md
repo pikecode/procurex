@@ -1,14 +1,14 @@
 # ProcureX Development Progress
 
-Last updated: 2026-09-25
+Last updated: 2026-09-26
 
 ## Current Position
 
 The backend has started M5 reporting development; M4 settlement adjustments remain incomplete.
 
-Latest completed implementation: R04 persisted report exports over the W11 R01-R03 page.
+Latest completed implementation: DEV-406 pending adjustment offsets reserve supplier payable balances in payment previews.
 
-Latest committed implementation:
+Latest committed implementation before the current work:
 
 ```text
 7365e9d Add persisted report exports
@@ -29,6 +29,8 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
 Recommended next step: complete W11 role acceptance and begin M5 notifications/export operational review. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
+
+DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. A focused assertion covers this state. B12 concurrency and confirmation-role acceptance remain to be reviewed; M4 is still incomplete.
 
 ## Progress Metrics
 

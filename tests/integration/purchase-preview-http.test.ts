@@ -1721,6 +1721,17 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     const differenceDisposal = await createDifferenceDisposal();
     const differenceDisposalReplay = await createDifferenceDisposal();
     assert.deepEqual(differenceDisposalReplay.data, differenceDisposal.data);
+    const payableWhileOffsetPendingResponse = await fetch(`${baseUrl}/payment-records/preview`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ settlementItemIds: [supplierPayableSettlementItemId] }),
+    });
+    assert.equal(payableWhileOffsetPendingResponse.status, 201);
+    const payableWhileOffsetPending = (await payableWhileOffsetPendingResponse.json()) as {
+      data: { totalPayableAmount: string; items: Array<{ payableAmount: string }> };
+    };
+    assert.equal(payableWhileOffsetPending.data.totalPayableAmount, '98.50');
+    assert.equal(payableWhileOffsetPending.data.items[0]?.payableAmount, '98.50');
     assert.ok(differenceDisposal.data.disposalNo);
     assert.equal(differenceDisposal.data.direction, 'SUPPLIER_TO_COMPANY');
     assert.equal(differenceDisposal.data.method, 'OFFSET');
