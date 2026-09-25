@@ -115,6 +115,10 @@ export class SupplierStoreStatementsService {
       },
       orderBy: [{ firstShippedAt: 'desc' }, { id: 'desc' }],
     });
+    const snapshots = await this.database.client.settlementItemSnapshot?.findMany({
+      where: { settlementItemId: { in: orders.map((order) => encodeSettlementItemId('SUPPLIER_PAYABLE', order.id)) } },
+    }) ?? [];
+    const snapshotsById = new Map(snapshots.map((snapshot) => [snapshot.settlementItemId, snapshot]));
 
     const groups = new Map<string, StatementGroup>();
     for (const order of orders) {
@@ -153,7 +157,7 @@ export class SupplierStoreStatementsService {
           periodEndExclusive,
           lines: [],
         };
-      group.lines.push(toLineView(order));
+      group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId('SUPPLIER_PAYABLE', order.id))));
       groups.set(key, group);
     }
 
@@ -164,17 +168,17 @@ export class SupplierStoreStatementsService {
   }
 }
 
-function toLineView(order: StatementOrder): SupplierStoreStatementLineView {
-  const goodsAmount = new Decimal(order.supplyGoodsAmount);
-  const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
+function toLineView(order: StatementOrder, snapshot?: { goodsAmount: import('decimal.js').Decimal; freightAmount: import('decimal.js').Decimal; totalAmount: import('decimal.js').Decimal; sourceVersion: number }): SupplierStoreStatementLineView {
+  const goodsAmount = snapshot?.goodsAmount ?? new Decimal(order.supplyGoodsAmount);
+  const freightAmount = snapshot?.freightAmount ?? order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
   return {
     settlementItemId: encodeSettlementItemId('SUPPLIER_PAYABLE', order.id),
     supplierOrderId: order.id,
     supplierOrderNo: order.supplierOrderNo,
     goodsAmount: goodsAmount.toFixed(2),
     freightAmount: freightAmount.toFixed(2),
-    totalAmount: goodsAmount.plus(freightAmount).toFixed(2),
-    sourceRevision: order.version,
+    totalAmount: (snapshot?.totalAmount ?? goodsAmount.plus(freightAmount)).toFixed(2),
+    sourceRevision: snapshot?.sourceVersion ?? order.version,
     firstShippedAt: order.firstShippedAt!.toISOString(),
     priceAdjustments: (order.priceChangeRuns ?? []).flatMap(({ runId, adjustment }) => adjustment ? [{ id: adjustment.id, runId, orderItemId: adjustment.orderItemId, salesDelta: adjustment.salesDelta.toFixed(2), supplyDelta: adjustment.supplyDelta.toFixed(2), createdAt: adjustment.createdAt.toISOString() }] : []),
   };

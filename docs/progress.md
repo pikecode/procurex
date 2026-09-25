@@ -6,11 +6,12 @@ Last updated: 2026-09-25
 
 The backend is currently in M4 settlement/read-model development.
 
-Latest completed milestone: P02 adjustment sources in statements, with failure and funding guards tightened.
+Latest completed milestone: DEV-406 settlement item snapshots for confirmed payments.
 
 Latest committed implementation:
 
 ```text
+7a4433b Snapshot confirmed settlement item amounts
 59ae4d3 Enforce settlement funding checks
 5ea495f Guard price processing and funding checks
 1c23421 Refresh M4 progress after price statement work
@@ -19,9 +20,9 @@ Latest committed implementation:
 b976b3f Expose price adjustment sources
 ```
 
-The current verified period-snapshot fix is pending commit.
+Confirmed payment allocations now create immutable settlement item amount snapshots in one transaction. Store, supplier total, and supplier-store statement lines and later payment previews read those snapshots, while items without a confirmed payment remain dynamic. Snapshot rows cascade with test data cleanup.
 
-Recommended next step: continue DEV-406 by adding immutable statement snapshots and post-settlement adjustment items. Existing statement endpoints are dynamic OPEN read models and cannot yet preserve a settled amount after later eligible changes.
+Recommended next step: extend the snapshot from settlement items to formal statement status and add post-settlement price adjustment items. Current B05 return adjustments and B12 disposals remain the only persisted adjustment sources.
 
 ## Verification Baseline
 

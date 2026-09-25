@@ -583,10 +583,26 @@ model SupplierOrder {
   freightConfirmations FreightConfirmation[]
   fundingAllocations   FundingAllocation[]
   paymentAllocations   PaymentAllocation[]
+  settlementItemSnapshots SettlementItemSnapshot[]
   priceChangeRuns      PriceChangeRunOrder[]
 
   @@index([requestId])
   @@index([supplierId, firstShippedAt])
+}
+
+model SettlementItemSnapshot {
+  id               String       @id @default(uuid()) @db.Uuid
+  settlementItemId String       @unique @db.VarChar(300)
+  supplierOrderId  String       @db.Uuid
+  kind             String       @db.VarChar(40)
+  goodsAmount      Decimal      @db.Decimal(20, 2)
+  freightAmount    Decimal      @db.Decimal(20, 2)
+  totalAmount      Decimal      @db.Decimal(20, 2)
+  sourceVersion    Int
+  createdAt        DateTime     @default(now()) @db.Timestamptz(6)
+  supplierOrder    SupplierOrder @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
+
+  @@index([supplierOrderId])
 }
 
 model OrderItem {

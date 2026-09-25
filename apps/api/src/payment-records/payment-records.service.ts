@@ -142,6 +142,10 @@ export class PaymentRecordsService {
       where: { id: { in: supplierOrderIds } },
       include: { shipments: true, request: { select: { shortfallAmount: true } } },
     });
+    const snapshots = await this.database.client.settlementItemSnapshot.findMany({
+      where: { settlementItemId: { in: uniqueIds } },
+    });
+    const snapshotsById = new Map(snapshots.map((snapshot) => [snapshot.settlementItemId, snapshot]));
     const ordersById = new Map(orders.map((order) => [order.id, order]));
     const storeReceivableIds = decoded.flatMap(({ decoded: item }) => {
       const order = ordersById.get(item.supplierOrderId);
@@ -204,7 +208,7 @@ export class PaymentRecordsService {
           continue;
         }
       }
-      items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id), confirmedOffsetSummary.get(item.id)));
+      items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id), confirmedOffsetSummary.get(item.id), snapshotsById.get(item.id)));
     }
 
     if (items.length === 0) {
@@ -356,20 +360,44 @@ export class PaymentRecordsService {
       });
     }
 
-    const confirmed = await this.database.client.paymentRecord.update({
-      where: { id },
-      data: {
-        status: PaymentRecordStatus.CONFIRMED,
-        confirmedAt: new Date(),
-        version: { increment: 1 },
-        allocations: {
-          updateMany: {
-            where: { state: PaymentAllocationState.RESERVED },
-            data: { state: PaymentAllocationState.CONFIRMED },
+    const confirmed = await this.database.client.$transaction(async (tx) => {
+      const result = await tx.paymentRecord.update({
+        where: { id },
+        data: {
+          status: PaymentRecordStatus.CONFIRMED,
+          confirmedAt: new Date(),
+          version: { increment: 1 },
+          allocations: {
+            updateMany: {
+              where: { state: PaymentAllocationState.RESERVED },
+              data: { state: PaymentAllocationState.CONFIRMED },
+            },
           },
         },
-      },
-      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+        include: { allocations: { orderBy: { createdAt: 'asc' } } },
+      });
+      const orderIds = [...new Set(result.allocations.map((allocation) => allocation.supplierOrderId))];
+      const orders = await tx.supplierOrder.findMany({ where: { id: { in: orderIds } }, include: { shipments: true } });
+      const ordersById = new Map(orders.map((order) => [order.id, order]));
+      await tx.settlementItemSnapshot.createMany({
+        data: result.allocations.map((allocation) => {
+          const order = ordersById.get(allocation.supplierOrderId)!;
+          const kind = decodeSettlementItemId(allocation.settlementItemId).kind;
+          const goodsAmount = kind === 'STORE_RECEIVABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount);
+          const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
+          return {
+            settlementItemId: allocation.settlementItemId,
+            supplierOrderId: order.id,
+            kind,
+            goodsAmount: goodsAmount.toFixed(2),
+            freightAmount: freightAmount.toFixed(2),
+            totalAmount: goodsAmount.plus(freightAmount).toFixed(2),
+            sourceVersion: allocation.sourceVersion,
+          };
+        }),
+        skipDuplicates: true,
+      });
+      return result;
     });
 
     return toPaymentRecordView(confirmed);
@@ -474,10 +502,11 @@ function toPreviewItem(
   order: PreviewOrder,
   allocationSummary: { pendingAmount: Decimal; confirmedAmount: Decimal } | undefined,
   confirmedOffsetAmount: Decimal | undefined,
+  snapshot?: { goodsAmount: import('decimal.js').Decimal; freightAmount: import('decimal.js').Decimal; totalAmount: import('decimal.js').Decimal; sourceVersion: number },
 ): PaymentPreviewItemView {
-  const goodsAmount = kind === 'STORE_RECEIVABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount);
-  const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
-  const grossAmount = goodsAmount.plus(freightAmount);
+  const goodsAmount = snapshot?.goodsAmount ?? (kind === 'STORE_RECEIVABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount));
+  const freightAmount = snapshot?.freightAmount ?? order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
+  const grossAmount = snapshot?.totalAmount ?? goodsAmount.plus(freightAmount);
   const pendingAmount = allocationSummary?.pendingAmount ?? new Decimal(0);
   const confirmedAmount = allocationSummary?.confirmedAmount ?? new Decimal(0);
   const offsetAmount = confirmedOffsetAmount ?? new Decimal(0);
@@ -489,7 +518,7 @@ function toPreviewItem(
     supplierOrderNo: order.supplierOrderNo,
     storeId: order.storeId,
     supplierId: order.supplierId,
-    sourceVersion: order.version,
+    sourceVersion: snapshot?.sourceVersion ?? order.version,
     payableAmount: payableAmount.toFixed(2),
     pendingPaymentAmount: pendingAmount.toFixed(2),
     confirmedPaidAmount: confirmedAmount.toFixed(2),

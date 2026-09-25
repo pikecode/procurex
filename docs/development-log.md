@@ -93,6 +93,9 @@
 3. npm audit 报告需要单独评估，不在本次直接使用强制升级。
 ## 2026-09-25
 
+- Added `SettlementItemSnapshot` persistence. Payment confirmation now records the confirmed settlement item's goods, freight, total amount, and source version atomically; later payment previews and store/supplier statement lines use the immutable amount after eligible order changes.
+- Added the database migration and cascade cleanup relation. Verification: build, 9 unit tests, 26 integration tests, and migration deploy passed.
+
 - Fixed statement and adjustment period grouping to use each supplier order's settlement cycle snapshot instead of the supplier's current default; added a regression unit test.
 - Verification: build, 9 unit tests, 26 integration tests, contract check, and `git diff --check` passed.
 - Kept P02 price revaluation funding summaries in sync with changed request totals; verified increased prices create a positive shortfall that blocks store-side payment preview.
