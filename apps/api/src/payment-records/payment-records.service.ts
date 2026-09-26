@@ -40,6 +40,8 @@ export type ListPaymentRecordsInput = {
   supplierId?: string;
 };
 
+export type PaymentScope = { type?: string; storeId?: string; supplierId?: string };
+
 export type CreatePaymentRecordItemInput = {
   settlementItemId: string;
   expectedVersion: number;
@@ -100,17 +102,23 @@ type DecodedSettlementItemId = {
 
 type PreviewOrder = SupplierOrder & { shipments: Shipment[] };
 
+function matchesPaymentScope(value: { storeId: string | null; supplierId: string | null }, scope?: PaymentScope): boolean {
+  if (scope?.type === 'STORE') return value.storeId === scope.storeId;
+  if (scope?.type === 'SUPPLIER') return value.supplierId === scope.supplierId;
+  return true;
+}
+
 @Injectable()
 export class PaymentRecordsService {
   constructor(private readonly database: DatabaseService) {}
 
-  async list(input: ListPaymentRecordsInput): Promise<PaymentRecordView[]> {
+  async list(input: ListPaymentRecordsInput, scope?: PaymentScope): Promise<PaymentRecordView[]> {
     const payments = await this.database.client.paymentRecord.findMany({
       where: {
         direction: input.direction,
         status: input.status,
-        storeId: input.storeId,
-        supplierId: input.supplierId,
+        storeId: scope?.type === 'STORE' ? scope.storeId : input.storeId,
+        supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : input.supplierId,
       },
       include: { allocations: { orderBy: { createdAt: 'asc' } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -119,12 +127,12 @@ export class PaymentRecordsService {
     return payments.map(toPaymentRecordView);
   }
 
-  async get(id: string): Promise<PaymentRecordView> {
+  async get(id: string, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
       include: { allocations: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!payment) {
+    if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
         code: 'PAYMENT_RECORD_NOT_FOUND',
         message: 'Payment record was not found',
@@ -134,7 +142,7 @@ export class PaymentRecordsService {
     return toPaymentRecordView(payment);
   }
 
-  async preview(settlementItemIds: string[], client: DatabaseService['client'] | Prisma.TransactionClient = this.database.client): Promise<PaymentPreviewView> {
+  async preview(settlementItemIds: string[], client: DatabaseService['client'] | Prisma.TransactionClient = this.database.client, scope?: PaymentScope): Promise<PaymentPreviewView> {
     const uniqueIds = [...new Set(settlementItemIds)];
     const decoded = uniqueIds.map((id) => ({ id, decoded: decodeSettlementItemId(id) }));
     const supplierOrderIds = decoded.map((item) => item.decoded.supplierOrderId);
@@ -215,6 +223,10 @@ export class PaymentRecordsService {
       items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id), reservedOffsetSummary.get(item.id), snapshotsById.get(item.id)));
     }
 
+    if (items.some((item) => !matchesPaymentScope(item, scope))) {
+      throw new NotFoundException({ code: 'PAYMENT_RECORD_NOT_FOUND', message: 'Payment items were not found' });
+    }
+
     if (items.length === 0) {
       throw new NotFoundException({
         code: 'PAYMENT_PREVIEW_EMPTY',
@@ -266,13 +278,13 @@ export class PaymentRecordsService {
     };
   }
 
-  async create(input: CreatePaymentRecordInput): Promise<PaymentRecordView> {
+  async create(input: CreatePaymentRecordInput, scope?: PaymentScope): Promise<PaymentRecordView> {
     return this.database.client.$transaction(async (tx) => {
     const settlementItemIds = input.items.map((item) => item.settlementItemId);
     for (const id of [...settlementItemIds].sort()) {
       await waitForSettlementLock(tx, id);
     }
-    const preview = await this.preview(settlementItemIds, tx);
+    const preview = await this.preview(settlementItemIds, tx, scope);
     if (preview.blockedItems.length > 0) {
       throw new ConflictException({
         code: 'PAYMENT_PREVIEW_BLOCKED',
@@ -347,12 +359,12 @@ export class PaymentRecordsService {
     });
   }
 
-  async confirm(id: string, expectedVersion: number): Promise<PaymentRecordView> {
+  async confirm(id: string, expectedVersion: number, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
       include: { allocations: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!payment) {
+    if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
         code: 'PAYMENT_RECORD_NOT_FOUND',
         message: 'Payment record was not found',

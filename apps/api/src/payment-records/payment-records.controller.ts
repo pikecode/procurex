@@ -64,21 +64,21 @@ export class PaymentRecordsController {
 
   @Get()
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
-  list(@Query() query: ListQuery): Promise<PaymentRecordView[]> {
-    return this.paymentRecordsService.list(parseListQuery(query));
+  list(@Query() query: ListQuery, @Req() request: AuthenticatedRequest): Promise<PaymentRecordView[]> {
+    return this.paymentRecordsService.list(parseListQuery(query), request.auth?.user.scope);
   }
 
   @Get(':id')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
-  get(@Param('id') id: string): Promise<PaymentRecordView> {
+  get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<PaymentRecordView> {
     throwIfInvalid(validateUuid('id', id));
-    return this.paymentRecordsService.get(id);
+    return this.paymentRecordsService.get(id, request.auth?.user.scope);
   }
 
   @Post('preview')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
-  preview(@Body() body: PreviewBody): Promise<PaymentPreviewView> {
-    return this.paymentRecordsService.preview(parsePreviewBody(body));
+  preview(@Body() body: PreviewBody, @Req() request: AuthenticatedRequest): Promise<PaymentPreviewView> {
+    return this.paymentRecordsService.preview(parsePreviewBody(body), undefined, request.auth?.user.scope);
   }
 
   @Post()
@@ -101,7 +101,7 @@ export class PaymentRecordsController {
       return command.command.responseBody as PaymentRecordView;
     }
 
-    const result = await this.paymentRecordsService.create(input);
+    const result = await this.paymentRecordsService.create(input, auth.user.scope);
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'PaymentRecord',
@@ -133,7 +133,7 @@ export class PaymentRecordsController {
       return command.command.responseBody as PaymentRecordView;
     }
 
-    const result = await this.paymentRecordsService.confirm(input.id, input.expectedVersion);
+    const result = await this.paymentRecordsService.confirm(input.id, input.expectedVersion, auth.user.scope);
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'PaymentRecord',

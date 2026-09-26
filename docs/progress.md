@@ -35,7 +35,7 @@ Direct supplier-term statements now use their B04 settlement item ID with the B0
 
 Recommended next step: complete W11 role acceptance and begin M5 notifications/export operational review. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
 
-DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. B12 confirmation-role acceptance and broader concurrency evidence remain to be reviewed; M4 is still incomplete.
+DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, and confirmation now apply the authenticated store or supplier scope. B12 confirmation-role acceptance and broader concurrency evidence remain to be reviewed; M4 is still incomplete.
 
 ## Progress Metrics
 
