@@ -283,8 +283,8 @@ export class PricingService {
         const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.settlementItemId));
         const originalPeriod = settlementPeriod(order.settlementCycleSnapshot as 'WEEKLY' | 'HALF_MONTHLY' | 'MONTHLY' | 'IMMEDIATE', order.firstShippedAt ?? order.request.submittedAt);
         const currentPeriod = settlementPeriod(order.settlementCycleSnapshot as 'WEEKLY' | 'HALF_MONTHLY' | 'MONTHLY' | 'IMMEDIATE', new Date());
-        const originalPeriodKey = `${order.settlementCycleSnapshot}:${originalPeriod.startDate}:${originalPeriod.endDate}`;
-        const settlementPeriodKey = `${order.settlementCycleSnapshot}:${currentPeriod.startDate}:${currentPeriod.endDate}`;
+        const originalPeriodKey = `${order.settlementCycleSnapshot}:${originalPeriod.startDate}:${addOneDay(originalPeriod.endDate)}`;
+        const settlementPeriodKey = `${order.settlementCycleSnapshot}:${currentPeriod.startDate}:${addOneDay(currentPeriod.endDate)}`;
         const documents = [
           { side: 'STORE', amount: salesDelta, kind: order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE' },
           { side: 'SUPPLIER', amount: supplyDelta, kind: order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'SUPPLIER_PAYABLE' },
@@ -404,4 +404,10 @@ export class PricingService {
 
 function settlementItemId(kind: 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT', supplierOrderId: string): string {
   return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
+}
+
+function addOneDay(value: string): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
 }
