@@ -11,6 +11,7 @@ Latest completed implementation: B01–B04 expose persisted adjustment amounts a
 Latest commits:
 
 ```text
+ae2e702 Verify adjustment credit offsets end to end
 e61f84e Allow offsets against positive adjustments
 66d8d78 Cover mixed adjustment payments
 de2ced8 Gate supplier adjustments on store settlement
@@ -59,9 +60,9 @@ Direct supplier-term statements now use their B04 settlement item ID with the B0
 
 Latest completed work: B12 permits a negative adjustment credit to offset a positive adjustment settlement item on the matching STORE or SUPPLIER side. Available amount subtracts reserved/confirmed payment allocations and pending/confirmed disposals. Unit and HTTP/database integration coverage verifies the offset record links both adjustment documents. Build, 28 unit tests, 26 integration tests, contract check, and diff check pass.
 
-Recommended next step: add database-backed B12 coverage for negative adjustment credit offset against a positive adjustment target, then audit DEV-406's remaining concurrency, offline return, and reconciliation acceptance evidence. M5 remains frozen until M4 work packages are closed.
+Recommended next step: resolve and implement B12 confirmation permissions by receiving party. The API contract requires the receiver to confirm, but the current controller permits HQ_FINANCE/ADMIN/SUPPLIER and omits STORE; this conflicts with COMPANY_TO_STORE direction. Direct supplier-term confirmation direction is not represented in the two-value `DifferenceDisposalDirection` enum and needs a business rule before safely completing that path. Then audit DEV-406's remaining offline return and reconciliation evidence. M5 remains frozen until M4 work packages are closed.
 
-DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. B12 confirmation-role acceptance and broader concurrency evidence remain to be reviewed; M4 is still incomplete.
+DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. B12 receiver-role acceptance and broader concurrency evidence remain to be completed; M4 is still incomplete.
 
 DEV-405 clearing creation now conditionally updates each funding allocation by version, active state, and outstanding amount, and conditionally updates the store account version and credit used. A concurrent second clearing therefore fails atomically instead of consuming the same credit twice.
 
