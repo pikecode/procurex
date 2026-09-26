@@ -21,4 +21,5 @@ test('A06 prevents a store scope from reading another store clearing', async () 
     (error: any) => error?.getResponse?.()?.code === 'CLEARING_NOT_FOUND',
   );
   assert.equal((await service.get(clearing.id, { type: 'STORE', storeId: clearing.storeId })).id, clearing.id);
+  assert.equal((await service.get(clearing.id, { type: 'STORE_FINANCE', storeId: clearing.storeId })).id, clearing.id);
 });

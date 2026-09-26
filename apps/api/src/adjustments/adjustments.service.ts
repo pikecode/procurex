@@ -116,7 +116,7 @@ export class AdjustmentsService {
 
   async get(id: string, scope?: { type?: string; storeId?: string; supplierId?: string }): Promise<AdjustmentDetailView> {
     const key = decodeAdjustmentId(id);
-    const filter = { storeId: scope?.type === 'STORE' ? scope.storeId : key.storeId, supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId };
+    const filter = { storeId: isStoreScope(scope?.type) ? scope?.storeId : key.storeId, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : key.supplierId };
     const [rows, prices] = await Promise.all([this.loadRows(filter), this.loadPriceRows(filter)]);
     const row = rows.find((item) => encodeAdjustmentId(item.id, item.orderItem.supplierOrder.storeId, item.orderItem.supplierOrder.supplierId) === id);
     if (row) return toDetailView(row);
@@ -247,6 +247,10 @@ export class AdjustmentsService {
     }
     return [...net.values()];
   }
+}
+
+function isStoreScope(type?: string): boolean {
+  return type === 'STORE' || type === 'STORE_FINANCE';
 }
 
 function encodeSettlementItemId(kind: 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT', supplierOrderId: string): string {

@@ -72,13 +72,13 @@ export class DifferenceDisposalsService {
       where: { id },
       include: { items: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!disposal || (scope?.type === 'STORE' && disposal.storeId !== scope.storeId) || (scope?.type === 'SUPPLIER' && disposal.supplierId !== scope.supplierId)) {
+    if (!disposal || (isStoreScope(scope?.type) && disposal.storeId !== scope?.storeId) || (scope?.type === 'SUPPLIER' && disposal.supplierId !== scope?.supplierId)) {
       throw new NotFoundException({
         code: 'DIFFERENCE_DISPOSAL_NOT_FOUND',
         message: 'Difference disposal was not found',
       });
     }
-    if ((scope?.type === 'STORE' && disposal.direction !== DifferenceDisposalDirection.COMPANY_TO_STORE) || (scope?.type === 'SUPPLIER' && disposal.direction !== DifferenceDisposalDirection.SUPPLIER_TO_COMPANY)) {
+    if ((isStoreScope(scope?.type) && disposal.direction !== DifferenceDisposalDirection.COMPANY_TO_STORE) || (scope?.type === 'SUPPLIER' && disposal.direction !== DifferenceDisposalDirection.SUPPLIER_TO_COMPANY)) {
       throw new NotFoundException({
         code: 'DIFFERENCE_DISPOSAL_NOT_FOUND',
         message: 'Difference disposal was not found',
@@ -317,13 +317,13 @@ export class DifferenceDisposalsService {
       where: { id },
       include: { items: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!disposal || (scope?.type === 'STORE' && disposal.storeId !== scope.storeId) || (scope?.type === 'SUPPLIER' && disposal.supplierId !== scope.supplierId)) {
+    if (!disposal || (isStoreScope(scope?.type) && disposal.storeId !== scope?.storeId) || (scope?.type === 'SUPPLIER' && disposal.supplierId !== scope?.supplierId)) {
       throw new NotFoundException({
         code: 'DIFFERENCE_DISPOSAL_NOT_FOUND',
         message: 'Difference disposal was not found',
       });
     }
-    if ((scope?.type === 'STORE' && disposal.direction !== DifferenceDisposalDirection.COMPANY_TO_STORE) || (scope?.type === 'SUPPLIER' && disposal.direction !== DifferenceDisposalDirection.SUPPLIER_TO_COMPANY)) {
+    if ((isStoreScope(scope?.type) && disposal.direction !== DifferenceDisposalDirection.COMPANY_TO_STORE) || (scope?.type === 'SUPPLIER' && disposal.direction !== DifferenceDisposalDirection.SUPPLIER_TO_COMPANY)) {
       throw new NotFoundException({ code: 'DIFFERENCE_DISPOSAL_NOT_FOUND', message: 'Difference disposal was not found' });
     }
     if (disposal.version !== input.expectedVersion) {
@@ -463,4 +463,8 @@ function summarizeDisposalItems(items: DifferenceDisposalItem[]): Map<string, De
 
 function makeDisposalNo(): string {
   return `DD-${Date.now()}-${Math.floor(Math.random() * 1_000_000).toString().padStart(6, '0')}`;
+}
+
+function isStoreScope(type?: string): boolean {
+  return type === 'STORE' || type === 'STORE_FINANCE';
 }

@@ -35,7 +35,7 @@ export class AdjustmentsController {
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
   get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<AdjustmentDetailView> {
     const scope = request.auth?.user.scope;
-    if (scope?.type === 'STORE' || scope?.type === 'SUPPLIER') {
+    if (scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' || scope?.type === 'SUPPLIER') {
       return this.adjustmentsService.get(id, scope);
     }
     return this.adjustmentsService.get(id);
@@ -44,7 +44,7 @@ export class AdjustmentsController {
 
 function applyScope(input: ListAdjustmentsInput, request: AuthenticatedRequest): ListAdjustmentsInput {
   const scope = request.auth?.user.scope;
-  if (scope?.type === 'STORE') {
+  if (scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE') {
     if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
     if (input.storeId && input.storeId !== scope.storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Adjustment is outside the current store scope' });
     return { ...input, storeId: scope.storeId };

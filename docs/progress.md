@@ -117,7 +117,7 @@ DEV-401 concurrency slice: price-run processing now locks each supplier order be
 DEV-402/403 evidence slice: direct-term settlement previews resolve to `STORE_TO_SUPPLIER` with the DIRECT channel and include freight; replenishment shipments remain in the supplier order's first-shipment half-month period.
 
 DEV-406 scope hardening: adjustment list/detail and difference-disposal detail/confirmation now enforce the authenticated store or supplier scope before returning or mutating records. Company roles retain the existing company access paths.
-Statement detail scope hardening: unconfigured STORE, STORE_FINANCE, and SUPPLIER accounts are rejected before decoded statement IDs are queried.
+Statement and payment scope hardening: STORE and STORE_FINANCE accounts now share the same bound-store enforcement across statements, payments, adjustments, difference disposals, and clearing details; unconfigured accounts are rejected before decoded IDs are queried.
 Controller regression coverage now verifies statement list narrowing and missing detail scopes for STORE, STORE_FINANCE, and SUPPLIER paths.
 DEV-403 AT-10 coverage now checks half-month 15/16 boundaries, Sunday/Monday weekly boundaries, year-end rollover, and leap-day month length.
 

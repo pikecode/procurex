@@ -41,7 +41,7 @@ export class ClearingsService {
       where: { id },
       include: { items: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!clearing || (scope?.type === 'STORE' && clearing.storeId !== scope.storeId)) {
+    if (!clearing || (isStoreScope(scope?.type) && clearing.storeId !== scope?.storeId)) {
       throw new NotFoundException({
         code: 'CLEARING_NOT_FOUND',
         message: 'Clearing document was not found',
@@ -51,6 +51,10 @@ export class ClearingsService {
     const account = await this.database.client.storeAccount.findUnique({ where: { storeId: clearing.storeId } });
     return toClearingDocumentDetailView(clearing, account);
   }
+}
+
+function isStoreScope(type?: string): boolean {
+  return type === 'STORE' || type === 'STORE_FINANCE';
 }
 
 function toClearingDocumentDetailView(

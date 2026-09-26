@@ -117,7 +117,7 @@ type DecodedSettlementItemId = {
 type PreviewOrder = SupplierOrder & { shipments: Shipment[] };
 
 function matchesPaymentScope(value: { storeId: string | null; supplierId: string | null }, scope?: PaymentScope): boolean {
-  if (scope?.type === 'STORE') return value.storeId === scope.storeId;
+  if (isStoreScope(scope?.type)) return value.storeId === scope?.storeId;
   if (scope?.type === 'SUPPLIER') return value.supplierId === scope.supplierId;
   return true;
 }
@@ -131,7 +131,7 @@ export class PaymentRecordsService {
       where: {
         direction: input.direction,
         status: input.status,
-        storeId: scope?.type === 'STORE' ? scope.storeId : input.storeId,
+        storeId: isStoreScope(scope?.type) ? scope?.storeId : input.storeId,
         supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : input.supplierId,
       },
       include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } } },
@@ -579,6 +579,10 @@ export class PaymentRecordsService {
 
     return toPaymentRecordView(cancelled);
   }
+}
+
+function isStoreScope(type?: string): boolean {
+  return type === 'STORE' || type === 'STORE_FINANCE';
 }
 
 async function waitForSettlementLock(tx: Prisma.TransactionClient, id: string): Promise<void> {
