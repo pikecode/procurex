@@ -46,7 +46,7 @@ export class DiscrepanciesController {
       return command.command.responseBody as DiscrepancyView;
     }
 
-    const result = await this.discrepanciesService.resolve(input.id, input.resolve);
+    const result = await this.discrepanciesService.resolve(input.id, input.resolve, supplierScope(request));
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'Discrepancy',
@@ -56,6 +56,11 @@ export class DiscrepanciesController {
 
     return result;
   }
+}
+
+function supplierScope(request: AuthenticatedRequest): { type: string; supplierId?: string } | undefined {
+  const scope = request.auth?.user.scope;
+  return scope?.type === 'SUPPLIER' ? scope : undefined;
 }
 
 function parseResolveBody(id: string, body: ResolveBody): { id: string; resolve: ResolveDiscrepancyInput } {

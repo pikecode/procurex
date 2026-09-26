@@ -54,9 +54,12 @@ export type DiscrepancyReturnView = {
 export class DiscrepanciesService {
   constructor(private readonly database: DatabaseService) {}
 
-  async resolve(id: string, input: ResolveDiscrepancyInput): Promise<DiscrepancyView> {
+  async resolve(id: string, input: ResolveDiscrepancyInput, scope?: { type: string; supplierId?: string }): Promise<DiscrepancyView> {
     const discrepancy = await this.database.client.discrepancy.findUnique({
-      where: { id },
+      where: {
+        id,
+        orderItem: scope?.type === 'SUPPLIER' ? { supplierOrder: { supplierId: scope?.supplierId } } : undefined,
+      },
       include: { replenishmentGap: true, returnRecord: true },
     });
     if (!discrepancy) {
