@@ -264,7 +264,7 @@ export class DifferenceDisposalsService {
           details: { targetDebitItemId: item.id },
         });
       }
-      result.set(item.id, targetAvailableAmount(order, usedByPayments.get(item.id), usedByDisposals.get(item.id)));
+      result.set(item.id, targetAvailableAmount(order, item.decoded.kind, usedByPayments.get(item.id), usedByDisposals.get(item.id)));
     }
     return result;
   }
@@ -378,8 +378,8 @@ function decodeSettlementItemId(id: string): DecodedSettlementItemId {
   });
 }
 
-function targetAvailableAmount(order: TargetOrder, paymentAmount: Decimal | undefined, disposalAmount: Decimal | undefined): Decimal {
-  const goodsAmount = new Decimal(order.supplyGoodsAmount);
+function targetAvailableAmount(order: TargetOrder, kind: SettlementItemKind, paymentAmount: Decimal | undefined, disposalAmount: Decimal | undefined): Decimal {
+  const goodsAmount = new Decimal(kind === 'STORE_RECEIVABLE' ? order.salesGoodsAmount : order.supplyGoodsAmount);
   const freightAmount = order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
   return Decimal.max(goodsAmount.plus(freightAmount).minus(paymentAmount ?? 0).minus(disposalAmount ?? 0), 0);
 }

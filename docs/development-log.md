@@ -143,6 +143,7 @@
 - Verification: migration deploy, build, 14 unit tests, 26 integration tests, contract check, and diff check passed.
 - B12 now accepts `Overpayment` credits, chooses the matching store receivable or supplier payable target by payment direction, and prevents the same credit from being disposed twice.
 - B05 now nets repeated price-change rows per order line before exposing store and supplier adjustment views; zero net deltas produce no adjustment row.
+- Corrected B12 target availability by settlement side: store receivable offsets use sales goods, supplier payable offsets use supply goods.
 
 - Continued DEV-406 instead of M5: unified P02 price-change adjustments with B05.
 - `/adjustments` now returns separate store receivable and supplier payable rows for each non-zero price delta, with original and actual periods, source revision, and detail lines.

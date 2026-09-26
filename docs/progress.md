@@ -21,6 +21,7 @@ da7a0bc Make settlement state transitions atomic
 ```
 
 Latest committed implementation: B05 returns net price adjustments per order line, while B12 accepts both discrepancy-return and overpayment credit sources for offset or offline disposal.
+The B12 target balance calculation now uses sales goods for store receivable targets and supply goods for supplier payable targets.
 
 ```text
 b81a722 Serialize settlement offset reservations
