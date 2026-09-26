@@ -30,6 +30,7 @@ export type SupplierStatementSummaryView = {
   pendingPaymentAmount: string;
   payableAmount: string;
   adjustmentAmount: string;
+  adjustmentSettlementItemIds: string[];
   storeCount: number;
   lineCount: number;
 };
@@ -65,6 +66,7 @@ type StatementGroup = {
   lines: SupplierStatementLineView[];
   paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal };
   adjustmentAmount: Decimal;
+  adjustmentSettlementItemIds: string[];
 };
 
 @Injectable()
@@ -146,7 +148,7 @@ export class SupplierStatementsService {
           periodEndExclusive,
           lines: [],
           paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) },
-          adjustmentAmount: new Decimal(0),
+          adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [],
         };
       group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId('SUPPLIER_PAYABLE', order.id))));
       groups.set(key, group);
@@ -161,9 +163,10 @@ export class SupplierStatementsService {
         id: encodeStatementId({ supplierId: document.supplierId, cycle: period.cycle, periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive }),
         supplierId: document.supplierId, cycle: period.cycle, periodKey: document.settlementPeriodKey,
         periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [],
-        paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0),
+        paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [],
       };
       group.adjustmentAmount = group.adjustmentAmount.plus(document.amount);
+      group.adjustmentSettlementItemIds.push(encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'SUPPLIER'));
       groups.set(key, group);
     }
 
@@ -209,6 +212,10 @@ function encodeSettlementItemId(kind: 'SUPPLIER_PAYABLE', supplierOrderId: strin
   return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
 }
 
+function encodeAdjustmentSettlementItemId(adjustmentDocumentId: string, supplierOrderId: string, adjustmentSide: 'STORE' | 'SUPPLIER'): string {
+  return Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', supplierOrderId, adjustmentDocumentId, adjustmentSide })).toString('base64url');
+}
+
 function toSummaryView(group: StatementGroup): SupplierStatementSummaryView {
   const goodsAmount = group.lines.reduce((sum, line) => sum.plus(line.goodsAmount), new Decimal(0));
   const freightAmount = group.lines.reduce((sum, line) => sum.plus(line.freightAmount), new Decimal(0));
@@ -231,6 +238,7 @@ function toSummaryView(group: StatementGroup): SupplierStatementSummaryView {
     pendingPaymentAmount: pendingPaymentAmount.toFixed(2),
     payableAmount: Decimal.max(totalAmount.minus(confirmedPaidAmount).minus(pendingPaymentAmount), 0).toFixed(2),
     adjustmentAmount: group.adjustmentAmount.toFixed(2),
+    adjustmentSettlementItemIds: group.adjustmentSettlementItemIds,
     storeCount: new Set(group.lines.map((line) => line.storeId)).size,
     lineCount: group.lines.length,
   };

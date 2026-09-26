@@ -42,13 +42,14 @@ export type DirectStatementSummaryView = {
   pendingPaymentAmount: string;
   payableAmount: string;
   adjustmentAmount: string;
+  adjustmentSettlementItemIds: string[];
   lineCount: number;
 };
 
 export type DirectStatementDetailView = DirectStatementSummaryView & { lines: DirectStatementLineView[] };
 
 type StatementOrder = SupplierOrder & { supplier: Supplier; shipments: Shipment[]; priceChangeRuns: Array<{ runId: string; adjustment: { id: string; orderItemId: string; salesDelta: import('decimal.js').Decimal; supplyDelta: import('decimal.js').Decimal; createdAt: Date } | null }> };
-type StatementGroup = Omit<DirectStatementSummaryView, 'settlementStatus' | 'goodsAmount' | 'freightAmount' | 'totalAmount' | 'confirmedPaidAmount' | 'pendingPaymentAmount' | 'payableAmount' | 'adjustmentAmount' | 'lineCount'> & { lines: DirectStatementLineView[]; paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal }; adjustmentAmount: Decimal };
+type StatementGroup = Omit<DirectStatementSummaryView, 'settlementStatus' | 'goodsAmount' | 'freightAmount' | 'totalAmount' | 'confirmedPaidAmount' | 'pendingPaymentAmount' | 'payableAmount' | 'adjustmentAmount' | 'adjustmentSettlementItemIds' | 'lineCount'> & { lines: DirectStatementLineView[]; paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal }; adjustmentAmount: Decimal; adjustmentSettlementItemIds: string[] };
 
 @Injectable()
 export class DirectStatementsService {
@@ -95,7 +96,7 @@ export class DirectStatementsService {
       const group = groups.get(key) ?? {
         id: encodeStatementId({ storeId: order.storeId, supplierId: order.supplierId, cycle, periodStart: period.startDate, periodEndExclusive }),
         type: 'DIRECT', storeId: order.storeId, supplierId: order.supplierId, cycle, periodKey,
-        periodStart: period.startDate, periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0),
+        periodStart: period.startDate, periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [],
       };
       group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId(order.id))));
       groups.set(key, group);
@@ -108,9 +109,10 @@ export class DirectStatementsService {
       const group = groups.get(key) ?? {
         id: encodeStatementId({ storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive }),
         type: 'DIRECT', storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodKey: document.settlementPeriodKey,
-        periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0),
+        periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [],
       };
       group.adjustmentAmount = group.adjustmentAmount.plus(document.amount);
+      group.adjustmentSettlementItemIds.push(encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'STORE'));
       groups.set(key, group);
     }
     const allGroups = [...groups.values()];
@@ -162,6 +164,10 @@ function addOneDay(value: string): string {
 
 function encodeSettlementItemId(supplierOrderId: string): string {
   return Buffer.from(JSON.stringify({ kind: 'DIRECT', supplierOrderId })).toString('base64url');
+}
+
+function encodeAdjustmentSettlementItemId(adjustmentDocumentId: string, supplierOrderId: string, adjustmentSide: 'STORE' | 'SUPPLIER'): string {
+  return Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', supplierOrderId, adjustmentDocumentId, adjustmentSide })).toString('base64url');
 }
 
 function encodeStatementId(input: { storeId: string; supplierId: string; cycle: SettlementCycle; periodStart: string; periodEndExclusive: string }): string {

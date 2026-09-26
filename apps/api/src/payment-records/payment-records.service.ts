@@ -12,7 +12,7 @@ import { DatabaseService } from '../database/database.service.js';
 
 export type PaymentDirection = 'STORE_TO_COMPANY' | 'COMPANY_TO_SUPPLIER';
 export type PaymentChannel = 'COMPANY' | 'DIRECT';
-export type SettlementItemKind = 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT';
+export type SettlementItemKind = 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT' | 'ADJUSTMENT';
 
 export type PaymentPreviewView = {
   direction: PaymentRecordDirection;
@@ -90,6 +90,7 @@ export type PaymentAllocationView = {
 export type PaymentPreviewItemView = {
   settlementItemId: string;
   kind: SettlementItemKind;
+  adjustmentSide?: 'STORE' | 'SUPPLIER';
   supplierOrderId: string;
   supplierOrderNo: string;
   storeId: string;
@@ -109,6 +110,8 @@ export type PaymentPreviewBlockedItemView = {
 type DecodedSettlementItemId = {
   kind: SettlementItemKind;
   supplierOrderId: string;
+  adjustmentDocumentId?: string;
+  adjustmentSide?: 'STORE' | 'SUPPLIER';
 };
 
 type PreviewOrder = SupplierOrder & { shipments: Shipment[] };
@@ -166,6 +169,9 @@ export class PaymentRecordsService {
     });
     const snapshotsById = new Map(snapshots.map((snapshot) => [snapshot.settlementItemId, snapshot]));
     const ordersById = new Map(orders.map((order) => [order.id, order]));
+    const adjustmentDocumentIds = decoded.flatMap(({ decoded: item }) => item.adjustmentDocumentId ? [item.adjustmentDocumentId] : []);
+    const adjustmentDocuments = await client.adjustmentDocument.findMany({ where: { id: { in: adjustmentDocumentIds } } });
+    const adjustmentDocumentsById = new Map(adjustmentDocuments.map((document) => [document.id, document]));
     const storeReceivableIds = decoded.flatMap(({ decoded: item }) => {
       const order = ordersById.get(item.supplierOrderId);
       return item.kind === 'SUPPLIER_PAYABLE' && order?.settlementMode === 'COMPANY_TERM'
@@ -207,7 +213,16 @@ export class PaymentRecordsService {
         });
         continue;
       }
-      if ((item.decoded.kind === 'DIRECT') !== (order.settlementMode === 'SUPPLIER_TERM')) {
+      const adjustment = item.decoded.adjustmentDocumentId ? adjustmentDocumentsById.get(item.decoded.adjustmentDocumentId) : undefined;
+      if (item.decoded.kind === 'ADJUSTMENT' && (!adjustment || adjustment.supplierOrderId !== order.id || adjustment.side !== item.decoded.adjustmentSide)) {
+        blockedItems.push({ settlementItemId: item.id, code: 'ADJUSTMENT_NOT_FOUND', message: 'Adjustment document was not found' });
+        continue;
+      }
+      if (item.decoded.kind === 'ADJUSTMENT' && (!adjustment || new Decimal(adjustment.amount).lte(0))) {
+        blockedItems.push({ settlementItemId: item.id, code: 'ADJUSTMENT_CREDIT_NOT_PAYABLE', message: 'Negative adjustments must be disposed through difference handling' });
+        continue;
+      }
+      if (item.decoded.kind !== 'ADJUSTMENT' && (item.decoded.kind === 'DIRECT') !== (order.settlementMode === 'SUPPLIER_TERM')) {
         blockedItems.push({ settlementItemId: item.id, code: 'SETTLEMENT_CHANNEL_MISMATCH', message: 'Settlement item does not match its order settlement mode' });
         continue;
       }
@@ -219,7 +234,7 @@ export class PaymentRecordsService {
         });
         continue;
       }
-      if (item.decoded.kind === 'SUPPLIER_PAYABLE' && order.settlementMode === 'COMPANY_TERM') {
+      if ((item.decoded.kind === 'SUPPLIER_PAYABLE' || (item.decoded.kind === 'ADJUSTMENT' && item.decoded.adjustmentSide === 'SUPPLIER')) && order.settlementMode === 'COMPANY_TERM') {
         const receivableId = encodeSettlementItemId('STORE_RECEIVABLE', order.id);
         const storeAmount = new Decimal(order.salesGoodsAmount).plus(order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0)));
         if ((allocationSummary.get(receivableId)?.confirmedAmount ?? new Decimal(0)).lessThan(storeAmount)) {
@@ -231,7 +246,7 @@ export class PaymentRecordsService {
           continue;
         }
       }
-      items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id), reservedOffsetSummary.get(item.id), snapshotsById.get(item.id)));
+      items.push(toPreviewItem(item.id, item.decoded.kind, order, allocationSummary.get(item.id), reservedOffsetSummary.get(item.id), snapshotsById.get(item.id), adjustment, item.decoded.adjustmentSide));
     }
 
     if (items.some((item) => !matchesPaymentScope(item, scope))) {
@@ -246,11 +261,11 @@ export class PaymentRecordsService {
       });
     }
 
-    const direction = directionForKind(items[0]!.kind);
+    const direction = directionForItem(items[0]!, ordersById);
     const storeId = direction !== 'COMPANY_TO_SUPPLIER' ? items[0]!.storeId : null;
     const supplierId = direction !== 'STORE_TO_COMPANY' ? items[0]!.supplierId : null;
     for (const item of items) {
-      if (directionForKind(item.kind) !== direction) {
+      if (directionForItem(item, ordersById) !== direction) {
         throw new ConflictException({
           code: 'PAYMENT_DIRECTION_MISMATCH',
           message: 'Settlement items must share the same payment direction',
@@ -414,7 +429,9 @@ export class PaymentRecordsService {
       const overpayments = new Map<string, { paymentId: string; storeId: string; supplierId: string; amount: Decimal; sourceRevision: number }>();
       for (const allocation of result.allocations) {
         const order = ordersById.get(allocation.supplierOrderId)!;
-        const kind = decodeSettlementItemId(allocation.settlementItemId).kind;
+        const decoded = decodeSettlementItemId(allocation.settlementItemId);
+        if (decoded.kind === 'ADJUSTMENT') continue;
+        const kind = decoded.kind;
         const goodsAmount = kind !== 'SUPPLIER_PAYABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount);
         const currentAmount = goodsAmount.plus(order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0)));
         const excess = new Decimal(allocation.amount).minus(currentAmount);
@@ -434,7 +451,7 @@ export class PaymentRecordsService {
         await tx.overpayment.createMany({ data: [...overpayments.values()].map((item) => ({ ...item, amount: item.amount.toFixed(2) })) });
       }
       await tx.settlementItemSnapshot.createMany({
-        data: result.allocations.map((allocation) => {
+        data: result.allocations.filter((allocation) => decodeSettlementItemId(allocation.settlementItemId).kind !== 'ADJUSTMENT').map((allocation) => {
           const order = ordersById.get(allocation.supplierOrderId)!;
           const kind = decodeSettlementItemId(allocation.settlementItemId).kind;
           const goodsAmount = kind !== 'SUPPLIER_PAYABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount);
@@ -561,7 +578,20 @@ function toPreviewItem(
   allocationSummary: { pendingAmount: Decimal; confirmedAmount: Decimal } | undefined,
   reservedOffsetAmount: Decimal | undefined,
   snapshot?: { goodsAmount: import('decimal.js').Decimal; freightAmount: import('decimal.js').Decimal; totalAmount: import('decimal.js').Decimal; sourceVersion: number },
+  adjustment?: { amount: import('decimal.js').Decimal; sourceRevision: number } | null,
+  adjustmentSide?: 'STORE' | 'SUPPLIER',
 ): PaymentPreviewItemView {
+  if (kind === 'ADJUSTMENT') {
+    const pendingAmount = allocationSummary?.pendingAmount ?? new Decimal(0);
+    const confirmedAmount = allocationSummary?.confirmedAmount ?? new Decimal(0);
+    const offsetAmount = reservedOffsetAmount ?? new Decimal(0);
+    const payableAmount = Decimal.max((adjustment?.amount ?? new Decimal(0)).minus(pendingAmount).minus(confirmedAmount).minus(offsetAmount), 0);
+    return {
+      settlementItemId, kind, adjustmentSide, supplierOrderId: order.id, supplierOrderNo: order.supplierOrderNo,
+      storeId: order.storeId, supplierId: order.supplierId, sourceVersion: adjustment?.sourceRevision ?? order.version,
+      payableAmount: payableAmount.toFixed(2), pendingPaymentAmount: pendingAmount.toFixed(2), confirmedPaidAmount: confirmedAmount.toFixed(2),
+    };
+  }
   const goodsAmount = snapshot?.goodsAmount ?? (kind !== 'SUPPLIER_PAYABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount));
   const freightAmount = snapshot?.freightAmount ?? order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0));
   const grossAmount = snapshot?.totalAmount ?? goodsAmount.plus(freightAmount);
@@ -617,6 +647,16 @@ function directionForKind(kind: SettlementItemKind): PaymentRecordDirection {
   return kind === 'STORE_RECEIVABLE' ? PaymentRecordDirection.STORE_TO_COMPANY : kind === 'DIRECT' ? PaymentRecordDirection.STORE_TO_SUPPLIER : PaymentRecordDirection.COMPANY_TO_SUPPLIER;
 }
 
+function directionForItem(item: PaymentPreviewItemView, ordersById: Map<string, PreviewOrder>): PaymentRecordDirection {
+  if (item.kind !== 'ADJUSTMENT') return directionForKind(item.kind);
+  const order = ordersById.get(item.supplierOrderId)!;
+  return item.adjustmentSide === 'STORE' && order.settlementMode !== 'SUPPLIER_TERM'
+    ? PaymentRecordDirection.STORE_TO_COMPANY
+    : order.settlementMode === 'SUPPLIER_TERM'
+      ? PaymentRecordDirection.STORE_TO_SUPPLIER
+      : PaymentRecordDirection.COMPANY_TO_SUPPLIER;
+}
+
 function decodeSettlementItemId(id: string): DecodedSettlementItemId {
   try {
     const parsed = JSON.parse(Buffer.from(id, 'base64url').toString('utf8')) as {
@@ -628,6 +668,9 @@ function decodeSettlementItemId(id: string): DecodedSettlementItemId {
       typeof parsed.supplierOrderId === 'string'
     ) {
       return { kind: parsed.kind, supplierOrderId: parsed.supplierOrderId };
+    }
+    if (parsed.kind === 'ADJUSTMENT' && typeof parsed.supplierOrderId === 'string' && typeof (parsed as { adjustmentDocumentId?: unknown }).adjustmentDocumentId === 'string' && ((parsed as { adjustmentSide?: unknown }).adjustmentSide === 'STORE' || (parsed as { adjustmentSide?: unknown }).adjustmentSide === 'SUPPLIER')) {
+      return { kind: 'ADJUSTMENT', supplierOrderId: parsed.supplierOrderId, adjustmentDocumentId: (parsed as { adjustmentDocumentId: string }).adjustmentDocumentId, adjustmentSide: (parsed as { adjustmentSide: 'STORE' | 'SUPPLIER' }).adjustmentSide };
     }
   } catch {
     // Fall through to uniform bad item handling.
