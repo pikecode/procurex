@@ -202,6 +202,20 @@ export class TemplatesService {
       throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'Supplier was not found' });
     }
 
+    if (settlementMode === SettlementMode.SUPPLIER_TERM) {
+      const items = await this.database.client.templateItem.findMany({ where: { templateId }, select: { productId: true } });
+      const scopes = await this.database.client.priceScope.findMany({
+        where: { supplierId, productId: { in: items.map((item) => item.productId) } },
+        include: { versions: { orderBy: [{ effectiveAt: 'desc' }, { revision: 'desc' }], take: 1 } },
+      });
+      if (scopes.some((scope) => scope.versions[0] && !scope.versions[0].salesPrice.equals(scope.versions[0].supplyPrice))) {
+        throw new ConflictException({
+          code: 'DIRECT_TERM_PRICES_MUST_MATCH',
+          message: 'Direct supplier-term sales and supply prices must be equal',
+        });
+      }
+    }
+
     const setting = await this.database.client.templateSupplierSetting.upsert({
       where: { templateId_supplierId: { templateId, supplierId } },
       update: { settlementMode, settlementCycle },

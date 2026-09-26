@@ -263,3 +263,36 @@ test('an older price run cannot overwrite a newer effective price when processed
     await prisma.$disconnect();
   }
 });
+
+test('direct supplier-term pricing rejects unequal sales and supply prices', async () => {
+  const prisma = createClient();
+  const service = createService(prisma);
+  const suffix = Date.now();
+  const categoryCode = `DIRECT${suffix}`;
+  const unitCode = `DIRECT${suffix}`;
+  const sku = `DIRECT${suffix}`;
+  const supplierCode = `DIRECT${suffix}`;
+  try {
+    const [category, unit, supplier] = await Promise.all([
+      prisma.category.create({ data: { code: categoryCode, name: 'Direct price category' } }),
+      prisma.unit.create({ data: { code: unitCode, name: 'piece' } }),
+      prisma.supplier.create({ data: { code: supplierCode, name: 'Direct price supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } }),
+    ]);
+    const product = await prisma.product.create({ data: { sku, name: 'Direct price product', categoryId: category.id, baseUnitId: unit.id } });
+    await assert.rejects(
+      service.publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: '10', supplyPrice: '8', effectiveAt: new Date('2026-09-01T00:00:00Z'), reason: 'Invalid direct price' }),
+      (error: any) => error?.getResponse?.()?.code === 'DIRECT_TERM_PRICES_MUST_MATCH',
+    );
+    const quote = await service.publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: '10', supplyPrice: '10', effectiveAt: new Date('2026-09-01T00:00:00Z'), reason: 'Valid direct price' });
+    assert.equal(quote.salesPrice, '10');
+    assert.equal(quote.supplyPrice, '10');
+  } finally {
+    await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: supplierCode } } } });
+    await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });
+    await prisma.product.deleteMany({ where: { sku } });
+    await prisma.supplier.deleteMany({ where: { code: supplierCode } });
+    await prisma.category.deleteMany({ where: { code: categoryCode } });
+    await prisma.unit.deleteMany({ where: { code: unitCode } });
+    await prisma.$disconnect();
+  }
+});

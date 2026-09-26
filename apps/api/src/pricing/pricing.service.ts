@@ -123,6 +123,20 @@ export class PricingService {
         update: {},
         create: { productId: input.productId, supplierId: input.supplierId },
       });
+      if (input.salesPrice !== input.supplyPrice) {
+        const supplier = await tx.supplier.findUnique({
+          where: { id: input.supplierId },
+          select: { defaultSettlementMode: true, templateSupplierSettings: { select: { settlementMode: true } } },
+        });
+        const hasDirectSettlement = supplier?.defaultSettlementMode === 'SUPPLIER_TERM'
+          || supplier?.templateSupplierSettings.some((setting) => setting.settlementMode === 'SUPPLIER_TERM');
+        if (hasDirectSettlement) {
+          throw new ConflictException({
+            code: 'DIRECT_TERM_PRICES_MUST_MATCH',
+            message: 'Direct supplier-term sales and supply prices must be equal',
+          });
+        }
+      }
       const latest = await tx.priceVersion.findFirst({ where: { scopeId: scope.id }, orderBy: { revision: 'desc' }, select: { revision: true } });
       const version = await tx.priceVersion.create({
         data: {

@@ -64,6 +64,8 @@ Latest completed work: B12 permits a negative adjustment credit to offset a posi
 
 DEV-401 progress: fixed and integration-tested AT-09. If an older effective price run is processed after a newer applicable run, the old run no longer overwrites order prices or creates a duplicate adjustment; its item completes with zero delta. This closes the AT-09 ordering case only; DEV-401 remains partial until the other concurrency case and W06/S10 acceptance are verified.
 
+DEV-402 progress: P02 price publishing now rejects unequal sales/supply prices when the supplier is configured for direct supplier-term settlement. Setting a template supplier to direct settlement performs the same check against the template's latest prices. A database integration test covers rejection and equal-price success. This closes the identified AT-16 price guard slice; broader direct-term statement and payment acceptance remains.
+
 ## Plan Alignment Review (2026-09-27)
 
 The delivery order is M0 → M1 → M2 → M3 → M4 → M5 → M6. Actual work did not follow it cleanly: R01-R04 and W11 from M5 were implemented before M4 was closed. M5 is now frozen, but those early features do not count toward closing M4.
@@ -73,7 +75,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | Package | Current assessment against plan | Closure evidence still needed |
 |---|---|---|
 | DEV-401 | P01-P03 backend is substantially implemented | Prove AT-08/09 ordering and close the planned W06/S10 workflow; then mark package complete |
-| DEV-402 | B01-B04, amount and period logic exist | Prove all settlement modes, especially AT-16 direct-term two-price consistency, with integrated evidence |
+| DEV-402 | B01-B04, amount and period logic exist; AT-16 price guard added | Prove all settlement modes and direct-term statement/payment consistency with integrated evidence |
 | DEV-403 | Statement read paths and adjustment linkage exist | Prove total equals store breakdown, replenishment keeps original period, and immediate orders are per-order; required W09/S05/S08 flows remain part of acceptance |
 | DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Close receiver-role authorization, direct-term direction mapping, duplicate-entry concurrency (AT-13), and required evidence/role flows |
 | DEV-405 | Clearing transaction logic exists | Verify A04-A06 acceptance and AT-24 ledger/history evidence; planned W08 workflow remains |
