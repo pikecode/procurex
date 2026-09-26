@@ -2,9 +2,10 @@ import { NotFoundException } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import { settlementPeriod, type SettlementCycle } from '../../../../packages/domain/src/settlement-period.js';
-import { SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import { PaymentAllocationState, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import type { Shipment, Supplier, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { summarizeAllocations } from '../payment-records/payment-records.service.js';
 
 export type StoreStatementStatus = 'OPEN';
 
@@ -61,6 +62,7 @@ type StatementGroup = {
   periodStart: string;
   periodEndExclusive: string;
   lines: StoreStatementLineView[];
+  paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal };
 };
 
 @Injectable()
@@ -149,12 +151,17 @@ export class StoreStatementsService {
           periodStart: period.startDate,
           periodEndExclusive,
           lines: [],
+          paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) },
         };
       group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId('STORE_RECEIVABLE', order.id))));
       groups.set(key, group);
     }
 
-    return [...groups.values()].sort((left, right) => {
+    const allGroups = [...groups.values()];
+    const allocations = await this.database.client.paymentAllocation?.findMany({ where: { settlementItemId: { in: allGroups.flatMap((group) => group.lines.map((line) => line.settlementItemId)) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } } }) ?? [];
+    const byItem = summarizeAllocations(allocations);
+    for (const group of allGroups) for (const line of group.lines) { const summary = byItem.get(line.settlementItemId); if (summary) { group.paymentSummary.pendingAmount = group.paymentSummary.pendingAmount.plus(summary.pendingAmount); group.paymentSummary.confirmedAmount = group.paymentSummary.confirmedAmount.plus(summary.confirmedAmount); } }
+    return allGroups.sort((left, right) => {
       const byPeriod = right.periodStart.localeCompare(left.periodStart);
       return byPeriod || left.supplierId.localeCompare(right.supplierId);
     });
@@ -198,9 +205,9 @@ function toSummaryView(group: StatementGroup): StoreStatementSummaryView {
     goodsAmount: goodsAmount.toFixed(2),
     freightAmount: freightAmount.toFixed(2),
     totalAmount: totalAmount.toFixed(2),
-    confirmedPaidAmount: '0.00',
-    pendingPaymentAmount: '0.00',
-    payableAmount: totalAmount.toFixed(2),
+    confirmedPaidAmount: group.paymentSummary.confirmedAmount.toFixed(2),
+    pendingPaymentAmount: group.paymentSummary.pendingAmount.toFixed(2),
+    payableAmount: Decimal.max(totalAmount.minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2),
     lineCount: group.lines.length,
   };
 }

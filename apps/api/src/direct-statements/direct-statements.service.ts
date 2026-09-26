@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import { settlementPeriod, type SettlementCycle } from '../../../../packages/domain/src/settlement-period.js';
-import { SettlementMode, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import { PaymentAllocationState, SettlementMode, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import type { Shipment, Supplier, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { summarizeAllocations } from '../payment-records/payment-records.service.js';
 
 export type ListDirectStatementsInput = {
   storeId?: string;
@@ -46,7 +47,7 @@ export type DirectStatementSummaryView = {
 export type DirectStatementDetailView = DirectStatementSummaryView & { lines: DirectStatementLineView[] };
 
 type StatementOrder = SupplierOrder & { supplier: Supplier; shipments: Shipment[]; priceChangeRuns: Array<{ runId: string; adjustment: { id: string; orderItemId: string; salesDelta: import('decimal.js').Decimal; supplyDelta: import('decimal.js').Decimal; createdAt: Date } | null }> };
-type StatementGroup = Omit<DirectStatementSummaryView, 'settlementStatus' | 'goodsAmount' | 'freightAmount' | 'totalAmount' | 'confirmedPaidAmount' | 'pendingPaymentAmount' | 'payableAmount' | 'lineCount'> & { lines: DirectStatementLineView[] };
+type StatementGroup = Omit<DirectStatementSummaryView, 'settlementStatus' | 'goodsAmount' | 'freightAmount' | 'totalAmount' | 'confirmedPaidAmount' | 'pendingPaymentAmount' | 'payableAmount' | 'lineCount'> & { lines: DirectStatementLineView[]; paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal } };
 
 @Injectable()
 export class DirectStatementsService {
@@ -94,12 +95,16 @@ export class DirectStatementsService {
       const group = groups.get(key) ?? {
         id: encodeStatementId({ storeId: order.storeId, supplierId: order.supplierId, cycle, periodStart: period.startDate, periodEndExclusive }),
         type: 'DIRECT', storeId: order.storeId, supplierId: order.supplierId, cycle, periodKey,
-        periodStart: period.startDate, periodEndExclusive, lines: [],
+        periodStart: period.startDate, periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) },
       };
       group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId(order.id))));
       groups.set(key, group);
     }
-    return [...groups.values()].sort((a, b) => b.periodStart.localeCompare(a.periodStart) || a.storeId.localeCompare(b.storeId));
+    const allGroups = [...groups.values()];
+    const allocations = await this.database.client.paymentAllocation?.findMany({ where: { settlementItemId: { in: allGroups.flatMap((group) => group.lines.map((line) => line.settlementItemId)) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } } }) ?? [];
+    const byItem = summarizeAllocations(allocations);
+    for (const group of allGroups) for (const line of group.lines) { const summary = byItem.get(line.settlementItemId); if (summary) { group.paymentSummary.pendingAmount = group.paymentSummary.pendingAmount.plus(summary.pendingAmount); group.paymentSummary.confirmedAmount = group.paymentSummary.confirmedAmount.plus(summary.confirmedAmount); } }
+    return allGroups.sort((a, b) => b.periodStart.localeCompare(a.periodStart) || a.storeId.localeCompare(b.storeId));
   }
 }
 
@@ -118,7 +123,7 @@ function toSummaryView(group: StatementGroup): DirectStatementSummaryView {
   const goodsAmount = group.lines.reduce((sum, line) => sum.plus(line.goodsAmount), new Decimal(0));
   const freightAmount = group.lines.reduce((sum, line) => sum.plus(line.freightAmount), new Decimal(0));
   const totalAmount = goodsAmount.plus(freightAmount).toFixed(2);
-  return { ...group, settlementStatus: 'OPEN', goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount, confirmedPaidAmount: '0.00', pendingPaymentAmount: '0.00', payableAmount: totalAmount, lineCount: group.lines.length };
+  return { ...group, settlementStatus: 'OPEN', goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount, confirmedPaidAmount: group.paymentSummary.confirmedAmount.toFixed(2), pendingPaymentAmount: group.paymentSummary.pendingAmount.toFixed(2), payableAmount: Decimal.max(new Decimal(totalAmount).minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2), lineCount: group.lines.length };
 }
 
 function normalizeCycle(value: string): SettlementCycle {

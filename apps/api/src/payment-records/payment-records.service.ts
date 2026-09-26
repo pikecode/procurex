@@ -551,7 +551,7 @@ function toPreviewItem(
   };
 }
 
-function summarizeAllocations(allocations: PaymentAllocation[]): Map<string, { pendingAmount: Decimal; confirmedAmount: Decimal }> {
+export function summarizeAllocations(allocations: PaymentAllocation[]): Map<string, { pendingAmount: Decimal; confirmedAmount: Decimal }> {
   const result = new Map<string, { pendingAmount: Decimal; confirmedAmount: Decimal }>();
   for (const allocation of allocations) {
     const current = result.get(allocation.settlementItemId) ?? {
