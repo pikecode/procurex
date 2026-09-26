@@ -1,6 +1,6 @@
 # ProcureX Development Progress
 
-Last updated: 2026-09-26
+Last updated: 2026-09-27
 
 ## Current Position
 
@@ -8,7 +8,7 @@ The backend has partial M4 settlement implementation. M5 reporting/export work w
 
 Latest completed implementation: B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
-Latest committed implementation:
+Latest committed implementation before the current work:
 
 ```text
 Freeze price adjustments by settlement side
@@ -48,7 +48,9 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Recommended next step: continue DEV-406 with mixed ordinary plus adjustment allocation coverage, then close the remaining adjustment disposal and reconciliation evidence. B01–B04 expose positive and negative adjustment IDs separately from ordinary order lines; B06–B08 use positive `ADJUSTMENT` items with source revision and side-specific direction, while B12 consumes negative adjustment credits, discrepancy returns, or overpayments. The adjustment amount remains separate from ordinary statement totals while positive adjustment payment is tracked in payable and settlement status.
+Current uncommitted work: B12 now permits a negative adjustment credit to offset a positive adjustment settlement item on the matching STORE or SUPPLIER side. Available amount subtracts reserved/confirmed payment allocations and pending/confirmed disposals. Unit coverage proves the remaining amount and rejects a target on the opposite side. Build, 28 unit tests, 26 integration tests, contract check, and diff check pass.
+
+Recommended next step: add database-backed B12 coverage for negative adjustment credit offset against a positive adjustment target, then audit DEV-406's remaining concurrency, offline return, and reconciliation acceptance evidence. M5 remains frozen until M4 work packages are closed.
 
 DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. B12 confirmation-role acceptance and broader concurrency evidence remain to be reviewed; M4 is still incomplete.
 
@@ -56,9 +58,7 @@ DEV-405 clearing creation now conditionally updates each funding allocation by v
 
 ## Progress Metrics
 
-The project uses two fixed metrics. **Core backend implementation: about 70%–75%** — the previously reported figure, covering the main API, data models, migrations, permissions, settlement reads/payments, fulfillment, pricing, reports, and exports already implemented. **Full release acceptance: about 40%–45%** — the stricter figure, also requiring all role pages, complete M4 adjustment handling, notifications, audit/reconciliation, task recovery, regression evidence, and M6 deployment/launch acceptance. The difference is scope, not a regression; future updates must label which metric they use.
-
-M4 work package status is intentionally separate from the overall metric: DEV-401 partial, DEV-402 partial, DEV-403 partial, DEV-404 partial, DEV-405 partial, DEV-406 partial. The existing tests prove selected slices, not the M4 completion conditions in `docs/development-plan.md`.
+The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status uses the six DEV work packages in `docs/development-plan.md`: **0 closed, 6 partial, 0 not started**. This is not “0% built”: each partial package has substantial implementation, but none is counted complete until its listed completion conditions and required evidence pass. Current focus is DEV-406; M5 stays frozen. Do not publish a new overall percentage until the plan has an itemized denominator for all milestones.
 
 ## Verification Baseline
 
@@ -68,7 +68,7 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count: 26 integration tests passing; unit coverage is 12 tests.
+Current integration coverage count: 26 integration tests passing; unit coverage is 28 tests.
 
 DEV-406 scope hardening: adjustment list/detail and difference-disposal detail/confirmation now enforce the authenticated store or supplier scope before returning or mutating records. Company roles retain the existing company access paths.
 

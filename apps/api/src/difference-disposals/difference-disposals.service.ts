@@ -51,11 +51,13 @@ export type DifferenceDisposalItemView = {
   createdAt: string;
 };
 
-type SettlementItemKind = 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE';
+type SettlementItemKind = 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'ADJUSTMENT';
 
 type DecodedSettlementItemId = {
   kind: SettlementItemKind;
   supplierOrderId: string;
+  adjustmentDocumentId?: string;
+  adjustmentSide?: 'STORE' | 'SUPPLIER';
 };
 
 type TargetOrder = SupplierOrder & { shipments: Shipment[] };
@@ -233,7 +235,8 @@ export class DifferenceDisposalsService {
     const decoded = targetDebitItemIds.map((id) => ({ id, decoded: decodeSettlementItemId(id) }));
     for (const item of decoded) {
       const expectedKind = direction === DifferenceDisposalDirection.COMPANY_TO_STORE ? 'STORE_RECEIVABLE' : 'SUPPLIER_PAYABLE';
-      if (item.decoded.kind !== expectedKind) {
+      const expectedAdjustmentSide = direction === DifferenceDisposalDirection.COMPANY_TO_STORE ? 'STORE' : 'SUPPLIER';
+      if (item.decoded.kind !== expectedKind && !(item.decoded.kind === 'ADJUSTMENT' && item.decoded.adjustmentSide === expectedAdjustmentSide)) {
         throw new ConflictException({
           code: 'TARGET_DEBIT_KIND_NOT_SUPPORTED',
           message: 'Offset disposal currently supports supplier payable target debit items only',
@@ -247,6 +250,10 @@ export class DifferenceDisposalsService {
       include: { shipments: true },
     });
     const ordersById = new Map(orders.map((order) => [order.id, order]));
+    const adjustmentDocuments = await client.adjustmentDocument.findMany({
+      where: { id: { in: decoded.flatMap(({ decoded: item }) => item.adjustmentDocumentId ? [item.adjustmentDocumentId] : []) } },
+    });
+    const adjustmentsById = new Map(adjustmentDocuments.map((document) => [document.id, document]));
     const allocations = await client.paymentAllocation.findMany({
       where: {
         settlementItemId: { in: targetDebitItemIds },
@@ -286,7 +293,15 @@ export class DifferenceDisposalsService {
           details: { targetDebitItemId: item.id },
         });
       }
-      result.set(item.id, targetAvailableAmount(order, item.decoded.kind, usedByPayments.get(item.id), usedByDisposals.get(item.id)));
+      if (item.decoded.kind === 'ADJUSTMENT') {
+        const adjustment = item.decoded.adjustmentDocumentId ? adjustmentsById.get(item.decoded.adjustmentDocumentId) : undefined;
+        if (!adjustment || adjustment.supplierOrderId !== order.id || adjustment.side !== item.decoded.adjustmentSide || !new Decimal(adjustment.amount).gt(0)) {
+          throw new ConflictException({ code: 'TARGET_ADJUSTMENT_NOT_PAYABLE', message: 'Target adjustment must be a positive adjustment for this order' });
+        }
+        result.set(item.id, Decimal.max(new Decimal(adjustment.amount).minus(usedByPayments.get(item.id) ?? 0).minus(usedByDisposals.get(item.id) ?? 0), 0));
+      } else {
+        result.set(item.id, targetAvailableAmount(order, item.decoded.kind, usedByPayments.get(item.id), usedByDisposals.get(item.id)));
+      }
     }
     return result;
   }
@@ -391,12 +406,17 @@ function decodeSettlementItemId(id: string): DecodedSettlementItemId {
     const parsed = JSON.parse(Buffer.from(id, 'base64url').toString('utf8')) as {
       kind?: unknown;
       supplierOrderId?: unknown;
+      adjustmentDocumentId?: unknown;
+      adjustmentSide?: unknown;
     };
     if (
       (parsed.kind === 'STORE_RECEIVABLE' || parsed.kind === 'SUPPLIER_PAYABLE') &&
       typeof parsed.supplierOrderId === 'string'
     ) {
       return { kind: parsed.kind, supplierOrderId: parsed.supplierOrderId };
+    }
+    if (parsed.kind === 'ADJUSTMENT' && typeof parsed.supplierOrderId === 'string' && typeof parsed.adjustmentDocumentId === 'string' && (parsed.adjustmentSide === 'STORE' || parsed.adjustmentSide === 'SUPPLIER')) {
+      return { kind: 'ADJUSTMENT', supplierOrderId: parsed.supplierOrderId, adjustmentDocumentId: parsed.adjustmentDocumentId, adjustmentSide: parsed.adjustmentSide };
     }
   } catch {
     // Fall through to uniform bad item handling.
