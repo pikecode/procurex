@@ -32,6 +32,7 @@ export class SupplierStoreStatementsController {
   @Get(':id')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'SUPPLIER')
   get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<SupplierStoreStatementDetailView> {
+    applyScope({}, request);
     return this.supplierStoreStatementsService.get(id, request.auth?.user.scope);
   }
 }

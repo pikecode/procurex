@@ -11,7 +11,7 @@ Latest completed implementation: the four statement families now enforce authent
 Latest commits:
 
 ```text
-Harden statement list and detail scopes (current work)
+b867e59 Harden statement list and detail scopes
 a205d0c Record B12 receiver permission gap
 ae2e702 Verify adjustment credit offsets end to end
 e61f84e Allow offsets against positive adjustments
@@ -117,6 +117,7 @@ DEV-401 concurrency slice: price-run processing now locks each supplier order be
 DEV-402/403 evidence slice: direct-term settlement previews resolve to `STORE_TO_SUPPLIER` with the DIRECT channel and include freight; replenishment shipments remain in the supplier order's first-shipment half-month period.
 
 DEV-406 scope hardening: adjustment list/detail and difference-disposal detail/confirmation now enforce the authenticated store or supplier scope before returning or mutating records. Company roles retain the existing company access paths.
+Statement detail scope hardening: unconfigured STORE, STORE_FINANCE, and SUPPLIER accounts are rejected before decoded statement IDs are queried.
 
 Current verified change: price-change runs now report FAILED when any child order fails; P02 revaluation refreshes purchase-request funding summaries; purchase confirmation recalculates funding from current item amounts and current account balance before splitting. Payment preview blocks unresolved positive shortfalls and company-term supplier payments whose store receivables are not confirmed paid. Price changes do not mutate balances or ledgers.
 

@@ -32,6 +32,7 @@ export class StoreStatementsController {
   @Get(':id')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
   get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<StoreStatementDetailView> {
+    applyScope({}, request);
     return this.storeStatementsService.get(id, request.auth?.user.scope);
   }
 }

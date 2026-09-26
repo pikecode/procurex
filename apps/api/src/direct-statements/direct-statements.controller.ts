@@ -19,7 +19,7 @@ export class DirectStatementsController {
 
   @Get(':id')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
-  get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<DirectStatementDetailView> { return this.service.get(id, request.auth?.user.scope); }
+  get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<DirectStatementDetailView> { applyScope({}, request); return this.service.get(id, request.auth?.user.scope); }
 }
 
 function applyScope(input: ListDirectStatementsInput, request: AuthenticatedRequest): ListDirectStatementsInput {
