@@ -47,3 +47,19 @@ test('supplier statements use the order cycle snapshot after supplier settings c
   const [statement] = await service.list({ supplierId: 'supplier-1' });
   assert.equal(statement?.cycle, 'MONTHLY');
 });
+
+test('statement status becomes settled only after confirmed allocations cover the amount', async () => {
+  const settlementItemId = Buffer.from(JSON.stringify({ kind: 'DIRECT', supplierOrderId: 'order-1' })).toString('base64url');
+  const service = new DirectStatementsService({
+    client: {
+      supplierOrder: { findMany: async () => [{
+        id: 'order-1', supplierOrderNo: 'SO-1', storeId: 'store-1', supplierId: 'supplier-1', version: 1,
+        salesGoodsAmount: '120.00', firstShippedAt: new Date('2026-09-10T00:00:00.000Z'), settlementMode: 'SUPPLIER_TERM', settlementCycleSnapshot: 'MONTHLY', shipments: [],
+      }] },
+      paymentAllocation: { findMany: async () => [{ settlementItemId, state: 'CONFIRMED', amount: '120.00' }] },
+    },
+  } as any);
+  const [statement] = await service.list({ settlementStatus: 'SETTLED' });
+  assert.equal(statement?.settlementStatus, 'SETTLED');
+  assert.equal((await service.get(statement!.id)).settlementStatus, 'SETTLED');
+});
