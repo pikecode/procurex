@@ -232,6 +232,19 @@ export class PricingService {
           await tx.priceChangeRunOrder.update({ where: { runId_supplierOrderId: { runId: id, supplierOrderId: runOrder.supplierOrderId } }, data: { status: 'FAILED' } });
           continue;
         }
+        const baseline = order.firstShippedAt ?? order.request.submittedAt;
+        const currentVersion = await tx.priceVersion.findFirst({
+          where: { scopeId: version.scopeId, effectiveAt: { lte: baseline } },
+          orderBy: [{ effectiveAt: 'desc' }, { revision: 'desc' }],
+          select: { id: true },
+        });
+        if (currentVersion?.id !== version.id) {
+          await tx.priceChangeRunOrder.update({
+            where: { runId_supplierOrderId: { runId: id, supplierOrderId: runOrder.supplierOrderId } },
+            data: { status: 'SUCCEEDED', salesDelta: 0, supplyDelta: 0 },
+          });
+          continue;
+        }
         const salesDelta = lineAmount(item.quantity, version.salesPrice).minus(item.salesLineAmount);
         const supplyDelta = lineAmount(item.quantity, version.supplyPrice).minus(item.supplyLineAmount);
         await tx.orderItem.update({

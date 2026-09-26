@@ -200,3 +200,66 @@ test('pricing service returns latest version effective at business time', async 
     await prisma.$disconnect();
   }
 });
+
+test('an older price run cannot overwrite a newer effective price when processed later', async () => {
+  const prisma = createClient();
+  const service = createService(prisma);
+  const suffix = Date.now();
+  const categoryCode = `ORDER${suffix}`;
+  const unitCode = `ORDER${suffix}`;
+  const sku = `ORDER${suffix}`;
+  const supplierCode = `ORDER${suffix}`;
+  const storeCode = `ORDER${suffix}`;
+  const templateCode = `ORDER${suffix}`;
+  const requestNo = `ORDER${suffix}`;
+
+  try {
+    const [category, unit, supplier, store, template] = await Promise.all([
+      prisma.category.create({ data: { code: categoryCode, name: 'Order price category' } }),
+      prisma.unit.create({ data: { code: unitCode, name: 'piece' } }),
+      prisma.supplier.create({ data: { code: supplierCode, name: 'Order price supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.COMPANY_TERM, defaultSettlementCycle: 'MONTHLY' } }),
+      prisma.store.create({ data: { code: storeCode, name: 'Order price store' } }),
+      prisma.orderTemplate.create({ data: { code: templateCode, name: 'Order price template' } }),
+    ]);
+    const product = await prisma.product.create({ data: { sku, name: 'Order price product', categoryId: category.id, baseUnitId: unit.id } });
+    await service.publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: '10', supplyPrice: '8', effectiveAt: new Date('2026-09-01T00:00:00Z'), reason: 'Initial' });
+    const request = await prisma.purchaseRequest.create({ data: { requestNo, storeId: store.id, templateId: template.id, status: PurchaseRequestStatus.CONFIRMED, submittedAt: new Date('2026-09-05T00:00:00Z'), salesGoodsAmount: '100', supplyGoodsAmount: '80' } });
+    const order = await prisma.supplierOrder.create({
+      data: {
+        supplierOrderNo: `ORDER${suffix}`, requestId: request.id, storeId: store.id, supplierId: supplier.id,
+        settlementMode: SettlementMode.COMPANY_TERM, status: SupplierOrderStatus.PUSHED,
+        fulfillmentStatus: FulfillmentStatus.PARTIAL_SHIPPED, firstShippedAt: new Date('2026-09-15T00:00:00Z'),
+        salesGoodsAmount: '100', supplyGoodsAmount: '80',
+        items: { create: { productId: product.id, quantity: '10', salesUnitPrice: '10', supplyUnitPrice: '8', salesLineAmount: '100', supplyLineAmount: '80' } },
+      },
+    });
+    const older = await service.publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: '12', supplyPrice: '9', effectiveAt: new Date('2026-09-10T00:00:00Z'), reason: 'Older effective price' });
+    const newer = await service.publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: '13', supplyPrice: '10', effectiveAt: new Date('2026-09-12T00:00:00Z'), reason: 'Newer effective price' });
+
+    await service.processRun(newer.runId!);
+    const staleRun = await service.processRun(older.runId!);
+    const updated = await prisma.supplierOrder.findUniqueOrThrow({ where: { id: order.id }, include: { items: true } });
+    assert.equal(updated.items[0]?.salesUnitPrice.toString(), '13');
+    assert.equal(updated.items[0]?.supplyUnitPrice.toString(), '10');
+    const obsoleteEntry = staleRun.orders.find(({ supplierOrderId }) => supplierOrderId === order.id);
+    assert.equal(obsoleteEntry?.status, 'SUCCEEDED');
+    assert.equal(obsoleteEntry?.salesDelta, '0');
+    assert.equal(obsoleteEntry?.supplyDelta, '0');
+    assert.equal(await prisma.priceChangeAdjustment.count({ where: { runId: older.runId } }), 0);
+  } finally {
+    await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: supplierCode } } } });
+    const orderIds = (await prisma.supplierOrder.findMany({ where: { supplier: { code: supplierCode } }, select: { id: true } })).map(({ id }) => id);
+    await prisma.priceChangeAdjustment.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
+    await prisma.priceChangeRunOrder.deleteMany({ where: { supplierOrder: { supplier: { code: supplierCode } } } });
+    await prisma.supplierOrder.deleteMany({ where: { supplier: { code: supplierCode } } });
+    await prisma.purchaseRequest.deleteMany({ where: { requestNo } });
+    await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
+    await prisma.store.deleteMany({ where: { code: storeCode } });
+    await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });
+    await prisma.product.deleteMany({ where: { sku } });
+    await prisma.supplier.deleteMany({ where: { code: supplierCode } });
+    await prisma.category.deleteMany({ where: { code: categoryCode } });
+    await prisma.unit.deleteMany({ where: { code: unitCode } });
+    await prisma.$disconnect();
+  }
+});

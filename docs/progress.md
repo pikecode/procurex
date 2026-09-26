@@ -14,6 +14,7 @@ Latest commits:
 a205d0c Record B12 receiver permission gap
 ae2e702 Verify adjustment credit offsets end to end
 e61f84e Allow offsets against positive adjustments
+419c438 Audit M4 plan alignment and closure gates
 66d8d78 Cover mixed adjustment payments
 de2ced8 Gate supplier adjustments on store settlement
 a674e33 Document adjustment settlement items
@@ -60,6 +61,8 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
 Latest completed work: B12 permits a negative adjustment credit to offset a positive adjustment settlement item on the matching STORE or SUPPLIER side. Available amount subtracts reserved/confirmed payment allocations and pending/confirmed disposals. Unit and HTTP/database integration coverage verifies the offset record links both adjustment documents. Build, 28 unit tests, 26 integration tests, contract check, and diff check pass.
+
+DEV-401 progress: fixed and integration-tested AT-09. If an older effective price run is processed after a newer applicable run, the old run no longer overwrites order prices or creates a duplicate adjustment; its item completes with zero delta. This closes the AT-09 ordering case only; DEV-401 remains partial until the other concurrency case and W06/S10 acceptance are verified.
 
 ## Plan Alignment Review (2026-09-27)
 
@@ -422,7 +425,7 @@ Current price history behavior:
 
 ## Recommended Next Step
 
-Complete DEV-501 role/data-scope behavior and API contract checks, then implement W11. Current report routes are company-role-only; store and supplier account data-scope binding is not implemented. Keep R03 restricted to PURCHASER/HQ_FINANCE/ADMIN.
+Follow the M4 plan order: finish DEV-401's AT-08 publish-versus-completion race and W06/S10 acceptance, then close DEV-402 and DEV-403 before returning to DEV-404–406. AT-16 review found direct-term two-price consistency specified by requirements but no enforcement found in P02 publishing; investigate and add database-backed evidence as part of DEV-402. M5 remains frozen until M4 packages are closed.
 
 ## Where To Look
 
