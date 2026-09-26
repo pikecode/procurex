@@ -165,7 +165,7 @@ export class PaymentRecordsController {
       return command.command.responseBody as PaymentRecordView;
     }
 
-    const result = await this.paymentRecordsService.reject(input.id, input.expectedVersion, input.reason);
+    const result = await this.paymentRecordsService.reject(input.id, input.expectedVersion, input.reason, auth.user.scope);
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'PaymentRecord',
@@ -197,7 +197,7 @@ export class PaymentRecordsController {
       return command.command.responseBody as PaymentRecordView;
     }
 
-    const result = await this.paymentRecordsService.cancel(input.id, input.expectedVersion, input.reason);
+    const result = await this.paymentRecordsService.cancel(input.id, input.expectedVersion, input.reason, auth.user.scope);
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'PaymentRecord',

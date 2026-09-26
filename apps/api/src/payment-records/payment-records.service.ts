@@ -428,12 +428,12 @@ export class PaymentRecordsService {
     return toPaymentRecordView(confirmed);
   }
 
-  async reject(id: string, expectedVersion: number, reason: string): Promise<PaymentRecordView> {
+  async reject(id: string, expectedVersion: number, reason: string, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
       include: { allocations: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!payment) {
+    if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
         code: 'PAYMENT_RECORD_NOT_FOUND',
         message: 'Payment record was not found',
@@ -474,12 +474,12 @@ export class PaymentRecordsService {
     return toPaymentRecordView(rejected);
   }
 
-  async cancel(id: string, expectedVersion: number, reason: string): Promise<PaymentRecordView> {
+  async cancel(id: string, expectedVersion: number, reason: string, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
       include: { allocations: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!payment) {
+    if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
         code: 'PAYMENT_RECORD_NOT_FOUND',
         message: 'Payment record was not found',
