@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -87,16 +87,18 @@ export class StoresController {
   }
 
   @Get(':id/account')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE')
-  getAccount(@Param('id') id: string): Promise<StoreAccountView> {
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  getAccount(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<StoreAccountView> {
     throwIfInvalid(validateUuid('id', id));
+    applyStoreScope(id, request);
     return this.storesService.getAccount(id);
   }
 
   @Get(':id/ledgers')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE')
-  listLedgers(@Param('id') id: string, @Query() query: LedgerQuery): Promise<AccountLedgerView[]> {
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  listLedgers(@Param('id') id: string, @Query() query: LedgerQuery, @Req() request: AuthenticatedRequest): Promise<AccountLedgerView[]> {
     throwIfInvalid(validateUuid('id', id));
+    applyStoreScope(id, request);
     return this.storesService.listLedgers(id, parseLedgerQuery(query));
   }
 
@@ -209,6 +211,13 @@ export class StoresController {
     const input = parsePatchStoreBody(id, body);
     return this.storesService.updateStore(id, input);
   }
+}
+
+function applyStoreScope(storeId: string, request: AuthenticatedRequest): void {
+  const scope = request.auth?.user.scope;
+  if (scope?.type !== 'STORE' && scope?.type !== 'STORE_FINANCE') return;
+  if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+  if (scope.storeId !== storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Store is outside the current store scope' });
 }
 
 function parseCreateStoreBody(body: CreateStoreBody): {

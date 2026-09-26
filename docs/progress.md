@@ -113,7 +113,7 @@ Current integration coverage count: 28 integration tests passing; unit coverage 
 
 DEV-404 acceptance slice: the payment integration now registers the same supplier payable concurrently with two different idempotency keys and verifies exactly one reservation succeeds while the other conflicts; replaying the winning key returns the original payment.
 
-DEV-405 acceptance slice: clearing preview/create/detail integration covers the selected credit allocation, independent clearing document, account ledger, released credit, and idempotent replay; clearing detail now rejects a mismatched store scope.
+DEV-405 acceptance slice: clearing preview/create/detail integration covers the selected credit allocation, independent clearing document, account ledger, released credit, and idempotent replay; clearing detail, account, and ledger reads now reject a mismatched store scope for both STORE and STORE_FINANCE.
 
 DEV-406 acceptance slice: the integration now creates a negative adjustment with no follow-up order, disposes it through `OFFLINE_RETURN` without a target debit, and confirms it through the receiver role; AT-14 is covered end to end.
 

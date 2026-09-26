@@ -5,6 +5,7 @@ import { DirectStatementsController } from '../../apps/api/src/direct-statements
 import { StoreStatementsController } from '../../apps/api/src/store-statements/store-statements.controller.js';
 import { SupplierStatementsController } from '../../apps/api/src/supplier-statements/supplier-statements.controller.js';
 import { SupplierStoreStatementsController } from '../../apps/api/src/supplier-store-statements/supplier-store-statements.controller.js';
+import { StoresController } from '../../apps/api/src/stores/stores.controller.js';
 
 const storeId = '11111111-1111-4111-8111-111111111111';
 const supplierId = '22222222-2222-4222-8222-222222222222';
@@ -46,4 +47,7 @@ test('statement controllers narrow list scope and require configured detail scop
   } as never);
   await supplierStore.list({}, request({ type: 'SUPPLIER', supplierId }));
   assert.equal((supplierStoreInput as { supplierId: string }).supplierId, supplierId);
+
+  const stores = new StoresController({ getAccount: async () => ({}) as never, listLedgers: async () => [] } as never, {} as never);
+  assert.throws(() => stores.getAccount(storeId, request({ type: 'STORE_FINANCE' })), (error: unknown) => error instanceof ForbiddenException);
 });

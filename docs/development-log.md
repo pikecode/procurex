@@ -3,6 +3,7 @@
 ## 2026-09-27
 
 - Continued M4 scope audit: `STORE_FINANCE` now has the documented store-side B12 read/confirm permission, and its bound store is enforced across payment, adjustment, difference-disposal, and clearing reads/mutations. Verification: build, 35 unit tests, 28 integration tests, contract check, and diff check passed.
+- Hardened W08 account reads: `GET /stores/{id}/account` and `GET /stores/{id}/ledgers` now include STORE_FINANCE and enforce the authenticated bound store. Added controller regression coverage. Verification: build, 35 unit tests, 28 integration tests, contract check, and diff check passed.
 - DEV-401/AT-09：修复价格 run 乱序处理覆盖新有效价格的问题。每单处理前重新按首次发货/提交基准时间查询当前有效 revision；旧 revision 已被更新版本取代时，将 run 明细置为成功零差额，不改订单和资金，不重复生成调整。新增 PostgreSQL 集成场景覆盖新 run 先执行、旧 run 后执行。验证：构建、27 项单测、27 项集成测试通过。
 - DEV-402 方向核对：AT-16 及需求/数据库设计要求直接账期销售价和供货价始终一致；初步审计未发现 P02 发布入口执行该约束。尚未修改，下一项沿计划补齐守卫及集成验收。
 - DEV-402/AT-16：P02 发布价格时校验供应商默认直接账期和模板直接账期配置，销售价与供货价不一致则拒绝；模板切换为直接账期时同步校验该模板商品的最新价格。新增数据库集成覆盖直接账期不一致拒绝及相等价格成功。验证：构建、28 项单测、契约检查、diff 检查通过。
