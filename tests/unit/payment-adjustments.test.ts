@@ -44,3 +44,27 @@ test('payment preview blocks a negative adjustment as a difference credit', asyn
     (error: any) => error?.getResponse?.()?.details?.blockedItems?.[0]?.code === 'ADJUSTMENT_CREDIT_NOT_PAYABLE',
   );
 });
+
+test('company-term supplier adjustment waits for store receivable and store adjustments', async () => {
+  const itemId = adjustmentItemId('adjustment-1', 'order-1', 'SUPPLIER');
+  const storeAdjustmentId = adjustmentItemId('adjustment-store', 'order-1', 'STORE');
+  const service = new PaymentRecordsService({
+    client: {
+      supplierOrder: { findMany: async () => [{
+        id: 'order-1', supplierOrderNo: 'SO-1', storeId: 'store-1', supplierId: 'supplier-1', version: 4,
+        status: 'COMPLETED', firstShippedAt: new Date('2026-09-10T00:00:00.000Z'), settlementMode: 'COMPANY_TERM',
+        salesGoodsAmount: '100.00', supplyGoodsAmount: '80.00', shipments: [], request: { shortfallAmount: '0.00' },
+      }] },
+      settlementItemSnapshot: { findMany: async () => [] },
+      adjustmentDocument: { findMany: async ({ where }: any) => where.side === 'STORE'
+        ? [{ id: 'adjustment-store', supplierOrderId: 'order-1', side: 'STORE', amount: new Decimal('20.00'), sourceRevision: 9 }]
+        : [{ id: 'adjustment-1', supplierOrderId: 'order-1', side: 'SUPPLIER', amount: new Decimal('10.00'), sourceRevision: 9 }] },
+      paymentAllocation: { findMany: async () => [{ settlementItemId: storeAdjustmentId, state: 'CONFIRMED', amount: '20.00' }] },
+      differenceDisposalItem: { findMany: async () => [] },
+    },
+  } as any);
+  await assert.rejects(
+    () => service.preview([itemId]),
+    (error: any) => error?.getResponse?.()?.details?.blockedItems?.[0]?.code === 'STORE_RECEIVABLE_UNSETTLED',
+  );
+});

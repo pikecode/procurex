@@ -172,15 +172,27 @@ export class PaymentRecordsService {
     const adjustmentDocumentIds = decoded.flatMap(({ decoded: item }) => item.adjustmentDocumentId ? [item.adjustmentDocumentId] : []);
     const adjustmentDocuments = await client.adjustmentDocument.findMany({ where: { id: { in: adjustmentDocumentIds } } });
     const adjustmentDocumentsById = new Map(adjustmentDocuments.map((document) => [document.id, document]));
+    const storeReceivableOrderIds = [...new Set(decoded.flatMap(({ decoded: item }) => {
+      const order = ordersById.get(item.supplierOrderId);
+      return (item.kind === 'SUPPLIER_PAYABLE' || (item.kind === 'ADJUSTMENT' && item.adjustmentSide === 'SUPPLIER')) && order?.settlementMode === 'COMPANY_TERM'
+        ? [item.supplierOrderId]
+        : [];
+    }))];
+    const storeAdjustmentDocuments = await client.adjustmentDocument.findMany({
+      where: { supplierOrderId: { in: storeReceivableOrderIds }, side: 'STORE' },
+    });
     const storeReceivableIds = decoded.flatMap(({ decoded: item }) => {
       const order = ordersById.get(item.supplierOrderId);
-      return item.kind === 'SUPPLIER_PAYABLE' && order?.settlementMode === 'COMPANY_TERM'
+      return (item.kind === 'SUPPLIER_PAYABLE' || (item.kind === 'ADJUSTMENT' && item.adjustmentSide === 'SUPPLIER')) && order?.settlementMode === 'COMPANY_TERM'
         ? [encodeSettlementItemId('STORE_RECEIVABLE', item.supplierOrderId)]
         : [];
     });
+    const storeAdjustmentIds = storeAdjustmentDocuments
+      .filter((document) => new Decimal(document.amount).gt(0))
+      .map((document) => encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'STORE'));
     const allocations = await client.paymentAllocation.findMany({
       where: {
-        settlementItemId: { in: [...uniqueIds, ...storeReceivableIds] },
+        settlementItemId: { in: [...uniqueIds, ...storeReceivableIds, ...storeAdjustmentIds] },
         state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] },
       },
     });
@@ -237,7 +249,13 @@ export class PaymentRecordsService {
       if ((item.decoded.kind === 'SUPPLIER_PAYABLE' || (item.decoded.kind === 'ADJUSTMENT' && item.decoded.adjustmentSide === 'SUPPLIER')) && order.settlementMode === 'COMPANY_TERM') {
         const receivableId = encodeSettlementItemId('STORE_RECEIVABLE', order.id);
         const storeAmount = new Decimal(order.salesGoodsAmount).plus(order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0)));
-        if ((allocationSummary.get(receivableId)?.confirmedAmount ?? new Decimal(0)).lessThan(storeAmount)) {
+        const storeAdjustmentAmount = storeAdjustmentDocuments
+          .filter((document) => document.supplierOrderId === order.id && new Decimal(document.amount).gt(0))
+          .reduce((sum, document) => sum.plus(document.amount), new Decimal(0));
+        const confirmedStoreAdjustments = storeAdjustmentDocuments
+          .filter((document) => document.supplierOrderId === order.id && new Decimal(document.amount).gt(0))
+          .reduce((sum, document) => sum.plus(allocationSummary.get(encodeAdjustmentSettlementItemId(document.id, order.id, 'STORE'))?.confirmedAmount ?? new Decimal(0)), new Decimal(0));
+        if ((allocationSummary.get(receivableId)?.confirmedAmount ?? new Decimal(0)).plus(confirmedStoreAdjustments).lessThan(storeAmount.plus(storeAdjustmentAmount))) {
           blockedItems.push({
             settlementItemId: item.id,
             code: 'STORE_RECEIVABLE_UNSETTLED',
@@ -683,6 +701,10 @@ function decodeSettlementItemId(id: string): DecodedSettlementItemId {
 
 function encodeSettlementItemId(kind: SettlementItemKind, supplierOrderId: string): string {
   return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
+}
+
+function encodeAdjustmentSettlementItemId(adjustmentDocumentId: string, supplierOrderId: string, adjustmentSide: 'STORE' | 'SUPPLIER'): string {
+  return Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', adjustmentDocumentId, supplierOrderId, adjustmentSide })).toString('base64url');
 }
 
 function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllocation[]; overpayments?: Overpayment[] }): PaymentRecordView {
