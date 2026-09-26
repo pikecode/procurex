@@ -32,6 +32,7 @@ export type StoreStatementSummaryView = {
   confirmedPaidAmount: string;
   pendingPaymentAmount: string;
   payableAmount: string;
+  adjustmentAmount: string;
   lineCount: number;
 };
 
@@ -63,6 +64,7 @@ type StatementGroup = {
   periodEndExclusive: string;
   lines: StoreStatementLineView[];
   paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal };
+  adjustmentAmount: Decimal;
 };
 
 @Injectable()
@@ -148,8 +150,24 @@ export class StoreStatementsService {
           periodEndExclusive,
           lines: [],
           paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) },
+          adjustmentAmount: new Decimal(0),
         };
       group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId('STORE_RECEIVABLE', order.id))));
+      groups.set(key, group);
+    }
+
+    const adjustmentDocuments = await this.database.client.adjustmentDocument?.findMany({ where: { storeId: input.storeId, side: 'STORE' } }) ?? [];
+    for (const document of adjustmentDocuments) {
+      const period = parsePeriodKey(document.settlementPeriodKey);
+      if (!period || (input.cycle && input.cycle !== period.cycle)) continue;
+      const key = `${document.storeId}:${document.supplierId}:${document.settlementPeriodKey}`;
+      const group = groups.get(key) ?? {
+        id: encodeStatementId({ storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive }),
+        storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodKey: document.settlementPeriodKey,
+        periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [],
+        paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0),
+      };
+      group.adjustmentAmount = group.adjustmentAmount.plus(document.amount);
       groups.set(key, group);
     }
 
@@ -204,6 +222,7 @@ function toSummaryView(group: StatementGroup): StoreStatementSummaryView {
     confirmedPaidAmount: group.paymentSummary.confirmedAmount.toFixed(2),
     pendingPaymentAmount: group.paymentSummary.pendingAmount.toFixed(2),
     payableAmount: Decimal.max(totalAmount.minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2),
+    adjustmentAmount: group.adjustmentAmount.toFixed(2),
     lineCount: group.lines.length,
   };
 }
@@ -211,6 +230,12 @@ function toSummaryView(group: StatementGroup): StoreStatementSummaryView {
 function toSettlementStatus(group: StatementGroup): StoreStatementStatus {
   const total = group.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Decimal(0));
   return group.paymentSummary.confirmedAmount.greaterThanOrEqualTo(total) ? 'SETTLED' : 'OPEN';
+}
+
+function parsePeriodKey(value: string): { cycle: SettlementCycle; periodStart: string; periodEndExclusive: string } | null {
+  const [cycle, periodStart, periodEndExclusive] = value.split(':');
+  if ((cycle !== 'WEEKLY' && cycle !== 'HALF_MONTHLY' && cycle !== 'MONTHLY' && cycle !== 'IMMEDIATE') || !periodStart || !periodEndExclusive) return null;
+  return { cycle, periodStart, periodEndExclusive };
 }
 
 function normalizeCycle(value: string): SettlementCycle {

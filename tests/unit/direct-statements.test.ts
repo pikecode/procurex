@@ -63,3 +63,18 @@ test('statement status becomes settled only after confirmed allocations cover th
   assert.equal(statement?.settlementStatus, 'SETTLED');
   assert.equal((await service.get(statement!.id)).settlementStatus, 'SETTLED');
 });
+
+test('direct statements expose persisted adjustment amounts in their actual period', async () => {
+  const service = new DirectStatementsService({
+    client: {
+      supplierOrder: { findMany: async () => [] },
+      adjustmentDocument: { findMany: async () => [{
+        storeId: 'store-1', supplierId: 'supplier-1', side: 'STORE', amount: '20.00', settlementPeriodKey: 'MONTHLY:2026-09-01:2026-10-01',
+      }] },
+    },
+  } as any);
+  const [statement] = await service.list({ storeId: 'store-1', supplierId: 'supplier-1' });
+  assert.equal(statement?.periodStart, '2026-09-01');
+  assert.equal(statement?.adjustmentAmount, '20.00');
+  assert.equal(statement?.totalAmount, '0.00');
+});
