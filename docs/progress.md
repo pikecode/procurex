@@ -68,6 +68,8 @@ DEV-402 progress: P02 price publishing now rejects unequal sales/supply prices w
 
 DEV-403 progress: the supplier-store statement integration now sums every returned store statement and asserts goods, freight, and total amounts equal the supplier total statement. Parent linkage and shared settlement item IDs remain covered. This closes the total-versus-store-breakdown evidence slice; replenishment-period and immediate-order acceptance remain.
 
+DEV-403 progress: fixed `IMMEDIATE` statement grouping in store, supplier-total, supplier-store, and direct statements. Same-day execution orders now include their order ID in the grouping key and statement ID, and direct statements have a regression test proving two same-day orders remain two statements.
+
 ## Plan Alignment Review (2026-09-27)
 
 The delivery order is M0 → M1 → M2 → M3 → M4 → M5 → M6. Actual work did not follow it cleanly: R01-R04 and W11 from M5 were implemented before M4 was closed. M5 is now frozen, but those early features do not count toward closing M4.
@@ -78,7 +80,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 |---|---|---|
 | DEV-401 | P01-P03 backend is substantially implemented | Prove AT-08/09 ordering and close the planned W06/S10 workflow; then mark package complete |
 | DEV-402 | B01-B04, amount and period logic exist; AT-16 price guard added | Prove all settlement modes and direct-term statement/payment consistency with integrated evidence |
-| DEV-403 | Statement read paths and adjustment linkage exist; total/store sum is tested | Prove replenishment keeps original period and immediate orders are per-order; required W09/S05/S08 flows remain part of acceptance |
+| DEV-403 | Statement read paths, total/store sum, and immediate per-order grouping are tested | Prove replenishment keeps original period; required W09/S05/S08 flows remain part of acceptance |
 | DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Close receiver-role authorization, direct-term direction mapping, duplicate-entry concurrency (AT-13), and required evidence/role flows |
 | DEV-405 | Clearing transaction logic exists | Verify A04-A06 acceptance and AT-24 ledger/history evidence; planned W08 workflow remains |
 | DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Finish correct per-side behavior, receiver confirmation, offline return path (AT-14), and reconciliation consistency before closure |

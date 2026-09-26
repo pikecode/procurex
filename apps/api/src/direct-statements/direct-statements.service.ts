@@ -92,9 +92,9 @@ export class DirectStatementsService {
       const period = settlementPeriod(cycle, order.firstShippedAt);
       const periodEndExclusive = addOneDay(period.endDate);
       const periodKey = `${cycle}:${period.startDate}:${periodEndExclusive}`;
-      const key = `${order.storeId}:${order.supplierId}:${periodKey}`;
+      const key = `${order.storeId}:${order.supplierId}:${periodKey}${cycle === 'IMMEDIATE' ? `:${order.id}` : ''}`;
       const group = groups.get(key) ?? {
-        id: encodeStatementId({ storeId: order.storeId, supplierId: order.supplierId, cycle, periodStart: period.startDate, periodEndExclusive }),
+        id: encodeStatementId({ storeId: order.storeId, supplierId: order.supplierId, cycle, periodStart: period.startDate, periodEndExclusive, orderId: cycle === 'IMMEDIATE' ? order.id : undefined }),
         type: 'DIRECT', storeId: order.storeId, supplierId: order.supplierId, cycle, periodKey,
         periodStart: period.startDate, periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [],
       };
@@ -105,9 +105,9 @@ export class DirectStatementsService {
     for (const document of adjustmentDocuments) {
       const period = parsePeriodKey(document.settlementPeriodKey);
       if (!period || (input.cycle && input.cycle !== period.cycle)) continue;
-      const key = `${document.storeId}:${document.supplierId}:${document.settlementPeriodKey}`;
+      const key = `${document.storeId}:${document.supplierId}:${document.settlementPeriodKey}${period.cycle === 'IMMEDIATE' ? `:${document.supplierOrderId}` : ''}`;
       const group = groups.get(key) ?? {
-        id: encodeStatementId({ storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive }),
+        id: encodeStatementId({ storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, orderId: period.cycle === 'IMMEDIATE' ? document.supplierOrderId : undefined }),
         type: 'DIRECT', storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodKey: document.settlementPeriodKey,
         periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [],
       };
@@ -170,7 +170,7 @@ function encodeAdjustmentSettlementItemId(adjustmentDocumentId: string, supplier
   return Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', supplierOrderId, adjustmentDocumentId, adjustmentSide })).toString('base64url');
 }
 
-function encodeStatementId(input: { storeId: string; supplierId: string; cycle: SettlementCycle; periodStart: string; periodEndExclusive: string }): string {
+function encodeStatementId(input: { storeId: string; supplierId: string; cycle: SettlementCycle; periodStart: string; periodEndExclusive: string; orderId?: string }): string {
   return Buffer.from(JSON.stringify(input)).toString('base64url');
 }
 

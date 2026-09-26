@@ -30,6 +30,21 @@ test('direct statements group completed supplier-term orders and include freight
   assert.equal(statement?.lineCount, 1);
 });
 
+test('immediate direct statements remain one statement per execution order', async () => {
+  const service = new DirectStatementsService({
+    client: {
+      supplierOrder: { findMany: async () => [
+        { id: 'order-1', supplierOrderNo: 'SO-1', storeId: 'store-1', supplierId: 'supplier-1', version: 1, salesGoodsAmount: '10.00', firstShippedAt: new Date('2026-09-10T01:00:00.000Z'), settlementMode: 'SUPPLIER_TERM', settlementCycleSnapshot: 'IMMEDIATE', shipments: [], priceChangeRuns: [] },
+        { id: 'order-2', supplierOrderNo: 'SO-2', storeId: 'store-1', supplierId: 'supplier-1', version: 1, salesGoodsAmount: '20.00', firstShippedAt: new Date('2026-09-10T03:00:00.000Z'), settlementMode: 'SUPPLIER_TERM', settlementCycleSnapshot: 'IMMEDIATE', shipments: [], priceChangeRuns: [] },
+      ] },
+    },
+  } as any);
+  const statements = await service.list({ storeId: 'store-1', supplierId: 'supplier-1' });
+  assert.equal(statements.length, 2);
+  assert.deepEqual(statements.map((statement) => statement.lineCount).sort(), [1, 1]);
+  assert.notEqual(statements[0]?.id, statements[1]?.id);
+});
+
 test('supplier statements use the order cycle snapshot after supplier settings change', async () => {
   const service = new SupplierStatementsService({
     client: {
