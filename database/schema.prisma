@@ -573,6 +573,7 @@ model AdjustmentDocument {
   sourceRevision     Int
   createdAt          DateTime                 @default(now()) @db.Timestamptz(6)
   items              AdjustmentDocumentItem[]
+  disposalItems      DifferenceDisposalItem[]
 
   @@unique([sourcePriceChangeId, side])
   @@index([storeId, supplierId, settlementPeriodKey])
@@ -1035,6 +1036,7 @@ model DifferenceDisposalItem {
   disposalId        String             @db.Uuid
   creditItemId      String?            @db.Uuid
   overpaymentId     String?            @db.Uuid
+  adjustmentDocumentId String?         @db.Uuid
   targetDebitItemId String?            @db.VarChar(300)
   amount            Decimal            @db.Decimal(20, 2)
   sourceVersion     Int
@@ -1042,9 +1044,11 @@ model DifferenceDisposalItem {
   disposal          DifferenceDisposal @relation(fields: [disposalId], references: [id], onDelete: Cascade)
   discrepancyReturn DiscrepancyReturn? @relation(fields: [creditItemId], references: [id])
   overpayment      Overpayment?        @relation(fields: [overpaymentId], references: [id])
+  adjustmentDocument AdjustmentDocument? @relation(fields: [adjustmentDocumentId], references: [id])
 
   @@unique([creditItemId])
   @@unique([overpaymentId])
+  @@unique([adjustmentDocumentId])
   @@index([disposalId])
 }
 

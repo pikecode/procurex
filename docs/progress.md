@@ -6,7 +6,7 @@ Last updated: 2026-09-26
 
 The backend has partial M4 settlement implementation. M5 reporting/export work was started before M4 was closed and is now frozen while the core settlement path is completed.
 
-Latest completed implementation: B05 reads persisted settled-side adjustment documents; P03 writes them transactionally when a price change follows a settlement snapshot.
+Latest completed implementation: B05 reads persisted settled-side adjustment documents; P03 writes them transactionally, and B12 accepts negative adjustment documents as side-specific credits.
 
 Latest committed implementation:
 
@@ -48,7 +48,7 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Recommended next step: continue DEV-406 with frozen settled-statement revisions and adjustment disposal linkage. B05 now reads persisted settled-side documents and keeps legacy snapshot fallback; P03 writes net adjustment documents with original and actual periods. B08 records excess confirmed payment after a price decrease, and B12 can consume either credit source. Do not expand M5 until these M4 gates have business evidence.
+Recommended next step: continue DEV-406 with frozen settled-statement revisions and final adjustment disposal evidence. B05 reads persisted settled-side documents with legacy snapshot fallback; P03 writes net adjustment documents; B12 can consume negative adjustment credits, discrepancy returns, or overpayments. Do not expand M5 until these M4 gates have business evidence.
 
 DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. B12 confirmation-role acceptance and broader concurrency evidence remain to be reviewed; M4 is still incomplete.
 

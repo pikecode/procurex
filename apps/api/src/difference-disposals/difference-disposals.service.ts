@@ -7,7 +7,7 @@ import {
   PaymentAllocationState,
   SupplierOrderStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import { Prisma, type DifferenceDisposal, type DifferenceDisposalItem, type Overpayment, type PaymentAllocation, type Shipment, type SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import { Prisma, type AdjustmentDocument, type DifferenceDisposal, type DifferenceDisposalItem, type Overpayment, type PaymentAllocation, type Shipment, type SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type CreateDifferenceDisposalInput = {
@@ -44,6 +44,7 @@ export type DifferenceDisposalItemView = {
   id: string;
   creditItemId: string | null;
   overpaymentId: string | null;
+  adjustmentDocumentId: string | null;
   targetDebitItemId: string | null;
   amount: string;
   sourceVersion: number;
@@ -58,6 +59,7 @@ type DecodedSettlementItemId = {
 };
 
 type TargetOrder = SupplierOrder & { shipments: Shipment[] };
+type AdjustmentCredit = AdjustmentDocument & { disposalItems: DifferenceDisposalItem[] };
 
 @Injectable()
 export class DifferenceDisposalsService {
@@ -104,26 +106,44 @@ export class DifferenceDisposalsService {
       where: { id: { in: input.creditItemIds } },
       include: { payment: true, disposalItems: true },
     });
+    const adjustmentDocuments = await tx.adjustmentDocument.findMany({
+      where: { id: { in: input.creditItemIds } },
+      include: { disposalItems: true },
+    });
     const returnById = new Map(returns.map((item) => [item.id, item]));
     const overpaymentById = new Map(overpayments.map((item) => [item.id, item]));
-    if (input.creditItemIds.some((id) => !returnById.has(id) && !overpaymentById.has(id))) {
+    const adjustmentById = new Map(adjustmentDocuments.map((item) => [item.id, item]));
+    if (input.creditItemIds.some((id) => !returnById.has(id) && !overpaymentById.has(id) && !adjustmentById.has(id))) {
       throw new NotFoundException({
         code: 'DIFFERENCE_CREDIT_ITEM_NOT_FOUND',
         message: 'One or more difference credit items were not found',
       });
     }
 
-    const first = returnById.get(input.creditItemIds[0]!) ?? overpaymentById.get(input.creditItemIds[0]!)!;
+    const firstId = input.creditItemIds[0]!;
+    const first = returnById.get(firstId) ?? overpaymentById.get(firstId) ?? adjustmentById.get(firstId)!;
     const storeId = 'orderItem' in first ? first.orderItem.supplierOrder.storeId : first.storeId;
     const supplierId = 'orderItem' in first ? first.orderItem.supplierOrder.supplierId : first.supplierId;
-    const direction = 'orderItem' in first ? DifferenceDisposalDirection.SUPPLIER_TO_COMPANY : overpaymentDirection(first);
+    const direction = returnById.has(firstId)
+      ? DifferenceDisposalDirection.SUPPLIER_TO_COMPANY
+      : adjustmentById.has(firstId)
+        ? adjustmentDirection(adjustmentById.get(firstId)!)
+        : overpaymentDirection(overpaymentById.get(firstId)!);
     const targetDebitItemIds = input.method === DifferenceDisposalMethod.OFFSET ? input.targetDebitItemIds! : [];
     const targetAvailability =
       input.method === DifferenceDisposalMethod.OFFSET ? await this.loadTargetAvailability(targetDebitItemIds, supplierId, storeId, direction, tx) : new Map<string, Decimal>();
     const items = input.creditItemIds.map((creditItemId, index) => {
       const returnRecord = returnById.get(creditItemId);
       const overpayment = overpaymentById.get(creditItemId);
-      const alreadyDisposed = returnRecord?.differenceDisposalItems.length || overpayment?.disposalItems.length;
+      const adjustmentDocument = adjustmentById.get(creditItemId);
+      if (adjustmentDocument && !new Decimal(adjustmentDocument.amount).isNegative()) {
+        throw new ConflictException({
+          code: 'DIFFERENCE_ADJUSTMENT_NOT_CREDIT',
+          message: 'Only negative adjustment documents can be disposed as credits',
+          details: { creditItemId },
+        });
+      }
+      const alreadyDisposed = returnRecord?.differenceDisposalItems.length || overpayment?.disposalItems.length || adjustmentDocument?.disposalItems.length;
       if (alreadyDisposed) {
         throw new ConflictException({
           code: 'DIFFERENCE_CREDIT_ALREADY_DISPOSED',
@@ -131,9 +151,9 @@ export class DifferenceDisposalsService {
           details: { creditItemId },
         });
       }
-      const itemStoreId = returnRecord?.orderItem.supplierOrder.storeId ?? overpayment!.storeId;
-      const itemSupplierId = returnRecord?.orderItem.supplierOrder.supplierId ?? overpayment!.supplierId;
-      if (itemStoreId !== storeId || itemSupplierId !== supplierId || (returnRecord && direction !== DifferenceDisposalDirection.SUPPLIER_TO_COMPANY) || (overpayment && overpaymentDirection(overpayment) !== direction)) {
+      const itemStoreId = returnRecord?.orderItem.supplierOrder.storeId ?? overpayment?.storeId ?? adjustmentDocument!.storeId;
+      const itemSupplierId = returnRecord?.orderItem.supplierOrder.supplierId ?? overpayment?.supplierId ?? adjustmentDocument!.supplierId;
+      if (itemStoreId !== storeId || itemSupplierId !== supplierId || (returnRecord && direction !== DifferenceDisposalDirection.SUPPLIER_TO_COMPANY) || (overpayment && overpaymentDirection(overpayment) !== direction) || (adjustmentDocument && adjustmentDirection(adjustmentDocument) !== direction)) {
         throw new ConflictException({
           code: 'DIFFERENCE_CREDIT_SUBJECT_MISMATCH',
           message: 'Difference credit items must share the same store and supplier',
@@ -142,9 +162,10 @@ export class DifferenceDisposalsService {
       return {
         creditItemId: returnRecord?.id ?? null,
         overpaymentId: overpayment?.id ?? null,
+        adjustmentDocumentId: adjustmentDocument?.id ?? null,
         targetDebitItemId: targetDebitItemIds[index] ?? null,
-        amount: returnRecord ? new Decimal(returnRecord.quantity).mul(returnRecord.orderItem.supplyUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP) : new Decimal(overpayment!.amount),
-        sourceVersion: returnRecord?.orderItem.supplierOrder.version ?? overpayment!.sourceRevision,
+        amount: returnRecord ? new Decimal(returnRecord.quantity).mul(returnRecord.orderItem.supplyUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP) : overpayment ? new Decimal(overpayment.amount) : new Decimal(adjustmentDocument!.amount).abs(),
+        sourceVersion: returnRecord?.orderItem.supplierOrder.version ?? overpayment?.sourceRevision ?? adjustmentDocument!.sourceRevision,
       };
     });
     for (const item of items) {
@@ -188,6 +209,7 @@ export class DifferenceDisposalsService {
           create: items.map((item) => ({
             creditItemId: item.creditItemId,
             overpaymentId: item.overpaymentId,
+            adjustmentDocumentId: item.adjustmentDocumentId,
             targetDebitItemId: item.targetDebitItemId,
             amount: item.amount.toFixed(2),
             sourceVersion: item.sourceVersion,
@@ -344,6 +366,7 @@ function toDifferenceDisposalItemView(item: DifferenceDisposalItem): DifferenceD
     id: item.id,
     creditItemId: item.creditItemId,
     overpaymentId: item.overpaymentId,
+    adjustmentDocumentId: item.adjustmentDocumentId,
     targetDebitItemId: item.targetDebitItemId,
     amount: item.amount.toFixed(2),
     sourceVersion: item.sourceVersion,
@@ -353,6 +376,12 @@ function toDifferenceDisposalItemView(item: DifferenceDisposalItem): DifferenceD
 
 function overpaymentDirection(overpayment: Overpayment & { payment: { direction: string } }): DifferenceDisposalDirection {
   return overpayment.payment.direction === 'STORE_TO_COMPANY'
+    ? DifferenceDisposalDirection.COMPANY_TO_STORE
+    : DifferenceDisposalDirection.SUPPLIER_TO_COMPANY;
+}
+
+function adjustmentDirection(adjustment: AdjustmentCredit): DifferenceDisposalDirection {
+  return adjustment.side === 'STORE'
     ? DifferenceDisposalDirection.COMPANY_TO_STORE
     : DifferenceDisposalDirection.SUPPLIER_TO_COMPANY;
 }

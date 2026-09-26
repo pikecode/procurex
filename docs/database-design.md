@@ -208,7 +208,7 @@ erDiagram
 | `payment_allocations` | `payment_id ID`、`settlement_item_id ID`、`amount M`、`state RESERVED/CONFIRMED/RELEASED` | payment+item 唯一；总分单入口共用；先预占后确认 |
 | `overpayments` | `payment_id ID`、`store_id ID`、`supplier_id ID`、`amount M`、`source_revision int` | 记录真实付款中未能核销的正数余额；payment+store+supplier+source_revision 唯一；按来源门店拆开，不跨店抵扣 |
 | `difference_disposals` | `document_id ID`、`store_id ID?`、`supplier_id ID?`、`direction`、`method OFFSET/OFFLINE_RETURN`、`amount M`、`business_date D`、`status PENDING/CONFIRMED`、`confirmed_by ID?` | 处理负调整或多付款；必须保留实际返还凭证或抵扣关系 |
-| `difference_disposal_items` | `disposal_id ID`、`credit_item_id ID`、`target_debit_item_id ID?`、`amount M` | 抵扣两侧同交易通道、同双方主体；返还无目标借项；不能跨店占用余额 |
+| `difference_disposal_items` | `disposal_id ID`、`credit_item_id ID?`、`overpayment_id ID?`、`adjustment_document_id ID?`、`target_debit_item_id ID?`、`amount M` | 抵扣两侧同交易通道、同双方主体；负调整、多付款和少收退回三类信用单独关联；返还无目标借项；不能跨店占用余额 |
 
 核销基于 settlement_item 的可核销净额，不能仅按单据总金额判断。两入口同时付款时锁相同明细，已预占金额不可再次分配。待确认付款遇降价，原付款登记保留；实际超额转为待处置余额，不伪造核销，也不能把真实付款当作没有发生。
 
