@@ -88,7 +88,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 
 The next execution order is therefore to stop adding isolated B12 refinements and close acceptance packages explicitly: **DEV-401 → DEV-402 → DEV-403 → DEV-404 → DEV-405 → DEV-406**. For each package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure. This order replaces the earlier recommendation to keep iterating B12 alone.
 
-DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. B12 receiver-role acceptance and broader concurrency evidence remain to be completed; M4 is still incomplete.
+DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. Receiver scope and AT-14 offline return are now covered; M4 remains incomplete pending reconciliation consistency and the remaining package gates.
 
 DEV-405 clearing creation now conditionally updates each funding allocation by version, active state, and outstanding amount, and conditionally updates the store account version and credit used. A concurrent second clearing therefore fails atomically instead of consuming the same credit twice.
 
@@ -440,7 +440,7 @@ Current price history behavior:
 
 ## Recommended Next Step
 
-Follow the M4 plan order: finish DEV-401's AT-08 publish-versus-completion race and W06/S10 acceptance, then close DEV-402 and DEV-403 before returning to DEV-404–406. AT-16 review found direct-term two-price consistency specified by requirements but no enforcement found in P02 publishing; investigate and add database-backed evidence as part of DEV-402. M5 remains frozen until M4 packages are closed.
+Follow the M4 plan order: DEV-401's AT-08 race is hardened and AT-09 is verified; finish its W06/S10 acceptance, then close DEV-402 and DEV-403 before finalizing DEV-404–406. AT-16 now has database-backed price consistency evidence. M5 remains frozen until M4 packages are closed.
 
 ## Where To Look
 
