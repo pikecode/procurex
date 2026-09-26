@@ -92,9 +92,9 @@ export class SupplierOrdersController {
 
   @Post(':id/shipment-preview')
   @RequireRoles('ADMIN', 'SUPPLIER')
-  shipmentPreview(@Param('id') id: string, @Body() body: ShipmentPreviewBody): Promise<ShipmentPreviewView> {
+  shipmentPreview(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: ShipmentPreviewBody): Promise<ShipmentPreviewView> {
     const input = parseShipmentPreviewBody(id, body);
-    return this.supplierOrdersService.shipmentPreview(input.id, input.expectedVersion, input.preview);
+    return this.supplierOrdersService.shipmentPreview(input.id, input.expectedVersion, input.preview, supplierScope(request));
   }
 
   @Post(':id/shipments')
@@ -118,7 +118,7 @@ export class SupplierOrdersController {
       return command.command.responseBody as ShipmentView;
     }
 
-    const result = await this.supplierOrdersService.createShipment(input.id, input.expectedVersion, input.preview);
+    const result = await this.supplierOrdersService.createShipment(input.id, input.expectedVersion, input.preview, supplierScope(request));
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'Shipment',
@@ -150,7 +150,7 @@ export class SupplierOrdersController {
       return command.command.responseBody as FreightConfirmationView;
     }
 
-    const result = await this.freightConfirmationsService.createForSupplierOrder(input.id, input.confirmation);
+    const result = await this.freightConfirmationsService.createForSupplierOrder(input.id, input.confirmation, supplierScope(request));
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'FreightConfirmation',
@@ -182,7 +182,7 @@ export class SupplierOrdersController {
       return command.command.responseBody as RejectSupplierOrderResult;
     }
 
-    const result = await this.supplierOrdersService.reject(input.id, input.expectedVersion, input.reason);
+    const result = await this.supplierOrdersService.reject(input.id, input.expectedVersion, input.reason, supplierScope(request));
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'SupplierOrder',

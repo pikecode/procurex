@@ -208,9 +208,9 @@ export class SupplierOrdersService {
     return toSupplierOrderDetailView(order);
   }
 
-  async shipmentPreview(id: string, expectedVersion: number, input: ShipmentPreviewInput): Promise<ShipmentPreviewView> {
+  async shipmentPreview(id: string, expectedVersion: number, input: ShipmentPreviewInput, scope?: { type: string; supplierId?: string }): Promise<ShipmentPreviewView> {
     const order = await this.database.client.supplierOrder.findUnique({
-      where: { id },
+      where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
       include: { items: { orderBy: { createdAt: 'asc' } } },
     });
     if (!order) {
@@ -359,10 +359,10 @@ export class SupplierOrdersService {
     };
   }
 
-  async createShipment(id: string, expectedVersion: number, input: ShipmentPreviewInput): Promise<ShipmentView> {
-    const preview = await this.shipmentPreview(id, expectedVersion, input);
+  async createShipment(id: string, expectedVersion: number, input: ShipmentPreviewInput, scope?: { type: string; supplierId?: string }): Promise<ShipmentView> {
+    const preview = await this.shipmentPreview(id, expectedVersion, input, scope);
     const order = await this.database.client.supplierOrder.findUniqueOrThrow({
-      where: { id },
+      where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
       include: { items: true, shipments: true },
     });
     const orderItemsById = new Map(order.items.map((item) => [item.id, item]));
@@ -454,8 +454,8 @@ export class SupplierOrdersService {
     return toShipmentView(shipment);
   }
 
-  async reject(id: string, expectedVersion: number, reason: string): Promise<RejectSupplierOrderResult> {
-    const order = await this.database.client.supplierOrder.findUnique({ where: { id } });
+  async reject(id: string, expectedVersion: number, reason: string, scope?: { type: string; supplierId?: string }): Promise<RejectSupplierOrderResult> {
+    const order = await this.database.client.supplierOrder.findUnique({ where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined } });
     if (!order) {
       throw new NotFoundException({
         code: 'SUPPLIER_ORDER_NOT_FOUND',

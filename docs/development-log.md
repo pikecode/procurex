@@ -195,6 +195,9 @@
 - Hardened supplier order F01 reads: SUPPLIER list filters are forced to the bound supplier, mismatched filters are rejected, and cross-supplier details resolve as not found.
 - Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
 
+- Hardened supplier order F02/F03/F06/F09 mutations: configured SUPPLIER scope is carried through shipment preview, shipment creation, freight confirmation, and rejection lookups.
+- Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
+
 - Added `STORE_FINANCE` to B12 read/confirm authorization, matching the documented shared store-side permission. Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
 
 - Closed a STORE_FINANCE scope gap across DEV-404/405/406: payment records, adjustments, difference disposals, and clearing details now enforce the bound store for both STORE and STORE_FINANCE accounts. Added the clearing regression assertion. Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.

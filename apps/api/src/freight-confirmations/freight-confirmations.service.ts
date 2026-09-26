@@ -34,8 +34,8 @@ export type FreightConfirmationView = {
 export class FreightConfirmationsService {
   constructor(private readonly database: DatabaseService) {}
 
-  async createForSupplierOrder(supplierOrderId: string, input: CreateFreightConfirmationInput): Promise<FreightConfirmationView> {
-    const order = await this.database.client.supplierOrder.findUnique({ where: { id: supplierOrderId } });
+  async createForSupplierOrder(supplierOrderId: string, input: CreateFreightConfirmationInput, scope?: { type: string; supplierId?: string }): Promise<FreightConfirmationView> {
+    const order = await this.database.client.supplierOrder.findUnique({ where: { id: supplierOrderId, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined } });
     if (!order) {
       throw new NotFoundException({
         code: 'SUPPLIER_ORDER_NOT_FOUND',
