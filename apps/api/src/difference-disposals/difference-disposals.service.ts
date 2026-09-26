@@ -7,7 +7,7 @@ import {
   PaymentAllocationState,
   SupplierOrderStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import { Prisma, type DifferenceDisposal, type DifferenceDisposalItem, type PaymentAllocation, type Shipment, type SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import { Prisma, type DifferenceDisposal, type DifferenceDisposalItem, type Overpayment, type PaymentAllocation, type Shipment, type SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type CreateDifferenceDisposalInput = {
@@ -42,7 +42,8 @@ export type DifferenceDisposalView = {
 
 export type DifferenceDisposalItemView = {
   id: string;
-  creditItemId: string;
+  creditItemId: string | null;
+  overpaymentId: string | null;
   targetDebitItemId: string | null;
   amount: string;
   sourceVersion: number;
@@ -99,37 +100,51 @@ export class DifferenceDisposalsService {
       where: { id: { in: input.creditItemIds } },
       include: { orderItem: { include: { supplierOrder: true } }, differenceDisposalItems: true },
     });
-    if (returns.length !== input.creditItemIds.length) {
+    const overpayments = await tx.overpayment.findMany({
+      where: { id: { in: input.creditItemIds } },
+      include: { payment: true, disposalItems: true },
+    });
+    const returnById = new Map(returns.map((item) => [item.id, item]));
+    const overpaymentById = new Map(overpayments.map((item) => [item.id, item]));
+    if (input.creditItemIds.some((id) => !returnById.has(id) && !overpaymentById.has(id))) {
       throw new NotFoundException({
         code: 'DIFFERENCE_CREDIT_ITEM_NOT_FOUND',
         message: 'One or more difference credit items were not found',
       });
     }
 
-    const storeId = returns[0]!.orderItem.supplierOrder.storeId;
-    const supplierId = returns[0]!.orderItem.supplierOrder.supplierId;
+    const first = returnById.get(input.creditItemIds[0]!) ?? overpaymentById.get(input.creditItemIds[0]!)!;
+    const storeId = 'orderItem' in first ? first.orderItem.supplierOrder.storeId : first.storeId;
+    const supplierId = 'orderItem' in first ? first.orderItem.supplierOrder.supplierId : first.supplierId;
+    const direction = 'orderItem' in first ? DifferenceDisposalDirection.SUPPLIER_TO_COMPANY : overpaymentDirection(first);
     const targetDebitItemIds = input.method === DifferenceDisposalMethod.OFFSET ? input.targetDebitItemIds! : [];
     const targetAvailability =
-      input.method === DifferenceDisposalMethod.OFFSET ? await this.loadTargetAvailability(targetDebitItemIds, supplierId, tx) : new Map<string, Decimal>();
-    const items = returns.map((returnRecord) => {
-      if (returnRecord.differenceDisposalItems.length > 0) {
+      input.method === DifferenceDisposalMethod.OFFSET ? await this.loadTargetAvailability(targetDebitItemIds, supplierId, storeId, direction, tx) : new Map<string, Decimal>();
+    const items = input.creditItemIds.map((creditItemId, index) => {
+      const returnRecord = returnById.get(creditItemId);
+      const overpayment = overpaymentById.get(creditItemId);
+      const alreadyDisposed = returnRecord?.differenceDisposalItems.length || overpayment?.disposalItems.length;
+      if (alreadyDisposed) {
         throw new ConflictException({
           code: 'DIFFERENCE_CREDIT_ALREADY_DISPOSED',
           message: 'Difference credit item has already been disposed',
-          details: { creditItemId: returnRecord.id },
+          details: { creditItemId },
         });
       }
-      if (returnRecord.orderItem.supplierOrder.storeId !== storeId || returnRecord.orderItem.supplierOrder.supplierId !== supplierId) {
+      const itemStoreId = returnRecord?.orderItem.supplierOrder.storeId ?? overpayment!.storeId;
+      const itemSupplierId = returnRecord?.orderItem.supplierOrder.supplierId ?? overpayment!.supplierId;
+      if (itemStoreId !== storeId || itemSupplierId !== supplierId || (returnRecord && direction !== DifferenceDisposalDirection.SUPPLIER_TO_COMPANY) || (overpayment && overpaymentDirection(overpayment) !== direction)) {
         throw new ConflictException({
           code: 'DIFFERENCE_CREDIT_SUBJECT_MISMATCH',
           message: 'Difference credit items must share the same store and supplier',
         });
       }
       return {
-        creditItemId: returnRecord.id,
-        targetDebitItemId: targetDebitItemIds[input.creditItemIds.indexOf(returnRecord.id)] ?? null,
-        amount: new Decimal(returnRecord.quantity).mul(returnRecord.orderItem.supplyUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
-        sourceVersion: returnRecord.orderItem.supplierOrder.version,
+        creditItemId: returnRecord?.id ?? null,
+        overpaymentId: overpayment?.id ?? null,
+        targetDebitItemId: targetDebitItemIds[index] ?? null,
+        amount: returnRecord ? new Decimal(returnRecord.quantity).mul(returnRecord.orderItem.supplyUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP) : new Decimal(overpayment!.amount),
+        sourceVersion: returnRecord?.orderItem.supplierOrder.version ?? overpayment!.sourceRevision,
       };
     });
     for (const item of items) {
@@ -162,7 +177,7 @@ export class DifferenceDisposalsService {
     const disposal = await tx.differenceDisposal.create({
       data: {
         disposalNo: makeDisposalNo(),
-        direction: DifferenceDisposalDirection.SUPPLIER_TO_COMPANY,
+        direction,
         method: input.method,
         storeId,
         supplierId,
@@ -172,6 +187,7 @@ export class DifferenceDisposalsService {
         items: {
           create: items.map((item) => ({
             creditItemId: item.creditItemId,
+            overpaymentId: item.overpaymentId,
             targetDebitItemId: item.targetDebitItemId,
             amount: item.amount.toFixed(2),
             sourceVersion: item.sourceVersion,
@@ -185,7 +201,7 @@ export class DifferenceDisposalsService {
     });
   }
 
-  private async loadTargetAvailability(targetDebitItemIds: string[], supplierId: string, client: DatabaseService['client'] | Prisma.TransactionClient = this.database.client): Promise<Map<string, Decimal>> {
+  private async loadTargetAvailability(targetDebitItemIds: string[], supplierId: string, storeId: string, direction: DifferenceDisposalDirection, client: DatabaseService['client'] | Prisma.TransactionClient = this.database.client): Promise<Map<string, Decimal>> {
     if (new Set(targetDebitItemIds).size !== targetDebitItemIds.length) {
       throw new ConflictException({
         code: 'TARGET_DEBIT_DUPLICATED',
@@ -194,7 +210,8 @@ export class DifferenceDisposalsService {
     }
     const decoded = targetDebitItemIds.map((id) => ({ id, decoded: decodeSettlementItemId(id) }));
     for (const item of decoded) {
-      if (item.decoded.kind !== 'SUPPLIER_PAYABLE') {
+      const expectedKind = direction === DifferenceDisposalDirection.COMPANY_TO_STORE ? 'STORE_RECEIVABLE' : 'SUPPLIER_PAYABLE';
+      if (item.decoded.kind !== expectedKind) {
         throw new ConflictException({
           code: 'TARGET_DEBIT_KIND_NOT_SUPPORTED',
           message: 'Offset disposal currently supports supplier payable target debit items only',
@@ -233,7 +250,7 @@ export class DifferenceDisposalsService {
           details: { targetDebitItemId: item.id },
         });
       }
-      if (order.supplierId !== supplierId) {
+      if (order.supplierId !== supplierId || (direction === DifferenceDisposalDirection.COMPANY_TO_STORE && order.storeId !== storeId)) {
         throw new ConflictException({
           code: 'TARGET_DEBIT_SUBJECT_MISMATCH',
           message: 'Offset target debit item must belong to the same supplier',
@@ -326,11 +343,18 @@ function toDifferenceDisposalItemView(item: DifferenceDisposalItem): DifferenceD
   return {
     id: item.id,
     creditItemId: item.creditItemId,
+    overpaymentId: item.overpaymentId,
     targetDebitItemId: item.targetDebitItemId,
     amount: item.amount.toFixed(2),
     sourceVersion: item.sourceVersion,
     createdAt: item.createdAt.toISOString(),
   };
+}
+
+function overpaymentDirection(overpayment: Overpayment & { payment: { direction: string } }): DifferenceDisposalDirection {
+  return overpayment.payment.direction === 'STORE_TO_COMPANY'
+    ? DifferenceDisposalDirection.COMPANY_TO_STORE
+    : DifferenceDisposalDirection.SUPPLIER_TO_COMPANY;
 }
 
 function decodeSettlementItemId(id: string): DecodedSettlementItemId {

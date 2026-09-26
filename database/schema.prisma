@@ -956,6 +956,7 @@ model Overpayment {
   payment        PaymentRecord @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   store          Store         @relation(fields: [storeId], references: [id])
   supplier       Supplier      @relation(fields: [supplierId], references: [id])
+  disposalItems  DifferenceDisposalItem[]
 
   @@unique([paymentId, storeId, supplierId, sourceRevision])
   @@index([storeId, supplierId, createdAt])
@@ -1003,15 +1004,18 @@ model DifferenceDisposal {
 model DifferenceDisposalItem {
   id                String             @id @default(uuid()) @db.Uuid
   disposalId        String             @db.Uuid
-  creditItemId      String             @db.Uuid
+  creditItemId      String?            @db.Uuid
+  overpaymentId     String?            @db.Uuid
   targetDebitItemId String?            @db.VarChar(300)
   amount            Decimal            @db.Decimal(20, 2)
   sourceVersion     Int
   createdAt         DateTime           @default(now()) @db.Timestamptz(6)
   disposal          DifferenceDisposal @relation(fields: [disposalId], references: [id], onDelete: Cascade)
-  discrepancyReturn DiscrepancyReturn  @relation(fields: [creditItemId], references: [id])
+  discrepancyReturn DiscrepancyReturn? @relation(fields: [creditItemId], references: [id])
+  overpayment      Overpayment?        @relation(fields: [overpaymentId], references: [id])
 
   @@unique([creditItemId])
+  @@unique([overpaymentId])
   @@index([disposalId])
 }
 

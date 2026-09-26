@@ -141,6 +141,7 @@
 - Continued DEV-406: added the persisted `Overpayment` model and migration.
 - B08 now compares each confirmed allocation with the current order amount after price changes and records positive excess by store, supplier, and source revision; payment details return the overpayment total and source rows.
 - Verification: migration deploy, build, 14 unit tests, 26 integration tests, contract check, and diff check passed.
+- B12 now accepts `Overpayment` credits, chooses the matching store receivable or supplier payable target by payment direction, and prevents the same credit from being disposed twice.
 
 - Continued DEV-406 instead of M5: unified P02 price-change adjustments with B05.
 - `/adjustments` now returns separate store receivable and supplier payable rows for each non-zero price delta, with original and actual periods, source revision, and detail lines.
