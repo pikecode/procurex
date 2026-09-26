@@ -386,21 +386,17 @@ export class PaymentRecordsService {
     }
 
     const confirmed = await this.database.client.$transaction(async (tx) => {
-      const result = await tx.paymentRecord.update({
-        where: { id },
+      const changed = await tx.paymentRecord.updateMany({
+        where: { id, version: expectedVersion, status: PaymentRecordStatus.PENDING },
         data: {
           status: PaymentRecordStatus.CONFIRMED,
           confirmedAt: new Date(),
           version: { increment: 1 },
-          allocations: {
-            updateMany: {
-              where: { state: PaymentAllocationState.RESERVED },
-              data: { state: PaymentAllocationState.CONFIRMED },
-            },
-          },
         },
-        include: { allocations: { orderBy: { createdAt: 'asc' } } },
       });
+      if (changed.count !== 1) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Payment record has already changed' });
+      await tx.paymentAllocation.updateMany({ where: { paymentId: id, state: PaymentAllocationState.RESERVED }, data: { state: PaymentAllocationState.CONFIRMED } });
+      const result = await tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } } } });
       const orderIds = [...new Set(result.allocations.map((allocation) => allocation.supplierOrderId))];
       const orders = await tx.supplierOrder.findMany({ where: { id: { in: orderIds } }, include: { shipments: true } });
       const ordersById = new Map(orders.map((order) => [order.id, order]));
@@ -454,21 +450,19 @@ export class PaymentRecordsService {
       });
     }
 
-    const rejected = await this.database.client.paymentRecord.update({
-      where: { id },
+    const rejected = await this.database.client.$transaction(async (tx) => {
+      const changed = await tx.paymentRecord.updateMany({
+        where: { id, version: expectedVersion, status: PaymentRecordStatus.PENDING },
       data: {
         status: PaymentRecordStatus.REJECTED,
         rejectedAt: new Date(),
         rejectedReason: reason,
         version: { increment: 1 },
-        allocations: {
-          updateMany: {
-            where: { state: PaymentAllocationState.RESERVED },
-            data: { state: PaymentAllocationState.RELEASED },
-          },
-        },
       },
-      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+      });
+      if (changed.count !== 1) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Payment record has already changed' });
+      await tx.paymentAllocation.updateMany({ where: { paymentId: id, state: PaymentAllocationState.RESERVED }, data: { state: PaymentAllocationState.RELEASED } });
+      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } } } });
     });
 
     return toPaymentRecordView(rejected);
@@ -500,21 +494,19 @@ export class PaymentRecordsService {
       });
     }
 
-    const cancelled = await this.database.client.paymentRecord.update({
-      where: { id },
+    const cancelled = await this.database.client.$transaction(async (tx) => {
+      const changed = await tx.paymentRecord.updateMany({
+        where: { id, version: expectedVersion, status: PaymentRecordStatus.PENDING },
       data: {
         status: PaymentRecordStatus.CANCELLED,
         cancelledAt: new Date(),
         cancelledReason: reason,
         version: { increment: 1 },
-        allocations: {
-          updateMany: {
-            where: { state: PaymentAllocationState.RESERVED },
-            data: { state: PaymentAllocationState.RELEASED },
-          },
-        },
       },
-      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+      });
+      if (changed.count !== 1) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Payment record has already changed' });
+      await tx.paymentAllocation.updateMany({ where: { paymentId: id, state: PaymentAllocationState.RESERVED }, data: { state: PaymentAllocationState.RELEASED } });
+      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } } } });
     });
 
     return toPaymentRecordView(cancelled);

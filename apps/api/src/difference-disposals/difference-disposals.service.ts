@@ -278,15 +278,18 @@ export class DifferenceDisposalsService {
       });
     }
 
-    const confirmed = await this.database.client.differenceDisposal.update({
-      where: { id },
+    const changed = await this.database.client.differenceDisposal.updateMany({
+      where: { id, version: input.expectedVersion, status: DifferenceDisposalStatus.PENDING },
       data: {
         status: DifferenceDisposalStatus.CONFIRMED,
         confirmedAt: new Date(),
         version: { increment: 1 },
       },
-      include: { items: { orderBy: { createdAt: 'asc' } } },
     });
+    if (changed.count !== 1) {
+      throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Difference disposal has already changed' });
+    }
+    const confirmed = await this.database.client.differenceDisposal.findUniqueOrThrow({ where: { id }, include: { items: { orderBy: { createdAt: 'asc' } } } });
 
     return toDifferenceDisposalView(confirmed);
   }
