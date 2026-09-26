@@ -79,11 +79,11 @@ export class SupplierStoreStatementsService {
     return groups.map(toSummaryView);
   }
 
-  async get(id: string): Promise<SupplierStoreStatementDetailView> {
+  async get(id: string, scope?: { type?: string; supplierId?: string }): Promise<SupplierStoreStatementDetailView> {
     const key = decodeStatementId(id);
     const groups = await this.loadGroups({
       storeId: key.storeId,
-      supplierId: key.supplierId,
+      supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId,
       cycle: key.cycle,
       settlementStatus: undefined,
     });

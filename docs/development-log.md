@@ -184,6 +184,9 @@
 
 # 2026-09-27
 
+- Hardened DEV-402/403 statement reads: direct, store, supplier-total, and supplier-store list/detail endpoints now apply authenticated store or supplier scope, reject mismatched filters, and prevent cross-scope detail access. Company roles retain existing broad access.
+- Verification: `npm run build`, `npm test` (33), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
+
 - Closed the B12 receiver authorization slice: store and supplier users may read and confirm only difference disposals whose direction matches their receiving side; company roles retain existing access. Added unit coverage for matching and mismatching scope/direction combinations.
 - Verification: `npm run build`, `npm test` (30), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
 

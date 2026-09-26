@@ -6,12 +6,12 @@ Last updated: 2026-09-27
 
 The backend has partial M4 settlement implementation. M5 reporting/export work was started before M4 was closed and is now frozen while the core settlement path is completed.
 
-Latest completed implementation: B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
+Latest completed implementation: the four statement families now enforce authenticated store or supplier scope on both list and detail reads; cross-scope statement IDs resolve as not found, while company roles retain broad access. B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
 Latest commits:
 
 ```text
-Enforce B12 receiver confirmation scope (current commit)
+Harden statement list and detail scopes (current work)
 a205d0c Record B12 receiver permission gap
 ae2e702 Verify adjustment credit offsets end to end
 e61f84e Allow offsets against positive adjustments
@@ -81,7 +81,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 |---|---|---|
 | DEV-401 | P01-P03 backend is substantially implemented | AT-08 now serializes revaluation with final receipt and AT-09 ordering is verified; close the planned W06/S10 workflow, then mark package complete |
 | DEV-402 | B01-B04, amount and period logic exist; AT-16 price guard added | Direct-term payment direction and amount mapping are covered; finish all settlement-mode acceptance evidence |
-| DEV-403 | Statement read paths, total/store sum, immediate per-order grouping, and replenishment period are tested | Required W09/S05/S08 flow evidence remains before closure |
+| DEV-403 | Statement read paths, total/store sum, immediate per-order grouping, replenishment period, and account scope are tested | Required W09/S05/S08 flow evidence remains before closure |
 | DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Receiver-role authorization and AT-13 duplicate-entry concurrency are verified; close direct-term direction mapping and remaining evidence/role flows |
 | DEV-405 | Clearing transaction logic and A04-A06 read/write paths exist | A06 now enforces store scope on clearing detail; verify AT-24 ledger/history recovery evidence and planned W08 workflow |
 | DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Receiver confirmation scope and AT-14 offline return are verified; finish reconciliation consistency before closure |

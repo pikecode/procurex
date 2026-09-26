@@ -59,9 +59,9 @@ export class DirectStatementsService {
     return (await this.loadGroups(input)).map(toSummaryView);
   }
 
-  async get(id: string): Promise<DirectStatementDetailView> {
+  async get(id: string, scope?: { type?: string; storeId?: string; supplierId?: string }): Promise<DirectStatementDetailView> {
     const key = decodeStatementId(id);
-    const group = (await this.loadGroups(key)).find((item) => item.id === id);
+    const group = (await this.loadGroups({ ...key, storeId: scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? scope.storeId : key.storeId, supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId })).find((item) => item.id === id);
     if (!group) {
       throw new NotFoundException({ code: 'DIRECT_STATEMENT_NOT_FOUND', message: 'Direct statement was not found' });
     }

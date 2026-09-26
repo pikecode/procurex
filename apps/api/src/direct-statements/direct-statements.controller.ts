@@ -1,6 +1,6 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
-import { AuthGuard } from '../auth/auth.guard.js';
+import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
@@ -15,11 +15,26 @@ export class DirectStatementsController {
 
   @Get()
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
-  list(@Query() query: ListQuery): Promise<DirectStatementSummaryView[]> { return this.service.list(parseQuery(query)); }
+  list(@Query() query: ListQuery, @Req() request: AuthenticatedRequest): Promise<DirectStatementSummaryView[]> { return this.service.list(applyScope(parseQuery(query), request)); }
 
   @Get(':id')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
-  get(@Param('id') id: string): Promise<DirectStatementDetailView> { return this.service.get(id); }
+  get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<DirectStatementDetailView> { return this.service.get(id, request.auth?.user.scope); }
+}
+
+function applyScope(input: ListDirectStatementsInput, request: AuthenticatedRequest): ListDirectStatementsInput {
+  const scope = request.auth?.user.scope;
+  if (scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE') {
+    if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+    if (input.storeId && input.storeId !== scope.storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Statement is outside the current store scope' });
+    return { ...input, storeId: scope.storeId };
+  }
+  if (scope?.type === 'SUPPLIER') {
+    if (!scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
+    if (input.supplierId && input.supplierId !== scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Statement is outside the current supplier scope' });
+    return { ...input, supplierId: scope.supplierId };
+  }
+  return input;
 }
 
 function parseQuery(query: ListQuery): ListDirectStatementsInput {

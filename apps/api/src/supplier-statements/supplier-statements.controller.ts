@@ -1,5 +1,5 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard.js';
+import { Controller, ForbiddenException, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
@@ -24,15 +24,23 @@ export class SupplierStatementsController {
 
   @Get()
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'SUPPLIER')
-  list(@Query() query: ListQuery): Promise<SupplierStatementSummaryView[]> {
-    return this.supplierStatementsService.list(parseListQuery(query));
+  list(@Query() query: ListQuery, @Req() request: AuthenticatedRequest): Promise<SupplierStatementSummaryView[]> {
+    return this.supplierStatementsService.list(applyScope(parseListQuery(query), request));
   }
 
   @Get(':id')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'SUPPLIER')
-  get(@Param('id') id: string): Promise<SupplierStatementDetailView> {
-    return this.supplierStatementsService.get(id);
+  get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<SupplierStatementDetailView> {
+    return this.supplierStatementsService.get(id, request.auth?.user.scope);
   }
+}
+
+function applyScope(input: ListSupplierStatementsInput, request: AuthenticatedRequest): ListSupplierStatementsInput {
+  const scope = request.auth?.user.scope;
+  if (scope?.type !== 'SUPPLIER') return input;
+  if (!scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
+  if (input.supplierId && input.supplierId !== scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Statement is outside the current supplier scope' });
+  return { ...input, supplierId: scope.supplierId };
 }
 
 function parseListQuery(query: ListQuery): ListSupplierStatementsInput {
