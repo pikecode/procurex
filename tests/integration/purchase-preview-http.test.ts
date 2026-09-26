@@ -2508,6 +2508,12 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierStoreStatementDetail.data.lines[0]?.goodsAmount, '88.00');
     assert.equal(supplierStoreStatementDetail.data.lines[0]?.freightAmount, '18.50');
     assert.equal(supplierStoreStatementDetail.data.lines[0]?.totalAmount, '106.50');
+    const storeGoodsTotal = supplierStoreStatements.data.reduce((sum, statement) => sum + Number(statement.goodsAmount), 0).toFixed(2);
+    const storeFreightTotal = supplierStoreStatements.data.reduce((sum, statement) => sum + Number(statement.freightAmount), 0).toFixed(2);
+    const storeTotal = supplierStoreStatements.data.reduce((sum, statement) => sum + Number(statement.totalAmount), 0).toFixed(2);
+    assert.equal(storeGoodsTotal, supplierStatement.goodsAmount);
+    assert.equal(storeFreightTotal, supplierStatement.freightAmount);
+    assert.equal(storeTotal, supplierStatement.totalAmount);
 
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.confirm', idempotencyKey: 'confirm-request-once' },
