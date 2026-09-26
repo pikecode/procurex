@@ -78,7 +78,7 @@ function optionalCycle(value: unknown, issues: ValidationIssue[]): ListStoreStat
 }
 
 function optionalSettlementStatus(value: unknown, issues: ValidationIssue[]): ListStoreStatementsInput['settlementStatus'] {
-  if (value === 'OPEN') {
+  if (value === 'OPEN' || value === 'SETTLED') {
     return value;
   }
   issues.push({ field: 'settlementStatus', code: 'INVALID_SETTLEMENT_STATUS', message: 'settlementStatus is invalid' });

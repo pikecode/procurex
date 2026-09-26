@@ -10,7 +10,7 @@ export type ListDirectStatementsInput = {
   storeId?: string;
   supplierId?: string;
   cycle?: SettlementCycle;
-  settlementStatus?: 'OPEN';
+  settlementStatus?: 'OPEN' | 'SETTLED';
 };
 
 export type DirectStatementLineView = {
@@ -34,7 +34,7 @@ export type DirectStatementSummaryView = {
   periodKey: string;
   periodStart: string;
   periodEndExclusive: string;
-  settlementStatus: 'OPEN';
+  settlementStatus: 'OPEN' | 'SETTLED';
   goodsAmount: string;
   freightAmount: string;
   totalAmount: string;
@@ -59,7 +59,7 @@ export class DirectStatementsService {
 
   async get(id: string): Promise<DirectStatementDetailView> {
     const key = decodeStatementId(id);
-    const group = (await this.loadGroups({ ...key, settlementStatus: 'OPEN' })).find((item) => item.id === id);
+    const group = (await this.loadGroups(key)).find((item) => item.id === id);
     if (!group) {
       throw new NotFoundException({ code: 'DIRECT_STATEMENT_NOT_FOUND', message: 'Direct statement was not found' });
     }
@@ -67,7 +67,6 @@ export class DirectStatementsService {
   }
 
   private async loadGroups(input: ListDirectStatementsInput): Promise<StatementGroup[]> {
-    if (input.settlementStatus && input.settlementStatus !== 'OPEN') return [];
     const orders = await this.database.client.supplierOrder.findMany({
       where: {
         storeId: input.storeId,
@@ -104,7 +103,7 @@ export class DirectStatementsService {
     const allocations = await this.database.client.paymentAllocation?.findMany({ where: { settlementItemId: { in: allGroups.flatMap((group) => group.lines.map((line) => line.settlementItemId)) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } } }) ?? [];
     const byItem = summarizeAllocations(allocations);
     for (const group of allGroups) for (const line of group.lines) { const summary = byItem.get(line.settlementItemId); if (summary) { group.paymentSummary.pendingAmount = group.paymentSummary.pendingAmount.plus(summary.pendingAmount); group.paymentSummary.confirmedAmount = group.paymentSummary.confirmedAmount.plus(summary.confirmedAmount); } }
-    return allGroups.sort((a, b) => b.periodStart.localeCompare(a.periodStart) || a.storeId.localeCompare(b.storeId));
+    return allGroups.filter((group) => !input.settlementStatus || toSettlementStatus(group) === input.settlementStatus).sort((a, b) => b.periodStart.localeCompare(a.periodStart) || a.storeId.localeCompare(b.storeId));
   }
 }
 
@@ -123,7 +122,12 @@ function toSummaryView(group: StatementGroup): DirectStatementSummaryView {
   const goodsAmount = group.lines.reduce((sum, line) => sum.plus(line.goodsAmount), new Decimal(0));
   const freightAmount = group.lines.reduce((sum, line) => sum.plus(line.freightAmount), new Decimal(0));
   const totalAmount = goodsAmount.plus(freightAmount).toFixed(2);
-  return { ...group, settlementStatus: 'OPEN', goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount, confirmedPaidAmount: group.paymentSummary.confirmedAmount.toFixed(2), pendingPaymentAmount: group.paymentSummary.pendingAmount.toFixed(2), payableAmount: Decimal.max(new Decimal(totalAmount).minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2), lineCount: group.lines.length };
+  return { ...group, settlementStatus: toSettlementStatus(group), goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount, confirmedPaidAmount: group.paymentSummary.confirmedAmount.toFixed(2), pendingPaymentAmount: group.paymentSummary.pendingAmount.toFixed(2), payableAmount: Decimal.max(new Decimal(totalAmount).minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2), lineCount: group.lines.length };
+}
+
+function toSettlementStatus(group: StatementGroup): 'OPEN' | 'SETTLED' {
+  const total = group.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Decimal(0));
+  return group.paymentSummary.confirmedAmount.greaterThanOrEqualTo(total) ? 'SETTLED' : 'OPEN';
 }
 
 function normalizeCycle(value: string): SettlementCycle {

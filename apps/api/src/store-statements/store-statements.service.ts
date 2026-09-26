@@ -7,7 +7,7 @@ import type { Shipment, Supplier, SupplierOrder } from '../../../../packages/bac
 import { DatabaseService } from '../database/database.service.js';
 import { summarizeAllocations } from '../payment-records/payment-records.service.js';
 
-export type StoreStatementStatus = 'OPEN';
+export type StoreStatementStatus = 'OPEN' | 'SETTLED';
 
 export type ListStoreStatementsInput = {
   storeId?: string;
@@ -80,7 +80,7 @@ export class StoreStatementsService {
       storeId: key.storeId,
       supplierId: key.supplierId,
       cycle: key.cycle,
-      settlementStatus: 'OPEN',
+      settlementStatus: undefined,
     });
     const group = groups.find(
       (item) =>
@@ -98,10 +98,6 @@ export class StoreStatementsService {
   }
 
   private async loadGroups(input: ListStoreStatementsInput): Promise<StatementGroup[]> {
-    if (input.settlementStatus && input.settlementStatus !== 'OPEN') {
-      return [];
-    }
-
     const orders = await this.database.client.supplierOrder.findMany({
       where: {
         storeId: input.storeId,
@@ -161,7 +157,7 @@ export class StoreStatementsService {
     const allocations = await this.database.client.paymentAllocation?.findMany({ where: { settlementItemId: { in: allGroups.flatMap((group) => group.lines.map((line) => line.settlementItemId)) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } } }) ?? [];
     const byItem = summarizeAllocations(allocations);
     for (const group of allGroups) for (const line of group.lines) { const summary = byItem.get(line.settlementItemId); if (summary) { group.paymentSummary.pendingAmount = group.paymentSummary.pendingAmount.plus(summary.pendingAmount); group.paymentSummary.confirmedAmount = group.paymentSummary.confirmedAmount.plus(summary.confirmedAmount); } }
-    return allGroups.sort((left, right) => {
+    return allGroups.filter((group) => !input.settlementStatus || toSettlementStatus(group) === input.settlementStatus).sort((left, right) => {
       const byPeriod = right.periodStart.localeCompare(left.periodStart);
       return byPeriod || left.supplierId.localeCompare(right.supplierId);
     });
@@ -201,7 +197,7 @@ function toSummaryView(group: StatementGroup): StoreStatementSummaryView {
     periodKey: group.periodKey,
     periodStart: group.periodStart,
     periodEndExclusive: group.periodEndExclusive,
-    settlementStatus: 'OPEN',
+    settlementStatus: toSettlementStatus(group),
     goodsAmount: goodsAmount.toFixed(2),
     freightAmount: freightAmount.toFixed(2),
     totalAmount: totalAmount.toFixed(2),
@@ -210,6 +206,11 @@ function toSummaryView(group: StatementGroup): StoreStatementSummaryView {
     payableAmount: Decimal.max(totalAmount.minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2),
     lineCount: group.lines.length,
   };
+}
+
+function toSettlementStatus(group: StatementGroup): StoreStatementStatus {
+  const total = group.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Decimal(0));
+  return group.paymentSummary.confirmedAmount.greaterThanOrEqualTo(total) ? 'SETTLED' : 'OPEN';
 }
 
 function normalizeCycle(value: string): SettlementCycle {

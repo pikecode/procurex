@@ -27,7 +27,7 @@ function parseQuery(query: ListQuery): ListDirectStatementsInput {
   const storeId = optionalUuid('storeId', query.storeId, issues);
   const supplierId = optionalUuid('supplierId', query.supplierId, issues);
   const cycle = query.cycle === undefined ? undefined : optionalCycle(query.cycle, issues);
-  const settlementStatus = query.settlementStatus === undefined ? undefined : query.settlementStatus === 'OPEN' ? 'OPEN' : invalidStatus(issues);
+  const settlementStatus = query.settlementStatus === undefined ? undefined : query.settlementStatus === 'OPEN' || query.settlementStatus === 'SETTLED' ? query.settlementStatus : invalidStatus(issues);
   throwIfInvalid(issues);
   return { storeId, supplierId, cycle, settlementStatus };
 }
@@ -44,7 +44,7 @@ function optionalCycle(value: unknown, issues: ValidationIssue[]): ListDirectSta
   return undefined;
 }
 
-function invalidStatus(issues: ValidationIssue[]): 'OPEN' | undefined {
+function invalidStatus(issues: ValidationIssue[]): 'OPEN' | 'SETTLED' | undefined {
   issues.push({ field: 'settlementStatus', code: 'INVALID_SETTLEMENT_STATUS', message: 'settlementStatus is invalid' });
   return undefined;
 }

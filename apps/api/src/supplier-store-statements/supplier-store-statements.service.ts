@@ -6,7 +6,7 @@ import type { Shipment, Supplier, SupplierOrder } from '../../../../packages/bac
 import { DatabaseService } from '../database/database.service.js';
 import { summarizeAllocations } from '../payment-records/payment-records.service.js';
 
-export type SupplierStoreStatementStatus = 'OPEN';
+export type SupplierStoreStatementStatus = 'OPEN' | 'SETTLED';
 
 export type ListSupplierStoreStatementsInput = {
   storeId?: string;
@@ -81,7 +81,7 @@ export class SupplierStoreStatementsService {
       storeId: key.storeId,
       supplierId: key.supplierId,
       cycle: key.cycle,
-      settlementStatus: 'OPEN',
+      settlementStatus: undefined,
     });
     const group = groups.find(
       (item) =>
@@ -99,10 +99,6 @@ export class SupplierStoreStatementsService {
   }
 
   private async loadGroups(input: ListSupplierStoreStatementsInput): Promise<StatementGroup[]> {
-    if (input.settlementStatus && input.settlementStatus !== 'OPEN') {
-      return [];
-    }
-
     const orders = await this.database.client.supplierOrder.findMany({
       where: {
         storeId: input.storeId,
@@ -178,7 +174,7 @@ export class SupplierStoreStatementsService {
         }
       }
     }
-    return allGroups.sort((left, right) => {
+    return allGroups.filter((group) => !input.settlementStatus || toSettlementStatus(group) === input.settlementStatus).sort((left, right) => {
       const byPeriod = right.periodStart.localeCompare(left.periodStart);
       return byPeriod || left.storeId.localeCompare(right.storeId);
     });
@@ -219,7 +215,7 @@ function toSummaryView(group: StatementGroup): SupplierStoreStatementSummaryView
     periodKey: group.periodKey,
     periodStart: group.periodStart,
     periodEndExclusive: group.periodEndExclusive,
-    settlementStatus: 'OPEN',
+    settlementStatus: toSettlementStatus(group),
     goodsAmount: goodsAmount.toFixed(2),
     freightAmount: freightAmount.toFixed(2),
     totalAmount: totalAmount.toFixed(2),
@@ -228,6 +224,11 @@ function toSummaryView(group: StatementGroup): SupplierStoreStatementSummaryView
     payableAmount: Decimal.max(totalAmount.minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2),
     lineCount: group.lines.length,
   };
+}
+
+function toSettlementStatus(group: StatementGroup): SupplierStoreStatementStatus {
+  const total = group.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Decimal(0));
+  return group.paymentSummary.confirmedAmount.greaterThanOrEqualTo(total) ? 'SETTLED' : 'OPEN';
 }
 
 function normalizeCycle(value: string): SettlementCycle {
