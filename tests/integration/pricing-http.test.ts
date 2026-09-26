@@ -118,6 +118,23 @@ test('pricing HTTP endpoint publishes prices and lists versions', async () => {
     assert.equal(first.data.reason, 'Supplier price update');
     assert.equal(first.data.revision, 1);
     assert.notEqual(first.data.runId, '');
+    const impact = await fetch(`${baseUrl}/prices/impact-preview`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        productId: product.id,
+        supplierId: supplier.id,
+        salesPrice: '11.000000',
+        supplyPrice: '9.000000',
+        effectiveAt: '2026-09-02T00:00:00.000Z',
+      }),
+    });
+    assert.equal(impact.status, 201);
+    const impactBody = (await impact.json()) as { data: { scopeId: string; affectedOrderCount: number; salesDelta: string; supplyDelta: string } };
+    assert.equal(impactBody.data.scopeId, first.data.scopeId);
+    assert.equal(impactBody.data.affectedOrderCount, 0);
+    assert.equal(impactBody.data.salesDelta, '0.00');
+    assert.equal(impactBody.data.supplyDelta, '0.00');
     const run = await fetch(`${baseUrl}/jobs/${first.data.runId}`, { headers: { authorization: `Bearer ${token}` } });
     assert.equal(run.status, 200);
     const runBody = (await run.json()) as { data: { status: string; priceVersionIds: string[] } };
