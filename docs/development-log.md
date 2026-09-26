@@ -153,7 +153,8 @@
 - Statement payment summaries now include adjustment allocations; positive adjustment amounts contribute to payable amount and `OPEN`/`SETTLED` status while ordinary goods totals remain unchanged. Added a regression test for a fully paid adjustment-only direct statement.
 - Added B06 regression coverage for positive adjustment preview direction/source revision and negative adjustment blocking.
 - Company-term supplier-side adjustment preview now includes positive store adjustment items in the store receivable gating calculation; added regression coverage.
-- Verification: `npm run build`, `npm test` (25), `npm run test:integration` (26), `npm run contract:check`, and `git diff --check` passed.
+- Added mixed ordinary plus same-direction adjustment preview coverage.
+- Verification: `npm run build`, `npm test` (26), `npm run test:integration` (26), `npm run contract:check`, and `git diff --check` passed.
 
 - Continued DEV-406: added the persisted `Overpayment` model and migration.
 - B08 now compares each confirmed allocation with the current order amount after price changes and records positive excess by store, supplier, and source revision; payment details return the overpayment total and source rows.

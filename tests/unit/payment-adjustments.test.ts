@@ -68,3 +68,25 @@ test('company-term supplier adjustment waits for store receivable and store adju
     (error: any) => error?.getResponse?.()?.details?.blockedItems?.[0]?.code === 'STORE_RECEIVABLE_UNSETTLED',
   );
 });
+
+test('payment preview combines an ordinary item and a same-direction adjustment', async () => {
+  const adjustmentId = adjustmentItemId('adjustment-1', 'order-1', 'STORE');
+  const ordinaryId = Buffer.from(JSON.stringify({ kind: 'STORE_RECEIVABLE', supplierOrderId: 'order-1' })).toString('base64url');
+  const service = new PaymentRecordsService({
+    client: {
+      supplierOrder: { findMany: async () => [{
+        id: 'order-1', supplierOrderNo: 'SO-1', storeId: 'store-1', supplierId: 'supplier-1', version: 4,
+        status: 'COMPLETED', firstShippedAt: new Date('2026-09-10T00:00:00.000Z'), settlementMode: 'COMPANY_TERM',
+        salesGoodsAmount: '100.00', supplyGoodsAmount: '80.00', shipments: [], request: { shortfallAmount: '0.00' },
+      }] },
+      settlementItemSnapshot: { findMany: async () => [] },
+      adjustmentDocument: { findMany: async () => [{ id: 'adjustment-1', supplierOrderId: 'order-1', side: 'STORE', amount: new Decimal('20.00'), sourceRevision: 9 }] },
+      paymentAllocation: { findMany: async () => [] },
+      differenceDisposalItem: { findMany: async () => [] },
+    },
+  } as any);
+  const preview = await service.preview([ordinaryId, adjustmentId]);
+  assert.equal(preview.direction, 'STORE_TO_COMPANY');
+  assert.equal(preview.totalPayableAmount, '120.00');
+  assert.equal(preview.items.length, 2);
+});
