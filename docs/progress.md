@@ -6,11 +6,16 @@ Last updated: 2026-09-27
 
 The backend has partial M4 settlement implementation. M5 reporting/export work was started before M4 was closed and is now frozen while the core settlement path is completed.
 
-Latest completed implementation: the four statement families now enforce authenticated store or supplier scope on both list and detail reads; cross-scope statement IDs resolve as not found, while company roles retain broad access. B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
+Latest completed implementation: the four statement families, payment records, adjustments, difference disposals, and clearing details now enforce authenticated store scope for both STORE and STORE_FINANCE accounts; cross-scope IDs resolve as not found, while company roles retain broad access. B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
 Latest commits:
 
 ```text
+96aee8f Allow finance scope disposal confirmation
+b54145c Enforce finance store scopes
+7c5cda1 Cover settlement period boundaries
+54fadd1 Cover statement scope guards
+4cd5090 Require statement detail scopes
 b867e59 Harden statement list and detail scopes
 a205d0c Record B12 receiver permission gap
 ae2e702 Verify adjustment credit offsets end to end
