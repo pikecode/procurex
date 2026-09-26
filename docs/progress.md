@@ -79,7 +79,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 
 | Package | Current assessment against plan | Closure evidence still needed |
 |---|---|---|
-| DEV-401 | P01-P03 backend is substantially implemented | Prove AT-08/09 ordering and close the planned W06/S10 workflow; then mark package complete |
+| DEV-401 | P01-P03 backend is substantially implemented | AT-08 now serializes revaluation with final receipt and AT-09 ordering is verified; close the planned W06/S10 workflow, then mark package complete |
 | DEV-402 | B01-B04, amount and period logic exist; AT-16 price guard added | Prove all settlement modes and direct-term statement/payment consistency with integrated evidence |
 | DEV-403 | Statement read paths, total/store sum, and immediate per-order grouping are tested | Prove replenishment keeps original period; required W09/S05/S08 flows remain part of acceptance |
 | DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Receiver-role authorization and AT-13 duplicate-entry concurrency are verified; close direct-term direction mapping and remaining evidence/role flows |
@@ -111,6 +111,8 @@ DEV-404 acceptance slice: the payment integration now registers the same supplie
 DEV-405 acceptance slice: clearing preview/create/detail integration covers the selected credit allocation, independent clearing document, account ledger, released credit, and idempotent replay; clearing detail now rejects a mismatched store scope.
 
 DEV-406 acceptance slice: the integration now creates a negative adjustment with no follow-up order, disposes it through `OFFLINE_RETURN` without a target debit, and confirms it through the receiver role; AT-14 is covered end to end.
+
+DEV-401 concurrency slice: price-run processing now locks each supplier order before reading completion status, so a receipt that commits first is skipped and a revaluation that acquires the lock first is applied before completion.
 
 DEV-406 scope hardening: adjustment list/detail and difference-disposal detail/confirmation now enforce the authenticated store or supplier scope before returning or mutating records. Company roles retain the existing company access paths.
 

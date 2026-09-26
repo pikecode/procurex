@@ -4,6 +4,7 @@ import { evaluateStoredValueFunding } from '../../../../packages/domain/src/fund
 import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
 import { settlementPeriod } from '../../../../packages/domain/src/settlement-period.js';
 import { PaymentStatus, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import { Prisma } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type PriceQuote = {
@@ -237,6 +238,7 @@ export class PricingService {
       if (!version) throw new ConflictException({ code: 'PRICE_CHANGE_RUN_INVALID', message: 'Price change run has no price version' });
 
       for (const runOrder of run.orders) {
+        await lockSupplierOrder(tx, runOrder.supplierOrderId);
         const order = await tx.supplierOrder.findUnique({
           where: { id: runOrder.supplierOrderId },
           include: { items: { where: { productId: version.scope.productId } }, request: { select: { submittedAt: true } } },
@@ -427,6 +429,10 @@ export class PricingService {
       revision: version.revision,
     }));
   }
+}
+
+async function lockSupplierOrder(tx: Prisma.TransactionClient, supplierOrderId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM "SupplierOrder" WHERE id = ${supplierOrderId}::uuid FOR UPDATE`;
 }
 
 function settlementItemId(kind: 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT', supplierOrderId: string): string {
