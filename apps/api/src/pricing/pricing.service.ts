@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { Decimal } from 'decimal.js';
 import { evaluateStoredValueFunding } from '../../../../packages/domain/src/funding.js';
 import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
+import { settlementPeriod } from '../../../../packages/domain/src/settlement-period.js';
 import { PaymentStatus, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { DatabaseService } from '../database/database.service.js';
 
@@ -224,7 +225,7 @@ export class PricingService {
       for (const runOrder of run.orders) {
         const order = await tx.supplierOrder.findUnique({
           where: { id: runOrder.supplierOrderId },
-          include: { items: { where: { productId: version.scope.productId } } },
+          include: { items: { where: { productId: version.scope.productId } }, request: { select: { submittedAt: true } } },
         });
         const item = order?.items[0];
         if (!order || !item || order.status === SupplierOrderStatus.COMPLETED || order.status === SupplierOrderStatus.CANCELED || order.status === SupplierOrderStatus.REJECTED) {
@@ -260,7 +261,7 @@ export class PricingService {
             shortfallAmount: funding.shortfallAmount.toFixed(2),
           },
         });
-        await tx.priceChangeAdjustment.create({
+        const adjustment = await tx.priceChangeAdjustment.create({
           data: {
             runId: id,
             supplierOrderId: order.id,
@@ -273,6 +274,37 @@ export class PricingService {
             supplyDelta,
           },
         });
+        const snapshots = await tx.settlementItemSnapshot.findMany({
+          where: { settlementItemId: { in: [
+            settlementItemId(order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE', order.id),
+            settlementItemId(order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'SUPPLIER_PAYABLE', order.id),
+          ] } },
+        });
+        const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.settlementItemId));
+        const originalPeriod = settlementPeriod(order.settlementCycleSnapshot as 'WEEKLY' | 'HALF_MONTHLY' | 'MONTHLY' | 'IMMEDIATE', order.firstShippedAt ?? order.request.submittedAt);
+        const currentPeriod = settlementPeriod(order.settlementCycleSnapshot as 'WEEKLY' | 'HALF_MONTHLY' | 'MONTHLY' | 'IMMEDIATE', new Date());
+        const originalPeriodKey = `${order.settlementCycleSnapshot}:${originalPeriod.startDate}:${originalPeriod.endDate}`;
+        const settlementPeriodKey = `${order.settlementCycleSnapshot}:${currentPeriod.startDate}:${currentPeriod.endDate}`;
+        const documents = [
+          { side: 'STORE', amount: salesDelta, kind: order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE' },
+          { side: 'SUPPLIER', amount: supplyDelta, kind: order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'SUPPLIER_PAYABLE' },
+        ].filter(({ amount, kind }) => !amount.isZero() && snapshotIds.has(settlementItemId(kind as 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT', order.id)));
+        for (const document of documents) {
+          await tx.adjustmentDocument.create({
+            data: {
+              sourcePriceChangeId: adjustment.id,
+              supplierOrderId: order.id,
+              storeId: order.storeId,
+              supplierId: order.supplierId,
+              side: document.side,
+              amount: document.amount.toFixed(2),
+              originalPeriodKey,
+              settlementPeriodKey,
+              sourceRevision: order.version + 1,
+              items: { create: { orderItemId: item.id, amount: document.amount.toFixed(2) } },
+            },
+          });
+        }
         await tx.priceChangeRunOrder.update({
           where: { runId_supplierOrderId: { runId: id, supplierOrderId: order.id } },
           data: { status: 'SUCCEEDED', salesDelta, supplyDelta },
@@ -368,4 +400,8 @@ export class PricingService {
       revision: version.revision,
     }));
   }
+}
+
+function settlementItemId(kind: 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT', supplierOrderId: string): string {
+  return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
 }

@@ -560,6 +560,35 @@ model PriceChangeAdjustment {
   @@index([supplierOrderId])
 }
 
+model AdjustmentDocument {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  sourcePriceChangeId String                   @db.Uuid
+  supplierOrderId    String                   @db.Uuid
+  storeId            String                   @db.Uuid
+  supplierId         String                   @db.Uuid
+  side               String                   @db.VarChar(20)
+  amount             Decimal                  @db.Decimal(20, 2)
+  originalPeriodKey  String                   @db.VarChar(128)
+  settlementPeriodKey String                 @db.VarChar(128)
+  sourceRevision     Int
+  createdAt          DateTime                 @default(now()) @db.Timestamptz(6)
+  items              AdjustmentDocumentItem[]
+
+  @@unique([sourcePriceChangeId, side])
+  @@index([storeId, supplierId, settlementPeriodKey])
+}
+
+model AdjustmentDocumentItem {
+  id             String             @id @default(uuid()) @db.Uuid
+  adjustmentId  String             @db.Uuid
+  orderItemId    String             @db.Uuid
+  amount         Decimal            @db.Decimal(20, 2)
+  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
+  adjustment     AdjustmentDocument @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  @@unique([adjustmentId, orderItemId])
+  @@index([orderItemId])
+}
+
 model PurchaseRequest {
   id                String                @id @default(uuid()) @db.Uuid
   requestNo         String                @unique @db.VarChar(80)

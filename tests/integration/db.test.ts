@@ -31,13 +31,15 @@ test('core migration created foundational tables', async () => {
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-        AND table_name IN ('User', 'UserSession', 'CommandRecord', 'Store', 'Supplier', 'Product', 'PurchaseRequest', 'SupplierOrder', 'StoreAccount', '_prisma_migrations')
+        AND table_name IN ('AdjustmentDocument', 'AdjustmentDocumentItem', 'User', 'UserSession', 'CommandRecord', 'Store', 'Supplier', 'Product', 'PurchaseRequest', 'SupplierOrder', 'StoreAccount', '_prisma_migrations')
       ORDER BY table_name
     `;
 
     assert.deepEqual(
       tables.map((table) => table.table_name),
       [
+        'AdjustmentDocument',
+        'AdjustmentDocumentItem',
         'CommandRecord',
         'Product',
         'PurchaseRequest',
@@ -62,13 +64,13 @@ test('required migrations are recorded by Prisma', async () => {
     const migrations = await prisma.$queryRaw<Array<{ migration_name: string; finished_at: Date | null }>>`
       SELECT migration_name, finished_at
       FROM "_prisma_migrations"
-      WHERE migration_name IN ('20260924044950_init_core', '20260924052429_add_command_records', '20260924054927_add_user_sessions')
+      WHERE migration_name IN ('20260924044950_init_core', '20260924052429_add_command_records', '20260924054927_add_user_sessions', '20260926120000_add_adjustment_documents')
       ORDER BY migration_name
     `;
 
     assert.deepEqual(
       migrations.map((migration) => migration.migration_name),
-      ['20260924044950_init_core', '20260924052429_add_command_records', '20260924054927_add_user_sessions'],
+      ['20260924044950_init_core', '20260924052429_add_command_records', '20260924054927_add_user_sessions', '20260926120000_add_adjustment_documents'],
     );
     assert.ok(migrations.every((migration) => migration.finished_at));
   } finally {
