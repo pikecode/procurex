@@ -42,7 +42,7 @@ export class DifferenceDisposalsController {
   ) {}
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'SUPPLIER')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
   get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<DifferenceDisposalView> {
     throwIfInvalid(validateUuid('id', id));
     return this.differenceDisposalsService.get(id, request.auth?.user.scope);
@@ -80,7 +80,7 @@ export class DifferenceDisposalsController {
   }
 
   @Post(':id/confirm')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'SUPPLIER')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
   async confirm(
     @Req() request: AuthenticatedRequest,
     @CurrentAuth() auth: AuthenticatedSession,

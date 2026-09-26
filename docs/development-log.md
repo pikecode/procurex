@@ -184,6 +184,8 @@
 
 # 2026-09-27
 
+- Added `STORE_FINANCE` to B12 read/confirm authorization, matching the documented shared store-side permission. Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
+
 - Closed a STORE_FINANCE scope gap across DEV-404/405/406: payment records, adjustments, difference disposals, and clearing details now enforce the bound store for both STORE and STORE_FINANCE accounts. Added the clearing regression assertion. Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
 
 - Added DEV-403 AT-10 boundary coverage for half-month 15/16, Sunday/Monday weekly rollover, year-end, and leap-day periods. Verification: `npm run build`, `npm test` (35), and `git diff --check` passed.
