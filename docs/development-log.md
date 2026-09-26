@@ -204,6 +204,9 @@
 - Hardened F04 receipt creation: configured STORE/STORE_FINANCE scope is applied through the shipment's supplier-order relation.
 - Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
 
+- Hardened O01/O02: configured store accounts can preview and create purchase requests only for their bound store.
+- Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
+
 - Added `STORE_FINANCE` to B12 read/confirm authorization, matching the documented shared store-side permission. Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
 
 - Closed a STORE_FINANCE scope gap across DEV-404/405/406: payment records, adjustments, difference disposals, and clearing details now enforce the bound store for both STORE and STORE_FINANCE accounts. Added the clearing regression assertion. Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.

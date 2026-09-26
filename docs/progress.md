@@ -18,6 +18,8 @@ F04 discrepancy resolution also carries the configured supplier scope through it
 
 F04 receipt creation now carries the configured STORE/STORE_FINANCE scope through the shipment's supplier-order relation.
 
+O01/O02 preview and create now reject a configured store account's request for another store.
+
 Latest completed implementation: the four statement families, payment records, adjustments, difference disposals, and clearing details now enforce authenticated store scope for both STORE and STORE_FINANCE accounts; cross-scope IDs resolve as not found, while company roles retain broad access. B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
 Latest commits:
@@ -151,6 +153,8 @@ Supplier order mutation scope hardening passed the same verification baseline.
 F04 discrepancy scope hardening passed the same verification baseline.
 
 F04 receipt scope hardening passed the same verification baseline.
+
+O01/O02 store scope hardening passed the same verification baseline.
 
 DEV-501 R01-R03 backend slice is implemented. `completedAt` is persisted and written when fulfillment becomes complete; existing completed orders are backfilled by migration. R01 reports completed-order amounts by completion month, R02 final received quantities by completion date with a three-month limit, and R03 completed non-direct order profit by first shipment date with freight separate. Date filtering uses Asia/Shanghai day boundaries; completed order prices are frozen by P02's completed-order exclusion. Local migration, build, 10 unit tests, 26 integration tests, contract check, and diff check passed.
 

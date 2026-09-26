@@ -103,8 +103,10 @@ export class PurchaseRequestsController {
 
   @Post('preview')
   @RequireRoles('ADMIN', 'PURCHASER', 'STORE')
-  preview(@Body() body: PreviewBody): Promise<PurchaseRequestPreview> {
-    return this.previewService.preview(parsePreviewBody(body));
+  preview(@Req() request: AuthenticatedRequest, @Body() body: PreviewBody): Promise<PurchaseRequestPreview> {
+    const input = parsePreviewBody(body);
+    assertStoreScope(request, input.storeId);
+    return this.previewService.preview(input);
   }
 
   @Post()
@@ -115,6 +117,7 @@ export class PurchaseRequestsController {
     @Body() body: PreviewBody,
   ): Promise<PurchaseRequestView> {
     const input = parsePreviewBody(body);
+    assertStoreScope(request, input.storeId);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'purchase-request.create',
@@ -234,6 +237,13 @@ export class PurchaseRequestsController {
 function storeScope(request: AuthenticatedRequest): { type: string; storeId?: string } | undefined {
   const scope = request.auth?.user.scope;
   return scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? scope : undefined;
+}
+
+function assertStoreScope(request: AuthenticatedRequest, storeId: string): void {
+  const scope = storeScope(request);
+  if (!scope) return;
+  if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+  if (scope.storeId !== storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Purchase request is outside the current store scope' });
 }
 
 function parseListQuery(query: ListQuery): ListPurchaseRequestsInput {
