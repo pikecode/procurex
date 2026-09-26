@@ -213,13 +213,13 @@ A02 不自动采购确认，A05 不变履约状态。清账按所选来源全部
 | B04 | `GET /direct-statements`、`GET /direct-statements/{id}` | 供应商直接账期，门店与供应商结算；明细带价格调整来源；不混入公司应付总单 |
 | B05 | `GET /adjustments`、`GET /adjustments/{id}` | 差额、原账单原周期、实际结算周期、来源修订、处理状态 |
 
-公共筛选为 storeId、supplierId、cycle、periodStart、periodEndExclusive、settlementStatus、page。范围由服务端收窄。详情返回商品额、运费、调整额、已确认支付、待确认支付、待支付、待返还/抵扣、待核对标记和修订号。门店销售账单不能跳转读供货价分店单。
+公共筛选为 storeId、supplierId、cycle、periodStart、periodEndExclusive、settlementStatus、page。范围由服务端收窄。详情返回商品额、运费、调整额、调整结算项 ID、已确认支付、待确认支付、待支付、待返还/抵扣、待核对标记和修订号。正向调整结算项可进入 B06-B08；负向调整继续走 B12。门店销售账单不能跳转读供货价分店单。
 
 ### 6.3 付款和差额处置
 
 | 编号 | 方法与路径 | 请求/结果 | 权限 |
 |---|---|---|---|
-| B06 | `POST /payment-records/preview` | settlementItemIds；返回同主体可付金额、已预占、来源版本和阻断项；直接账期使用 `STORE_TO_SUPPLIER` | 该方向付款登记角色 |
+| B06 | `POST /payment-records/preview` | settlementItemIds（普通结算项或 `ADJUSTMENT` 调整项）；返回同主体可付金额、已预占、来源版本和阻断项；正向调整带调整侧和来源修订，直接账期使用 `STORE_TO_SUPPLIER` | 该方向付款登记角色 |
 | B07 | `POST /payment-records` | direction、items[{settlementItemId,expectedVersion,expectedAmount}]、businessDate、evidenceFileIds、remark?；201 待收款确认记录 | 门店侧登记对公司/供应商付款；HQ_FINANCE/ADMIN 登记公司付供应商 |
 | B08 | `POST /payment-records/{id}/confirm` | expectedVersion；返回有效核销和任何多付款待处置额 | STORE_TO_COMPANY 仅 HQ_FINANCE/ADMIN；其他方向 SUPPLIER/ADMIN |
 | B09 | `POST /payment-records/{id}/reject` | expectedVersion、reason；保留登记，释放预占 | 对应收款确认角色；仅待确认 |
@@ -227,7 +227,7 @@ A02 不自动采购确认，A05 不变履约状态。清账按所选来源全部
 | B11 | `GET /payment-records`、`GET /payment-records/{id}` | 付款单、分配、确认人与凭证 | 双方及授权公司人员，按方向隔离 |
 | B12 | `POST /difference-disposals`、`POST /difference-disposals/{id}/confirm`、`GET /difference-disposals/{id}` | method、creditItemIds、targetDebitItemIds?、amount、businessDate、evidenceFileIds；抵扣/线下返还 | 公司通道由 HQ_FINANCE/ADMIN 登记；涉及对方收款由收款方确认；直接通道各方仅处理自身往来 |
 
-B07 首版按选择明细的全部可付余额登记；可以选不同订单，但必须同付款方、收款方、方向。跨供应商界面按组逐笔登记，不在一笔付款里混合账户。公司账期对应门店应收含有效补收差额尚未结清时，返回 `STORE_RECEIVABLE_UNSETTLED`。
+B07 首版按选择明细的全部可付余额登记；可以选不同订单或正向调整项，但必须同付款方、收款方、方向。跨供应商界面按组逐笔登记，不在一笔付款里混合账户。公司账期对应门店应收含有效补收差额尚未结清时，返回 `STORE_RECEIVABLE_UNSETTLED`。
 
 B08 不能覆盖原登记金额：期间降价造成多付款时记录真实已收及可核销分配，超额进入 differenceDisposal 待处理；不把超额默认为已抵扣。B12 只处理既有负调整或真实多付款，不允许凭空创建退款额度；抵扣必须同双方主体同通道，无后续订单时可线下返还。
 
