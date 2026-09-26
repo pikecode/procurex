@@ -1,5 +1,5 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard.js';
+import { Controller, ForbiddenException, Get, Param, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
@@ -12,9 +12,9 @@ export class RechargesController {
   constructor(private readonly rechargesService: RechargesService) {}
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE')
-  get(@Param('id') id: string): Promise<RechargeDocumentDetailView> {
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<RechargeDocumentDetailView> {
     throwIfInvalid(validateUuid('id', id));
-    return this.rechargesService.get(id);
+    return this.rechargesService.get(id, request.auth?.user.scope);
   }
 }

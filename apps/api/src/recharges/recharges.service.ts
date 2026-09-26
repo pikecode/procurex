@@ -28,9 +28,9 @@ export type RechargeDocumentDetailView = {
 export class RechargesService {
   constructor(private readonly database: DatabaseService) {}
 
-  async get(id: string): Promise<RechargeDocumentDetailView> {
+  async get(id: string, scope?: { type?: string; storeId?: string }): Promise<RechargeDocumentDetailView> {
     const recharge = await this.database.client.rechargeDocument.findUnique({ where: { id } });
-    if (!recharge) {
+    if (!recharge || ((scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE') && recharge.storeId !== scope.storeId)) {
       throw new NotFoundException({
         code: 'RECHARGE_NOT_FOUND',
         message: 'Recharge document was not found',

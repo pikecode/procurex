@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard.js';
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
@@ -72,8 +72,13 @@ export class CatalogController {
 
   @Get('stores/:id/catalog')
   @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
-  readStoreCatalog(@Param('id') id: string): Promise<StoreCatalogView> {
+  readStoreCatalog(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<StoreCatalogView> {
     throwIfInvalid(validateUuid('id', id));
+    const scope = request.auth?.user.scope;
+    if (scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE') {
+      if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+      if (scope.storeId !== id) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Store is outside the current store scope' });
+    }
     return this.catalogService.readStoreCatalog(id);
   }
 }
