@@ -144,9 +144,9 @@ export class PurchaseRequestsService {
     return requests.map(toPurchaseRequestSummaryView);
   }
 
-  async get(id: string): Promise<PurchaseRequestDetailView> {
+  async get(id: string, scope?: { type: string; storeId?: string }): Promise<PurchaseRequestDetailView> {
     const request = await this.database.client.purchaseRequest.findUnique({
-      where: { id },
+      where: { id, storeId: isStoreScope(scope?.type) ? scope?.storeId : undefined },
       include: {
         items: { orderBy: { createdAt: 'asc' } },
         supplierOrders: { orderBy: { createdAt: 'asc' } },
@@ -926,6 +926,10 @@ export class PurchaseRequestsService {
       rejectedAt: rejected.rejectedAt?.toISOString() ?? null,
     };
   }
+}
+
+function isStoreScope(type?: string): boolean {
+  return type === 'STORE' || type === 'STORE_FINANCE';
 }
 
 function toPurchaseRequestSummaryView(request: PurchaseRequest): PurchaseRequestSummaryView {

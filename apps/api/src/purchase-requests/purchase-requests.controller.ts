@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -80,16 +80,25 @@ export class PurchaseRequestsController {
   ) {}
 
   @Get()
-  @RequireRoles('ADMIN', 'PURCHASER', 'STORE')
-  list(@Query() query: ListQuery): Promise<PurchaseRequestSummaryView[]> {
-    return this.purchaseRequestsService.list(parseListQuery(query));
+  @RequireRoles('ADMIN', 'PURCHASER', 'STORE', 'STORE_FINANCE')
+  list(@Req() request: AuthenticatedRequest, @Query() query: ListQuery): Promise<PurchaseRequestSummaryView[]> {
+    const scope = storeScope(request);
+    const input = parseListQuery(query);
+    if (scope) {
+      if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+      if (input.storeId && input.storeId !== scope.storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Purchase requests are outside the current store scope' });
+      input.storeId = scope.storeId;
+    }
+    return this.purchaseRequestsService.list(input);
   }
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'PURCHASER', 'STORE')
-  get(@Param('id') id: string): Promise<PurchaseRequestDetailView> {
+  @RequireRoles('ADMIN', 'PURCHASER', 'STORE', 'STORE_FINANCE')
+  get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<PurchaseRequestDetailView> {
     throwIfInvalid(validateUuid('id', id));
-    return this.purchaseRequestsService.get(id);
+    const scope = storeScope(request);
+    if (scope && !scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+    return this.purchaseRequestsService.get(id, scope);
   }
 
   @Post('preview')
@@ -220,6 +229,11 @@ export class PurchaseRequestsController {
 
     return result;
   }
+}
+
+function storeScope(request: AuthenticatedRequest): { type: string; storeId?: string } | undefined {
+  const scope = request.auth?.user.scope;
+  return scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? scope : undefined;
 }
 
 function parseListQuery(query: ListQuery): ListPurchaseRequestsInput {
