@@ -1840,6 +1840,43 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(adjustmentDetail.data.disposal?.disposalId, differenceDisposal.data.id);
     assert.equal(adjustmentDetail.data.disposal?.status, 'CONFIRMED');
     assert.equal(adjustmentDetail.data.disposal?.amount, '8.00');
+    const adjustmentCredit = await prisma.adjustmentDocument.create({
+      data: {
+        sourcePriceChangeId: crypto.randomUUID(), supplierOrderId: supplierBOrderAfterReallocate.id,
+        storeId: store.id, supplierId: supplierB.id, side: 'SUPPLIER', amount: '-5.00',
+        originalPeriodKey: 'test:original', settlementPeriodKey: 'test:current', sourceRevision: 1,
+      },
+    });
+    const adjustmentTarget = await prisma.adjustmentDocument.create({
+      data: {
+        sourcePriceChangeId: crypto.randomUUID(), supplierOrderId: supplierBOrderAfterReallocate.id,
+        storeId: store.id, supplierId: supplierB.id, side: 'SUPPLIER', amount: '10.00',
+        originalPeriodKey: 'test:original', settlementPeriodKey: 'test:current', sourceRevision: 2,
+      },
+    });
+    const adjustmentTargetId = Buffer.from(JSON.stringify({
+      kind: 'ADJUSTMENT', supplierOrderId: supplierBOrderAfterReallocate.id,
+      adjustmentDocumentId: adjustmentTarget.id, adjustmentSide: 'SUPPLIER',
+    })).toString('base64url');
+    const adjustmentOffsetResponse = await fetch(`${baseUrl}/difference-disposals`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${financeToken}`, 'content-type': 'application/json',
+        'idempotency-key': 'offset-adjustment-credit-once', 'x-trace-id': 'trace-offset-adjustment-credit',
+      },
+      body: JSON.stringify({
+        method: 'OFFSET', creditItemIds: [adjustmentCredit.id], targetDebitItemIds: [adjustmentTargetId],
+        amount: '5.00', businessDate: '2026-09-24', reason: 'Offset negative adjustment against positive adjustment',
+      }),
+    });
+    assert.equal(adjustmentOffsetResponse.status, 201);
+    const adjustmentOffset = (await adjustmentOffsetResponse.json()) as {
+      data: { status: string; amount: string; items: Array<{ adjustmentDocumentId: string; targetDebitItemId: string }> };
+    };
+    assert.equal(adjustmentOffset.data.status, 'PENDING');
+    assert.equal(adjustmentOffset.data.amount, '5.00');
+    assert.equal(adjustmentOffset.data.items[0]?.adjustmentDocumentId, adjustmentCredit.id);
+    assert.equal(adjustmentOffset.data.items[0]?.targetDebitItemId, adjustmentTargetId);
     const storeStatementsResponse = await fetch(`${baseUrl}/store-statements?storeId=${store.id}&supplierId=${supplierB.id}`, {
       headers: { authorization: `Bearer ${token}` },
     });

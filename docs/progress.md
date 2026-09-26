@@ -8,7 +8,16 @@ The backend has partial M4 settlement implementation. M5 reporting/export work w
 
 Latest completed implementation: B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
-Latest committed implementation before the current work:
+Latest commits:
+
+```text
+e61f84e Allow offsets against positive adjustments
+66d8d78 Cover mixed adjustment payments
+de2ced8 Gate supplier adjustments on store settlement
+a674e33 Document adjustment settlement items
+```
+
+Earlier related commits:
 
 ```text
 Freeze price adjustments by settlement side
@@ -48,7 +57,7 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Current uncommitted work: B12 now permits a negative adjustment credit to offset a positive adjustment settlement item on the matching STORE or SUPPLIER side. Available amount subtracts reserved/confirmed payment allocations and pending/confirmed disposals. Unit coverage proves the remaining amount and rejects a target on the opposite side. Build, 28 unit tests, 26 integration tests, contract check, and diff check pass.
+Latest completed work: B12 permits a negative adjustment credit to offset a positive adjustment settlement item on the matching STORE or SUPPLIER side. Available amount subtracts reserved/confirmed payment allocations and pending/confirmed disposals. Unit and HTTP/database integration coverage verifies the offset record links both adjustment documents. Build, 28 unit tests, 26 integration tests, contract check, and diff check pass.
 
 Recommended next step: add database-backed B12 coverage for negative adjustment credit offset against a positive adjustment target, then audit DEV-406's remaining concurrency, offline return, and reconciliation acceptance evidence. M5 remains frozen until M4 work packages are closed.
 
