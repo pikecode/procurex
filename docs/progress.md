@@ -82,7 +82,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | DEV-401 | P01-P03 backend is substantially implemented | Prove AT-08/09 ordering and close the planned W06/S10 workflow; then mark package complete |
 | DEV-402 | B01-B04, amount and period logic exist; AT-16 price guard added | Prove all settlement modes and direct-term statement/payment consistency with integrated evidence |
 | DEV-403 | Statement read paths, total/store sum, and immediate per-order grouping are tested | Prove replenishment keeps original period; required W09/S05/S08 flows remain part of acceptance |
-| DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Close receiver-role authorization, direct-term direction mapping, duplicate-entry concurrency (AT-13), and required evidence/role flows |
+| DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Receiver-role authorization and AT-13 duplicate-entry concurrency are verified; close direct-term direction mapping and remaining evidence/role flows |
 | DEV-405 | Clearing transaction logic exists | Verify A04-A06 acceptance and AT-24 ledger/history evidence; planned W08 workflow remains |
 | DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Receiver confirmation scope is now enforced for STORE/SUPPLIER; finish offline return path (AT-14) and reconciliation consistency before closure |
 
@@ -105,6 +105,8 @@ npm run db:validate && npm run db:migrate && npm run build && npm test && npm ru
 ```
 
 Current integration coverage count: 28 integration tests passing; unit coverage is 30 tests.
+
+DEV-404 acceptance slice: the payment integration now registers the same supplier payable concurrently with two different idempotency keys and verifies exactly one reservation succeeds while the other conflicts; replaying the winning key returns the original payment.
 
 DEV-406 scope hardening: adjustment list/detail and difference-disposal detail/confirmation now enforce the authenticated store or supplier scope before returning or mutating records. Company roles retain the existing company access paths.
 

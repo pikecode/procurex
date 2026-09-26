@@ -186,3 +186,6 @@
 
 - Closed the B12 receiver authorization slice: store and supplier users may read and confirm only difference disposals whose direction matches their receiving side; company roles retain existing access. Added unit coverage for matching and mismatching scope/direction combinations.
 - Verification: `npm run build`, `npm test` (30), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
+
+- Added AT-13 integration evidence for DEV-404: two different idempotency keys concurrently register the same supplier payable, exactly one reserves it, the other receives a conflict, and the winning request replays the same payment.
+- Verification: `npm run build` and `npm run test:integration` (28) passed.

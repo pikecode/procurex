@@ -2231,14 +2231,14 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierPaymentPreview.data.items[0]?.sourceVersion, completedOrderAfterReturn.version);
     assert.equal(supplierPaymentPreview.data.items[0]?.payableAmount, '98.50');
     assert.equal(supplierPaymentPreview.data.blockedItems.length, 0);
-    const createSupplierPayment = async () => {
+    const createSupplierPayment = async (idempotencyKey: string, traceId: string) => {
       const response = await fetch(`${baseUrl}/payment-records`, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,
           'content-type': 'application/json',
-          'idempotency-key': 'create-supplier-payment-once',
-          'x-trace-id': 'trace-create-supplier-payment',
+          'idempotency-key': idempotencyKey,
+          'x-trace-id': traceId,
         },
         body: JSON.stringify({
           direction: 'COMPANY_TO_SUPPLIER',
@@ -2253,8 +2253,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
           ],
         }),
       });
-      assert.equal(response.status, 201);
-      return (await response.json()) as {
+      return { status: response.status, body: (await response.json()) as {
         data: {
           id: string;
           direction: string;
@@ -2264,10 +2263,19 @@ test('purchase request confirm splits supplier orders once per idempotency key',
           version: number;
           allocations: Array<{ settlementItemId: string; amount: string; state: string }>;
         };
-      };
+      } };
     };
-    const supplierPayment = await createSupplierPayment();
-    const supplierPaymentReplay = await createSupplierPayment();
+    const concurrentSupplierPayments = await Promise.all([
+      createSupplierPayment('create-supplier-payment-at13-a', 'trace-create-supplier-payment-at13-a'),
+      createSupplierPayment('create-supplier-payment-at13-b', 'trace-create-supplier-payment-at13-b'),
+    ]);
+    assert.deepEqual(concurrentSupplierPayments.map((result) => result.status).sort(), [201, 409]);
+    const winner = concurrentSupplierPayments.find((result) => result.status === 201)!;
+    const winnerKey = concurrentSupplierPayments[0]?.status === 201
+      ? 'create-supplier-payment-at13-a'
+      : 'create-supplier-payment-at13-b';
+    const supplierPayment = winner.body;
+    const supplierPaymentReplay = (await createSupplierPayment(winnerKey, 'trace-create-supplier-payment-replay')).body;
     assert.deepEqual(supplierPaymentReplay.data, supplierPayment.data);
     assert.equal(supplierPayment.data.direction, 'COMPANY_TO_SUPPLIER');
     assert.equal(supplierPayment.data.supplierId, supplierB.id);
