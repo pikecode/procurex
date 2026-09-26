@@ -3,33 +3,53 @@ import test from 'node:test';
 import { Decimal } from 'decimal.js';
 import { AdjustmentsService } from '../../apps/api/src/adjustments/adjustments.service.js';
 
-test('price changes appear as adjustments only for settlement sides frozen before the change', async () => {
-  const createdAt = new Date('2026-09-20T00:00:00Z');
+const changedAt = new Date('2026-09-21T00:00:00Z');
+
+function createService(snapshotTimes: Record<string, Date>) {
   const order = {
     id: 'order-1', storeId: 'store-1', supplierId: 'supplier-1', supplierOrderNo: 'SO-1',
-    settlementMode: 'COMPANY_TERM', settlementCycleSnapshot: 'MONTHLY', firstShippedAt: createdAt, version: 2,
-    request: { submittedAt: createdAt },
+    settlementMode: 'COMPANY_TERM', settlementCycleSnapshot: 'MONTHLY', firstShippedAt: new Date('2026-09-20T00:00:00Z'), version: 2,
+    request: { submittedAt: new Date('2026-09-20T00:00:00Z') },
   };
-  const service = new AdjustmentsService({
+  return new AdjustmentsService({
     client: {
       discrepancyReturn: { findMany: async () => [] },
       priceChangeAdjustment: { findMany: async () => [{
-        id: 'change-1', orderItemId: 'line-1', createdAt: new Date('2026-09-21T00:00:00Z'),
+        id: 'change-1', orderItemId: 'line-1', createdAt: changedAt,
         salesDelta: new Decimal(20), supplyDelta: new Decimal(10),
         orderItem: { id: 'line-1', productId: 'product-1', quantity: 2, salesUnitPrice: 12, supplyUnitPrice: 9,
           product: { name: 'Item' }, supplierOrder: order },
       }] },
-      settlementItemSnapshot: { findMany: async ({ where }: any) => {
-        const ids = where.settlementItemId.in as string[];
-        return [
-          { settlementItemId: ids[0], createdAt: new Date('2026-09-19T00:00:00Z') },
-          { settlementItemId: ids[1], createdAt: new Date('2026-09-22T00:00:00Z') },
-        ];
-      } },
+      settlementItemSnapshot: { findMany: async ({ where }: any) => (where.settlementItemId.in as string[]).flatMap((id) => {
+        const kind = JSON.parse(Buffer.from(id, 'base64url').toString()).kind;
+        return snapshotTimes[kind] ? [{ settlementItemId: id, createdAt: snapshotTimes[kind] }] : [];
+      }) },
     },
   } as any);
+}
 
-  const adjustments = await service.list({ storeId: order.storeId, supplierId: order.supplierId });
+test('price change before settlement snapshots is already in the settled amounts', async () => {
+  const service = createService({
+    STORE_RECEIVABLE: new Date('2026-09-22T00:00:00Z'),
+    SUPPLIER_PAYABLE: new Date('2026-09-22T00:00:00Z'),
+  });
+  assert.deepEqual(await service.list({}), []);
+});
+
+test('price change after only one side settled adjusts only that frozen side', async () => {
+  const service = createService({ STORE_RECEIVABLE: new Date('2026-09-19T00:00:00Z') });
+  const adjustments = await service.list({});
+  assert.equal(adjustments.length, 1);
+  assert.equal(adjustments[0]?.direction, 'STORE_RECEIVABLE_INCREASE');
+  assert.equal(adjustments[0]?.adjustmentAmount, '20.00');
+});
+
+test('sequential side settlement keeps the pre-change side adjustment only', async () => {
+  const service = createService({
+    STORE_RECEIVABLE: new Date('2026-09-19T00:00:00Z'),
+    SUPPLIER_PAYABLE: new Date('2026-09-22T00:00:00Z'),
+  });
+  const adjustments = await service.list({});
   assert.equal(adjustments.length, 1);
   assert.equal(adjustments[0]?.direction, 'STORE_RECEIVABLE_INCREASE');
   assert.equal(adjustments[0]?.adjustmentAmount, '20.00');
