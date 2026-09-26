@@ -16,8 +16,12 @@ import type {
 import { DatabaseService } from '../database/database.service.js';
 
 export type AdjustmentProcessingStatus = 'PENDING_DISPOSAL' | 'DISPOSED';
-export type AdjustmentDirection = 'SUPPLIER_PAYABLE_DECREASE';
-export type AdjustmentType = 'RETURN_SHORTAGE';
+export type AdjustmentDirection =
+  | 'SUPPLIER_PAYABLE_DECREASE'
+  | 'SUPPLIER_PAYABLE_INCREASE'
+  | 'STORE_RECEIVABLE_DECREASE'
+  | 'STORE_RECEIVABLE_INCREASE';
+export type AdjustmentType = 'RETURN_SHORTAGE' | 'PRICE_CHANGE';
 
 export type ListAdjustmentsInput = {
   storeId?: string;
@@ -37,6 +41,7 @@ export type AdjustmentSummaryView = {
   supplierOrderId: string;
   supplierOrderNo: string;
   sourceReturnId: string;
+  sourcePriceChangeId?: string;
   sourceDiscrepancyId: string;
   originalStatementId: string;
   originalPeriodKey: string;
@@ -87,26 +92,40 @@ type ReturnWithRelations = DiscrepancyReturn & {
   differenceDisposalItems: Array<DifferenceDisposalItem & { disposal: DifferenceDisposal }>;
 };
 
+type PriceWithRelations = {
+  id: string;
+  supplierOrderId: string;
+  orderItemId: string;
+  salesDelta: Decimal;
+  supplyDelta: Decimal;
+  createdAt: Date;
+  orderItem: OrderItem & { product: Product; supplierOrder: SupplierOrder & { supplier: Supplier; shipments: Shipment[]; request: { submittedAt: Date } } };
+};
+
 @Injectable()
 export class AdjustmentsService {
   constructor(private readonly database: DatabaseService) {}
 
   async list(input: ListAdjustmentsInput): Promise<AdjustmentSummaryView[]> {
-    const rows = await this.loadRows(input);
-    return rows.map(toSummaryView);
+    const [returns, prices] = await Promise.all([this.loadRows(input), this.loadPriceRows(input)]);
+    return [...returns.map(toSummaryView), ...prices.flatMap(toPriceSummaryViews)].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async get(id: string, scope?: { type?: string; storeId?: string; supplierId?: string }): Promise<AdjustmentDetailView> {
     const key = decodeAdjustmentId(id);
-    const rows = await this.loadRows({ storeId: scope?.type === 'STORE' ? scope.storeId : key.storeId, supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId });
+    const filter = { storeId: scope?.type === 'STORE' ? scope.storeId : key.storeId, supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId };
+    const [rows, prices] = await Promise.all([this.loadRows(filter), this.loadPriceRows(filter)]);
     const row = rows.find((item) => encodeAdjustmentId(item.id, item.orderItem.supplierOrder.storeId, item.orderItem.supplierOrder.supplierId) === id);
-    if (!row) {
-      throw new NotFoundException({
-        code: 'ADJUSTMENT_NOT_FOUND',
-        message: 'Adjustment was not found',
-      });
+    if (row) return toDetailView(row);
+    const price = prices.find((item) => toPriceSummaryViews(item).some((view) => view.id === id));
+    if (price) {
+      const view = toPriceSummaryViews(price).find((item) => item.id === id)!;
+      return { ...view, lines: [toPriceLine(price, view.direction)], disposal: null };
     }
-    return toDetailView(row);
+    throw new NotFoundException({
+      code: 'ADJUSTMENT_NOT_FOUND',
+      message: 'Adjustment was not found',
+    });
   }
 
   private async loadRows(input: ListAdjustmentsInput): Promise<ReturnWithRelations[]> {
@@ -155,6 +174,54 @@ export class AdjustmentsService {
       return true;
     });
   }
+
+  private async loadPriceRows(input: ListAdjustmentsInput): Promise<PriceWithRelations[]> {
+    const rows = await this.database.client.priceChangeAdjustment.findMany({
+      where: { orderItem: { supplierOrder: { storeId: input.storeId, supplierId: input.supplierId } } },
+      include: { orderItem: { include: { product: true, supplierOrder: { include: { supplier: true, shipments: true, request: { select: { submittedAt: true } } } } } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return rows.filter((row) => {
+      const order = row.orderItem.supplierOrder;
+      const cycle = normalizeCycle(order.settlementCycleSnapshot);
+      const period = toPeriod(cycle, row.createdAt);
+      return (!input.cycle || input.cycle === cycle) && (!input.periodStart || input.periodStart === period.periodStart) &&
+        (!input.periodEndExclusive || input.periodEndExclusive === period.periodEndExclusive) &&
+        (!input.processingStatus || input.processingStatus === 'PENDING_DISPOSAL');
+    }) as PriceWithRelations[];
+  }
+}
+
+function toPriceSummaryViews(row: PriceWithRelations): AdjustmentSummaryView[] {
+  const order = row.orderItem.supplierOrder;
+  const cycle = normalizeCycle(order.settlementCycleSnapshot);
+  const originalPeriod = toPeriod(cycle, order.firstShippedAt ?? order.request.submittedAt);
+  const actualPeriod = toPeriod(cycle, row.createdAt);
+  const views: AdjustmentSummaryView[] = [];
+  if (!row.salesDelta.isZero()) views.push(toPriceSummary(row, 'STORE', row.salesDelta, originalPeriod, actualPeriod, cycle));
+  if (!row.supplyDelta.isZero()) views.push(toPriceSummary(row, 'SUPPLIER', row.supplyDelta, originalPeriod, actualPeriod, cycle));
+  return views;
+}
+
+function toPriceSummary(row: PriceWithRelations, side: 'STORE' | 'SUPPLIER', delta: Decimal, originalPeriod: ReturnType<typeof toPeriod>, actualPeriod: ReturnType<typeof toPeriod>, cycle: SettlementCycle): AdjustmentSummaryView {
+  const order = row.orderItem.supplierOrder;
+  const increase = delta.greaterThan(0);
+  return {
+    id: encodePriceAdjustmentId(row.id, order.storeId, order.supplierId, side), type: 'PRICE_CHANGE',
+    direction: side === 'STORE' ? (increase ? 'STORE_RECEIVABLE_INCREASE' : 'STORE_RECEIVABLE_DECREASE') : (increase ? 'SUPPLIER_PAYABLE_INCREASE' : 'SUPPLIER_PAYABLE_DECREASE'),
+    storeId: order.storeId, supplierId: order.supplierId, supplierOrderId: order.id, supplierOrderNo: order.supplierOrderNo,
+    sourceReturnId: '', sourcePriceChangeId: row.id, sourceDiscrepancyId: '',
+    originalStatementId: encodeSupplierStatementId({ supplierId: order.supplierId, cycle, periodStart: originalPeriod.periodStart, periodEndExclusive: originalPeriod.periodEndExclusive }),
+    originalPeriodKey: originalPeriod.periodKey, originalPeriodStart: originalPeriod.periodStart, originalPeriodEndExclusive: originalPeriod.periodEndExclusive,
+    actualPeriodKey: actualPeriod.periodKey, periodStart: actualPeriod.periodStart, periodEndExclusive: actualPeriod.periodEndExclusive, cycle,
+    goodsAdjustmentAmount: delta.toFixed(2), freightAdjustmentAmount: '0.00', adjustmentAmount: delta.toFixed(2), confirmedPaidAmount: '0.00', pendingPaymentAmount: '0.00', payableAmount: delta.toFixed(2), pendingReturnOrOffsetAmount: '0.00', processingStatus: 'PENDING_DISPOSAL', sourceRevision: order.version, createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function toPriceLine(row: PriceWithRelations, direction: AdjustmentDirection): AdjustmentLineView {
+  const delta = direction.startsWith('STORE_') ? row.salesDelta : row.supplyDelta;
+  const price = direction.startsWith('STORE_') ? row.orderItem.salesUnitPrice : row.orderItem.supplyUnitPrice;
+  return { orderItemId: row.orderItemId, productId: row.orderItem.productId, productName: row.orderItem.product.name, quantity: row.orderItem.quantity.toString(), unitSupplyPrice: price.toFixed(2), supplyAdjustmentAmount: delta.toFixed(2), sourceRevision: row.orderItem.supplierOrder.version };
 }
 
 function toSummaryView(row: ReturnWithRelations): AdjustmentSummaryView {
@@ -269,21 +336,26 @@ function encodeAdjustmentId(returnId: string, storeId: string, supplierId: strin
   return Buffer.from(JSON.stringify({ kind: 'RETURN_SHORTAGE', returnId, storeId, supplierId })).toString('base64url');
 }
 
-function decodeAdjustmentId(id: string): { returnId: string; storeId: string; supplierId: string } {
+function encodePriceAdjustmentId(priceChangeId: string, storeId: string, supplierId: string, side: 'STORE' | 'SUPPLIER'): string {
+  return Buffer.from(JSON.stringify({ kind: 'PRICE_CHANGE', priceChangeId, storeId, supplierId, side })).toString('base64url');
+}
+
+function decodeAdjustmentId(id: string): { storeId: string; supplierId: string } {
   try {
     const parsed = JSON.parse(Buffer.from(id, 'base64url').toString('utf8')) as {
       kind?: unknown;
       returnId?: unknown;
+      priceChangeId?: unknown;
       storeId?: unknown;
       supplierId?: unknown;
     };
     if (
-      parsed.kind === 'RETURN_SHORTAGE' &&
-      typeof parsed.returnId === 'string' &&
+      (parsed.kind === 'RETURN_SHORTAGE' || parsed.kind === 'PRICE_CHANGE') &&
+      (parsed.kind === 'PRICE_CHANGE' ? typeof parsed.priceChangeId === 'string' : typeof parsed.returnId === 'string') &&
       typeof parsed.storeId === 'string' &&
       typeof parsed.supplierId === 'string'
     ) {
-      return { returnId: parsed.returnId, storeId: parsed.storeId, supplierId: parsed.supplierId };
+      return { storeId: parsed.storeId, supplierId: parsed.supplierId };
     }
   } catch {
     // Fall through to the uniform not found response.

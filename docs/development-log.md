@@ -135,3 +135,10 @@
 - Purchase confirmation now recalculates current item total against current store balance and refuses to split orders when funds are short.
 - Left account balances and ledgers untouched by price adjustments because the requirements define no refund or reversal flow.
 - Verification: build, 8 unit tests, 26 integration tests, contract check, and `git diff --check` passed.
+
+# 2026-09-26
+
+- Continued DEV-406 instead of M5: unified P02 price-change adjustments with B05.
+- `/adjustments` now returns separate store receivable and supplier payable rows for each non-zero price delta, with original and actual periods, source revision, and detail lines.
+- Included price changes for orders without a first shipment by using request submission as the baseline period; preserved existing F05 return adjustment and disposal behavior.
+- Verification: `npm run build`, `npm test` (14), `npm run test:integration` (26), `npm run contract:check`, and `git diff --check` passed.

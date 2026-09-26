@@ -11,6 +11,7 @@ Latest completed implementation: B01-B04 statement summaries now include payment
 Latest committed implementation:
 
 ```text
+feaca76 Unify price changes in adjustment reads
 8114349 Link statement totals to payment allocations
 da7a0bc Make settlement state transitions atomic
 3a4f1c0 Enforce payment account scopes
@@ -39,7 +40,7 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Recommended next step: return to M4 in this order: finish DEV-404 payment/settlement reconciliation, complete DEV-405 clearing integration, then implement the remaining DEV-406 net adjustment and overpayment paths. Do not expand M5 until these three M4 gates have business evidence.
+Recommended next step: continue DEV-406 with persisted net adjustment and overpayment paths. B05 now unifies F05 return adjustments and P02 price-change adjustments; next close the real multi-payment credit and adjustment disposal loop. Do not expand M5 until these M4 gates have business evidence.
 
 DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. B12 confirmation-role acceptance and broader concurrency evidence remain to be reviewed; M4 is still incomplete.
 
@@ -286,12 +287,13 @@ Current B03 behavior:
 Current B05 behavior:
 
 - Dynamically exposes F05 RETURN `DiscrepancyReturn` records as supplier payable decrease adjustments.
+- Exposes P02 `PriceChangeAdjustment` records through the same endpoint as separate store receivable and supplier payable adjustment rows, including unfinished orders whose baseline is request submission time.
 - Calculates adjustment amount from returned quantity times source supplier order item supply unit price.
 - Returns original supplier statement ID and original period based on the source order first shipped time.
 - Returns actual adjustment period based on the return record creation time.
 - Supports filtering by storeId, supplierId, cycle, actual period, and processingStatus.
 - Marks adjustments DISPOSED when linked to a confirmed `DifferenceDisposal`, otherwise PENDING_DISPOSAL.
-- Store receivable adjustments, direct settlement adjustments, price-change adjustments, and persisted adjustment documents remain future work.
+- Direct settlement adjustments and persisted adjustment documents remain future work.
 
 Current B06 behavior:
 
