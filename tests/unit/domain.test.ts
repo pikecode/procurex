@@ -50,6 +50,16 @@ test('settlement periods use natural cycles in Asia Shanghai', () => {
   });
 });
 
+test('settlement periods keep half-month, week, year-end, and leap-day boundaries unique', () => {
+  assert.equal(settlementPeriod('HALF_MONTHLY', new Date('2026-09-15T15:59:59.999Z')).startDate, '2026-09-01');
+  assert.equal(settlementPeriod('HALF_MONTHLY', new Date('2026-09-15T16:00:00.000Z')).startDate, '2026-09-16');
+  assert.equal(settlementPeriod('WEEKLY', new Date('2026-09-20T15:59:59.999Z')).startDate, '2026-09-14');
+  assert.equal(settlementPeriod('WEEKLY', new Date('2026-09-20T16:00:00.000Z')).startDate, '2026-09-21');
+  assert.equal(settlementPeriod('MONTHLY', new Date('2026-12-31T15:59:59.999Z')).endDate, '2026-12-31');
+  assert.equal(settlementPeriod('MONTHLY', new Date('2027-01-01T00:00:00.000Z')).startDate, '2027-01-01');
+  assert.equal(settlementPeriod('MONTHLY', new Date('2024-02-29T00:00:00.000Z')).endDate, '2024-02-29');
+});
+
 test('idempotency request hash is stable for reordered object keys', () => {
   const left = {
     storeId: 'store-a',

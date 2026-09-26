@@ -104,7 +104,7 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count: 28 integration tests passing; unit coverage is 34 tests.
+Current integration coverage count: 28 integration tests passing; unit coverage is 35 tests.
 
 DEV-404 acceptance slice: the payment integration now registers the same supplier payable concurrently with two different idempotency keys and verifies exactly one reservation succeeds while the other conflicts; replaying the winning key returns the original payment.
 
@@ -119,6 +119,7 @@ DEV-402/403 evidence slice: direct-term settlement previews resolve to `STORE_TO
 DEV-406 scope hardening: adjustment list/detail and difference-disposal detail/confirmation now enforce the authenticated store or supplier scope before returning or mutating records. Company roles retain the existing company access paths.
 Statement detail scope hardening: unconfigured STORE, STORE_FINANCE, and SUPPLIER accounts are rejected before decoded statement IDs are queried.
 Controller regression coverage now verifies statement list narrowing and missing detail scopes for STORE, STORE_FINANCE, and SUPPLIER paths.
+DEV-403 AT-10 coverage now checks half-month 15/16 boundaries, Sunday/Monday weekly boundaries, year-end rollover, and leap-day month length.
 
 Current verified change: price-change runs now report FAILED when any child order fails; P02 revaluation refreshes purchase-request funding summaries; purchase confirmation recalculates funding from current item amounts and current account balance before splitting. Payment preview blocks unresolved positive shortfalls and company-term supplier payments whose store receivables are not confirmed paid. Price changes do not mutate balances or ledgers.
 

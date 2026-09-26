@@ -184,6 +184,8 @@
 
 # 2026-09-27
 
+- Added DEV-403 AT-10 boundary coverage for half-month 15/16, Sunday/Monday weekly rollover, year-end, and leap-day periods. Verification: `npm run build`, `npm test` (35), and `git diff --check` passed.
+
 - Closed the statement detail scope gap found during follow-up audit: unconfigured STORE/STORE_FINANCE/SUPPLIER accounts are rejected before decoded statement IDs are queried. Added Controller regression coverage for list narrowing and missing detail scopes. Verification: `npm run build`, `npm test` (34), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
 
 - Hardened DEV-402/403 statement reads: direct, store, supplier-total, and supplier-store list/detail endpoints now apply authenticated store or supplier scope, reject mismatched filters, and prevent cross-scope detail access. Company roles retain existing broad access.
