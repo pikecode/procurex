@@ -181,13 +181,29 @@ export class AdjustmentsService {
       include: { orderItem: { include: { product: true, supplierOrder: { include: { supplier: true, shipments: true, request: { select: { submittedAt: true } } } } } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-    const filtered = rows.filter((row) => {
+    const settlementItemIds = rows.flatMap((row) => {
+      const order = row.orderItem.supplierOrder;
+      const kind = order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE';
+      return [encodeSettlementItemId(kind, order.id), encodeSettlementItemId(order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'SUPPLIER_PAYABLE', order.id)];
+    });
+    const snapshots = await this.database.client.settlementItemSnapshot?.findMany({
+      where: { settlementItemId: { in: settlementItemIds } },
+    }) ?? [];
+    const snapshotsById = new Map(snapshots.map((snapshot) => [snapshot.settlementItemId, snapshot]));
+    const filtered = rows.flatMap((row) => {
       const order = row.orderItem.supplierOrder;
       const cycle = normalizeCycle(order.settlementCycleSnapshot);
       const period = toPeriod(cycle, row.createdAt);
-      return (!input.cycle || input.cycle === cycle) && (!input.periodStart || input.periodStart === period.periodStart) &&
-        (!input.periodEndExclusive || input.periodEndExclusive === period.periodEndExclusive) &&
-        (!input.processingStatus || input.processingStatus === 'PENDING_DISPOSAL');
+      if ((input.cycle && input.cycle !== cycle) || (input.periodStart && input.periodStart !== period.periodStart) ||
+        (input.periodEndExclusive && input.periodEndExclusive !== period.periodEndExclusive) ||
+        (input.processingStatus && input.processingStatus !== 'PENDING_DISPOSAL')) return [];
+      const storeKind = order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE';
+      const storeSnapshot = snapshotsById.get(encodeSettlementItemId(storeKind, order.id));
+      const supplierKind = order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'SUPPLIER_PAYABLE';
+      const supplierSnapshot = snapshotsById.get(encodeSettlementItemId(supplierKind, order.id));
+      const salesDelta = storeSnapshot && row.createdAt > storeSnapshot.createdAt ? row.salesDelta : new Decimal(0);
+      const supplyDelta = supplierSnapshot && row.createdAt > supplierSnapshot.createdAt ? row.supplyDelta : new Decimal(0);
+      return salesDelta.isZero() && supplyDelta.isZero() ? [] : [{ ...row, salesDelta, supplyDelta }];
     }) as PriceWithRelations[];
     const net = new Map<string, PriceWithRelations>();
     for (const row of filtered) {
@@ -202,6 +218,10 @@ export class AdjustmentsService {
     }
     return [...net.values()];
   }
+}
+
+function encodeSettlementItemId(kind: 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT', supplierOrderId: string): string {
+  return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
 }
 
 function toPriceSummaryViews(row: PriceWithRelations): AdjustmentSummaryView[] {
