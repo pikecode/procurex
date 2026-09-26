@@ -80,8 +80,8 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | Package | Current assessment against plan | Closure evidence still needed |
 |---|---|---|
 | DEV-401 | P01-P03 backend is substantially implemented | AT-08 now serializes revaluation with final receipt and AT-09 ordering is verified; close the planned W06/S10 workflow, then mark package complete |
-| DEV-402 | B01-B04, amount and period logic exist; AT-16 price guard added | Prove all settlement modes and direct-term statement/payment consistency with integrated evidence |
-| DEV-403 | Statement read paths, total/store sum, and immediate per-order grouping are tested | Prove replenishment keeps original period; required W09/S05/S08 flows remain part of acceptance |
+| DEV-402 | B01-B04, amount and period logic exist; AT-16 price guard added | Direct-term payment direction and amount mapping are covered; finish all settlement-mode acceptance evidence |
+| DEV-403 | Statement read paths, total/store sum, immediate per-order grouping, and replenishment period are tested | Required W09/S05/S08 flow evidence remains before closure |
 | DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Receiver-role authorization and AT-13 duplicate-entry concurrency are verified; close direct-term direction mapping and remaining evidence/role flows |
 | DEV-405 | Clearing transaction logic and A04-A06 read/write paths exist | A06 now enforces store scope on clearing detail; verify AT-24 ledger/history recovery evidence and planned W08 workflow |
 | DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Receiver confirmation scope and AT-14 offline return are verified; finish reconciliation consistency before closure |
@@ -104,7 +104,7 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count: 28 integration tests passing; unit coverage is 31 tests.
+Current integration coverage count: 28 integration tests passing; unit coverage is 33 tests.
 
 DEV-404 acceptance slice: the payment integration now registers the same supplier payable concurrently with two different idempotency keys and verifies exactly one reservation succeeds while the other conflicts; replaying the winning key returns the original payment.
 
@@ -113,6 +113,8 @@ DEV-405 acceptance slice: clearing preview/create/detail integration covers the 
 DEV-406 acceptance slice: the integration now creates a negative adjustment with no follow-up order, disposes it through `OFFLINE_RETURN` without a target debit, and confirms it through the receiver role; AT-14 is covered end to end.
 
 DEV-401 concurrency slice: price-run processing now locks each supplier order before reading completion status, so a receipt that commits first is skipped and a revaluation that acquires the lock first is applied before completion.
+
+DEV-402/403 evidence slice: direct-term settlement previews resolve to `STORE_TO_SUPPLIER` with the DIRECT channel and include freight; replenishment shipments remain in the supplier order's first-shipment half-month period.
 
 DEV-406 scope hardening: adjustment list/detail and difference-disposal detail/confirmation now enforce the authenticated store or supplier scope before returning or mutating records. Company roles retain the existing company access paths.
 

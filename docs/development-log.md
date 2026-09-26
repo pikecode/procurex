@@ -190,6 +190,9 @@
 - Added AT-13 integration evidence for DEV-404: two different idempotency keys concurrently register the same supplier payable, exactly one reserves it, the other receives a conflict, and the winning request replays the same payment.
 - Verification: `npm run build` and `npm run test:integration` (28) passed.
 
+- Added regression coverage for DEV-402/403: direct supplier-term payment previews use `STORE_TO_SUPPLIER` and the DIRECT channel with freight included; replenishment shipments remain in the original first-shipment settlement period.
+- Verification: `npm run build`, `npm test` (33), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
+
 - Hardened DEV-401 AT-08 ordering: price-run processing takes a row lock on each supplier order before checking completion and applying the new price, preventing a final receipt from racing with a stale completion check.
 - Verification: `npm run build` and `npm run test:integration` (28) passed.
 

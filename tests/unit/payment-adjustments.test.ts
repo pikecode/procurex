@@ -90,3 +90,26 @@ test('payment preview combines an ordinary item and a same-direction adjustment'
   assert.equal(preview.totalPayableAmount, '120.00');
   assert.equal(preview.items.length, 2);
 });
+
+test('direct-term settlement previews as store-to-supplier direct payment', async () => {
+  const itemId = Buffer.from(JSON.stringify({ kind: 'DIRECT', supplierOrderId: 'order-1' })).toString('base64url');
+  const service = new PaymentRecordsService({
+    client: {
+      supplierOrder: { findMany: async () => [{
+        id: 'order-1', supplierOrderNo: 'SO-1', storeId: 'store-1', supplierId: 'supplier-1', version: 2,
+        status: 'COMPLETED', firstShippedAt: new Date('2026-09-10T00:00:00.000Z'), settlementMode: 'SUPPLIER_TERM',
+        salesGoodsAmount: '100.00', supplyGoodsAmount: '100.00', shipments: [{ freight: '5.00' }], request: { shortfallAmount: '0.00' },
+      }] },
+      settlementItemSnapshot: { findMany: async () => [] },
+      adjustmentDocument: { findMany: async () => [] },
+      paymentAllocation: { findMany: async () => [] },
+      differenceDisposalItem: { findMany: async () => [] },
+    },
+  } as any);
+  const preview = await service.preview([itemId]);
+  assert.equal(preview.direction, 'STORE_TO_SUPPLIER');
+  assert.equal(preview.channel, 'DIRECT');
+  assert.equal(preview.storeId, 'store-1');
+  assert.equal(preview.supplierId, 'supplier-1');
+  assert.equal(preview.totalPayableAmount, '105.00');
+});

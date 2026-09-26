@@ -63,6 +63,26 @@ test('supplier statements use the order cycle snapshot after supplier settings c
   assert.equal(statement?.cycle, 'MONTHLY');
 });
 
+test('replenishment shipments stay in the order first-shipment period', async () => {
+  const service = new SupplierStatementsService({
+    client: {
+      supplierOrder: { findMany: async () => [{
+        id: 'order-1', supplierOrderNo: 'SO-1', storeId: 'store-1', supplierId: 'supplier-1', version: 2,
+        supplyGoodsAmount: '80.00', firstShippedAt: new Date('2026-09-16T00:00:00.000Z'),
+        settlementCycleSnapshot: 'HALF_MONTHLY', supplier: { defaultSettlementCycle: 'WEEKLY' },
+        shipments: [
+          { freight: '2.00', shippedAt: new Date('2026-09-16T00:00:00.000Z') },
+          { freight: '3.00', shippedAt: new Date('2026-09-30T00:00:00.000Z') },
+        ], priceChangeRuns: [],
+      }] },
+    },
+  } as any);
+  const [statement] = await service.list({ supplierId: 'supplier-1' });
+  assert.equal(statement?.periodStart, '2026-09-16');
+  assert.equal(statement?.periodEndExclusive, '2026-10-01');
+  assert.equal(statement?.freightAmount, '5.00');
+});
+
 test('statement status becomes settled only after confirmed allocations cover the amount', async () => {
   const settlementItemId = Buffer.from(JSON.stringify({ kind: 'DIRECT', supplierOrderId: 'order-1' })).toString('base64url');
   const service = new DirectStatementsService({
