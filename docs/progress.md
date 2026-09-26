@@ -11,12 +11,16 @@ Latest completed implementation: B01-B04 statement summaries now include payment
 Latest committed implementation:
 
 ```text
+083fa70 Net repeated price adjustments
+e1140c4 Allow overpayments in difference disposal
+070a1f3 Persist payment overpayments
 cb076db Unify price changes in adjustment reads
-Latest committed implementation after this stage: B12 accepts both discrepancy-return and overpayment credit sources for offset or offline disposal.
 8114349 Link statement totals to payment allocations
 da7a0bc Make settlement state transitions atomic
 3a4f1c0 Enforce payment account scopes
 ```
+
+Latest committed implementation: B05 returns net price adjustments per order line, while B12 accepts both discrepancy-return and overpayment credit sources for offset or offline disposal.
 
 ```text
 b81a722 Serialize settlement offset reservations
@@ -41,7 +45,7 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Recommended next step: continue DEV-406 with persisted adjustment documents and net-difference deduplication. B05 now unifies F05 return adjustments and P02 price-change adjustments, B08 records excess confirmed payment after a price decrease, and B12 can consume either credit source. Do not expand M5 until these M4 gates have business evidence.
+Recommended next step: continue DEV-406 with persisted adjustment documents and frozen settled-statement revisions. B05 now unifies F05 return adjustments and nets repeated P02 price changes per order line, B08 records excess confirmed payment after a price decrease, and B12 can consume either credit source. Do not expand M5 until these M4 gates have business evidence.
 
 DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. B12 confirmation-role acceptance and broader concurrency evidence remain to be reviewed; M4 is still incomplete.
 

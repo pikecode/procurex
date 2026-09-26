@@ -181,7 +181,7 @@ export class AdjustmentsService {
       include: { orderItem: { include: { product: true, supplierOrder: { include: { supplier: true, shipments: true, request: { select: { submittedAt: true } } } } } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-    return rows.filter((row) => {
+    const filtered = rows.filter((row) => {
       const order = row.orderItem.supplierOrder;
       const cycle = normalizeCycle(order.settlementCycleSnapshot);
       const period = toPeriod(cycle, row.createdAt);
@@ -189,6 +189,18 @@ export class AdjustmentsService {
         (!input.periodEndExclusive || input.periodEndExclusive === period.periodEndExclusive) &&
         (!input.processingStatus || input.processingStatus === 'PENDING_DISPOSAL');
     }) as PriceWithRelations[];
+    const net = new Map<string, PriceWithRelations>();
+    for (const row of filtered) {
+      const current = net.get(row.orderItemId);
+      if (!current) {
+        net.set(row.orderItemId, row);
+        continue;
+      }
+      current.salesDelta = current.salesDelta.plus(row.salesDelta);
+      current.supplyDelta = current.supplyDelta.plus(row.supplyDelta);
+      if (row.createdAt > current.createdAt) current.createdAt = row.createdAt;
+    }
+    return [...net.values()];
   }
 }
 
