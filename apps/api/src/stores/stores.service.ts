@@ -454,8 +454,13 @@ export class StoresService {
             sourceVersion: item.version,
           },
         });
-        await tx.fundingAllocation.update({
-          where: { id: item.fundingAllocationId },
+        const allocationUpdated = await tx.fundingAllocation.updateMany({
+          where: {
+            id: item.fundingAllocationId,
+            version: item.version,
+            active: true,
+            creditOutstanding: { gte: item.clearableAmount },
+          },
           data: {
             netPaid: { increment: item.clearableAmount },
             creditOutstanding: { decrement: item.clearableAmount },
@@ -463,15 +468,26 @@ export class StoresService {
             version: { increment: 1 },
           },
         });
+        if (allocationUpdated.count !== 1) {
+          throw new ConflictException({
+            code: 'CLEARING_AMOUNT_CHANGED',
+            message: 'Funding allocation clearable amount has changed',
+            details: { fundingAllocationId: item.fundingAllocationId },
+          });
+        }
       }
 
-      const updatedAccount = await tx.storeAccount.update({
-        where: { id: account.id },
+      const accountUpdated = await tx.storeAccount.updateMany({
+        where: { id: account.id, version: account.version, creditUsed: { gte: totalAmount.toFixed(2) } },
         data: {
           creditUsed: { decrement: totalAmount.toFixed(2) },
           version: { increment: 1 },
         },
       });
+      if (accountUpdated.count !== 1) {
+        throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Store account changed during clearing' });
+      }
+      const updatedAccount = await tx.storeAccount.findUniqueOrThrow({ where: { id: account.id } });
 
       await tx.accountLedger.create({
         data: {
