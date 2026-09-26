@@ -189,3 +189,6 @@
 
 - Added AT-13 integration evidence for DEV-404: two different idempotency keys concurrently register the same supplier payable, exactly one reserves it, the other receives a conflict, and the winning request replays the same payment.
 - Verification: `npm run build` and `npm run test:integration` (28) passed.
+
+- Hardened DEV-405 A06 clearing detail access: STORE and STORE_FINANCE roles can read only their bound store's clearing documents; company roles retain full access. Added a cross-store unit regression test.
+- Verification: `npm run build`, `npm test` (31), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.

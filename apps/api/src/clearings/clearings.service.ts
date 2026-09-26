@@ -36,12 +36,12 @@ export type ClearingItemDetailView = {
 export class ClearingsService {
   constructor(private readonly database: DatabaseService) {}
 
-  async get(id: string): Promise<ClearingDocumentDetailView> {
+  async get(id: string, scope?: { type?: string; storeId?: string }): Promise<ClearingDocumentDetailView> {
     const clearing = await this.database.client.clearingDocument.findUnique({
       where: { id },
       include: { items: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!clearing) {
+    if (!clearing || (scope?.type === 'STORE' && clearing.storeId !== scope.storeId)) {
       throw new NotFoundException({
         code: 'CLEARING_NOT_FOUND',
         message: 'Clearing document was not found',
