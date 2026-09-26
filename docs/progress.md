@@ -11,7 +11,8 @@ Latest completed implementation: B01-B04 statement summaries now include payment
 Latest committed implementation:
 
 ```text
-feaca76 Unify price changes in adjustment reads
+cb076db Unify price changes in adjustment reads
+Current uncommitted implementation: DEV-406 overpayment persistence on payment confirmation.
 8114349 Link statement totals to payment allocations
 da7a0bc Make settlement state transitions atomic
 3a4f1c0 Enforce payment account scopes
@@ -40,7 +41,7 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Recommended next step: continue DEV-406 with persisted net adjustment and overpayment paths. B05 now unifies F05 return adjustments and P02 price-change adjustments; next close the real multi-payment credit and adjustment disposal loop. Do not expand M5 until these M4 gates have business evidence.
+Recommended next step: continue DEV-406 by allowing B12 difference disposal to consume persisted `Overpayment` credit items. B05 now unifies F05 return adjustments and P02 price-change adjustments, and B08 records excess confirmed payment after a price decrease. Do not expand M5 until these M4 gates have business evidence.
 
 DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. B12 confirmation-role acceptance and broader concurrency evidence remain to be reviewed; M4 is still incomplete.
 
@@ -319,6 +320,7 @@ Current B08 behavior:
 - Marks the payment record CONFIRMED and increments its version.
 - Converts RESERVED allocations to CONFIRMED.
 - Later payment previews show confirmed paid amounts and no remaining payable amount for confirmed items.
+- If the payable amount decreases after registration but before confirmation, B08 preserves the registered payment and persists the excess as an `Overpayment`; the response exposes its amount and source rows.
 - Uses Idempotency-Key through command records.
 
 Current B09 behavior:

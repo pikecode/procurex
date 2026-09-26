@@ -7,7 +7,7 @@ import {
   SupplierOrderStatus,
   DifferenceDisposalStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import { Prisma, type DifferenceDisposalItem, type PaymentAllocation, type PaymentRecord, type Shipment, type SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import { Prisma, type DifferenceDisposalItem, type Overpayment, type PaymentAllocation, type PaymentRecord, type Shipment, type SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type PaymentDirection = 'STORE_TO_COMPANY' | 'COMPANY_TO_SUPPLIER';
@@ -64,6 +64,17 @@ export type PaymentRecordView = {
   version: number;
   createdAt: string;
   allocations: PaymentAllocationView[];
+  overpaymentAmount: string;
+  overpayments: OverpaymentView[];
+};
+
+export type OverpaymentView = {
+  id: string;
+  storeId: string;
+  supplierId: string;
+  amount: string;
+  sourceRevision: number;
+  createdAt: string;
 };
 
 export type PaymentAllocationView = {
@@ -120,7 +131,7 @@ export class PaymentRecordsService {
         storeId: scope?.type === 'STORE' ? scope.storeId : input.storeId,
         supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : input.supplierId,
       },
-      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+      include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
 
@@ -130,7 +141,7 @@ export class PaymentRecordsService {
   async get(id: string, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
-      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+      include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } } },
     });
     if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
@@ -400,6 +411,28 @@ export class PaymentRecordsService {
       const orderIds = [...new Set(result.allocations.map((allocation) => allocation.supplierOrderId))];
       const orders = await tx.supplierOrder.findMany({ where: { id: { in: orderIds } }, include: { shipments: true } });
       const ordersById = new Map(orders.map((order) => [order.id, order]));
+      const overpayments = new Map<string, { paymentId: string; storeId: string; supplierId: string; amount: Decimal; sourceRevision: number }>();
+      for (const allocation of result.allocations) {
+        const order = ordersById.get(allocation.supplierOrderId)!;
+        const kind = decodeSettlementItemId(allocation.settlementItemId).kind;
+        const goodsAmount = kind !== 'SUPPLIER_PAYABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount);
+        const currentAmount = goodsAmount.plus(order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0)));
+        const excess = new Decimal(allocation.amount).minus(currentAmount);
+        if (excess.gt(0)) {
+          const key = `${order.storeId}:${order.supplierId}:${allocation.sourceVersion}`;
+          const current = overpayments.get(key);
+          overpayments.set(key, current ? { ...current, amount: current.amount.plus(excess) } : {
+            paymentId: id,
+            storeId: order.storeId,
+            supplierId: order.supplierId,
+            amount: excess,
+            sourceRevision: allocation.sourceVersion,
+          });
+        }
+      }
+      if (overpayments.size > 0) {
+        await tx.overpayment.createMany({ data: [...overpayments.values()].map((item) => ({ ...item, amount: item.amount.toFixed(2) })) });
+      }
       await tx.settlementItemSnapshot.createMany({
         data: result.allocations.map((allocation) => {
           const order = ordersById.get(allocation.supplierOrderId)!;
@@ -418,7 +451,7 @@ export class PaymentRecordsService {
         }),
         skipDuplicates: true,
       });
-      return result;
+      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } } } });
     });
 
     return toPaymentRecordView(confirmed);
@@ -427,7 +460,7 @@ export class PaymentRecordsService {
   async reject(id: string, expectedVersion: number, reason: string, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
-      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+      include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } } },
     });
     if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
@@ -609,7 +642,8 @@ function encodeSettlementItemId(kind: SettlementItemKind, supplierOrderId: strin
   return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
 }
 
-function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllocation[] }): PaymentRecordView {
+function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllocation[]; overpayments?: Overpayment[] }): PaymentRecordView {
+  const overpayments = payment.overpayments ?? [];
   return {
     id: payment.id,
     paymentNo: payment.paymentNo,
@@ -626,6 +660,15 @@ function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllo
     version: payment.version,
     createdAt: payment.createdAt.toISOString(),
     allocations: payment.allocations.map(toPaymentAllocationView),
+    overpaymentAmount: overpayments.reduce((sum, item) => sum.plus(item.amount), new Decimal(0)).toFixed(2),
+    overpayments: overpayments.map((item) => ({
+      id: item.id,
+      storeId: item.storeId,
+      supplierId: item.supplierId,
+      amount: item.amount.toFixed(2),
+      sourceRevision: item.sourceRevision,
+      createdAt: item.createdAt.toISOString(),
+    })),
   };
 }
 

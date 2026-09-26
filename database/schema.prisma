@@ -323,6 +323,7 @@ model Store {
   rechargeDocuments RechargeDocument[]
   clearingDocuments ClearingDocument[]
   userScopes        UserScope[]
+  overpayments      Overpayment[]
 }
 
 model Supplier {
@@ -344,6 +345,7 @@ model Supplier {
   requestItems             RequestItem[]
   supplierOrders           SupplierOrder[]
   userScopes               UserScope[]
+  overpayments             Overpayment[]
 }
 
 model Category {
@@ -936,10 +938,27 @@ model PaymentRecord {
   createdAt       DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime               @updatedAt @db.Timestamptz(6)
   allocations     PaymentAllocation[]
+  overpayments    Overpayment[]
 
   @@index([direction, status, businessDate])
   @@index([storeId, status])
   @@index([supplierId, status])
+}
+
+model Overpayment {
+  id             String        @id @default(uuid()) @db.Uuid
+  paymentId      String        @db.Uuid
+  storeId        String        @db.Uuid
+  supplierId     String        @db.Uuid
+  amount         Decimal       @db.Decimal(20, 2)
+  sourceRevision Int
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  payment        PaymentRecord @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  store          Store         @relation(fields: [storeId], references: [id])
+  supplier       Supplier      @relation(fields: [supplierId], references: [id])
+
+  @@unique([paymentId, storeId, supplierId, sourceRevision])
+  @@index([storeId, supplierId, createdAt])
 }
 
 model PaymentAllocation {
