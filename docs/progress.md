@@ -11,6 +11,11 @@ Latest completed implementation: DEV-406 pending adjustment offsets reserve supp
 Latest committed implementation before the current work:
 
 ```text
+b81a722 Serialize settlement offset reservations
+e2cc71e Reserve pending offsets from payable balance
+```
+
+```text
 7365e9d Add persisted report exports
 ea129f6 Build initial W11 reporting screen
 062e65a Enable direct supplier payments
