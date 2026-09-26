@@ -7,7 +7,7 @@ import {
   PaymentAllocationState,
   SupplierOrderStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { DifferenceDisposal, DifferenceDisposalItem, PaymentAllocation, Shipment, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import { Prisma, type DifferenceDisposal, type DifferenceDisposalItem, type PaymentAllocation, type Shipment, type SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type CreateDifferenceDisposalInput = {
@@ -90,7 +90,12 @@ export class DifferenceDisposalsService {
       });
     }
 
-    const returns = await this.database.client.discrepancyReturn.findMany({
+    return this.database.client.$transaction(async (tx) => {
+      for (const id of [...input.creditItemIds, ...(input.targetDebitItemIds ?? [])].sort()) {
+        await waitForSettlementLock(tx, id);
+      }
+
+    const returns = await tx.discrepancyReturn.findMany({
       where: { id: { in: input.creditItemIds } },
       include: { orderItem: { include: { supplierOrder: true } }, differenceDisposalItems: true },
     });
@@ -105,7 +110,7 @@ export class DifferenceDisposalsService {
     const supplierId = returns[0]!.orderItem.supplierOrder.supplierId;
     const targetDebitItemIds = input.method === DifferenceDisposalMethod.OFFSET ? input.targetDebitItemIds! : [];
     const targetAvailability =
-      input.method === DifferenceDisposalMethod.OFFSET ? await this.loadTargetAvailability(targetDebitItemIds, supplierId) : new Map<string, Decimal>();
+      input.method === DifferenceDisposalMethod.OFFSET ? await this.loadTargetAvailability(targetDebitItemIds, supplierId, tx) : new Map<string, Decimal>();
     const items = returns.map((returnRecord) => {
       if (returnRecord.differenceDisposalItems.length > 0) {
         throw new ConflictException({
@@ -154,7 +159,7 @@ export class DifferenceDisposalsService {
       });
     }
 
-    const disposal = await this.database.client.differenceDisposal.create({
+    const disposal = await tx.differenceDisposal.create({
       data: {
         disposalNo: makeDisposalNo(),
         direction: DifferenceDisposalDirection.SUPPLIER_TO_COMPANY,
@@ -177,9 +182,10 @@ export class DifferenceDisposalsService {
     });
 
     return toDifferenceDisposalView(disposal);
+    });
   }
 
-  private async loadTargetAvailability(targetDebitItemIds: string[], supplierId: string): Promise<Map<string, Decimal>> {
+  private async loadTargetAvailability(targetDebitItemIds: string[], supplierId: string, client: DatabaseService['client'] | Prisma.TransactionClient = this.database.client): Promise<Map<string, Decimal>> {
     if (new Set(targetDebitItemIds).size !== targetDebitItemIds.length) {
       throw new ConflictException({
         code: 'TARGET_DEBIT_DUPLICATED',
@@ -197,19 +203,19 @@ export class DifferenceDisposalsService {
       }
     }
 
-    const orders = await this.database.client.supplierOrder.findMany({
+    const orders = await client.supplierOrder.findMany({
       where: { id: { in: decoded.map((item) => item.decoded.supplierOrderId) } },
       include: { shipments: true },
     });
     const ordersById = new Map(orders.map((order) => [order.id, order]));
-    const allocations = await this.database.client.paymentAllocation.findMany({
+    const allocations = await client.paymentAllocation.findMany({
       where: {
         settlementItemId: { in: targetDebitItemIds },
         state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] },
       },
     });
     const usedByPayments = summarizeAllocations(allocations);
-    const disposalItems = await this.database.client.differenceDisposalItem.findMany({
+    const disposalItems = await client.differenceDisposalItem.findMany({
       where: {
         targetDebitItemId: { in: targetDebitItemIds },
         disposal: { status: { in: [DifferenceDisposalStatus.PENDING, DifferenceDisposalStatus.CONFIRMED] } },
@@ -283,6 +289,14 @@ export class DifferenceDisposalsService {
     });
 
     return toDifferenceDisposalView(confirmed);
+  }
+}
+
+async function waitForSettlementLock(tx: Prisma.TransactionClient, id: string): Promise<void> {
+  for (;;) {
+    const rows = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(hashtextextended(${id}::text, 0)) AS locked`;
+    if (rows[0]?.locked) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
 

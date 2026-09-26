@@ -7,7 +7,7 @@ import {
   SupplierOrderStatus,
   DifferenceDisposalStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { DifferenceDisposalItem, PaymentAllocation, PaymentRecord, Shipment, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import { Prisma, type DifferenceDisposalItem, type PaymentAllocation, type PaymentRecord, type Shipment, type SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 
 export type PaymentDirection = 'STORE_TO_COMPANY' | 'COMPANY_TO_SUPPLIER';
@@ -134,15 +134,15 @@ export class PaymentRecordsService {
     return toPaymentRecordView(payment);
   }
 
-  async preview(settlementItemIds: string[]): Promise<PaymentPreviewView> {
+  async preview(settlementItemIds: string[], client: DatabaseService['client'] | Prisma.TransactionClient = this.database.client): Promise<PaymentPreviewView> {
     const uniqueIds = [...new Set(settlementItemIds)];
     const decoded = uniqueIds.map((id) => ({ id, decoded: decodeSettlementItemId(id) }));
     const supplierOrderIds = decoded.map((item) => item.decoded.supplierOrderId);
-    const orders = await this.database.client.supplierOrder.findMany({
+    const orders = await client.supplierOrder.findMany({
       where: { id: { in: supplierOrderIds } },
       include: { shipments: true, request: { select: { shortfallAmount: true } } },
     });
-    const snapshots = await this.database.client.settlementItemSnapshot.findMany({
+    const snapshots = await client.settlementItemSnapshot.findMany({
       where: { settlementItemId: { in: uniqueIds } },
     });
     const snapshotsById = new Map(snapshots.map((snapshot) => [snapshot.settlementItemId, snapshot]));
@@ -153,14 +153,14 @@ export class PaymentRecordsService {
         ? [encodeSettlementItemId('STORE_RECEIVABLE', item.supplierOrderId)]
         : [];
     });
-    const allocations = await this.database.client.paymentAllocation.findMany({
+    const allocations = await client.paymentAllocation.findMany({
       where: {
         settlementItemId: { in: [...uniqueIds, ...storeReceivableIds] },
         state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] },
       },
     });
     const allocationSummary = summarizeAllocations(allocations);
-    const offsetItems = await this.database.client.differenceDisposalItem.findMany({
+    const offsetItems = await client.differenceDisposalItem.findMany({
       where: {
         targetDebitItemId: { in: uniqueIds },
         disposal: { status: { in: [DifferenceDisposalStatus.PENDING, DifferenceDisposalStatus.CONFIRMED] } },
@@ -267,7 +267,12 @@ export class PaymentRecordsService {
   }
 
   async create(input: CreatePaymentRecordInput): Promise<PaymentRecordView> {
-    const preview = await this.preview(input.items.map((item) => item.settlementItemId));
+    return this.database.client.$transaction(async (tx) => {
+    const settlementItemIds = input.items.map((item) => item.settlementItemId);
+    for (const id of [...settlementItemIds].sort()) {
+      await waitForSettlementLock(tx, id);
+    }
+    const preview = await this.preview(settlementItemIds, tx);
     if (preview.blockedItems.length > 0) {
       throw new ConflictException({
         code: 'PAYMENT_PREVIEW_BLOCKED',
@@ -314,7 +319,7 @@ export class PaymentRecordsService {
     }
 
     const amount = input.items.reduce((sum, item) => sum.plus(item.expectedAmount), new Decimal(0));
-    const payment = await this.database.client.paymentRecord.create({
+    const payment = await tx.paymentRecord.create({
       data: {
         paymentNo: makePaymentNo(),
         direction: input.direction,
@@ -339,6 +344,7 @@ export class PaymentRecordsService {
     });
 
     return toPaymentRecordView(payment);
+    });
   }
 
   async confirm(id: string, expectedVersion: number): Promise<PaymentRecordView> {
@@ -500,6 +506,14 @@ export class PaymentRecordsService {
     });
 
     return toPaymentRecordView(cancelled);
+  }
+}
+
+async function waitForSettlementLock(tx: Prisma.TransactionClient, id: string): Promise<void> {
+  for (;;) {
+    const rows = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(hashtextextended(${id}::text, 0)) AS locked`;
+    if (rows[0]?.locked) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
 
