@@ -54,3 +54,14 @@ test('sequential side settlement keeps the pre-change side adjustment only', asy
   assert.equal(adjustments[0]?.direction, 'STORE_RECEIVABLE_INCREASE');
   assert.equal(adjustments[0]?.adjustmentAmount, '20.00');
 });
+
+test('B05 reads persisted adjustment documents when available', async () => {
+  const service = createService({});
+  (service as any).database.client.adjustmentDocument = {
+    findMany: async () => [{ sourcePriceChangeId: 'change-1', side: 'SUPPLIER', amount: new Decimal(10), createdAt: changedAt }],
+  };
+  const adjustments = await service.list({});
+  assert.equal(adjustments.length, 1);
+  assert.equal(adjustments[0]?.direction, 'SUPPLIER_PAYABLE_INCREASE');
+  assert.equal(adjustments[0]?.adjustmentAmount, '10.00');
+});

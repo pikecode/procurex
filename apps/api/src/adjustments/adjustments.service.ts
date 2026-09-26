@@ -181,6 +181,16 @@ export class AdjustmentsService {
       include: { orderItem: { include: { product: true, supplierOrder: { include: { supplier: true, shipments: true, request: { select: { submittedAt: true } } } } } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
+    const documents = await this.database.client.adjustmentDocument?.findMany({
+      where: { sourcePriceChangeId: { in: rows.map((row) => row.id) } },
+      orderBy: { createdAt: 'desc' },
+    }) ?? [];
+    const documentsBySource = new Map<string, typeof documents>();
+    for (const document of documents) {
+      const list = documentsBySource.get(document.sourcePriceChangeId) ?? [];
+      list.push(document);
+      documentsBySource.set(document.sourcePriceChangeId, list);
+    }
     const settlementItemIds = rows.flatMap((row) => {
       const order = row.orderItem.supplierOrder;
       const kind = order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE';
@@ -197,6 +207,12 @@ export class AdjustmentsService {
       if ((input.cycle && input.cycle !== cycle) || (input.periodStart && input.periodStart !== period.periodStart) ||
         (input.periodEndExclusive && input.periodEndExclusive !== period.periodEndExclusive) ||
         (input.processingStatus && input.processingStatus !== 'PENDING_DISPOSAL')) return [];
+      const persisted = documentsBySource.get(row.id);
+      if (persisted?.length) {
+        const salesDelta = persisted.find((document) => document.side === 'STORE')?.amount ?? new Decimal(0);
+        const supplyDelta = persisted.find((document) => document.side === 'SUPPLIER')?.amount ?? new Decimal(0);
+        return salesDelta.isZero() && supplyDelta.isZero() ? [] : [{ ...row, salesDelta, supplyDelta }];
+      }
       const storeKind = order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE';
       const storeSnapshot = snapshotsById.get(encodeSettlementItemId(storeKind, order.id));
       const supplierKind = order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'SUPPLIER_PAYABLE';
