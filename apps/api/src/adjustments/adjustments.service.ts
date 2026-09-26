@@ -99,6 +99,7 @@ type PriceWithRelations = {
   salesDelta: Decimal;
   supplyDelta: Decimal;
   createdAt: Date;
+  disposalBySide?: Partial<Record<'STORE' | 'SUPPLIER', AdjustmentDisposalView>>;
   orderItem: OrderItem & { product: Product; supplierOrder: SupplierOrder & { supplier: Supplier; shipments: Shipment[]; request: { submittedAt: Date } } };
 };
 
@@ -108,7 +109,9 @@ export class AdjustmentsService {
 
   async list(input: ListAdjustmentsInput): Promise<AdjustmentSummaryView[]> {
     const [returns, prices] = await Promise.all([this.loadRows(input), this.loadPriceRows(input)]);
-    return [...returns.map(toSummaryView), ...prices.flatMap(toPriceSummaryViews)].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return [...returns.map(toSummaryView), ...prices.flatMap(toPriceSummaryViews)]
+      .filter((view) => !input.processingStatus || view.processingStatus === input.processingStatus)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async get(id: string, scope?: { type?: string; storeId?: string; supplierId?: string }): Promise<AdjustmentDetailView> {
@@ -120,7 +123,7 @@ export class AdjustmentsService {
     const price = prices.find((item) => toPriceSummaryViews(item).some((view) => view.id === id));
     if (price) {
       const view = toPriceSummaryViews(price).find((item) => item.id === id)!;
-      return { ...view, lines: [toPriceLine(price, view.direction)], disposal: null };
+      return { ...view, lines: [toPriceLine(price, view.direction)], disposal: price.disposalBySide?.[view.direction.startsWith('STORE_') ? 'STORE' : 'SUPPLIER'] ?? null };
     }
     throw new NotFoundException({
       code: 'ADJUSTMENT_NOT_FOUND',
@@ -183,6 +186,7 @@ export class AdjustmentsService {
     });
     const documents = await this.database.client.adjustmentDocument?.findMany({
       where: { sourcePriceChangeId: { in: rows.map((row) => row.id) } },
+      include: { disposalItems: { include: { disposal: true } } },
       orderBy: { createdAt: 'desc' },
     }) ?? [];
     const documentsBySource = new Map<string, typeof documents>();
@@ -205,13 +209,22 @@ export class AdjustmentsService {
       const cycle = normalizeCycle(order.settlementCycleSnapshot);
       const period = toPeriod(cycle, row.createdAt);
       if ((input.cycle && input.cycle !== cycle) || (input.periodStart && input.periodStart !== period.periodStart) ||
-        (input.periodEndExclusive && input.periodEndExclusive !== period.periodEndExclusive) ||
-        (input.processingStatus && input.processingStatus !== 'PENDING_DISPOSAL')) return [];
+        (input.periodEndExclusive && input.periodEndExclusive !== period.periodEndExclusive)) return [];
       const persisted = documentsBySource.get(row.id);
       if (persisted?.length) {
         const salesDelta = persisted.find((document) => document.side === 'STORE')?.amount ?? new Decimal(0);
         const supplyDelta = persisted.find((document) => document.side === 'SUPPLIER')?.amount ?? new Decimal(0);
-        return salesDelta.isZero() && supplyDelta.isZero() ? [] : [{ ...row, salesDelta, supplyDelta }];
+        const disposalBySide = Object.fromEntries(persisted.flatMap((document) => {
+          const disposal = document.disposalItems?.[0]?.disposal;
+          return disposal ? [[document.side, {
+            disposalId: disposal.id,
+            disposalNo: disposal.disposalNo,
+            status: disposal.status,
+            amount: document.disposalItems?.[0]!.amount.toFixed(2) ?? '0.00',
+            confirmedAt: disposal.confirmedAt?.toISOString() ?? null,
+          }]] : [];
+        })) as PriceWithRelations['disposalBySide'];
+        return salesDelta.isZero() && supplyDelta.isZero() ? [] : [{ ...row, salesDelta, supplyDelta, disposalBySide }];
       }
       const storeKind = order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE';
       const storeSnapshot = snapshotsById.get(encodeSettlementItemId(storeKind, order.id));
@@ -262,7 +275,7 @@ function toPriceSummary(row: PriceWithRelations, side: 'STORE' | 'SUPPLIER', del
     originalStatementId: encodeSupplierStatementId({ supplierId: order.supplierId, cycle, periodStart: originalPeriod.periodStart, periodEndExclusive: originalPeriod.periodEndExclusive }),
     originalPeriodKey: originalPeriod.periodKey, originalPeriodStart: originalPeriod.periodStart, originalPeriodEndExclusive: originalPeriod.periodEndExclusive,
     actualPeriodKey: actualPeriod.periodKey, periodStart: actualPeriod.periodStart, periodEndExclusive: actualPeriod.periodEndExclusive, cycle,
-    goodsAdjustmentAmount: delta.toFixed(2), freightAdjustmentAmount: '0.00', adjustmentAmount: delta.toFixed(2), confirmedPaidAmount: '0.00', pendingPaymentAmount: '0.00', payableAmount: delta.toFixed(2), pendingReturnOrOffsetAmount: '0.00', processingStatus: 'PENDING_DISPOSAL', sourceRevision: order.version, createdAt: row.createdAt.toISOString(),
+    goodsAdjustmentAmount: delta.toFixed(2), freightAdjustmentAmount: '0.00', adjustmentAmount: delta.toFixed(2), confirmedPaidAmount: '0.00', pendingPaymentAmount: '0.00', payableAmount: delta.toFixed(2), pendingReturnOrOffsetAmount: row.disposalBySide?.[side]?.status === DifferenceDisposalStatus.CONFIRMED ? '0.00' : delta.isNegative() ? delta.abs().toFixed(2) : '0.00', processingStatus: row.disposalBySide?.[side]?.status === DifferenceDisposalStatus.CONFIRMED ? 'DISPOSED' : 'PENDING_DISPOSAL', sourceRevision: order.version, createdAt: row.createdAt.toISOString(),
   };
 }
 
