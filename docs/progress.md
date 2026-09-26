@@ -10,6 +10,8 @@ Latest follow-up audit also closes two remaining store-scope reads: recharge det
 
 Purchase request O03 list/detail reads now also accept STORE_FINANCE and force the authenticated store scope; mismatched list filters are rejected and cross-store details resolve as not found.
 
+Supplier order F01 list/detail reads now force the authenticated SUPPLIER scope; mismatched supplier filters are rejected and cross-supplier details resolve as not found.
+
 Latest completed implementation: the four statement families, payment records, adjustments, difference disposals, and clearing details now enforce authenticated store scope for both STORE and STORE_FINANCE accounts; cross-scope IDs resolve as not found, while company roles retain broad access. B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
 Latest commits:
@@ -135,6 +137,8 @@ Current verified change: price-change runs now report FAILED when any child orde
 Latest verification: recharge detail and store catalog scope hardening passed build, 35 unit tests, 28 integration tests, contract check, and diff check.
 
 Purchase request scope hardening passed the same verification baseline.
+
+Supplier order F01 scope hardening passed the same verification baseline.
 
 DEV-501 R01-R03 backend slice is implemented. `completedAt` is persisted and written when fulfillment becomes complete; existing completed orders are backfilled by migration. R01 reports completed-order amounts by completion month, R02 final received quantities by completion date with a three-month limit, and R03 completed non-direct order profit by first shipment date with freight separate. Date filtering uses Asia/Shanghai day boundaries; completed order prices are frozen by P02's completed-order exclusion. Local migration, build, 10 unit tests, 26 integration tests, contract check, and diff check passed.
 

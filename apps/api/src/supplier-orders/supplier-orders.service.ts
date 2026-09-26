@@ -193,9 +193,9 @@ export class SupplierOrdersService {
     return orders.map(toSupplierOrderSummaryView);
   }
 
-  async get(id: string): Promise<SupplierOrderDetailView> {
+  async get(id: string, scope?: { type: string; supplierId?: string }): Promise<SupplierOrderDetailView> {
     const order = await this.database.client.supplierOrder.findUnique({
-      where: { id },
+      where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
       include: { items: { orderBy: { createdAt: 'asc' } } },
     });
     if (!order) {

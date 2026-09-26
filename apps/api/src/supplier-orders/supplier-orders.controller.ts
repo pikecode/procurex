@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -70,15 +70,24 @@ export class SupplierOrdersController {
 
   @Get()
   @RequireRoles('ADMIN', 'PURCHASER', 'SUPPLIER')
-  list(@Query() query: ListQuery): Promise<SupplierOrderSummaryView[]> {
-    return this.supplierOrdersService.list(parseListQuery(query));
+  list(@Req() request: AuthenticatedRequest, @Query() query: ListQuery): Promise<SupplierOrderSummaryView[]> {
+    const scope = supplierScope(request);
+    const input = parseListQuery(query);
+    if (scope) {
+      if (!scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
+      if (input.supplierId && input.supplierId !== scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Supplier orders are outside the current supplier scope' });
+      input.supplierId = scope.supplierId;
+    }
+    return this.supplierOrdersService.list(input);
   }
 
   @Get(':id')
   @RequireRoles('ADMIN', 'PURCHASER', 'SUPPLIER')
-  get(@Param('id') id: string): Promise<SupplierOrderDetailView> {
+  get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<SupplierOrderDetailView> {
     throwIfInvalid(validateUuid('id', id));
-    return this.supplierOrdersService.get(id);
+    const scope = supplierScope(request);
+    if (scope && !scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
+    return this.supplierOrdersService.get(id, scope);
   }
 
   @Post(':id/shipment-preview')
@@ -215,6 +224,11 @@ export class SupplierOrdersController {
 
     return result;
   }
+}
+
+function supplierScope(request: AuthenticatedRequest): { type: string; supplierId?: string } | undefined {
+  const scope = request.auth?.user.scope;
+  return scope?.type === 'SUPPLIER' ? scope : undefined;
 }
 
 function parseListQuery(query: ListQuery): ListSupplierOrdersInput {
