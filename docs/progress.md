@@ -84,7 +84,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | DEV-403 | Statement read paths, total/store sum, and immediate per-order grouping are tested | Prove replenishment keeps original period; required W09/S05/S08 flows remain part of acceptance |
 | DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Receiver-role authorization and AT-13 duplicate-entry concurrency are verified; close direct-term direction mapping and remaining evidence/role flows |
 | DEV-405 | Clearing transaction logic and A04-A06 read/write paths exist | A06 now enforces store scope on clearing detail; verify AT-24 ledger/history recovery evidence and planned W08 workflow |
-| DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Receiver confirmation scope is now enforced for STORE/SUPPLIER; finish offline return path (AT-14) and reconciliation consistency before closure |
+| DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Receiver confirmation scope and AT-14 offline return are verified; finish reconciliation consistency before closure |
 
 The next execution order is therefore to stop adding isolated B12 refinements and close acceptance packages explicitly: **DEV-401 → DEV-402 → DEV-403 → DEV-404 → DEV-405 → DEV-406**. For each package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure. This order replaces the earlier recommendation to keep iterating B12 alone.
 
@@ -109,6 +109,8 @@ Current integration coverage count: 28 integration tests passing; unit coverage 
 DEV-404 acceptance slice: the payment integration now registers the same supplier payable concurrently with two different idempotency keys and verifies exactly one reservation succeeds while the other conflicts; replaying the winning key returns the original payment.
 
 DEV-405 acceptance slice: clearing preview/create/detail integration covers the selected credit allocation, independent clearing document, account ledger, released credit, and idempotent replay; clearing detail now rejects a mismatched store scope.
+
+DEV-406 acceptance slice: the integration now creates a negative adjustment with no follow-up order, disposes it through `OFFLINE_RETURN` without a target debit, and confirms it through the receiver role; AT-14 is covered end to end.
 
 DEV-406 scope hardening: adjustment list/detail and difference-disposal detail/confirmation now enforce the authenticated store or supplier scope before returning or mutating records. Company roles retain the existing company access paths.
 

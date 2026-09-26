@@ -1877,6 +1877,46 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(adjustmentOffset.data.amount, '5.00');
     assert.equal(adjustmentOffset.data.items[0]?.adjustmentDocumentId, adjustmentCredit.id);
     assert.equal(adjustmentOffset.data.items[0]?.targetDebitItemId, adjustmentTargetId);
+    const offlineCredit = await prisma.adjustmentDocument.create({
+      data: {
+        sourcePriceChangeId: crypto.randomUUID(), supplierOrderId: supplierBOrderAfterReallocate.id,
+        storeId: store.id, supplierId: supplierB.id, side: 'SUPPLIER', amount: '-4.00',
+        originalPeriodKey: 'test:original', settlementPeriodKey: 'test:current', sourceRevision: 3,
+      },
+    });
+    const offlineReturnResponse = await fetch(`${baseUrl}/difference-disposals`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${financeToken}`, 'content-type': 'application/json',
+        'idempotency-key': 'offline-return-adjustment-once', 'x-trace-id': 'trace-offline-return-adjustment',
+      },
+      body: JSON.stringify({
+        method: 'OFFLINE_RETURN', creditItemIds: [offlineCredit.id], amount: '4.00',
+        businessDate: '2026-09-24', reason: 'Return negative adjustment without a follow-up order',
+      }),
+    });
+    assert.equal(offlineReturnResponse.status, 201);
+    const offlineReturn = (await offlineReturnResponse.json()) as {
+      data: { id: string; direction: string; method: string; status: string; amount: string; items: Array<{ adjustmentDocumentId: string; targetDebitItemId: string | null }> };
+    };
+    assert.equal(offlineReturn.data.direction, 'SUPPLIER_TO_COMPANY');
+    assert.equal(offlineReturn.data.method, 'OFFLINE_RETURN');
+    assert.equal(offlineReturn.data.status, 'PENDING');
+    assert.equal(offlineReturn.data.amount, '4.00');
+    assert.equal(offlineReturn.data.items[0]?.adjustmentDocumentId, offlineCredit.id);
+    assert.equal(offlineReturn.data.items[0]?.targetDebitItemId, null);
+    const offlineConfirmResponse = await fetch(`${baseUrl}/difference-disposals/${offlineReturn.data.id}/confirm`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`, 'content-type': 'application/json',
+        'idempotency-key': 'offline-return-adjustment-confirm-once', 'x-trace-id': 'trace-offline-return-adjustment-confirm',
+      },
+      body: JSON.stringify({ expectedVersion: 1 }),
+    });
+    assert.equal(offlineConfirmResponse.status, 201);
+    const offlineConfirmed = (await offlineConfirmResponse.json()) as { data: { status: string; version: number } };
+    assert.equal(offlineConfirmed.data.status, 'CONFIRMED');
+    assert.equal(offlineConfirmed.data.version, 2);
     const storeStatementsResponse = await fetch(`${baseUrl}/store-statements?storeId=${store.id}&supplierId=${supplierB.id}`, {
       headers: { authorization: `Bearer ${token}` },
     });

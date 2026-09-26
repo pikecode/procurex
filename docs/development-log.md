@@ -192,3 +192,6 @@
 
 - Hardened DEV-405 A06 clearing detail access: STORE and STORE_FINANCE roles can read only their bound store's clearing documents; company roles retain full access. Added a cross-store unit regression test.
 - Verification: `npm run build`, `npm test` (31), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
+
+- Added DEV-406 AT-14 integration coverage: a negative adjustment without a follow-up order can be recorded as an `OFFLINE_RETURN` with no target debit and confirmed by the supplier receiver role.
+- Verification: `npm run build` and `npm run test:integration` (28) passed.
