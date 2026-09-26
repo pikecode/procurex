@@ -4,11 +4,17 @@ Last updated: 2026-09-26
 
 ## Current Position
 
-The backend has started M5 reporting development; M4 settlement adjustments remain incomplete.
+The backend has partial M4 settlement implementation. M5 reporting/export work was started before M4 was closed and is now frozen while the core settlement path is completed.
 
-Latest completed implementation: DEV-406 pending adjustment offsets reserve supplier payable balances in payment previews.
+Latest completed implementation: B01-B04 statement summaries now include payment allocation totals.
 
-Latest committed implementation before the current work:
+Latest committed implementation:
+
+```text
+8114349 Link statement totals to payment allocations
+da7a0bc Make settlement state transitions atomic
+3a4f1c0 Enforce payment account scopes
+```
 
 ```text
 b81a722 Serialize settlement offset reservations
@@ -33,13 +39,15 @@ Confirmed payment allocations now create immutable settlement item amount snapsh
 
 Direct supplier-term statements now use their B04 settlement item ID with the B06 payment preview/create/confirm flow and retain direct channel metadata.
 
-Recommended next step: complete W11 role acceptance and begin M5 notifications/export operational review. M4 post-settlement adjustments and B12 overpayment remain unfinished and must not be marked complete.
+Recommended next step: return to M4 in this order: finish DEV-404 payment/settlement reconciliation, complete DEV-405 clearing integration, then implement the remaining DEV-406 net adjustment and overpayment paths. Do not expand M5 until these three M4 gates have business evidence.
 
 DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. B12 confirmation-role acceptance and broader concurrency evidence remain to be reviewed; M4 is still incomplete.
 
 ## Progress Metrics
 
 The project uses two fixed metrics. **Core backend implementation: about 70%–75%** — the previously reported figure, covering the main API, data models, migrations, permissions, settlement reads/payments, fulfillment, pricing, reports, and exports already implemented. **Full release acceptance: about 40%–45%** — the stricter figure, also requiring all role pages, complete M4 adjustment handling, notifications, audit/reconciliation, task recovery, regression evidence, and M6 deployment/launch acceptance. The difference is scope, not a regression; future updates must label which metric they use.
+
+M4 work package status is intentionally separate from the overall metric: DEV-401 partial, DEV-402 partial, DEV-403 partial, DEV-404 partial, DEV-405 partial, DEV-406 partial. The existing tests prove selected slices, not the M4 completion conditions in `docs/development-plan.md`.
 
 ## Verification Baseline
 
