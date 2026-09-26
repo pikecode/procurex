@@ -201,8 +201,8 @@ export class AdjustmentsService {
       const storeSnapshot = snapshotsById.get(encodeSettlementItemId(storeKind, order.id));
       const supplierKind = order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'SUPPLIER_PAYABLE';
       const supplierSnapshot = snapshotsById.get(encodeSettlementItemId(supplierKind, order.id));
-      const salesDelta = storeSnapshot && row.createdAt > storeSnapshot.createdAt ? row.salesDelta : new Decimal(0);
-      const supplyDelta = supplierSnapshot && row.createdAt > supplierSnapshot.createdAt ? row.supplyDelta : new Decimal(0);
+      const salesDelta = !storeSnapshot || row.createdAt > storeSnapshot.createdAt ? row.salesDelta : new Decimal(0);
+      const supplyDelta = !supplierSnapshot || row.createdAt > supplierSnapshot.createdAt ? row.supplyDelta : new Decimal(0);
       return salesDelta.isZero() && supplyDelta.isZero() ? [] : [{ ...row, salesDelta, supplyDelta }];
     }) as PriceWithRelations[];
     const net = new Map<string, PriceWithRelations>();

@@ -21,7 +21,10 @@ test('price changes appear as adjustments only for settlement sides frozen befor
       }] },
       settlementItemSnapshot: { findMany: async ({ where }: any) => {
         const ids = where.settlementItemId.in as string[];
-        return [{ settlementItemId: ids[0], createdAt: new Date('2026-09-19T00:00:00Z') }];
+        return [
+          { settlementItemId: ids[0], createdAt: new Date('2026-09-19T00:00:00Z') },
+          { settlementItemId: ids[1], createdAt: new Date('2026-09-22T00:00:00Z') },
+        ];
       } },
     },
   } as any);
