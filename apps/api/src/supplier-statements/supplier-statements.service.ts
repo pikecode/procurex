@@ -172,12 +172,12 @@ export class SupplierStatementsService {
 
     const allGroups = [...groups.values()];
     const allocations = await this.database.client.paymentAllocation?.findMany({
-      where: { settlementItemId: { in: allGroups.flatMap((group) => group.lines.map((line) => line.settlementItemId)) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } },
+      where: { settlementItemId: { in: allGroups.flatMap((group) => [...group.lines.map((line) => line.settlementItemId), ...group.adjustmentSettlementItemIds]) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } },
     }) ?? [];
     const byItem = summarizeAllocations(allocations);
     for (const group of allGroups) {
-      for (const line of group.lines) {
-        const summary = byItem.get(line.settlementItemId);
+      for (const itemId of [...group.lines.map((line) => line.settlementItemId), ...group.adjustmentSettlementItemIds]) {
+        const summary = byItem.get(itemId);
         if (summary) {
           group.paymentSummary.pendingAmount = group.paymentSummary.pendingAmount.plus(summary.pendingAmount);
           group.paymentSummary.confirmedAmount = group.paymentSummary.confirmedAmount.plus(summary.confirmedAmount);
@@ -236,7 +236,7 @@ function toSummaryView(group: StatementGroup): SupplierStatementSummaryView {
     totalAmount: totalAmount.toFixed(2),
     confirmedPaidAmount: confirmedPaidAmount.toFixed(2),
     pendingPaymentAmount: pendingPaymentAmount.toFixed(2),
-    payableAmount: Decimal.max(totalAmount.minus(confirmedPaidAmount).minus(pendingPaymentAmount), 0).toFixed(2),
+    payableAmount: Decimal.max(totalAmount.plus(Decimal.max(group.adjustmentAmount, 0)).minus(confirmedPaidAmount).minus(pendingPaymentAmount), 0).toFixed(2),
     adjustmentAmount: group.adjustmentAmount.toFixed(2),
     adjustmentSettlementItemIds: group.adjustmentSettlementItemIds,
     storeCount: new Set(group.lines.map((line) => line.storeId)).size,
@@ -245,7 +245,7 @@ function toSummaryView(group: StatementGroup): SupplierStatementSummaryView {
 }
 
 function toSettlementStatus(group: StatementGroup): SupplierStatementStatus {
-  const total = group.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Decimal(0));
+  const total = group.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Decimal(0)).plus(Decimal.max(group.adjustmentAmount, 0));
   return group.paymentSummary.confirmedAmount.greaterThanOrEqualTo(total) ? 'SETTLED' : 'OPEN';
 }
 

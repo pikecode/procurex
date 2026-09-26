@@ -150,7 +150,8 @@
 # 2026-09-26
 
 - Continued DEV-406 with formal adjustment settlement item IDs. B01-B04 now expose side-specific persisted adjustment IDs alongside adjustment amounts. B06 preview validates the adjustment document, allows only positive adjustments, applies the correct store/company/direct direction, and uses the document source revision. B07 reuses existing payment allocations; B08 confirms adjustment allocations without calculating order overpayments or ordinary settlement snapshots. Negative adjustments remain routed to B12.
-- Verification: `npm run build`, `npm test` (21), `npm run test:integration` (26), `npm run contract:check`, and `git diff --check` passed.
+- Statement payment summaries now include adjustment allocations; positive adjustment amounts contribute to payable amount and `OPEN`/`SETTLED` status while ordinary goods totals remain unchanged. Added a regression test for a fully paid adjustment-only direct statement.
+- Verification: `npm run build`, `npm test` (22), `npm run test:integration` (26), `npm run contract:check`, and `git diff --check` passed.
 
 - Continued DEV-406: added the persisted `Overpayment` model and migration.
 - B08 now compares each confirmed allocation with the current order amount after price changes and records positive excess by store, supplier, and source revision; payment details return the overpayment total and source rows.

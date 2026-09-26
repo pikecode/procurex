@@ -175,9 +175,9 @@ export class StoreStatementsService {
     }
 
     const allGroups = [...groups.values()];
-    const allocations = await this.database.client.paymentAllocation?.findMany({ where: { settlementItemId: { in: allGroups.flatMap((group) => group.lines.map((line) => line.settlementItemId)) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } } }) ?? [];
+    const allocations = await this.database.client.paymentAllocation?.findMany({ where: { settlementItemId: { in: allGroups.flatMap((group) => [...group.lines.map((line) => line.settlementItemId), ...group.adjustmentSettlementItemIds]) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } } }) ?? [];
     const byItem = summarizeAllocations(allocations);
-    for (const group of allGroups) for (const line of group.lines) { const summary = byItem.get(line.settlementItemId); if (summary) { group.paymentSummary.pendingAmount = group.paymentSummary.pendingAmount.plus(summary.pendingAmount); group.paymentSummary.confirmedAmount = group.paymentSummary.confirmedAmount.plus(summary.confirmedAmount); } }
+    for (const group of allGroups) for (const itemId of [...group.lines.map((line) => line.settlementItemId), ...group.adjustmentSettlementItemIds]) { const summary = byItem.get(itemId); if (summary) { group.paymentSummary.pendingAmount = group.paymentSummary.pendingAmount.plus(summary.pendingAmount); group.paymentSummary.confirmedAmount = group.paymentSummary.confirmedAmount.plus(summary.confirmedAmount); } }
     return allGroups.filter((group) => !input.settlementStatus || toSettlementStatus(group) === input.settlementStatus).sort((left, right) => {
       const byPeriod = right.periodStart.localeCompare(left.periodStart);
       return byPeriod || left.supplierId.localeCompare(right.supplierId);
@@ -228,7 +228,7 @@ function toSummaryView(group: StatementGroup): StoreStatementSummaryView {
     totalAmount: totalAmount.toFixed(2),
     confirmedPaidAmount: group.paymentSummary.confirmedAmount.toFixed(2),
     pendingPaymentAmount: group.paymentSummary.pendingAmount.toFixed(2),
-    payableAmount: Decimal.max(totalAmount.minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2),
+    payableAmount: Decimal.max(totalAmount.plus(Decimal.max(group.adjustmentAmount, 0)).minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2),
     adjustmentAmount: group.adjustmentAmount.toFixed(2),
     adjustmentSettlementItemIds: group.adjustmentSettlementItemIds,
     lineCount: group.lines.length,
@@ -236,7 +236,7 @@ function toSummaryView(group: StatementGroup): StoreStatementSummaryView {
 }
 
 function toSettlementStatus(group: StatementGroup): StoreStatementStatus {
-  const total = group.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Decimal(0));
+  const total = group.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Decimal(0)).plus(Decimal.max(group.adjustmentAmount, 0));
   return group.paymentSummary.confirmedAmount.greaterThanOrEqualTo(total) ? 'SETTLED' : 'OPEN';
 }
 

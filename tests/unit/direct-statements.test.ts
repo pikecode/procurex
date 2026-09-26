@@ -78,3 +78,18 @@ test('direct statements expose persisted adjustment amounts in their actual peri
   assert.equal(statement?.adjustmentAmount, '20.00');
   assert.equal(statement?.totalAmount, '0.00');
 });
+
+test('direct statement payment totals include positive adjustment settlement items', async () => {
+  const adjustmentSettlementItemId = Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', supplierOrderId: 'order-1', adjustmentDocumentId: 'adjustment-1', adjustmentSide: 'STORE' })).toString('base64url');
+  const service = new DirectStatementsService({
+    client: {
+      supplierOrder: { findMany: async () => [] },
+      adjustmentDocument: { findMany: async () => [{ id: 'adjustment-1', supplierOrderId: 'order-1', storeId: 'store-1', supplierId: 'supplier-1', side: 'STORE', amount: '20.00', settlementPeriodKey: 'MONTHLY:2026-09-01:2026-10-01' }] },
+      paymentAllocation: { findMany: async () => [{ settlementItemId: adjustmentSettlementItemId, state: 'CONFIRMED', amount: '20.00' }] },
+    },
+  } as any);
+  const [statement] = await service.list({ storeId: 'store-1', supplierId: 'supplier-1' });
+  assert.equal(statement?.confirmedPaidAmount, '20.00');
+  assert.equal(statement?.payableAmount, '0.00');
+  assert.equal(statement?.settlementStatus, 'SETTLED');
+});

@@ -116,9 +116,9 @@ export class DirectStatementsService {
       groups.set(key, group);
     }
     const allGroups = [...groups.values()];
-    const allocations = await this.database.client.paymentAllocation?.findMany({ where: { settlementItemId: { in: allGroups.flatMap((group) => group.lines.map((line) => line.settlementItemId)) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } } }) ?? [];
+    const allocations = await this.database.client.paymentAllocation?.findMany({ where: { settlementItemId: { in: allGroups.flatMap((group) => [...group.lines.map((line) => line.settlementItemId), ...group.adjustmentSettlementItemIds]) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } } }) ?? [];
     const byItem = summarizeAllocations(allocations);
-    for (const group of allGroups) for (const line of group.lines) { const summary = byItem.get(line.settlementItemId); if (summary) { group.paymentSummary.pendingAmount = group.paymentSummary.pendingAmount.plus(summary.pendingAmount); group.paymentSummary.confirmedAmount = group.paymentSummary.confirmedAmount.plus(summary.confirmedAmount); } }
+    for (const group of allGroups) for (const itemId of [...group.lines.map((line) => line.settlementItemId), ...group.adjustmentSettlementItemIds]) { const summary = byItem.get(itemId); if (summary) { group.paymentSummary.pendingAmount = group.paymentSummary.pendingAmount.plus(summary.pendingAmount); group.paymentSummary.confirmedAmount = group.paymentSummary.confirmedAmount.plus(summary.confirmedAmount); } }
     return allGroups.filter((group) => !input.settlementStatus || toSettlementStatus(group) === input.settlementStatus).sort((a, b) => b.periodStart.localeCompare(a.periodStart) || a.storeId.localeCompare(b.storeId));
   }
 }
@@ -138,7 +138,7 @@ function toSummaryView(group: StatementGroup): DirectStatementSummaryView {
   const goodsAmount = group.lines.reduce((sum, line) => sum.plus(line.goodsAmount), new Decimal(0));
   const freightAmount = group.lines.reduce((sum, line) => sum.plus(line.freightAmount), new Decimal(0));
   const totalAmount = goodsAmount.plus(freightAmount).toFixed(2);
-  return { ...group, settlementStatus: toSettlementStatus(group), goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount, adjustmentAmount: group.adjustmentAmount.toFixed(2), confirmedPaidAmount: group.paymentSummary.confirmedAmount.toFixed(2), pendingPaymentAmount: group.paymentSummary.pendingAmount.toFixed(2), payableAmount: Decimal.max(new Decimal(totalAmount).minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2), lineCount: group.lines.length };
+  return { ...group, settlementStatus: toSettlementStatus(group), goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount, adjustmentAmount: group.adjustmentAmount.toFixed(2), confirmedPaidAmount: group.paymentSummary.confirmedAmount.toFixed(2), pendingPaymentAmount: group.paymentSummary.pendingAmount.toFixed(2), payableAmount: Decimal.max(new Decimal(totalAmount).plus(Decimal.max(group.adjustmentAmount, 0)).minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2), lineCount: group.lines.length };
 }
 
 function parsePeriodKey(value: string): { cycle: SettlementCycle; periodStart: string; periodEndExclusive: string } | null {
@@ -148,7 +148,7 @@ function parsePeriodKey(value: string): { cycle: SettlementCycle; periodStart: s
 }
 
 function toSettlementStatus(group: StatementGroup): 'OPEN' | 'SETTLED' {
-  const total = group.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Decimal(0));
+  const total = group.lines.reduce((sum, line) => sum.plus(line.totalAmount), new Decimal(0)).plus(Decimal.max(group.adjustmentAmount, 0));
   return group.paymentSummary.confirmedAmount.greaterThanOrEqualTo(total) ? 'SETTLED' : 'OPEN';
 }
 
