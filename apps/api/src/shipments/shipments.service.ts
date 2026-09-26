@@ -37,9 +37,12 @@ export type ReceiptItemView = {
 export class ShipmentsService {
   constructor(private readonly database: DatabaseService) {}
 
-  async createReceipt(shipmentId: string, input: CreateReceiptInput): Promise<ReceiptView> {
+  async createReceipt(shipmentId: string, input: CreateReceiptInput, scope?: { type: string; storeId?: string }): Promise<ReceiptView> {
     const shipment = await this.database.client.shipment.findUnique({
-      where: { id: shipmentId },
+      where: {
+        id: shipmentId,
+        supplierOrder: scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? { storeId: scope?.storeId } : undefined,
+      },
       include: {
         supplierOrder: { include: { items: { include: { shipmentItems: true } } } },
         items: { orderBy: { createdAt: 'asc' } },

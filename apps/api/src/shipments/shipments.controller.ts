@@ -50,7 +50,7 @@ export class ShipmentsController {
       return command.command.responseBody as ReceiptView;
     }
 
-    const result = await this.shipmentsService.createReceipt(input.id, input.receipt);
+    const result = await this.shipmentsService.createReceipt(input.id, input.receipt, storeScope(request));
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'Receipt',
@@ -60,6 +60,11 @@ export class ShipmentsController {
 
     return result;
   }
+}
+
+function storeScope(request: AuthenticatedRequest): { type: string; storeId?: string } | undefined {
+  const scope = request.auth?.user.scope;
+  return scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? scope : undefined;
 }
 
 function parseCreateReceiptBody(id: string, body: CreateReceiptBody): { id: string; receipt: CreateReceiptInput } {
