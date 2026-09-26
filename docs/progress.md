@@ -11,6 +11,7 @@ Latest completed implementation: B01–B04 expose persisted adjustment amounts a
 Latest commits:
 
 ```text
+a205d0c Record B12 receiver permission gap
 ae2e702 Verify adjustment credit offsets end to end
 e61f84e Allow offsets against positive adjustments
 66d8d78 Cover mixed adjustment payments
@@ -60,7 +61,22 @@ Direct supplier-term statements now use their B04 settlement item ID with the B0
 
 Latest completed work: B12 permits a negative adjustment credit to offset a positive adjustment settlement item on the matching STORE or SUPPLIER side. Available amount subtracts reserved/confirmed payment allocations and pending/confirmed disposals. Unit and HTTP/database integration coverage verifies the offset record links both adjustment documents. Build, 28 unit tests, 26 integration tests, contract check, and diff check pass.
 
-Recommended next step: resolve and implement B12 confirmation permissions by receiving party. The API contract requires the receiver to confirm, but the current controller permits HQ_FINANCE/ADMIN/SUPPLIER and omits STORE; this conflicts with COMPANY_TO_STORE direction. Direct supplier-term confirmation direction is not represented in the two-value `DifferenceDisposalDirection` enum and needs a business rule before safely completing that path. Then audit DEV-406's remaining offline return and reconciliation evidence. M5 remains frozen until M4 work packages are closed.
+## Plan Alignment Review (2026-09-27)
+
+The delivery order is M0 → M1 → M2 → M3 → M4 → M5 → M6. Actual work did not follow it cleanly: R01-R04 and W11 from M5 were implemented before M4 was closed. M5 is now frozen, but those early features do not count toward closing M4.
+
+Recent work has advanced B12 materially (credit sources, target balance, locking, positive adjustment payment, and now adjustment-to-adjustment offset). The apparent stall comes from tracking only whole-package closure: all six M4 packages remain partial, so repeated B12 slices never change the headline. There was also genuine over-focus on DEV-406; several successive commits refined the same settlement area while the ordered DEV-401–405 completion gates were not explicitly closed. This is a tracking and prioritization failure, not evidence that the implementation made no progress.
+
+| Package | Current assessment against plan | Closure evidence still needed |
+|---|---|---|
+| DEV-401 | P01-P03 backend is substantially implemented | Prove AT-08/09 ordering and close the planned W06/S10 workflow; then mark package complete |
+| DEV-402 | B01-B04, amount and period logic exist | Prove all settlement modes, especially AT-16 direct-term two-price consistency, with integrated evidence |
+| DEV-403 | Statement read paths and adjustment linkage exist | Prove total equals store breakdown, replenishment keeps original period, and immediate orders are per-order; required W09/S05/S08 flows remain part of acceptance |
+| DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Close receiver-role authorization, direct-term direction mapping, duplicate-entry concurrency (AT-13), and required evidence/role flows |
+| DEV-405 | Clearing transaction logic exists | Verify A04-A06 acceptance and AT-24 ledger/history evidence; planned W08 workflow remains |
+| DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Finish correct per-side behavior, receiver confirmation, offline return path (AT-14), and reconciliation consistency before closure |
+
+The next execution order is therefore to stop adding isolated B12 refinements and close acceptance packages explicitly: **DEV-401 → DEV-402 → DEV-403 → DEV-404 → DEV-405 → DEV-406**. For each package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure. This order replaces the earlier recommendation to keep iterating B12 alone.
 
 DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. B12 receiver-role acceptance and broader concurrency evidence remain to be completed; M4 is still incomplete.
 
@@ -68,7 +84,7 @@ DEV-405 clearing creation now conditionally updates each funding allocation by v
 
 ## Progress Metrics
 
-The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status uses the six DEV work packages in `docs/development-plan.md`: **0 closed, 6 partial, 0 not started**. This is not “0% built”: each partial package has substantial implementation, but none is counted complete until its listed completion conditions and required evidence pass. Current focus is DEV-406; M5 stays frozen. Do not publish a new overall percentage until the plan has an itemized denominator for all milestones.
+The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status currently is **0 closed, 6 partial, 0 not started**. This whole-package count is a gate status, not a sensitive progress metric; use the closure-evidence column in the plan alignment review to show movement between commits. Do not publish an overall percentage until the plan has an itemized denominator for all milestones.
 
 ## Verification Baseline
 
