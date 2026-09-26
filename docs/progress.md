@@ -11,6 +11,7 @@ Latest completed implementation: B01–B04 expose persisted adjustment amounts a
 Latest commits:
 
 ```text
+Enforce B12 receiver confirmation scope (current commit)
 a205d0c Record B12 receiver permission gap
 ae2e702 Verify adjustment credit offsets end to end
 e61f84e Allow offsets against positive adjustments
@@ -83,7 +84,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | DEV-403 | Statement read paths, total/store sum, and immediate per-order grouping are tested | Prove replenishment keeps original period; required W09/S05/S08 flows remain part of acceptance |
 | DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Close receiver-role authorization, direct-term direction mapping, duplicate-entry concurrency (AT-13), and required evidence/role flows |
 | DEV-405 | Clearing transaction logic exists | Verify A04-A06 acceptance and AT-24 ledger/history evidence; planned W08 workflow remains |
-| DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Finish correct per-side behavior, receiver confirmation, offline return path (AT-14), and reconciliation consistency before closure |
+| DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Receiver confirmation scope is now enforced for STORE/SUPPLIER; finish offline return path (AT-14) and reconciliation consistency before closure |
 
 The next execution order is therefore to stop adding isolated B12 refinements and close acceptance packages explicitly: **DEV-401 → DEV-402 → DEV-403 → DEV-404 → DEV-405 → DEV-406**. For each package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure. This order replaces the earlier recommendation to keep iterating B12 alone.
 
@@ -103,7 +104,7 @@ The latest completed stage passed:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
-Current integration coverage count: 26 integration tests passing; unit coverage is 28 tests.
+Current integration coverage count: 28 integration tests passing; unit coverage is 30 tests.
 
 DEV-406 scope hardening: adjustment list/detail and difference-disposal detail/confirmation now enforce the authenticated store or supplier scope before returning or mutating records. Company roles retain the existing company access paths.
 

@@ -78,6 +78,12 @@ export class DifferenceDisposalsService {
         message: 'Difference disposal was not found',
       });
     }
+    if ((scope?.type === 'STORE' && disposal.direction !== DifferenceDisposalDirection.COMPANY_TO_STORE) || (scope?.type === 'SUPPLIER' && disposal.direction !== DifferenceDisposalDirection.SUPPLIER_TO_COMPANY)) {
+      throw new NotFoundException({
+        code: 'DIFFERENCE_DISPOSAL_NOT_FOUND',
+        message: 'Difference disposal was not found',
+      });
+    }
     return toDifferenceDisposalView(disposal);
   }
 
@@ -316,6 +322,9 @@ export class DifferenceDisposalsService {
         code: 'DIFFERENCE_DISPOSAL_NOT_FOUND',
         message: 'Difference disposal was not found',
       });
+    }
+    if ((scope?.type === 'STORE' && disposal.direction !== DifferenceDisposalDirection.COMPANY_TO_STORE) || (scope?.type === 'SUPPLIER' && disposal.direction !== DifferenceDisposalDirection.SUPPLIER_TO_COMPANY)) {
+      throw new NotFoundException({ code: 'DIFFERENCE_DISPOSAL_NOT_FOUND', message: 'Difference disposal was not found' });
     }
     if (disposal.version !== input.expectedVersion) {
       throw new ConflictException({

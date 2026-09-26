@@ -181,3 +181,8 @@
 - `/adjustments` now returns separate store receivable and supplier payable rows for each non-zero price delta, with original and actual periods, source revision, and detail lines.
 - Included price changes for orders without a first shipment by using request submission as the baseline period; preserved existing F05 return adjustment and disposal behavior.
 - Verification: `npm run build`, `npm test` (14), `npm run test:integration` (26), `npm run contract:check`, and `git diff --check` passed.
+
+# 2026-09-27
+
+- Closed the B12 receiver authorization slice: store and supplier users may read and confirm only difference disposals whose direction matches their receiving side; company roles retain existing access. Added unit coverage for matching and mismatching scope/direction combinations.
+- Verification: `npm run build`, `npm test` (30), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
