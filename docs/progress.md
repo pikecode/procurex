@@ -74,10 +74,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `a61c0db Add copyable M4 acceptance summary`.
-Latest commit before this progress update: `a61c0db Add copyable M4 acceptance summary`.
+Latest functional slice: `5705727 Add M4 gate status command`.
+Latest commit before this progress update: `5705727 Add M4 gate status command`.
 
 ```text
+5705727 Add M4 gate status command
 a61c0db Add copyable M4 acceptance summary
 6a38fcb Add M4 manual evidence checklist
 1260b1b Map M4 gates to acceptance evidence
