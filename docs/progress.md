@@ -53,6 +53,8 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 Latest commits:
 
 ```text
+9023643 Clarify adjustment disposal states
+dd39150 Record W10 commits in progress ledger
 00e520a Connect W10 adjustment workbench to B12
 59c7966 Add adjustment read workbench to billing page
 427953d Refresh progress after adjustment payment acceptance
