@@ -27,6 +27,7 @@
     "billing:check-acceptance": "node --env-file-if-exists=.env scripts/check-billing-acceptance.mjs",
     "acceptance:m4-browserless": "npm run build && npm run billing:seed-acceptance && npm run billing:check-acceptance && npm run m4:gate-status && npm run main-flow:seed-demo && npm run main-flow:check-demo && npm run acceptance:main-flow && npm run web:check",
     "m4:gate-status": "node scripts/check-m4-gate-status.mjs",
+    "m4:write-manual-checklist": "node scripts/write-m4-manual-checklist.mjs",
     "main-flow:seed-demo": "node --env-file-if-exists=.env scripts/seed-main-flow-demo.mjs",
     "main-flow:check-demo": "node --env-file-if-exists=.env scripts/check-main-flow-demo.mjs"
   },

@@ -66,6 +66,8 @@ W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run bil
 
 The same gate definition file now includes manual execution steps for each gate. `m4-acceptance.html` renders those steps as an acceptance path with account, entry page, action, and expected result for DEV-402, DEV-403, and DEV-406.
 
+`npm run m4:write-manual-checklist` generates `docs/m4-manual-acceptance.md` from the same gate definition file, giving reviewers a committed manual checklist for screenshot and recording collection.
+
 `apps/web/m4-acceptance.html` now renders the generated `billing-acceptance-run.json` and `main-flow-run.json` together, so a reviewer can see the latest M4 browserless acceptance result from the Web workbench rather than reading terminal logs only.
 
 The same M4 acceptance page now includes a gate walkthrough for DEV-402, DEV-403, and DEV-406, plus the seeded account matrix for W09/S05/S08 and W10. `billing:check-acceptance` writes structured `gateId/evidenceId` entries, so the page can show which automatic evidence is already covered per gate and which manual browser evidence remains. This keeps the remaining work visible as browser acceptance and manual evidence collection, not new M5 scope.

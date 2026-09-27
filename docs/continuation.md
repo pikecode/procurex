@@ -117,6 +117,14 @@ For the M4 gate status summary, run:
 npm run m4:gate-status
 ```
 
+For the generated manual acceptance checklist, run:
+
+```bash
+npm run m4:write-manual-checklist
+```
+
+Open `docs/m4-manual-acceptance.md` when collecting screenshots or recordings.
+
 ## Remaining Work
 
 Do these in order:
