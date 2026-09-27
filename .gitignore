@@ -13,6 +13,7 @@ var/m4-manual-evidence/
 var/chrome-m4-manual-evidence/
 var/m5-browser-evidence/
 var/chrome-m5-browser-evidence/
+var/chrome-m5-ops-evidence/
 docs/.omc/
 packages/backend/generated/
 *.tsbuildinfo

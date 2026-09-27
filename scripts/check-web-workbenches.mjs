@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, opsHtml, opsJs] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -46,6 +46,8 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHt
   readProjectFile('apps/web/m4-gates.json'),
   readProjectFile('apps/web/main-flow-demo.html'),
   readProjectFile('apps/web/main-flow-demo.js'),
+  readProjectFile('apps/web/ops.html'),
+  readProjectFile('apps/web/ops.js'),
 ]);
 
 for (const path of [
@@ -61,6 +63,8 @@ for (const path of [
   'apps/web/m4-gates.json',
   'apps/web/main-flow-demo.html',
   'apps/web/main-flow-demo.js',
+  'apps/web/ops.html',
+  'apps/web/ops.js',
 ]) {
   assertExists(path, 'web asset');
 }
@@ -70,6 +74,7 @@ checkSyntax('apps/web/app.js');
 checkSyntax('apps/web/main-flow.js');
 checkSyntax('apps/web/m4-acceptance.js');
 checkSyntax('apps/web/main-flow-demo.js');
+checkSyntax('apps/web/ops.js');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
 assertIncludes(billingHtml, '账单调整与差额', 'W10 adjustment page');
@@ -96,6 +101,7 @@ assertIncludes(billingCss, '.adjustment-detail', 'adjustment styles');
 assertIncludes(billingCss, '@media', 'responsive billing styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');
+assertIncludes(reportHtml, '/ops.html', 'W13 navigation entry');
 assertIncludes(reportHtml, 'M5 验收状态', 'M5 acceptance summary');
 assertIncludes(reportHtml, 'id="m5-acceptance"', 'M5 acceptance summary');
 assertIncludes(reportHtml, 'id="export-jobs"', 'R04 export job list');
@@ -168,5 +174,11 @@ assertIncludes(mainFlowDemoHtml, '/main-flow-demo.js', 'main-flow demo script');
 assertIncludes(mainFlowDemoJs, 'main-flow-demo-seed.json', 'main-flow demo seed output');
 assertIncludes(mainFlowDemoJs, '/purchase-requests', 'main-flow demo purchase request call');
 assertIncludes(mainFlowDemoJs, '/shipments/', 'main-flow demo receipt call');
+
+assertIncludes(opsHtml, '运营与对账', 'W13 ops page');
+assertIncludes(opsHtml, '/ops.js', 'W13 ops script');
+assertIncludes(opsHtml, 'id="issues"', 'R05 issue table');
+assertIncludes(opsJs, '/reconciliation-issues', 'R05 reconciliation endpoint');
+assertIncludes(opsJs, 'STORE_BALANCE_LEDGER_MISMATCH', 'R05 issue labels');
 
 console.log('Web workbench check passed.');
