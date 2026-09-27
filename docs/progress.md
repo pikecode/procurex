@@ -6,7 +6,7 @@ Last updated: 2026-09-27
 
 For new-window continuation, start with `docs/continuation.md`.
 
-M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export has resumed with a repeatable browserless acceptance chain, browser-visible W11 acceptance summary, W13 operations view, DEV-505 export recovery/health/retry coverage, and DEV-503 in-app notifications now connected to supplier shipment, receipt discrepancy, and discrepancy resolution business events.
+M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export has resumed with a repeatable browserless acceptance chain, browser-visible W11 acceptance summary, W13 operations view, DEV-505 export recovery/health/retry coverage, DEV-503 in-app notifications connected to supplier shipment/receipt discrepancy/discrepancy resolution events, and the first DEV-504 audit log slice.
 
 Latest follow-up audit also closes two remaining store-scope reads: recharge detail accepts STORE_FINANCE and rejects another store, and store catalog reads reject unconfigured or mismatched STORE/STORE_FINANCE scopes.
 
@@ -64,6 +64,8 @@ R04 export reliability now has the first DEV-505 slices: the worker scans both f
 
 DEV-503 now has I08 in-app notification list/read plus three real business triggers. `Notification` persists recipient, channel, status, title/body, payload, read timestamp, and a per-recipient event key; `GET /notifications` returns the current user's latest 50 messages with unread count, and `POST /notifications/{id}/read` marks only the current user's message as read. `notifications:seed-acceptance` seeds admin/store messages, `notifications:check-acceptance` verifies list/read/isolation over HTTP, and W13 renders a "站内消息" card. Supplier shipment creation writes a "待收货提醒" notification to active users scoped to the destination store; receipt with missing quantity writes a "收货差异待处理" notification to active users scoped to the supplier; supplier discrepancy resolution writes a store notification such as "差异已同意少收". `main-flow:check-demo` verifies all three messages through real `PXFLOW` order, shipment, receipt, and F05 resolution steps.
 
+DEV-504 now has the first audit log slice. `AuditLog` persists actor, active roles/scope, action, entity, traceId, reason, before/after JSON, and createdAt. `GET /audit-logs` is restricted to ADMIN/HQ_FINANCE and returns the latest 50 entries with actor display text. The supplier shipment, store receipt, and discrepancy resolution command paths write audit rows only after the command succeeds, so idempotent replay does not duplicate the audit trail. W13 renders a "审计日志" table, and `main-flow:check-demo` verifies all three actions are queryable.
+
 The main-flow acceptance runner now writes a browser-readable result to `apps/web/main-flow-run.json`, and `apps/web/main-flow.html` renders the latest order-to-payment handoff status. `npm run web:check` now guards this page as well, so the main flow is visible even before a full interactive order-entry workbench is built.
 
 W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run billing:seed-acceptance` creates `PXACC` demo data for company-term, stored-value, credit-backed, and direct supplier-term statements, plus a shared pending supplier payable reservation visible from supplier total and supplier-store views; it also seeds W10 positive/negative supplier adjustments for offset. `npm run billing:check-acceptance` verifies those facts through a temporary API and creates/confirms one W10 offset disposal. See `docs/billing-acceptance-seed.md` for accounts and checks.
@@ -110,10 +112,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice in this update: DEV-503 discrepancy resolution creates store in-app notification.
-Latest commit before this progress update: `b7ee08c Notify suppliers about receipt discrepancies`.
+Latest functional slice in this update: DEV-504 audit logs for shipment, receipt, and discrepancy resolution.
+Latest commit before this progress update: `ca3b382 Notify stores after discrepancy resolution`.
 
 ```text
+ca3b382 Notify stores after discrepancy resolution
 b7ee08c Notify suppliers about receipt discrepancies
 bf3c999 Notify stores after supplier shipment
 8923fde Add in-app notifications foundation

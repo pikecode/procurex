@@ -1,4 +1,5 @@
 import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -27,6 +28,7 @@ export class ShipmentsController {
   constructor(
     private readonly shipmentsService: ShipmentsService,
     private readonly commandsService: CommandsService,
+    private readonly audit: AuditService,
   ) {}
 
   @Post(':id/receipts')
@@ -38,12 +40,13 @@ export class ShipmentsController {
     @Body() body: CreateReceiptBody,
   ): Promise<ReceiptView> {
     const input = parseCreateReceiptBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'shipment.receipt.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -57,6 +60,20 @@ export class ShipmentsController {
       resourceId: result.id,
       responseBody: result as never,
     });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'shipment.receipt.create',
+      entityType: 'Receipt',
+      entityId: result.id,
+      traceId,
+      after: {
+        shipmentId: result.shipmentId,
+        receiptNo: result.receiptNo,
+        revision: result.revision,
+        itemCount: result.items.length,
+      },
+    });
 
     return result;
   }
@@ -65,6 +82,10 @@ export class ShipmentsController {
 function storeScope(request: AuthenticatedRequest): { type: string; storeId?: string } | undefined {
   const scope = request.auth?.user.scope;
   return scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? scope : undefined;
+}
+
+function auditScope(auth: AuthenticatedSession) {
+  return { roles: auth.user.roles, ...(auth.user.scope ? { scope: auth.user.scope } : {}) };
 }
 
 function parseCreateReceiptBody(id: string, body: CreateReceiptBody): { id: string; receipt: CreateReceiptInput } {

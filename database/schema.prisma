@@ -210,6 +210,7 @@ model User {
   exportJobs    ExportJob[]
   notifications Notification[]
   files         FileObject[]
+  auditLogs     AuditLog[]
 }
 
 model UserScope {
@@ -259,6 +260,27 @@ model Notification {
 
   @@unique([recipientId, eventKey, channel])
   @@index([recipientId, status, createdAt])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorUserId  String   @db.Uuid
+  activeScope  Json
+  action       String   @db.VarChar(120)
+  entityType   String   @db.VarChar(80)
+  entityId     String   @db.Uuid
+  traceId      String   @db.VarChar(80)
+  reason       String?  @db.VarChar(300)
+  before       Json?
+  after        Json?
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  actor        User     @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([action, createdAt])
+  @@index([traceId])
 }
 
 model UserSession {

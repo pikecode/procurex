@@ -47,7 +47,7 @@ async function loadMe() {
 
 async function loadOperations() {
   $('notice').classList.add('hidden');
-  await Promise.all([loadIssues(), loadExportHealth(), loadNotifications()]);
+  await Promise.all([loadIssues(), loadExportHealth(), loadNotifications(), loadAuditLogs()]);
 }
 
 async function loadIssues() {
@@ -107,6 +107,17 @@ async function loadNotifications() {
   }
 }
 
+async function loadAuditLogs() {
+  try {
+    const logs = await call('/audit-logs');
+    $('audit-logs-empty').classList.toggle('hidden', logs.length > 0);
+    $('audit-logs').innerHTML = logs.map((item) => `<tr><td><strong>${esc(item.action)}</strong><br><small>${esc(item.reason || '')}</small></td><td>${esc(item.entityType)}<br><small>${esc(item.entityId)}</small></td><td>${esc(item.actorName)}</td><td><small>${esc(item.traceId)}</small></td><td>${esc(new Date(item.createdAt).toLocaleString('zh-CN'))}</td></tr>`).join('');
+  } catch (error) {
+    $('notice').textContent = error.message;
+    $('notice').classList.remove('hidden');
+  }
+}
+
 $('login-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   $('login-error').textContent = '';
@@ -125,5 +136,6 @@ $('logout').addEventListener('click', async () => { try { await call('/auth/logo
 $('refresh').addEventListener('click', loadOperations);
 $('refresh-issues').addEventListener('click', loadOperations);
 $('refresh-notifications').addEventListener('click', loadOperations);
+$('refresh-audit-logs').addEventListener('click', loadOperations);
 showSession();
 loadMe();

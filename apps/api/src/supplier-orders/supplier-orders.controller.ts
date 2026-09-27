@@ -1,4 +1,5 @@
 import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -66,6 +67,7 @@ export class SupplierOrdersController {
     private readonly supplierOrdersService: SupplierOrdersService,
     private readonly commandsService: CommandsService,
     private readonly freightConfirmationsService: FreightConfirmationsService,
+    private readonly audit: AuditService,
   ) {}
 
   @Get()
@@ -106,12 +108,13 @@ export class SupplierOrdersController {
     @Body() body: ShipmentPreviewBody,
   ): Promise<ShipmentView> {
     const input = parseShipmentPreviewBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'supplier-order.shipment.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -124,6 +127,21 @@ export class SupplierOrdersController {
       resourceType: 'Shipment',
       resourceId: result.id,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'supplier-order.shipment.create',
+      entityType: 'Shipment',
+      entityId: result.id,
+      traceId,
+      after: {
+        supplierOrderId: result.supplierOrderId,
+        shipmentNo: result.shipmentNo,
+        kind: result.kind,
+        itemCount: result.items.length,
+        freight: result.freight,
+      },
     });
 
     return result;
@@ -229,6 +247,10 @@ export class SupplierOrdersController {
 function supplierScope(request: AuthenticatedRequest): { type: string; supplierId?: string } | undefined {
   const scope = request.auth?.user.scope;
   return scope?.type === 'SUPPLIER' ? scope : undefined;
+}
+
+function auditScope(auth: AuthenticatedSession) {
+  return { roles: auth.user.roles, ...(auth.user.scope ? { scope: auth.user.scope } : {}) };
 }
 
 function parseListQuery(query: ListQuery): ListSupplierOrdersInput {

@@ -181,11 +181,20 @@ async function run() {
     const resolutionNotification = storeNotificationsAfterResolution.notifications.find((item) => item.payload?.discrepancyId === discrepancyId);
     assert.equal(resolutionNotification?.title, '差异已同意少收');
 
+    const auditLogs = await request(`${baseUrl}/audit-logs`, {
+      headers: authHeaders(token),
+    });
+    const actions = new Set(auditLogs.map((entry) => entry.action));
+    assert.ok(actions.has('supplier-order.shipment.create'));
+    assert.ok(actions.has('shipment.receipt.create'));
+    assert.ok(actions.has('discrepancy.resolve'));
+
     console.log('Main flow demo check passed.');
     console.log(`  Order: ${completedOrder.status} / ${completedOrder.fulfillmentStatus}`);
     console.log(`  Store notification: ${shipmentNotification.title}`);
     console.log(`  Supplier notification: ${discrepancyNotification.title}`);
     console.log(`  Resolution notification: ${resolutionNotification.title}`);
+    console.log(`  Audit actions: ${Array.from(actions).filter((action) => action.includes('shipment') || action.includes('discrepancy')).join(', ')}`);
     console.log(`  Payment preview: ${preview.direction} ${preview.totalPayableAmount}`);
   } finally {
     await app.close();

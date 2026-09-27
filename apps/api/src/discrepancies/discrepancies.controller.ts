@@ -1,4 +1,5 @@
 import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -23,6 +24,7 @@ export class DiscrepanciesController {
   constructor(
     private readonly discrepanciesService: DiscrepanciesService,
     private readonly commandsService: CommandsService,
+    private readonly audit: AuditService,
   ) {}
 
   @Post(':id/resolve')
@@ -34,12 +36,13 @@ export class DiscrepanciesController {
     @Body() body: ResolveBody,
   ): Promise<DiscrepancyView> {
     const input = parseResolveBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'discrepancy.resolve',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -53,6 +56,22 @@ export class DiscrepanciesController {
       resourceId: result.id,
       responseBody: result as never,
     });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'discrepancy.resolve',
+      entityType: 'Discrepancy',
+      entityId: result.id,
+      traceId,
+      reason: input.resolve.reason,
+      after: {
+        action: input.resolve.action,
+        status: result.status,
+        missingQuantity: result.missingQuantity,
+        replenishmentGapId: result.replenishmentGap?.id ?? null,
+        returnRecordId: result.returnRecord?.id ?? null,
+      },
+    });
 
     return result;
   }
@@ -61,6 +80,10 @@ export class DiscrepanciesController {
 function supplierScope(request: AuthenticatedRequest): { type: string; supplierId?: string } | undefined {
   const scope = request.auth?.user.scope;
   return scope?.type === 'SUPPLIER' ? scope : undefined;
+}
+
+function auditScope(auth: AuthenticatedSession) {
+  return { roles: auth.user.roles, ...(auth.user.scope ? { scope: auth.user.scope } : {}) };
 }
 
 function parseResolveBody(id: string, body: ResolveBody): { id: string; resolve: ResolveDiscrepancyInput } {
