@@ -36,14 +36,19 @@ DEV-403 AC-20 now proves cross-view reservation consistency: registering the sha
 
 DEV-404 company-term ordering now has HTTP acceptance: the supplier payable is blocked with STORE_RECEIVABLE_UNSETTLED until the store payment is confirmed; afterward B06 exposes the company supplier payable.
 
+DEV-405 W08 clearing now has stronger HTTP/database evidence: clearing one selected 200 credit leaves an unselected 50 credit outstanding, preserves the 240 cumulative net-paid amount and 320.50 cash balance, and records a 200 debit clearing ledger row.
+
 Latest completed implementation: the four statement families, payment records, adjustments, difference disposals, and clearing details now enforce authenticated store scope for both STORE and STORE_FINANCE accounts; cross-scope IDs resolve as not found, while company roles retain broad access. B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
 Latest commits:
 
 ```text
-e0399b6 Verify credit limit cannot undercut used credit
-8879613 Cover direct term statement HTTP settlement
-219f35d Refresh M4 progress ledger
+Pending this commit: W08 selected-only clearing evidence
+628d1cd Verify company term waits for store payment
+dc41992 Verify shared statement item reservation
+3e0f341 Cover immediate grouping across statement views
+bc16c68 Verify direct payment receiver role boundaries
+b856890 Assert stored value supplier payable acceptance
 1bc4666 Close DEV-401 backend gates
 3e7c8fd Cover price impact preview HTTP flow
 173bae4 Scope purchase previews by store
@@ -130,7 +135,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | DEV-402 | B01-B04, amount/period logic, AT-16 price guard, direct-term B04→B08 flow, AT-17 credit-limit guard, and AC-21 stored-value supplier payable verified | Finish remaining settlement-mode and W09/S05/S08 acceptance evidence |
 | DEV-403 | Statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, account scope, and cross-view shared-item reservation are tested | Remaining W09/S05/S08 flow evidence before closure |
 | DEV-404 | B06-B11 lifecycle, AT-13 concurrency, receiver authorization, direct-term B06-B08 with role checks, and company-term store-first HTTP gate verified; B12 is being completed | Finish remaining payment workflow acceptance evidence |
-| DEV-405 | Clearing transaction logic and A04-A06 read/write paths exist | A06 now enforces store scope on clearing detail; verify AT-24 ledger/history recovery evidence and planned W08 workflow |
+| DEV-405 | A04-A06, store scope, and W08 selected-only clearing/accounting flow verified | AT-24 requires a real backup and credential/file recovery drill with measured RPO/RTO |
 | DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Receiver confirmation scope and AT-14 offline return are verified; finish reconciliation consistency before closure |
 
 The next execution order is therefore to close acceptance packages explicitly: **DEV-402 → DEV-403 → DEV-404 → DEV-405 → DEV-406**. For each package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure.

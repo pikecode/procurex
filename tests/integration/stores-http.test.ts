@@ -272,6 +272,16 @@ test('stores endpoint creates, lists and disables stores with admin role', async
         creditOutstanding: '200.00',
       },
     });
+    const unselectedFundingAllocation = await prisma.fundingAllocation.create({
+      data: {
+        storeId: createdBody.data.id,
+        method: FundingAllocationMethod.CREDIT,
+        targetAmount: '60.00',
+        netPaid: '10.00',
+        creditOutstanding: '50.00',
+      },
+    });
+    await prisma.storeAccount.update({ where: { storeId: createdBody.data.id }, data: { creditUsed: '250.00', version: { increment: 1 } } });
     const clearingPreviewResponse = await fetch(`${baseUrl}/stores/${createdBody.data.id}/clearings/preview`, {
       method: 'POST',
       headers: {
@@ -378,7 +388,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
           businessDate: string;
           remark: string | null;
           items: Array<{ fundingAllocationId: string; amount: string; sourceVersion: number }>;
-          account: { creditUsed: string; creditAvailable: string; version: number };
+          account: { balance: string; creditUsed: string; creditAvailable: string; version: number };
         };
         traceId: string;
       };
@@ -402,13 +412,23 @@ test('stores endpoint creates, lists and disables stores with admin role', async
         sourceVersion: 1,
       },
     ]);
-    assert.equal(clearing.data.account.creditUsed, '0.00');
-    assert.equal(clearing.data.account.creditAvailable, '1000.00');
+    assert.equal(clearing.data.account.balance, '320.50');
+    assert.equal(clearing.data.account.creditUsed, '50.00');
+    assert.equal(clearing.data.account.creditAvailable, '950.00');
     const clearedAllocation = await prisma.fundingAllocation.findUniqueOrThrow({ where: { id: fundingAllocation.id } });
     assert.equal(clearedAllocation.active, false);
     assert.equal(clearedAllocation.netPaid.toString(), '240');
     assert.equal(clearedAllocation.creditOutstanding.toString(), '0');
     assert.equal(clearedAllocation.version, 2);
+    assert.equal(clearedAllocation.netPaid.toString(), '240');
+    const untouchedAllocation = await prisma.fundingAllocation.findUniqueOrThrow({ where: { id: unselectedFundingAllocation.id } });
+    assert.equal(untouchedAllocation.active, true);
+    assert.equal(untouchedAllocation.netPaid.toString(), '10');
+    assert.equal(untouchedAllocation.creditOutstanding.toString(), '50');
+    const clearingLedger = await prisma.accountLedger.findFirstOrThrow({ where: { sourceType: LedgerSourceType.CLEARING, sourceId: clearing.data.id } });
+    assert.equal(clearingLedger.direction, LedgerDirection.DEBIT);
+    assert.equal(clearingLedger.amount.toFixed(2), '200.00');
+    assert.equal(clearingLedger.balanceAfter.toFixed(2), '320.50');
     const clearingDetailResponse = await fetch(`${baseUrl}/clearings/${clearing.data.id}`, {
       headers: {
         authorization: `Bearer ${storeToken}`,
@@ -425,7 +445,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
         businessDate: string;
         remark: string | null;
         items: Array<{ fundingAllocationId: string; amount: string; sourceVersion: number }>;
-        account: { creditUsed: string; creditAvailable: string };
+        account: { balance: string; creditUsed: string; creditAvailable: string };
       };
       traceId: string;
     };
@@ -447,8 +467,9 @@ test('stores endpoint creates, lists and disables stores with admin role', async
         sourceVersion: 1,
       },
     ]);
-    assert.equal(clearingDetail.data.account.creditUsed, '0.00');
-    assert.equal(clearingDetail.data.account.creditAvailable, '1000.00');
+    assert.equal(clearingDetail.data.account.balance, '320.50');
+    assert.equal(clearingDetail.data.account.creditUsed, '50.00');
+    assert.equal(clearingDetail.data.account.creditAvailable, '950.00');
 
     const list = await fetch(`${baseUrl}/stores`, {
       headers: {

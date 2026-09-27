@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Strengthened DEV-405 W08 clearing acceptance: clearing selected 200 from two credits leaves the unselected 50 active, preserves cumulative net-paid and cash balance, reduces only outstanding credit, and writes the matching clearing debit ledger.
+- Verification: `npm run build`, `npm test` (36), `npm run test:integration` (30), `npm run contract:check`, and `git diff --check` passed.
+
 - Added a company-term HTTP settlement gate scenario: B06 rejects company supplier payment with STORE_RECEIVABLE_UNSETTLED until STORE_TO_COMPANY payment is confirmed, then makes the supplier payable available.
 - Verification: `npm run build`, `npm test` (36), `npm run test:integration` (30), `npm run contract:check`, and `git diff --check` passed.
 
