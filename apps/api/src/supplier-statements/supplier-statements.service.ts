@@ -31,6 +31,7 @@ export type SupplierStatementSummaryView = {
   payableAmount: string;
   adjustmentAmount: string;
   adjustmentSettlementItemIds: string[];
+  adjustmentItems: Array<{ settlementItemId: string; amount: string }>;
   storeCount: number;
   lineCount: number;
 };
@@ -67,6 +68,7 @@ type StatementGroup = {
   paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal };
   adjustmentAmount: Decimal;
   adjustmentSettlementItemIds: string[];
+  adjustmentItems: Array<{ settlementItemId: string; amount: string }>;
 };
 
 @Injectable()
@@ -149,7 +151,7 @@ export class SupplierStatementsService {
           periodEndExclusive,
           lines: [],
           paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) },
-          adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [],
+          adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [], adjustmentItems: [],
         };
       group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId('SUPPLIER_PAYABLE', order.id))));
       groups.set(key, group);
@@ -164,10 +166,12 @@ export class SupplierStatementsService {
         id: encodeStatementId({ supplierId: document.supplierId, cycle: period.cycle, periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, orderId: period.cycle === 'IMMEDIATE' ? document.supplierOrderId : undefined }),
         supplierId: document.supplierId, cycle: period.cycle, periodKey: document.settlementPeriodKey,
         periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [],
-        paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [],
+        paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [], adjustmentItems: [],
       };
       group.adjustmentAmount = group.adjustmentAmount.plus(document.amount);
-      group.adjustmentSettlementItemIds.push(encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'SUPPLIER'));
+      const adjustmentSettlementItemId = encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'SUPPLIER');
+      group.adjustmentSettlementItemIds.push(adjustmentSettlementItemId);
+      group.adjustmentItems.push({ settlementItemId: adjustmentSettlementItemId, amount: new Decimal(document.amount).toFixed(2) });
       groups.set(key, group);
     }
 
@@ -240,6 +244,7 @@ function toSummaryView(group: StatementGroup): SupplierStatementSummaryView {
     payableAmount: Decimal.max(totalAmount.plus(Decimal.max(group.adjustmentAmount, 0)).minus(confirmedPaidAmount).minus(pendingPaymentAmount), 0).toFixed(2),
     adjustmentAmount: group.adjustmentAmount.toFixed(2),
     adjustmentSettlementItemIds: group.adjustmentSettlementItemIds,
+    adjustmentItems: group.adjustmentItems,
     storeCount: new Set(group.lines.map((line) => line.storeId)).size,
     lineCount: group.lines.length,
   };

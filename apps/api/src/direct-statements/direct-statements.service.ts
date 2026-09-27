@@ -43,13 +43,14 @@ export type DirectStatementSummaryView = {
   payableAmount: string;
   adjustmentAmount: string;
   adjustmentSettlementItemIds: string[];
+  adjustmentItems: Array<{ settlementItemId: string; amount: string }>;
   lineCount: number;
 };
 
 export type DirectStatementDetailView = DirectStatementSummaryView & { lines: DirectStatementLineView[] };
 
 type StatementOrder = SupplierOrder & { supplier: Supplier; shipments: Shipment[]; priceChangeRuns: Array<{ runId: string; adjustment: { id: string; orderItemId: string; salesDelta: import('decimal.js').Decimal; supplyDelta: import('decimal.js').Decimal; createdAt: Date } | null }> };
-type StatementGroup = Omit<DirectStatementSummaryView, 'settlementStatus' | 'goodsAmount' | 'freightAmount' | 'totalAmount' | 'confirmedPaidAmount' | 'pendingPaymentAmount' | 'payableAmount' | 'adjustmentAmount' | 'adjustmentSettlementItemIds' | 'lineCount'> & { lines: DirectStatementLineView[]; paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal }; adjustmentAmount: Decimal; adjustmentSettlementItemIds: string[] };
+type StatementGroup = Omit<DirectStatementSummaryView, 'settlementStatus' | 'goodsAmount' | 'freightAmount' | 'totalAmount' | 'confirmedPaidAmount' | 'pendingPaymentAmount' | 'payableAmount' | 'adjustmentAmount' | 'adjustmentSettlementItemIds' | 'adjustmentItems' | 'lineCount'> & { lines: DirectStatementLineView[]; paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal }; adjustmentAmount: Decimal; adjustmentSettlementItemIds: string[]; adjustmentItems: Array<{ settlementItemId: string; amount: string }> };
 
 @Injectable()
 export class DirectStatementsService {
@@ -96,7 +97,7 @@ export class DirectStatementsService {
       const group = groups.get(key) ?? {
         id: encodeStatementId({ storeId: order.storeId, supplierId: order.supplierId, cycle, periodStart: period.startDate, periodEndExclusive, orderId: cycle === 'IMMEDIATE' ? order.id : undefined }),
         type: 'DIRECT', storeId: order.storeId, supplierId: order.supplierId, cycle, periodKey,
-        periodStart: period.startDate, periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [],
+        periodStart: period.startDate, periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [], adjustmentItems: [],
       };
       group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId(order.id))));
       groups.set(key, group);
@@ -109,10 +110,12 @@ export class DirectStatementsService {
       const group = groups.get(key) ?? {
         id: encodeStatementId({ storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, orderId: period.cycle === 'IMMEDIATE' ? document.supplierOrderId : undefined }),
         type: 'DIRECT', storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodKey: document.settlementPeriodKey,
-        periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [],
+        periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [], paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [], adjustmentItems: [],
       };
       group.adjustmentAmount = group.adjustmentAmount.plus(document.amount);
-      group.adjustmentSettlementItemIds.push(encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'STORE'));
+      const adjustmentSettlementItemId = encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'STORE');
+      group.adjustmentSettlementItemIds.push(adjustmentSettlementItemId);
+      group.adjustmentItems.push({ settlementItemId: adjustmentSettlementItemId, amount: new Decimal(document.amount).toFixed(2) });
       groups.set(key, group);
     }
     const allGroups = [...groups.values()];
@@ -138,7 +141,7 @@ function toSummaryView(group: StatementGroup): DirectStatementSummaryView {
   const goodsAmount = group.lines.reduce((sum, line) => sum.plus(line.goodsAmount), new Decimal(0));
   const freightAmount = group.lines.reduce((sum, line) => sum.plus(line.freightAmount), new Decimal(0));
   const totalAmount = goodsAmount.plus(freightAmount).toFixed(2);
-  return { ...group, settlementStatus: toSettlementStatus(group), goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount, adjustmentAmount: group.adjustmentAmount.toFixed(2), confirmedPaidAmount: group.paymentSummary.confirmedAmount.toFixed(2), pendingPaymentAmount: group.paymentSummary.pendingAmount.toFixed(2), payableAmount: Decimal.max(new Decimal(totalAmount).plus(Decimal.max(group.adjustmentAmount, 0)).minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2), lineCount: group.lines.length };
+  return { ...group, settlementStatus: toSettlementStatus(group), goodsAmount: goodsAmount.toFixed(2), freightAmount: freightAmount.toFixed(2), totalAmount, adjustmentAmount: group.adjustmentAmount.toFixed(2), adjustmentItems: group.adjustmentItems, confirmedPaidAmount: group.paymentSummary.confirmedAmount.toFixed(2), pendingPaymentAmount: group.paymentSummary.pendingAmount.toFixed(2), payableAmount: Decimal.max(new Decimal(totalAmount).plus(Decimal.max(group.adjustmentAmount, 0)).minus(group.paymentSummary.confirmedAmount).minus(group.paymentSummary.pendingAmount), 0).toFixed(2), lineCount: group.lines.length };
 }
 
 function parsePeriodKey(value: string): { cycle: SettlementCycle; periodStart: string; periodEndExclusive: string } | null {
