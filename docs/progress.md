@@ -66,10 +66,11 @@ W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run bil
 
 Latest commits:
 
-Latest functional slice: `4afe8a6 Add interactive main flow demo`.
-Latest commit before this progress update: `4afe8a6 Add interactive main flow demo`.
+Latest functional slice: `ea81b68 Add main flow demo checker`.
+Latest commit before this progress update: `ea81b68 Add main flow demo checker`.
 
 ```text
+ea81b68 Add main flow demo checker
 4afe8a6 Add interactive main flow demo
 7db7c4d Refresh progress ledger for handoff
 eaea023 Add continuation handoff document

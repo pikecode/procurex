@@ -15,6 +15,10 @@ The direction has not shifted: finish M4 settlement/billing/payment/adjustment a
 Recent commits added visible and repeatable acceptance evidence:
 
 ```text
+ea81b68 Add main flow demo checker
+4afe8a6 Add interactive main flow demo
+7db7c4d Refresh progress ledger for handoff
+eaea023 Add continuation handoff document
 56672e9 Add M4 acceptance summary page
 4dde596 Refresh progress ledger after acceptance work
 1593023 Add M4 browserless acceptance command
