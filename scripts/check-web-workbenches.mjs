@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '..');
+const packageJson = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
 
 async function readProjectFile(path) {
   return readFile(resolve(root, path), 'utf8');
@@ -82,6 +83,7 @@ assertIncludes(billingCss, '@media', 'responsive billing styles');
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');
 assertIncludes(appJs, '/reports/${active}', 'W11 report endpoints');
 assertIncludes(appJs, '/exports', 'R04 export workflow');
+assertIncludes(packageJson.scripts['billing:seed-acceptance'], 'seed-billing-acceptance.mjs', 'billing acceptance seed script');
 
 assertIncludes(mainFlowHtml, '主流程验收', 'main-flow acceptance page');
 assertIncludes(mainFlowHtml, '/main-flow.js', 'main-flow acceptance script');

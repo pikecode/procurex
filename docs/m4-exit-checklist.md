@@ -33,6 +33,7 @@ Prerequisites:
 
 ```bash
 npm run build
+npm run billing:seed-acceptance
 npm run start:api
 npm run start:web
 ```
@@ -42,6 +43,8 @@ Open:
 ```text
 http://127.0.0.1:4173/billing.html
 ```
+
+Use `docs/billing-acceptance-seed.md` for the local seeded accounts and the expected `PXACC` statement evidence.
 
 ### DEV-402
 

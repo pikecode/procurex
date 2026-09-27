@@ -70,6 +70,14 @@ The browserless workbench visibility check is:
 npm run web:check
 ```
 
+For local manual billing acceptance data:
+
+```bash
+npm run billing:seed-acceptance
+```
+
+Use `docs/billing-acceptance-seed.md` for the seeded accounts and expected W09/S05/S08 evidence.
+
 The latest progress ledger records successful runs with 36 unit tests and 31 integration tests for the W09/W10 slices. Always rerun the full baseline before marking a package closed.
 
 ## Browser E2E Blocker
