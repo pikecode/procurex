@@ -72,6 +72,8 @@ The same gate definition file now includes manual execution steps for each gate.
 
 `npm run m4:check-browser-runtime` checks whether a local Chromium, Chrome, or Firefox runtime is available for manual M4 acceptance. The current environment reports Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`, so the remaining M4 work is evidence collection rather than browser installation.
 
+`npm run m4:prepare-manual-acceptance` is the single preflight command for manual M4 review. It runs the browser runtime check, gate-status check, manual checklist sync check, and prints the exact service commands, URLs, accounts, and DEV-402/403/406 manual acceptance path.
+
 `apps/web/m4-acceptance.html` now renders the generated `billing-acceptance-run.json` and `main-flow-run.json` together, so a reviewer can see the latest M4 browserless acceptance result from the Web workbench rather than reading terminal logs only.
 
 The same M4 acceptance page now includes a gate walkthrough for DEV-402, DEV-403, and DEV-406, plus the seeded account matrix for W09/S05/S08 and W10. `billing:check-acceptance` writes structured `gateId/evidenceId` entries, so the page can show which automatic evidence is already covered per gate and which manual browser evidence remains. This keeps the remaining work visible as browser acceptance and manual evidence collection, not new M5 scope.

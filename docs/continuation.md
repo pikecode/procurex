@@ -119,6 +119,7 @@ npm run main-flow:check-demo
 For the M4 gate status summary, run:
 
 ```bash
+npm run m4:prepare-manual-acceptance
 npm run m4:check-browser-runtime
 npm run m4:gate-status
 ```
