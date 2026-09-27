@@ -15,6 +15,7 @@ M5 has resumed. The current M5 slice has a repeatable browserless acceptance cha
 Recent commits closed M4 and restarted M5 reporting/export acceptance:
 
 ```text
+15b66b3 Add M5 reports acceptance chain
 77e7fb2 Close M4 local acceptance gates
 89e07ff Record M4 browserless acceptance after DB restore
 560600d Add M4 manual evidence package check

@@ -102,10 +102,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `77e7fb2 Close M4 local acceptance gates`.
-Latest commit before this progress update: `77e7fb2 Close M4 local acceptance gates`.
+Latest functional slice: `15b66b3 Add M5 reports acceptance chain`.
+Latest commit before this progress update: `15b66b3 Add M5 reports acceptance chain`.
 
 ```text
+15b66b3 Add M5 reports acceptance chain
 77e7fb2 Close M4 local acceptance gates
 89e07ff Record M4 browserless acceptance after DB restore
 560600d Add M4 manual evidence package check
