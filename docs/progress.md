@@ -82,6 +82,8 @@ The same gate definition file now includes manual execution steps for each gate.
 
 `npm run m4:status` gives the fastest current M4 snapshot: browser runtime, local database, automatic gate evidence, manual checklist, and browser entry screenshots. It is meant for orientation and does not replace `acceptance:m4-browserless`.
 
+`npm run m4:manual-evidence-status` lists the exact DEV-402/403/406 manual screenshots or recordings still missing under `var/m4-manual-evidence/`. `npm run m4:check-manual-evidence` is the strict close-gate version and fails until all expected files are present.
+
 `apps/web/m4-acceptance.html` now renders the generated `billing-acceptance-run.json` and `main-flow-run.json` together, so a reviewer can see the latest M4 browserless acceptance result from the Web workbench rather than reading terminal logs only.
 
 The same M4 acceptance page now includes a gate walkthrough for DEV-402, DEV-403, and DEV-406, plus the seeded account matrix for W09/S05/S08 and W10. `billing:check-acceptance` writes structured `gateId/evidenceId` entries, so the page can show which automatic evidence is already covered per gate and which manual browser evidence remains. This keeps the remaining work visible as browser acceptance and manual evidence collection, not new M5 scope.

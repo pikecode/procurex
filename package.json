@@ -29,6 +29,8 @@
     "acceptance:m4-browserless": "npm run build && npm run billing:seed-acceptance && npm run billing:check-acceptance && npm run m4:gate-status && npm run m4:check-manual-checklist && npm run main-flow:seed-demo && npm run main-flow:check-demo && npm run acceptance:main-flow && npm run web:check",
     "m4:check-browser-runtime": "node scripts/check-browser-runtime.mjs",
     "m4:capture-browser-evidence": "node scripts/capture-m4-browser-evidence.mjs",
+    "m4:manual-evidence-status": "node scripts/check-m4-manual-evidence.mjs --allow-missing",
+    "m4:check-manual-evidence": "node scripts/check-m4-manual-evidence.mjs",
     "m4:prepare-manual-acceptance": "node --env-file-if-exists=.env scripts/prepare-m4-manual-acceptance.mjs",
     "m4:status": "node --env-file-if-exists=.env scripts/report-m4-status.mjs",
     "m4:start-manual-acceptance": "node scripts/start-m4-manual-acceptance.mjs",

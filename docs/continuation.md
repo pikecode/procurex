@@ -129,6 +129,7 @@ For the M4 gate status summary, run:
 ```bash
 npm run m4:prepare-manual-acceptance
 npm run m4:status
+npm run m4:manual-evidence-status
 npm run m4:check-browser-runtime
 npm run m4:gate-status
 npm run m4:capture-browser-evidence
@@ -142,6 +143,14 @@ npm run m4:check-manual-checklist
 ```
 
 Open `docs/m4-manual-acceptance.md` when collecting screenshots or recordings.
+
+Place collected manual evidence files under:
+
+```text
+var/m4-manual-evidence/<gate>/<manualEvidenceId>.<png|jpg|jpeg|webp|mp4|mov|webm|pdf>
+```
+
+Run `npm run m4:check-manual-evidence` before marking M4 closed.
 
 ## Remaining Work
 

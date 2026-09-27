@@ -1,5 +1,5 @@
 import net from 'node:net';
-import { access, readFile, stat } from 'node:fs/promises';
+import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
@@ -104,6 +104,21 @@ if (!manifest) {
     if (!(await fileExists(screenshot.file))) missing.push(screenshot.slug);
   }
   printLine('Browser entry screenshots', missing.length ? 'PARTIAL' : 'READY', missing.length ? `missing: ${missing.join(', ')}` : 'var/m4-browser-evidence/manifest.json');
+}
+
+if (gates) {
+  let manualReady = 0;
+  let manualExpected = 0;
+  for (const gate of gates) {
+    for (const [evidenceId] of gate.manualEvidence || []) {
+      manualExpected += 1;
+      const dir = `var/m4-manual-evidence/${gate.id}`;
+      const files = await readdir(dir).catch(() => []);
+      const found = files.some((file) => file.startsWith(evidenceId) && file.match(/\.(png|jpe?g|webp|mp4|mov|webm|pdf)$/i));
+      if (found) manualReady += 1;
+    }
+  }
+  printLine('Manual evidence package', manualReady === manualExpected ? 'READY' : 'MISSING', `${manualReady}/${manualExpected}; run npm run m4:manual-evidence-status`);
 }
 
 console.log('');

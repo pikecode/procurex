@@ -19,6 +19,8 @@ console.log(run('npm', ['run', 'm4:status']));
 console.log('');
 console.log(run('npm', ['run', 'm4:check-browser-runtime']));
 console.log('');
+console.log(run('npm', ['run', 'm4:manual-evidence-status']));
+console.log('');
 console.log(run('npm', ['run', 'db:check']));
 console.log('');
 console.log(run('npm', ['run', 'm4:gate-status']));
