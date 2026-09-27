@@ -22,6 +22,11 @@ export class ExportsController {
     return this.reports.createExport(request.auth!.user.id, request.auth!.user.scope, type, filters);
   }
 
+  @Get()
+  async list(@Req() request: AuthenticatedRequest) {
+    return this.reports.listExports(request.auth!.user.id, request.auth!.user.roles, request.auth!.user.scope);
+  }
+
   @Get(':id')
   async status(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     const job = await this.reports.exportStatus(id, request.auth!.user.id, request.auth!.user.roles, request.auth!.user.scope);

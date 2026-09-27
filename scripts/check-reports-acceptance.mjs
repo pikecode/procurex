@@ -115,10 +115,14 @@ async function run() {
     const csv = await download.text();
     assert.match(csv, /supplierOrderId/);
     assert.match(csv, /PX Reports Rice/);
+    const exportJobs = await request(`${baseUrl}/exports`, { headers: authHeaders(adminToken) });
+    assert.equal(exportJobs[0]?.jobId, exportJob.jobId);
+    assert.equal(exportJobs[0]?.status, 'READY');
     record('7. R04 export job reaches READY and downloads CSV', {
       jobId: exportJob.jobId,
       status: ready.status,
       csvBytes: csv.length,
+      listedJobs: exportJobs.length,
     });
 
     await writeFile(

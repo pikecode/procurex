@@ -212,7 +212,7 @@ async function prepareReportPage(cdp) {
     (async () => {
       const waitFor = async (predicate, label) => {
         for (let i = 0; i < 80; i += 1) {
-          if (predicate()) return;
+          if (await predicate()) return;
           await new Promise((resolve) => setTimeout(resolve, 250));
         }
         throw new Error(label + ' did not become ready.');
@@ -223,10 +223,25 @@ async function prepareReportPage(cdp) {
       document.querySelector('#to').value = '2026-09-30';
       document.querySelector('#run').click();
       await waitFor(() => document.querySelectorAll('#tbody tr').length > 0, 'report rows');
+      const token = sessionStorage.getItem('procurex-token');
+      const created = await fetch('${apiBaseUrl}/exports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ reportType: 'order-amounts', filters: { from: '2026-09-01', to: '2026-09-30' } })
+      }).then((response) => response.json());
+      const jobId = created.data.jobId;
+      await waitFor(async () => {
+        const status = await fetch('${apiBaseUrl}/exports/' + jobId, { headers: { Authorization: 'Bearer ' + token } }).then((response) => response.json());
+        return status.data.status === 'READY';
+      }, 'ready export job');
+      await window.loadExportJobs();
+      await waitFor(() => document.querySelectorAll('#export-jobs tr').length > 0, 'export job rows');
+      await waitFor(() => document.querySelector('#export-jobs')?.textContent.includes('READY'), 'ready export job');
       return {
         acceptanceStatus: document.querySelector('#m5-acceptance-status').textContent.trim(),
         acceptanceSteps: document.querySelectorAll('#m5-acceptance article').length,
         reportRows: document.querySelectorAll('#tbody tr').length,
+        exportRows: document.querySelectorAll('#export-jobs tr').length,
         tableTitle: document.querySelector('#table-title').textContent.trim()
       };
     })()
@@ -274,4 +289,5 @@ console.log(`  Web server started by script: ${captured.startedServer ? 'yes' : 
 console.log(`  Screenshot: ${captured.file}`);
 console.log(`  Acceptance status: ${captured.state.acceptanceStatus} (${captured.state.acceptanceSteps} steps)`);
 console.log(`  Report rows: ${captured.state.reportRows}`);
+console.log(`  Export rows: ${captured.state.exportRows}`);
 console.log(`  Manifest: ${resolve(outputDir, 'manifest.json')}`);

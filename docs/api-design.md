@@ -240,12 +240,12 @@ B08 不能覆盖原登记金额：期间降价造成多付款时记录真实已�
 | R01 | `GET /reports/order-amounts` | 已完成订货金额，按 completedAt；门店范围或公司全量 |
 | R02 | `GET /reports/product-quantities` | 最终有效数量按完成日汇总；日期范围最大 3 个月 |
 | R03 | `GET /reports/profit` | 首次发货日期筛选，只统计完成订单；销售商品金额减供货商品金额，运费单列，排除直接账期 |
-| R04 | `POST /exports`、`GET /exports/{id}` | reportType、filters；202 jobId；生成及下载复核角色和字段权限 |
+| R04 | `POST /exports`、`GET /exports`、`GET /exports/{id}` | reportType、filters；202 jobId；列表和详情只返回本人且当前账号范围仍有权查看的任务；生成及下载复核角色和字段权限 |
 | R05 | `GET /audit-logs`、`GET /reconciliation-issues` | 内部授权查询，敏感内容脱敏；不可通过这些接口直接修改财务事实 |
 
 R03 仅 PURCHASER/HQ_FINANCE/ADMIN；导出不接受客户端自定义任意 SQL、字段或数据范围。每个报表响应含 `dateBasis`、`asOf`、`currency`、统计口径，防止把利润月份和清账月份混淆。
 
-R04 `POST /exports` 返回 202 和 jobId；`GET /exports/{id}` 查询状态；`GET /exports/{id}/download` 下载私有 CSV。快照保存于数据库，7 天到期，且仅创建者可查/下载；状态和下载按当前角色及账号范围复核。
+R04 `POST /exports` 返回 202 和 jobId；`GET /exports` 返回本人最近未过期导出任务；`GET /exports/{id}` 查询状态；`GET /exports/{id}/download` 下载私有 CSV。快照保存于数据库，7 天到期，且仅创建者可查/下载；列表、状态和下载均按当前角色及账号范围复核。
 
 后台定时出账、任务续租和每日对账是内部服务，不开放无鉴权 HTTP 触发入口。需要重试任务时只允许授权角色重试已存在的失败项，不允许上传任意可执行任务内容。
 

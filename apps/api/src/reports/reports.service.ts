@@ -29,6 +29,24 @@ export class ReportsService implements OnModuleInit {
     return { jobId: job.id, reportType: job.reportType, status: job.status, createdAt: job.createdAt.toISOString(), expiresAt: job.expiresAt.toISOString(), error: job.errorMessage };
   }
 
+  async listExports(userId: string, roles: string[], scope?: unknown) {
+    const jobs = await this.database.client.exportJob.findMany({
+      where: { requestedById: userId, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    return jobs
+      .filter((job) => authorizedExport(job, roles, scope))
+      .map((job) => ({
+        jobId: job.id,
+        reportType: job.reportType,
+        status: job.status,
+        createdAt: job.createdAt.toISOString(),
+        expiresAt: job.expiresAt.toISOString(),
+        error: job.errorMessage,
+      }));
+  }
+
   async exportContent(id: string, userId: string, roles: string[], scope?: unknown) {
     const job = await this.database.client.exportJob.findFirst({ where: { id, requestedById: userId } });
     return !job || job.expiresAt <= new Date() || job.status !== 'READY' || !authorizedExport(job, roles, scope) ? null : job.csvContent;

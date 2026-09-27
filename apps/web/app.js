@@ -8,6 +8,7 @@ const reportMeta = {
   'product-quantities': { title: '商品流转数量', desc: '按订单完成日期汇总最终有效实收数量，最多查询三个月。', table: '商品汇总' },
   profit: { title: '商品经营差额', desc: '按首次发货日期统计已完成订单，运费单列且不计入差额。', table: '订单商品明细' },
 };
+const reportNames = { 'order-amounts': '订货金额', 'product-quantities': '商品数量', profit: '商品差额' };
 function showSession(user) {
   $('login').classList.toggle('hidden', !!token); $('workspace').classList.toggle('hidden', !token);
   $('logout').classList.toggle('hidden', !token); $('identity').textContent = user ? `${user.displayName} · ${(user.roles || []).join(', ')}` : (token ? '已登录' : '未登录');
@@ -21,7 +22,7 @@ async function call(path, options = {}) {
   if (!response.ok) throw new Error(body.message || body.error?.message || `请求失败（${response.status}）`);
   return body.data ?? body;
 }
-async function loadMe() { if (!token) return; try { const me = await call('/me'); showSession(me.user || me); } catch { token = null; sessionStorage.removeItem('procurex-token'); showSession(); } }
+async function loadMe() { if (!token) return; try { const me = await call('/me'); showSession(me.user || me); await loadExportJobs(); } catch { token = null; sessionStorage.removeItem('procurex-token'); showSession(); } }
 async function loadAcceptance() {
   try {
     const response = await fetch(`/reports-acceptance-run.json?ts=${Date.now()}`);
@@ -35,11 +36,34 @@ async function loadAcceptance() {
     $('m5-acceptance').innerHTML = '<article><strong>尚未生成 M5 验收结果</strong><small>运行 npm run acceptance:m5-browserless 后刷新页面</small></article>';
   }
 }
+async function loadExportJobs() {
+  if (!token) return;
+  try {
+    const jobs = await call('/exports');
+    $('exports-empty').classList.toggle('hidden', !!jobs.length);
+    $('export-jobs').innerHTML = jobs.map((job) => `<tr><td>${new Date(job.createdAt).toLocaleString('zh-CN')}</td><td><strong>${esc(reportNames[job.reportType] || job.reportType)}</strong></td><td><span class="tag ${job.status === 'READY' ? 'tag-ok' : job.status === 'FAILED' ? 'tag-fail' : 'tag-pending'}">${esc(job.status)}</span>${job.error ? `<small>${esc(job.error)}</small>` : ''}</td><td>${new Date(job.expiresAt).toLocaleString('zh-CN')}</td><td>${job.status === 'READY' ? `<button class="secondary" data-export-download="${esc(job.jobId)}">下载</button>` : ''}</td></tr>`).join('');
+    $('export-jobs').querySelectorAll('[data-export-download]').forEach((button) => button.addEventListener('click', async () => { try { await downloadExportJob(button.dataset.exportDownload); } catch (error) { $('notice').textContent = error.message; $('notice').classList.remove('hidden'); } }));
+  } catch (error) {
+    $('notice').textContent = error.message;
+    $('notice').classList.remove('hidden');
+  }
+}
+async function downloadExportJob(jobId) {
+  const response = await fetch(`${api}/exports/${jobId}/download`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error('下载失败，请重新生成');
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `procurex-${jobId}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => { active = tab.dataset.report; document.querySelectorAll('.tab').forEach((item) => item.classList.toggle('active', item === tab)); updateMeta(); if (latest) runReport(); }));
 function updateMeta() { const meta = reportMeta[active]; $('report-title').textContent = meta.title; $('report-desc').textContent = meta.desc; $('table-title').textContent = meta.table; }
-$('login-form').addEventListener('submit', async (event) => { event.preventDefault(); $('login-error').textContent = ''; const form = new FormData(event.currentTarget); try { const result = await call('/auth/login', { method: 'POST', body: JSON.stringify({ username: form.get('username'), password: form.get('password'), client: 'WEB' }) }); token = result.accessToken; sessionStorage.setItem('procurex-token', token); showSession(result.user); } catch (error) { $('login-error').textContent = error.message; } });
+$('login-form').addEventListener('submit', async (event) => { event.preventDefault(); $('login-error').textContent = ''; const form = new FormData(event.currentTarget); try { const result = await call('/auth/login', { method: 'POST', body: JSON.stringify({ username: form.get('username'), password: form.get('password'), client: 'WEB' }) }); token = result.accessToken; sessionStorage.setItem('procurex-token', token); showSession(result.user); await loadExportJobs(); } catch (error) { $('login-error').textContent = error.message; } });
 $('logout').addEventListener('click', async () => { try { await call('/auth/logout', { method: 'POST' }); } catch {} token = null; sessionStorage.removeItem('procurex-token'); showSession(); });
 $('run').addEventListener('click', runReport);
+$('refresh-exports').addEventListener('click', loadExportJobs);
 async function runReport() {
   const params = new URLSearchParams(); if ($('from').value) params.set('from', $('from').value); if ($('to').value) params.set('to', $('to').value);
   if ($('storeId').value) params.set('storeId', $('storeId').value); if ($('supplierId').value) params.set('supplierId', $('supplierId').value);
@@ -71,5 +95,5 @@ function render(data) {
   }
   $('summary').innerHTML = cards; $('thead').innerHTML = head; $('tbody').innerHTML = rows; $('empty').classList.toggle('hidden', !!rows);
 }
-$('download').addEventListener('click', async () => { if (!latest) return; const button = $('download'); button.disabled = true; button.querySelector('span').textContent = '生成中…'; try { const job = await call('/exports', { method: 'POST', body: JSON.stringify({ reportType: active, filters: { from: $('from').value || undefined, to: $('to').value || undefined, storeId: $('storeId').value || undefined, supplierId: $('supplierId').value || undefined } }) }); let status; for (let i = 0; i < 30; i++) { status = await call(`/exports/${job.jobId}`); if (status.status === 'READY' || status.status === 'FAILED') break; await new Promise((resolve) => setTimeout(resolve, 1000)); } if (status.status !== 'READY') throw new Error(status.error || '导出仍在处理中，请稍后重试'); const response = await fetch(`${api}/exports/${job.jobId}/download`, { headers: { Authorization: `Bearer ${token}` } }); if (!response.ok) throw new Error('下载失败，请重新生成'); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = `procurex-${active}.csv`; link.click(); URL.revokeObjectURL(url); } catch (error) { $('notice').textContent = error.message; $('notice').classList.remove('hidden'); } finally { button.disabled = false; button.querySelector('span').textContent = '导出 CSV'; } });
+$('download').addEventListener('click', async () => { if (!latest) return; const button = $('download'); button.disabled = true; button.querySelector('span').textContent = '生成中…'; try { const job = await call('/exports', { method: 'POST', body: JSON.stringify({ reportType: active, filters: { from: $('from').value || undefined, to: $('to').value || undefined, storeId: $('storeId').value || undefined, supplierId: $('supplierId').value || undefined } }) }); await loadExportJobs(); let status; for (let i = 0; i < 30; i++) { status = await call(`/exports/${job.jobId}`); if (status.status === 'READY' || status.status === 'FAILED') break; await new Promise((resolve) => setTimeout(resolve, 1000)); } if (status.status !== 'READY') throw new Error(status.error || '导出仍在处理中，请稍后重试'); await downloadExportJob(job.jobId); await loadExportJobs(); } catch (error) { $('notice').textContent = error.message; $('notice').classList.remove('hidden'); } finally { button.disabled = false; button.querySelector('span').textContent = '导出 CSV'; } });
 showSession(); loadMe(); updateMeta(); loadAcceptance();

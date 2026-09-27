@@ -229,8 +229,10 @@ assertIncludes(reportsController, "@Get('order-amounts')", 'reports controller')
 assertIncludes(reportsController, "@Get('product-quantities')", 'reports controller');
 assertIncludes(reportsController, "@Get('profit')", 'reports controller');
 assertIncludes(apiDesign, '`POST /exports`', 'api design');
+assertIncludes(apiDesign, '`GET /exports`', 'api design');
 assertIncludes(exportsController, "@Controller('exports')", 'exports controller');
 assertIncludes(exportsController, '@HttpCode(202)', 'exports controller');
+assertIncludes(exportsController, '@Get()', 'exports controller');
 assertIncludes(exportsController, '@Get(\':id/download\')', 'exports controller');
 assertIncludes(prismaSchema, 'model ExportJob', 'export job schema');
 assertIncludes(prismaSchema, 'PROCESSING', 'export processing status');

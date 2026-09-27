@@ -48,6 +48,17 @@ test('export status and downloads recheck current report role and saved scope', 
   assert.equal(await service.exportContent('job', 'user', ['PURCHASER'], { type: 'COMPANY' }), 'private');
 });
 
+test('export list only returns current user jobs in the current saved scope', async () => {
+  const rows = [
+    { id: 'visible', reportType: 'order-amounts', permissionScope: { type: 'STORE', storeId: 'store-1' }, expiresAt: new Date(Date.now() + 60000), status: 'READY', createdAt: new Date('2026-09-27T00:00:00.000Z'), errorMessage: null },
+    { id: 'hidden-scope', reportType: 'order-amounts', permissionScope: { type: 'STORE', storeId: 'store-2' }, expiresAt: new Date(Date.now() + 60000), status: 'READY', createdAt: new Date('2026-09-27T00:00:00.000Z'), errorMessage: null },
+    { id: 'hidden-profit', reportType: 'profit', permissionScope: { type: 'STORE', storeId: 'store-1' }, expiresAt: new Date(Date.now() + 60000), status: 'READY', createdAt: new Date('2026-09-27T00:00:00.000Z'), errorMessage: null },
+  ];
+  const service = new ReportsService({ client: { exportJob: { findMany: async () => rows } } } as any);
+  const jobs = await service.listExports('user', ['STORE'], { type: 'STORE', storeId: 'store-1' });
+  assert.deepEqual(jobs.map((job) => job.jobId), ['visible']);
+});
+
 test('export worker claims queued jobs once', async () => {
   const updates: any[] = [];
   const service = new ReportsService({ client: { exportJob: {
