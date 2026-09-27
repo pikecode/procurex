@@ -22,7 +22,10 @@ console.log('');
 console.log(run('npm', ['run', 'm4:check-manual-checklist']));
 console.log('');
 
-console.log('Start services in two terminals:');
+console.log('Start services and open Chrome with one command:');
+console.log('  npm run m4:start-manual-acceptance');
+console.log('');
+console.log('Or start services in two terminals:');
 console.log('  npm run start:api');
 console.log('  npm run start:web');
 console.log('');

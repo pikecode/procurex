@@ -73,9 +73,10 @@ These files are intentionally ignored by git.
 Start the local services:
 
 ```bash
-npm run start:api
-npm run start:web
+npm run m4:start-manual-acceptance
 ```
+
+Alternatively, start the API and web server separately with `npm run start:api` and `npm run start:web`.
 
 Open:
 

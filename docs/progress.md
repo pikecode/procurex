@@ -74,6 +74,8 @@ The same gate definition file now includes manual execution steps for each gate.
 
 `npm run m4:prepare-manual-acceptance` is the single preflight command for manual M4 review. It runs the browser runtime check, gate-status check, manual checklist sync check, and prints the exact service commands, URLs, accounts, and DEV-402/403/406 manual acceptance path.
 
+`npm run m4:start-manual-acceptance` starts the API and Web static server together and opens the M4 review pages in Chrome on macOS. Use it after `npm run acceptance:m4-browserless` when collecting the remaining screenshots or recordings.
+
 `apps/web/m4-acceptance.html` now renders the generated `billing-acceptance-run.json` and `main-flow-run.json` together, so a reviewer can see the latest M4 browserless acceptance result from the Web workbench rather than reading terminal logs only.
 
 The same M4 acceptance page now includes a gate walkthrough for DEV-402, DEV-403, and DEV-406, plus the seeded account matrix for W09/S05/S08 and W10. `billing:check-acceptance` writes structured `gateId/evidenceId` entries, so the page can show which automatic evidence is already covered per gate and which manual browser evidence remains. This keeps the remaining work visible as browser acceptance and manual evidence collection, not new M5 scope.
