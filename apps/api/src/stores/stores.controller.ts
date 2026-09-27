@@ -1,4 +1,5 @@
 import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -72,6 +73,7 @@ export class StoresController {
   constructor(
     private readonly storesService: StoresService,
     private readonly commandsService: CommandsService,
+    private readonly audit: AuditService,
   ) {}
 
   @Get()
@@ -111,12 +113,13 @@ export class StoresController {
     @Body() body: CreateRechargeBody,
   ): Promise<RechargeDocumentView> {
     const input = parseCreateRechargeBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'store.recharge.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -129,6 +132,22 @@ export class StoresController {
       resourceType: 'RechargeDocument',
       resourceId: result.id,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'store.recharge.create',
+      entityType: 'RechargeDocument',
+      entityId: result.id,
+      traceId,
+      reason: input.recharge.remark,
+      after: {
+        storeId: result.storeId,
+        amount: result.amount,
+        businessDate: result.businessDate,
+        collectionAccountId: result.collectionAccountId,
+        accountVersion: result.account.version,
+      },
     });
 
     return result;
@@ -143,12 +162,13 @@ export class StoresController {
     @Body() body: UpdateCreditLimitBody,
   ): Promise<StoreAccountView> {
     const input = parseUpdateCreditLimitBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'store.credit-limit.update',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -161,6 +181,22 @@ export class StoresController {
       resourceType: 'StoreAccount',
       resourceId: result.id ?? input.id,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'store.credit-limit.update',
+      entityType: 'StoreAccount',
+      entityId: result.id ?? input.id,
+      traceId,
+      reason: input.creditLimit.reason,
+      after: {
+        storeId: result.storeId,
+        creditLimit: result.creditLimit,
+        creditUsed: result.creditUsed,
+        creditAvailable: result.creditAvailable,
+        version: result.version,
+      },
     });
 
     return result;
@@ -182,12 +218,13 @@ export class StoresController {
     @Body() body: CreateClearingBody,
   ): Promise<ClearingDocumentView> {
     const input = parseCreateClearingBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'store.clearing.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -200,6 +237,22 @@ export class StoresController {
       resourceType: 'ClearingDocument',
       resourceId: result.id,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'store.clearing.create',
+      entityType: 'ClearingDocument',
+      entityId: result.id,
+      traceId,
+      reason: input.clearing.remark,
+      after: {
+        storeId: result.storeId,
+        amount: result.amount,
+        businessDate: result.businessDate,
+        itemCount: result.items.length,
+        accountVersion: result.account.version,
+      },
     });
 
     return result;
@@ -218,6 +271,10 @@ function applyStoreScope(storeId: string, request: AuthenticatedRequest): void {
   if (scope?.type !== 'STORE' && scope?.type !== 'STORE_FINANCE') return;
   if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
   if (scope.storeId !== storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Store is outside the current store scope' });
+}
+
+function auditScope(auth: AuthenticatedSession) {
+  return { roles: auth.user.roles, ...(auth.user.scope ? { scope: auth.user.scope } : {}) };
 }
 
 function parseCreateStoreBody(body: CreateStoreBody): {

@@ -48,6 +48,6 @@ test('statement controllers narrow list scope and require configured detail scop
   await supplierStore.list({}, request({ type: 'SUPPLIER', supplierId }));
   assert.equal((supplierStoreInput as { supplierId: string }).supplierId, supplierId);
 
-  const stores = new StoresController({ getAccount: async () => ({}) as never, listLedgers: async () => [] } as never, {} as never);
+  const stores = new StoresController({ getAccount: async () => ({}) as never, listLedgers: async () => [] } as never, {} as never, {} as never);
   assert.throws(() => stores.getAccount(storeId, request({ type: 'STORE_FINANCE' })), (error: unknown) => error instanceof ForbiddenException);
 });

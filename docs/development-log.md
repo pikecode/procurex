@@ -351,3 +351,6 @@
 
 - Expanded DEV-504 audit coverage to supplier-order rejection, supplier funding reconciliation, freight-confirmation create, and freight-confirmation confirm/reject commands. Integration coverage asserts those audit rows are written once across idempotent replays.
 - Verification: `npm run build`, `npm run test:integration`, `npm run acceptance:m4-browserless`, `npm run acceptance:m5-browserless`, `npm run contract:check`, `npm run web:check`, and `git diff --check` passed.
+
+- Expanded DEV-504 audit coverage to store recharge, store credit-limit update, and store clearing creation. Stores HTTP integration coverage asserts each command writes one audit row across idempotent replays.
+- Verification: `npm run build`, `npm test`, `npm run test:integration`, `npm run acceptance:m4-browserless`, `npm run acceptance:m5-browserless`, `npm run contract:check`, `npm run web:check`, and `git diff --check` passed.

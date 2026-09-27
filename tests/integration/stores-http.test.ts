@@ -158,6 +158,11 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(recharge.data.collectionAccountId, 'COLLECT-001');
     assert.equal(recharge.data.remark, 'Initial recharge');
     assert.equal(recharge.data.account.balance, '320.50');
+    const rechargeAuditLogs = await prisma.auditLog.findMany({
+      where: { actor: { username: adminUsername }, action: 'store.recharge.create', traceId: 'trace-store-recharge' },
+    });
+    assert.equal(rechargeAuditLogs.length, 1);
+    assert.equal(rechargeAuditLogs[0]?.entityId, recharge.data.id);
 
     const rechargeDetailResponse = await fetch(`${baseUrl}/recharges/${recharge.data.id}`, {
       headers: {
@@ -249,6 +254,11 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(creditLimit.data.creditUsed, '0.00');
     assert.equal(creditLimit.data.creditAvailable, '1000.00');
     assert.equal(creditLimit.data.version, 2);
+    const creditAuditLogs = await prisma.auditLog.findMany({
+      where: { actor: { username: adminUsername }, action: 'store.credit-limit.update', traceId: 'trace-store-credit-limit' },
+    });
+    assert.equal(creditAuditLogs.length, 1);
+    assert.equal(creditAuditLogs[0]?.entityId, creditLimit.data.id);
     await prisma.storeAccount.update({
       where: { storeId: createdBody.data.id },
       data: { creditUsed: '200.00', version: { increment: 1 } },
@@ -429,6 +439,11 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(clearingLedger.direction, LedgerDirection.DEBIT);
     assert.equal(clearingLedger.amount.toFixed(2), '200.00');
     assert.equal(clearingLedger.balanceAfter.toFixed(2), '320.50');
+    const clearingAuditLogs = await prisma.auditLog.findMany({
+      where: { actor: { username: adminUsername }, action: 'store.clearing.create', traceId: 'trace-store-clearing' },
+    });
+    assert.equal(clearingAuditLogs.length, 1);
+    assert.equal(clearingAuditLogs[0]?.entityId, clearing.data.id);
     const clearingDetailResponse = await fetch(`${baseUrl}/clearings/${clearing.data.id}`, {
       headers: {
         authorization: `Bearer ${storeToken}`,
