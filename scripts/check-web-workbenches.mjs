@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, mainFlowDemoHtml, mainFlowDemoJs] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, mainFlowDemoHtml, mainFlowDemoJs] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -41,6 +41,7 @@ const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, main
   readProjectFile('apps/web/main-flow.js'),
   readProjectFile('apps/web/m4-acceptance.html'),
   readProjectFile('apps/web/m4-acceptance.js'),
+  readProjectFile('apps/web/m4-acceptance.css'),
   readProjectFile('apps/web/main-flow-demo.html'),
   readProjectFile('apps/web/main-flow-demo.js'),
 ]);
@@ -54,6 +55,7 @@ for (const path of [
   'apps/web/main-flow.js',
   'apps/web/m4-acceptance.html',
   'apps/web/m4-acceptance.js',
+  'apps/web/m4-acceptance.css',
   'apps/web/main-flow-demo.html',
   'apps/web/main-flow-demo.js',
 ]) {
@@ -109,9 +111,14 @@ assertIncludes(mainFlowJs, 'fulfillmentStatus', 'main-flow receipt completion ev
 
 assertIncludes(m4Html, 'M4 验收', 'M4 acceptance page');
 assertIncludes(m4Html, '/m4-acceptance.js', 'M4 acceptance script');
+assertIncludes(m4Html, '/m4-acceptance.css', 'M4 acceptance styles');
 assertIncludes(m4Js, 'billing-acceptance-run.json', 'M4 billing acceptance output');
 assertIncludes(m4Js, 'main-flow-run.json', 'M4 main-flow acceptance output');
 assertIncludes(m4Js, 'acceptance:m4-browserless', 'M4 acceptance command');
+assertIncludes(m4Js, 'DEV-402', 'M4 gate walkthrough');
+assertIncludes(m4Js, 'DEV-403', 'M4 gate walkthrough');
+assertIncludes(m4Js, 'DEV-406', 'M4 gate walkthrough');
+assertIncludes(m4Css, '.gate-card', 'M4 gate styles');
 
 assertIncludes(mainFlowDemoHtml, '主流程操作台', 'main-flow demo page');
 assertIncludes(mainFlowDemoHtml, '/main-flow-demo.js', 'main-flow demo script');

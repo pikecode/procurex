@@ -72,6 +72,8 @@ http://127.0.0.1:4173/billing.html
 http://127.0.0.1:4173/main-flow.html
 ```
 
+`m4-acceptance.html` is the best first screen for review: it shows the latest browserless result, the DEV-402/403/406 gate status, the seeded account matrix, and the manual evidence still needed for M4 closure.
+
 If port `4173` is occupied, run a one-off static server on another port:
 
 ```bash
