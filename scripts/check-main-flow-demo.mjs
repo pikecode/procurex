@@ -185,6 +185,8 @@ async function run() {
       headers: authHeaders(token),
     });
     const actions = new Set(auditLogs.map((entry) => entry.action));
+    assert.ok(actions.has('purchase-request.create'));
+    assert.ok(actions.has('purchase-request.confirm'));
     assert.ok(actions.has('supplier-order.shipment.create'));
     assert.ok(actions.has('shipment.receipt.create'));
     assert.ok(actions.has('discrepancy.resolve'));
@@ -194,7 +196,7 @@ async function run() {
     console.log(`  Store notification: ${shipmentNotification.title}`);
     console.log(`  Supplier notification: ${discrepancyNotification.title}`);
     console.log(`  Resolution notification: ${resolutionNotification.title}`);
-    console.log(`  Audit actions: ${Array.from(actions).filter((action) => action.includes('shipment') || action.includes('discrepancy')).join(', ')}`);
+    console.log(`  Audit actions: ${Array.from(actions).filter((action) => action.includes('purchase-request') || action.includes('shipment') || action.includes('discrepancy')).sort().join(', ')}`);
     console.log(`  Payment preview: ${preview.direction} ${preview.totalPayableAmount}`);
   } finally {
     await app.close();

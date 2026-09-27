@@ -342,3 +342,6 @@
 
 - Hardened DEV-406 settlement-item locking: payment registration and difference offset creation now use PostgreSQL blocking transaction advisory locks instead of a JavaScript retry loop, keeping the same sorted lock order while reducing transaction polling.
 - Verification: `npm run acceptance:m4-browserless`, `npm run acceptance:m5-browserless`, `npm run contract:check`, `npm run web:check`, and `git diff --check` passed.
+
+- Expanded DEV-504 audit coverage to purchase request create/confirm/reject commands, so the W13 audit trail starts at ordering and continues through fulfillment, discrepancy handling, and billing. `main-flow:check-demo` now asserts purchase-request create/confirm audit rows.
+- Verification: `npm run acceptance:m4-browserless`, `npm run acceptance:m5-browserless`, `npm run contract:check`, `npm run web:check`, and `git diff --check` passed.

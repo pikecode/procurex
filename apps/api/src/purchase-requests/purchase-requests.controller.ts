@@ -1,4 +1,5 @@
 import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -77,6 +78,7 @@ export class PurchaseRequestsController {
     private readonly previewService: PurchaseRequestPreviewService,
     private readonly purchaseRequestsService: PurchaseRequestsService,
     private readonly commandsService: CommandsService,
+    private readonly audit: AuditService,
   ) {}
 
   @Get()
@@ -118,12 +120,13 @@ export class PurchaseRequestsController {
   ): Promise<PurchaseRequestView> {
     const input = parsePreviewBody(body);
     assertStoreScope(request, input.storeId);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'purchase-request.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: body as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -136,6 +139,21 @@ export class PurchaseRequestsController {
       resourceType: 'PurchaseRequest',
       resourceId: result.id,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'purchase-request.create',
+      entityType: 'PurchaseRequest',
+      entityId: result.id,
+      traceId,
+      after: {
+        storeId: result.storeId,
+        status: result.status,
+        paymentStatus: result.paymentStatus,
+        itemCount: result.items.length,
+        salesGoodsAmount: result.totals.salesGoodsAmount,
+      },
     });
 
     return result;
@@ -178,12 +196,13 @@ export class PurchaseRequestsController {
     @Body() body: ConfirmBody,
   ): Promise<ConfirmPurchaseRequestResult> {
     const input = parseConfirmBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'purchase-request.confirm',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -196,6 +215,18 @@ export class PurchaseRequestsController {
       resourceType: 'PurchaseRequest',
       resourceId: result.requestId,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'purchase-request.confirm',
+      entityType: 'PurchaseRequest',
+      entityId: result.requestId,
+      traceId,
+      after: {
+        status: result.status,
+        supplierOrderIds: result.supplierOrderIds,
+      },
     });
 
     return result;
@@ -210,12 +241,13 @@ export class PurchaseRequestsController {
     @Body() body: RejectBody,
   ): Promise<RejectPurchaseRequestResult> {
     const input = parseRejectBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'purchase-request.reject',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -228,6 +260,19 @@ export class PurchaseRequestsController {
       resourceType: 'PurchaseRequest',
       resourceId: result.requestId,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'purchase-request.reject',
+      entityType: 'PurchaseRequest',
+      entityId: result.requestId,
+      traceId,
+      reason: input.reason,
+      after: {
+        status: result.status,
+        rejectedAt: result.rejectedAt,
+      },
     });
 
     return result;
@@ -244,6 +289,10 @@ function assertStoreScope(request: AuthenticatedRequest, storeId: string): void 
   if (!scope) return;
   if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
   if (scope.storeId !== storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Purchase request is outside the current store scope' });
+}
+
+function auditScope(auth: AuthenticatedSession) {
+  return { roles: auth.user.roles, ...(auth.user.scope ? { scope: auth.user.scope } : {}) };
 }
 
 function parseListQuery(query: ListQuery): ListPurchaseRequestsInput {
