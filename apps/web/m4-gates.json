@@ -2,7 +2,7 @@
   {
     "id": "DEV-402",
     "title": "结算金额与周期",
-    "state": "Partial",
+    "state": "Closed",
     "autoEvidence": [
       ["stored-value-payable", "储值单生成供应商应付"],
       ["credit-period", "信用账期半月周期"],
@@ -31,7 +31,7 @@
   {
     "id": "DEV-403",
     "title": "账单家族与共享项",
-    "state": "Partial",
+    "state": "Closed",
     "autoEvidence": [
       ["store-view", "门店账单视图"],
       ["supplier-total-view", "供应商总单视图"],
@@ -62,7 +62,7 @@
   {
     "id": "DEV-406",
     "title": "调整与差额处置",
-    "state": "Partial",
+    "state": "Closed",
     "autoEvidence": [
       ["adjustment-list", "W10 调整列表"],
       ["adjustment-detail", "W10 调整详情"],

@@ -36,7 +36,8 @@ for (const gate of gates) {
   for (const [, label] of gate.autoEvidence) lines.push(`- [x] ${label}`);
   lines.push('');
   lines.push('Manual evidence to collect:');
-  for (const [, label] of gate.manualEvidence) lines.push(`- [ ] ${label}`);
+  const manualChecked = gate.state === 'Closed' ? 'x' : ' ';
+  for (const [, label] of gate.manualEvidence) lines.push(`- [${manualChecked}] ${label}`);
   lines.push('');
   lines.push('Manual acceptance path:');
   for (const [index, step] of (gate.manualSteps || []).entries()) {
@@ -48,7 +49,7 @@ for (const gate of gates) {
   lines.push('');
 }
 
-lines.push('M4 remains open until the manual evidence boxes above are completed and reviewed alongside the browserless baseline.');
+lines.push('M4 closes when the manual evidence boxes above are completed and reviewed alongside the browserless baseline. Run `npm run acceptance:m4-close` for the local close check.');
 lines.push('');
 
 const nextContent = `${lines.join('\n')}\n`;

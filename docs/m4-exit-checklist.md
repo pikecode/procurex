@@ -4,7 +4,7 @@ Last updated: 2026-09-27
 
 This checklist exists because M4 is the financial closure layer. M4 should not be marked complete merely because APIs or pages exist; it closes only when the billing, payment, clearing, and adjustment flows are visibly accepted.
 
-## Why M4 Is Still Open
+## Why M4 Is Locally Closed
 
 M4 contains the risky money paths:
 
@@ -15,17 +15,17 @@ M4 contains the risky money paths:
 - A04-A06 clearing selected credit without altering cumulative debt.
 - W09/S05/S08 billing workbench and W10 adjustment workbench acceptance.
 
-The backend evidence is strong, but browser-level acceptance is still blocked by the missing browser runtime. Until that is available, M4 stays open with DEV-402, DEV-403, and DEV-406 partial.
+The backend evidence is strong, Chrome is available locally, and browser evidence has been captured for DEV-402, DEV-403, and DEV-406. `npm run acceptance:m4-close` is the current local close gate.
 
 ## Gate Rules
 
-Do not reopen M5 work until all rows below are closed.
+Do not reopen M4 work unless one of the close checks below regresses or a reviewer rejects the collected browser evidence.
 
 | Gate | Current State | Close When |
 |---|---|---|
-| DEV-402 settlement amount/period acceptance | Partial | W09/S05/S08 can show company-term, direct-term, stored-value, and credit-backed settlement amounts with correct period and payment status. |
-| DEV-403 statement-family acceptance | Partial | W09/S05/S08 can switch store, supplier total, supplier-store, and direct statement views; shared settlement items cannot be paid twice. |
-| DEV-406 adjustment/difference acceptance | Partial | W10 can list an adjustment, open detail, register offline return or offset, and show receiver confirmation/disposed state. |
+| DEV-402 settlement amount/period acceptance | Closed | W09/S05/S08 can show company-term, direct-term, stored-value, and credit-backed settlement amounts with correct period and payment status. |
+| DEV-403 statement-family acceptance | Closed | W09/S05/S08 can switch store, supplier total, supplier-store, and direct statement views; shared settlement items cannot be paid twice. |
+| DEV-406 adjustment/difference acceptance | Closed | W10 can list an adjustment, open detail, register offline return or offset, and show receiver confirmation/disposed state. |
 
 ## Browser Acceptance Steps
 
@@ -92,28 +92,30 @@ Close evidence:
 - Targeted HTTP/database B05 to B12 flow passes.
 - `npm run web:check` passes.
 
-## Browserless Evidence Allowed Before Final Close
+## Close Check
 
-These checks can support development, but they do not fully close the browser gates:
-
-```bash
-npm run web:check
-npm run contract:check
-npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration
-```
-
-Browserless evidence may prove that APIs, page entry points, and scripts exist. It does not prove that the user can complete the workflow in the browser.
-
-The highest-signal browserless M4 chain is:
+Run the local close gate after any M4 billing, payment, adjustment, or Web acceptance change:
 
 ```bash
-npm run acceptance:m4-browserless
+npm run acceptance:m4-close
 ```
 
-It builds the project, reseeds W09/W10 `PXACC` evidence, verifies W09/S05/S08 and W10 through temporary API calls, runs the main-flow acceptance runner, and checks the Web workbench entry points.
+The generated browser evidence package lives under:
+
+```text
+var/m4-manual-evidence/
+```
+
+Rebuild it with:
+
+```bash
+npm run m4:capture-manual-evidence
+```
+
+The browserless subchain still supports development and is included in `acceptance:m4-close`.
 
 ## Current Browser Status
 
 `npm run m4:check-browser-runtime` currently finds Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`.
 
-M4 remains open because DEV-402, DEV-403, and DEV-406 still require manual browser screenshots or recordings. The browserless evidence is complete, but it does not replace visible acceptance of the W09/S05/S08 and W10 workflows.
+M4 is locally closed because DEV-402, DEV-403, and DEV-406 now have both automatic evidence and browser screenshot evidence. Reviewer-requested video recordings can still be added beside the screenshot files if needed.

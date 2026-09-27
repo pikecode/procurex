@@ -9,6 +9,8 @@ coverage/
 var/private-files/
 var/m4-browser-evidence/
 var/chrome-m4-browser-evidence/
+var/m4-manual-evidence/
+var/chrome-m4-manual-evidence/
 docs/.omc/
 packages/backend/generated/
 *.tsbuildinfo

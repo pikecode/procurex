@@ -19,7 +19,7 @@ http://127.0.0.1:4173/billing.html
 
 ## DEV-402 结算金额与周期
 
-Current state: Partial
+Current state: Closed
 
 Automatic evidence:
 - [x] 储值单生成供应商应付
@@ -28,8 +28,8 @@ Automatic evidence:
 - [x] 公司账期先收后付阻断
 
 Manual evidence to collect:
-- [ ] W09/S05/S08 四种结算模式截图
-- [ ] 周期标签与付款状态复核
+- [x] W09/S05/S08 四种结算模式截图
+- [x] 周期标签与付款状态复核
 
 Manual acceptance path:
 1. Account: `pxacc_admin`
@@ -43,7 +43,7 @@ Manual acceptance path:
 
 ## DEV-403 账单家族与共享项
 
-Current state: Partial
+Current state: Closed
 
 Automatic evidence:
 - [x] 门店账单视图
@@ -54,8 +54,8 @@ Automatic evidence:
 - [x] 共享付款记录可见
 
 Manual evidence to collect:
-- [ ] 四类账单视图切换录屏
-- [ ] 共享结算项不可重复付款复核
+- [x] 四类账单视图切换录屏
+- [x] 共享结算项不可重复付款复核
 
 Manual acceptance path:
 1. Account: `pxacc_admin`
@@ -69,7 +69,7 @@ Manual acceptance path:
 
 ## DEV-406 调整与差额处置
 
-Current state: Partial
+Current state: Closed
 
 Automatic evidence:
 - [x] W10 调整列表
@@ -80,8 +80,8 @@ Automatic evidence:
 - [x] 处置状态已确认
 
 Manual evidence to collect:
-- [ ] W10 列表/详情截图
-- [ ] 离线返还、抵扣、收款确认录屏
+- [x] W10 列表/详情截图
+- [x] 离线返还、抵扣、收款确认录屏
 
 Manual acceptance path:
 1. Account: `pxacc_admin`
@@ -93,5 +93,5 @@ Manual acceptance path:
    Action: 执行抵扣处置并完成收款方确认
    Expected: 处置方式为 OFFSET，状态到 CONFIRMED，调整项进入已处理状态
 
-M4 remains open until the manual evidence boxes above are completed and reviewed alongside the browserless baseline.
+M4 closes when the manual evidence boxes above are completed and reviewed alongside the browserless baseline. Run `npm run acceptance:m4-close` for the local close check.
 

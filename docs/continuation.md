@@ -6,13 +6,13 @@ Use this as the first document when continuing development in a new window.
 
 ## Current State
 
-The project is still in M4. DEV-401, DEV-404, and DEV-405 are closed against current backend gates. DEV-402, DEV-403, and DEV-406 remain partial because their final browser-level screenshots or recordings have not been collected yet. `npm run m4:status` is the fastest current snapshot: Chrome is ready, local PostgreSQL is reachable, automatic evidence/checklists/screenshots are ready, and the manual evidence package is still 0/6.
+M4 is locally closed against the current acceptance gates. DEV-401 through DEV-406 are closed, `npm run acceptance:m4-close` passes, Chrome is ready, local PostgreSQL is reachable, automatic evidence is complete, and the manual browser evidence package is 6/6.
 
-The direction has not shifted: finish M4 settlement/billing/payment/adjustment acceptance before reopening M5 reporting or operations scope.
+The direction has not shifted: M4 settlement/billing/payment/adjustment acceptance is now closed locally, so the next planned work can move back to M5 reporting or the next approved milestone.
 
 ## Latest High-Signal Work
 
-Recent commits added visible and repeatable acceptance evidence:
+Recent commits closed the visible and repeatable M4 acceptance evidence:
 
 ```text
 89e07ff Record M4 browserless acceptance after DB restore
@@ -95,7 +95,7 @@ http://127.0.0.1:4173/billing.html
 http://127.0.0.1:4173/main-flow.html
 ```
 
-`m4-acceptance.html` is the best first screen for review: it shows the latest browserless result, the DEV-402/403/406 gate status, structured automatic evidence coverage, the seeded account matrix, a copyable acceptance summary, and the manual evidence still needed for M4 closure. The manual evidence checkboxes are saved locally in the browser and are review aids, not backend acceptance data.
+`m4-acceptance.html` is the best first screen for review: it shows the latest browserless result, the DEV-402/403/406 gate status, structured automatic evidence coverage, the seeded account matrix, and a copyable acceptance summary. The manual evidence checkboxes are saved locally in the browser as review aids; the strict file-based close gate is `npm run m4:check-manual-evidence`.
 
 The gate definitions live in `apps/web/m4-gates.json`; update that file first if DEV-402/403/406 acceptance evidence changes, because both the page and `m4:gate-status` read from it. The same file also drives the manual acceptance path shown on `m4-acceptance.html`.
 
@@ -132,6 +132,7 @@ For the M4 gate status summary, run:
 npm run m4:prepare-manual-acceptance
 npm run m4:status
 npm run m4:manual-evidence-status
+npm run m4:capture-manual-evidence
 npm run m4:check-browser-runtime
 npm run m4:gate-status
 npm run m4:capture-browser-evidence
@@ -154,13 +155,14 @@ var/m4-manual-evidence/<gate>/<manualEvidenceId>.<png|jpg|jpeg|webp|mp4|mov|webm
 
 Run `npm run m4:check-manual-evidence` before marking M4 closed.
 
-## Remaining Work
+Run `npm run acceptance:m4-close` for the final local M4 close check after browser evidence exists.
+
+## Next Work
 
 Do these in order:
 
-1. Run real browser/manual acceptance for DEV-402 settlement modes once a browser runtime is available.
-2. Run real browser/manual acceptance for DEV-403 statement-family switching and shared settlement item reservation.
-3. Run real browser/manual acceptance for DEV-406 W10 adjustment list/detail/offline-return/offset/confirmation.
-4. Only after M4 is closed, decide whether to build the interactive main-flow operator workbench or resume M5.
+1. Preserve the generated M4 evidence package under `var/m4-manual-evidence/` when handing off local evidence.
+2. Run `npm run acceptance:m4-close` after any billing or acceptance change.
+3. Resume M5 reporting/export or the next approved milestone.
 
-Do not add new M5 scope until M4 is accepted.
+Do not reopen M4 unless a regression appears in `acceptance:m4-close` or a reviewer rejects the collected browser evidence.

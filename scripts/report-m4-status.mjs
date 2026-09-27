@@ -106,9 +106,9 @@ if (!manifest) {
   printLine('Browser entry screenshots', missing.length ? 'PARTIAL' : 'READY', missing.length ? `missing: ${missing.join(', ')}` : 'var/m4-browser-evidence/manifest.json');
 }
 
+let manualReady = 0;
+let manualExpected = 0;
 if (gates) {
-  let manualReady = 0;
-  let manualExpected = 0;
   for (const gate of gates) {
     for (const [evidenceId] of gate.manualEvidence || []) {
       manualExpected += 1;
@@ -122,4 +122,8 @@ if (gates) {
 }
 
 console.log('');
-console.log('M4 closes only after DEV-402/403/406 manual browser screenshots or recordings are collected and reviewed.');
+if (manualExpected > 0 && manualReady === manualExpected) {
+  console.log('M4 local close evidence is complete. Run npm run acceptance:m4-close after any M4-related change.');
+} else {
+  console.log('M4 closes only after DEV-402/403/406 manual browser screenshots or recordings are collected and reviewed.');
+}

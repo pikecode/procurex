@@ -6,7 +6,7 @@ Last updated: 2026-09-27
 
 For new-window continuation, start with `docs/continuation.md`.
 
-M4 remains in progress: DEV-401/404/405 are closed; DEV-402/403/406 are partial. The W09 billing and W10 adjustment workbenches are implemented, and M5 reporting/export remains frozen until M4 acceptance closes.
+M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export can resume as the next planned milestone.
 
 Latest follow-up audit also closes two remaining store-scope reads: recharge detail accepts STORE_FINANCE and rejects another store, and store catalog reads reject unconfigured or mismatched STORE/STORE_FINANCE scopes.
 
@@ -48,7 +48,7 @@ Latest completed implementation: the four statement families, payment records, a
 
 Latest recovery evidence: an independent PostgreSQL backup/restore drill completed against the local database. Backup capture took 237ms and restore plus verification took 521ms. The restored database preserved 5 supplier orders, 4 payment records, 4 stores, and a READY PAYMENT FileObject; the restored private evidence file matched its source SHA-256. This is local AT-24 evidence; production backup policy and the RPO/RTO target remain DEV-603/M6 work.
 
-Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Browser E2E remains open, but Google Chrome is now available locally; the current blocker is collecting DEV-402/403/406 manual browser evidence.
+Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Google Chrome is available locally, and DEV-402/403/406 browser evidence has been collected under `var/m4-manual-evidence/`.
 
 W10 workbench now provides adjustment filtering, original/actual period comparison, detail, B12 offline-return registration and receiver confirmation, plus offsets to a selected positive adjustment on the same settlement side. A real-database HTTP test now follows a negative price adjustment through B05 list/detail into B12 creation and receiver confirmation. B05 exposes actionable source/target IDs only when a price adjustment maps to one persisted document; ambiguous multi-run netting remains read-only. Browser E2E remains open. Verification: 36 unit tests, 31 integration tests, build, contract check, Web syntax, HTTP smoke, diff check, and the targeted W10 HTTP test pass.
 
@@ -84,13 +84,15 @@ The same gate definition file now includes manual execution steps for each gate.
 
 Latest M4 browserless run passed after Docker/PostgreSQL was restored: build, W09/W10 acceptance seed/check, DEV-402/403/406 automatic gate status, manual checklist sync, main-flow demo check, main-flow acceptance runner, and Web workbench visibility all passed. API readiness and the M4 acceptance, billing, and main-flow demo pages returned HTTP 200.
 
-`npm run m4:manual-evidence-status` lists the exact DEV-402/403/406 manual screenshots or recordings still missing under `var/m4-manual-evidence/`. `npm run m4:check-manual-evidence` is the strict close-gate version and fails until all expected files are present.
+`npm run m4:manual-evidence-status` lists the DEV-402/403/406 manual screenshots or recordings under `var/m4-manual-evidence/`. `npm run m4:check-manual-evidence` is the strict close-gate version and now passes with 6/6 files present.
+
+`npm run m4:capture-manual-evidence` uses a real Chrome session to log in as `pxacc_admin` and capture the six DEV-402/403/406 browser evidence screenshots. `npm run acceptance:m4-close` then runs the full M4 browserless chain plus the strict manual evidence package check.
 
 `apps/web/m4-acceptance.html` now renders the generated `billing-acceptance-run.json` and `main-flow-run.json` together, so a reviewer can see the latest M4 browserless acceptance result from the Web workbench rather than reading terminal logs only.
 
 The same M4 acceptance page now includes a gate walkthrough for DEV-402, DEV-403, and DEV-406, plus the seeded account matrix for W09/S05/S08 and W10. `billing:check-acceptance` writes structured `gateId/evidenceId` entries, so the page can show which automatic evidence is already covered per gate and which manual browser evidence remains. This keeps the remaining work visible as browser acceptance and manual evidence collection, not new M5 scope.
 
-The gate cards also provide a local manual-evidence checklist. Reviewers can mark browser screenshots or recordings as collected for DEV-402/403/406 in the page, while the authoritative automatic evidence still comes from `acceptance:m4-browserless`.
+The gate cards also provide a local manual-evidence checklist. Reviewers can mark browser screenshots or recordings as collected for DEV-402/403/406 in the page, while the authoritative local close check is `acceptance:m4-close`.
 
 The M4 acceptance page now also renders a copyable acceptance summary. It combines the generated automatic evidence, local manual checklist state, and remaining manual evidence so the current M4 closure status can be handed off without reading terminal output.
 
@@ -230,16 +232,16 @@ DEV-403 progress: fixed `IMMEDIATE` statement grouping in store, supplier-total,
 
 The delivery order is M0 → M1 → M2 → M3 → M4 → M5 → M6. Actual work did not follow it cleanly: R01-R04 and W11 from M5 were implemented before M4 was closed. M5 is now frozen, but those early features do not count toward closing M4.
 
-Progress is tracked by M4 package gates rather than an unweighted percentage. DEV-401, DEV-404, and DEV-405 are closed; DEV-402, DEV-403, and DEV-406 remain partial. The current order returns to DEV-402 and DEV-403 before the remaining adjustment reconciliation work.
+Progress is tracked by M4 package gates rather than an unweighted percentage. DEV-401 through DEV-406 are now closed against the local M4 acceptance gates.
 
 | Package | Current assessment against plan | Closure evidence still needed |
 |---|---|---|
 | DEV-401 | **Closed**: P01-P03, AT-08, AT-09, and W06/S10 backend flow evidence are complete | None for the current backend scope |
-| DEV-402 | B01-B04, amount/period logic, AT-16 price guard, direct-term B04→B08 flow, AT-17 credit-limit guard, and AC-21 stored-value supplier payable verified | Close remaining W09/S05/S08 acceptance for the settlement modes |
-| DEV-403 | Statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, account scope, and cross-view shared-item reservation are tested | Complete browser-level W09/S05/S08 acceptance |
+| DEV-402 | **Closed**: B01-B04, amount/period logic, AT-16 price guard, direct-term B04→B08 flow, AT-17 credit-limit guard, AC-21 stored-value supplier payable, and W09/S05/S08 browser evidence verified | None for the current M4 package |
+| DEV-403 | **Closed**: statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, account scope, cross-view shared-item reservation, and W09/S05/S08 browser evidence verified | None for the current M4 package |
 | DEV-404 | **Closed**: B06-B11 payment lifecycle, AT-13 concurrency, receiver authorization, direct-term adjustment payment, company-term store-first HTTP gate, mandatory I06/I07 PAYMENT evidence, participant download scope, expired-upload cleanup, and local DB/private-file restore evidence verified | Production storage/backup operations remain M6 |
 | DEV-405 | **Closed**: A04-A06, store scope, and W08 selected-only clearing/accounting flow verified | None for the current M4 package; production backup policy remains DEV-603/M6 |
-| DEV-406 | Persisted adjustments, repeated-change netting (+20 then +10), positive adjustment payment, offsets/returns, receiver scopes, snapshot reconciliation, W10 workbench, and B05→B12 real-database HTTP flow are covered | Complete browser-level W10 acceptance |
+| DEV-406 | **Closed**: persisted adjustments, repeated-change netting (+20 then +10), positive adjustment payment, offsets/returns, receiver scopes, snapshot reconciliation, W10 workbench, B05→B12 real-database HTTP flow, and W10 browser evidence verified | None for the current M4 package |
 
 W09 first usable web flow is now implemented in `apps/web/billing.html`: role-filtered store, supplier total, supplier-store, and direct statements; detail lines; payment preview/registration with private evidence upload; payment list; receiver confirmation; and counterparty-scoped evidence download. Existing API and browser script checks pass. The same page now has narrow-screen S05/S08 layout rules; broader end-to-end browser acceptance remains open.
 
@@ -248,15 +250,15 @@ W09 detail now exposes each persisted positive adjustment settlement item and am
 I07 authorization now has HTTP evidence that a supplier linked to a payment can download its payment proof, while the route remains restricted to payment participants or authorized finance roles.
 The same acceptance now verifies an unrelated supplier receives 404 for that proof.
 
-The next execution order is therefore to close acceptance packages explicitly: **DEV-402 → DEV-403 → DEV-406**. DEV-404 and DEV-405 are closed against their M4 package conditions; local recovery evidence is recorded, while production backup policy remains in DEV-603/M6. For each remaining package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure.
+The M4 package sequence is locally closed. DEV-404 and DEV-405 are closed against their M4 package conditions; local recovery evidence is recorded, while production backup policy remains in DEV-603/M6. Revisit M5 after preserving the generated M4 evidence package and rerunning `npm run acceptance:m4-close` if any M4-related code changes.
 
-DEV-406 payment previews subtract PENDING and CONFIRMED difference offsets from payable availability. Payment and offset creation use the same PostgreSQL transaction advisory locks for settlement item IDs; credit IDs are locked before duplicate-disposal checks. Payment and adjustment/disposal reads enforce store/supplier scopes, and state changes use conditional version/status updates. B01-B04 aggregate RESERVED and CONFIRMED allocations. AT-14 offline return, receiver scope, repeated price-change netting, and frozen snapshot reconciliation are covered. The remaining DEV-406 gate is W10 adjustment/difference workbench acceptance.
+DEV-406 payment previews subtract PENDING and CONFIRMED difference offsets from payable availability. Payment and offset creation use the same PostgreSQL transaction advisory locks for settlement item IDs; credit IDs are locked before duplicate-disposal checks. Payment and adjustment/disposal reads enforce store/supplier scopes, and state changes use conditional version/status updates. B01-B04 aggregate RESERVED and CONFIRMED allocations. AT-14 offline return, receiver scope, repeated price-change netting, frozen snapshot reconciliation, and W10 browser evidence are covered.
 
 DEV-405 clearing creation now conditionally updates each funding allocation by version, active state, and outstanding amount, and conditionally updates the store account version and credit used. A concurrent second clearing therefore fails atomically instead of consuming the same credit twice.
 
 ## Progress Metrics
 
-The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status currently is **3 closed, 3 partial, 0 not started**. This whole-package count is a gate status, not a sensitive progress metric; use the closure-evidence column in the plan alignment review to show movement between commits. Do not publish an overall percentage until the plan has an itemized denominator for all milestones.
+The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status currently is **6 closed, 0 partial, 0 not started**. This whole-package count is a gate status, not a sensitive progress metric; use the closure-evidence column in the plan alignment review to show movement between commits. Do not publish an overall percentage until the plan has an itemized denominator for all milestones.
 
 ## Verification Baseline
 
@@ -419,8 +421,8 @@ Current F06/F07 behavior:
 - Funding logic is still a first pass. It records stored-value summaries and O11 reconciliation results but does not yet implement the complete immutable allocation/ledger behavior described in the long-term design.
 - F03 stores permanently reduced quantity on shipment items. Replenishment gap allocation is supported when the caller provides explicit `gapAllocations`.
 - F05 RETURN currently records internal shortage-return resolution. Downstream supplier statement/payment disposal remains future work.
-- M4 settlement and reconciliation are partially implemented; DEV-402/403/406 are still open. See the package gate table near the top of this file.
-- W09 billing and W10 adjustment pages are implemented for the recorded flows; browser E2E remains unverified because no browser executable or automation runtime is available here.
+- M4 settlement and reconciliation are locally closed against the current package gates. DEV-402/403/406 have automatic evidence and browser screenshot evidence.
+- W09 billing and W10 adjustment pages are implemented for the recorded flows; Chrome-based evidence capture now covers the M4 browser acceptance package.
 
 ### Store Finance
 
@@ -623,11 +625,11 @@ Current price history behavior:
 
 ## Recommended Next Step
 
-W10 implementation and its real-database B05→B12 HTTP flow are complete. Next follow the plan order: close DEV-402 and DEV-403 browser acceptance, then run browser acceptance for W10 once a browser runtime is available. M5 remains frozen until all M4 packages are closed.
+W10 implementation and its real-database B05→B12 HTTP flow are complete, and M4 local close acceptance now passes. Next follow the plan order by resuming M5 reporting/export or the next approved milestone.
 
 For a user-visible status map, use `docs/acceptance-dashboard.md`. It maps each implemented slice back to the original plan, shows the available workbenches, and separates passed API evidence from still-open browser E2E.
 
-For the exact remaining M4 exit gates, use `docs/m4-exit-checklist.md`. M4 remains open until DEV-402, DEV-403, and DEV-406 meet that checklist's close conditions.
+For the M4 exit gates, use `docs/m4-exit-checklist.md` together with `npm run acceptance:m4-close`. DEV-402, DEV-403, and DEV-406 now meet the local close conditions.
 
 The ordering-to-payment main flow is tracked in `docs/main-flow-acceptance.md`. Current assessment: backend APIs and integration tests cover the main path, but the visible product flow starts mostly at billing/payment. The next execution step should create a narrow visible main-flow demo or scripted acceptance runner before adding more detailed settlement work.
 

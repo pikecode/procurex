@@ -26,7 +26,11 @@ for (const gate of gateDefinitions) {
   );
   console.log(`  ${gate.id} ${gate.title}`);
   console.log(`    Automatic evidence: ${gate.autoEvidence.length}/${gate.autoEvidence.length}`);
-  console.log(`    Manual evidence still required: ${gate.manualEvidence.map(([, label]) => label).join('; ')}`);
+  if (gate.state === 'Closed') {
+    console.log('    Manual evidence: tracked by npm run m4:check-manual-evidence');
+  } else {
+    console.log(`    Manual evidence still required: ${gate.manualEvidence.map(([, label]) => label).join('; ')}`);
+  }
 }
 
-console.log('M4 automatic gate evidence is complete. Browser screenshots/recordings are still required before closing DEV-402/403/406.');
+console.log('M4 automatic gate evidence is complete. Run npm run m4:check-manual-evidence or npm run acceptance:m4-close for the browser evidence close gate.');
