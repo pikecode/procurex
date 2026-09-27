@@ -545,8 +545,11 @@ Current price history behavior:
 
 W10 implementation and its real-database B05→B12 HTTP flow are complete. Next follow the plan order: close DEV-402 and DEV-403 browser acceptance, then run browser acceptance for W10 once a browser runtime is available. M5 remains frozen until all M4 packages are closed.
 
+For a user-visible status map, use `docs/acceptance-dashboard.md`. It maps each implemented slice back to the original plan, shows the available workbenches, and separates passed API evidence from still-open browser E2E.
+
 ## Where To Look
 
+- Visible acceptance map: `docs/acceptance-dashboard.md`
 - Completed chronological notes: `docs/development-log.md`
 - Planned milestones: `docs/development-plan.md`
 - API contract: `docs/api-design.md`

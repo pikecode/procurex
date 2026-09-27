@@ -3,7 +3,7 @@
 > 版本：v1.0 详细设计评审稿，2026-09-24
 > 基线：[需求 v1.4](./requirements.md)、[架构确认 D1-D7](./architecture-design.md)
 > 输入：[数据库设计](./database-design.md)、[接口设计](./api-design.md)、[页面交互设计](./page-interaction-design.md)
-> 当前阶段：只整理文档，未进入业务开发；本文中的测试和验收均为待执行计划。
+> 当前阶段：计划仍作为验收基线使用；实际开发进度以 `progress.md` 和 `acceptance-dashboard.md` 为准。本文中的未执行条目仍为后续验收计划。
 
 ## 1. 交付范围与执行原则
 
