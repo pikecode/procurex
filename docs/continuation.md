@@ -51,9 +51,10 @@ This performs:
 2. W09/W10 `PXACC` acceptance seeding.
 3. W09/S05/S08 and W10 HTTP acceptance checks.
 4. DEV-402/403/406 automatic gate-status check.
-5. Main-flow acceptance runner.
-6. Interactive main-flow demo seeding and HTTP check.
-7. Web workbench visibility check.
+5. Generated manual-checklist sync check.
+6. Main-flow acceptance runner.
+7. Interactive main-flow demo seeding and HTTP check.
+8. Web workbench visibility check.
 
 Generated local files:
 
