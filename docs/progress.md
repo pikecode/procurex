@@ -6,7 +6,7 @@ Last updated: 2026-09-27
 
 For new-window continuation, start with `docs/continuation.md`.
 
-M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export has resumed with a repeatable browserless acceptance chain.
+M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export has resumed with a repeatable browserless acceptance chain and a browser-visible W11 acceptance summary.
 
 Latest follow-up audit also closes two remaining store-scope reads: recharge detail accepts STORE_FINANCE and rejects another store, and store catalog reads reject unconfigured or mismatched STORE/STORE_FINANCE scopes.
 
@@ -56,6 +56,8 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 
 `npm run acceptance:m5-browserless` now covers the M5 reporting/export slice. It builds the project, seeds isolated `PXRPT` data, verifies R01 scoped completed-order amount, R02 product quantity and three-month range rejection, R03 profit excluding direct supplier-term orders with freight separate, R04 export job READY plus CSV download, store-scope enforcement, supplier profit denial, and W11 Web visibility. The latest run passed and wrote `apps/web/reports-acceptance-run.json`.
 
+`apps/web/index.html` now renders the latest M5 browserless result from `reports-acceptance-run.json` inside the W11 report page. `npm run m5:capture-browser-evidence` logs in as the store-scoped report account, loads the M5 acceptance summary, runs the R01 September 2026 query, and captures Chrome evidence under `var/m5-browser-evidence/`. The latest capture showed `PASSED`, 7 acceptance steps, 2 scoped orders, goods `156.00`, freight `8.00`, and total `164.00`.
+
 The main-flow acceptance runner now writes a browser-readable result to `apps/web/main-flow-run.json`, and `apps/web/main-flow.html` renders the latest order-to-payment handoff status. `npm run web:check` now guards this page as well, so the main flow is visible even before a full interactive order-entry workbench is built.
 
 W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run billing:seed-acceptance` creates `PXACC` demo data for company-term, stored-value, credit-backed, and direct supplier-term statements, plus a shared pending supplier payable reservation visible from supplier total and supplier-store views; it also seeds W10 positive/negative supplier adjustments for offset. `npm run billing:check-acceptance` verifies those facts through a temporary API and creates/confirms one W10 offset disposal. See `docs/billing-acceptance-seed.md` for accounts and checks.
@@ -102,10 +104,12 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `15b66b3 Add M5 reports acceptance chain`.
-Latest commit before this progress update: `15b66b3 Add M5 reports acceptance chain`.
+Latest functional slice: `387fca8 Add M5 browser evidence view`.
+Latest commit before this progress update: `387fca8 Add M5 browser evidence view`.
 
 ```text
+387fca8 Add M5 browser evidence view
+20f62b9 Refresh progress ledger after M5 acceptance chain
 15b66b3 Add M5 reports acceptance chain
 77e7fb2 Close M4 local acceptance gates
 89e07ff Record M4 browserless acceptance after DB restore

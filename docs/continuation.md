@@ -8,13 +8,15 @@ Use this as the first document when continuing development in a new window.
 
 M4 is locally closed against the current acceptance gates. DEV-401 through DEV-406 are closed, `npm run acceptance:m4-close` passes, Chrome is ready, local PostgreSQL is reachable, automatic evidence is complete, and the manual browser evidence package is 6/6.
 
-M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R04 reporting/export and W11 visibility.
+M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R04 reporting/export, W11 visibility, and a Chrome-captured W11 acceptance screenshot.
 
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export acceptance:
 
 ```text
+387fca8 Add M5 browser evidence view
+20f62b9 Refresh progress ledger after M5 acceptance chain
 15b66b3 Add M5 reports acceptance chain
 77e7fb2 Close M4 local acceptance gates
 89e07ff Record M4 browserless acceptance after DB restore
@@ -54,6 +56,7 @@ Run the M5 reporting/export browserless chain:
 
 ```bash
 npm run acceptance:m5-browserless
+npm run m5:capture-browser-evidence
 ```
 
 This performs:
@@ -63,6 +66,13 @@ This performs:
 3. R01/R02/R03/R04 HTTP acceptance checks.
 4. Store-scope and supplier profit-permission checks.
 5. W11 Web visibility check.
+
+The screenshot capture logs in as `pxrpt_store`, renders the M5 acceptance summary on the W11 report page, runs the September 2026 R01 scoped query, and writes local evidence to:
+
+```text
+var/m5-browser-evidence/reports-dashboard.png
+var/m5-browser-evidence/manifest.json
+```
 
 Generated local file:
 
@@ -117,7 +127,10 @@ http://127.0.0.1:4173/m4-acceptance.html
 http://127.0.0.1:4173/main-flow-demo.html
 http://127.0.0.1:4173/billing.html
 http://127.0.0.1:4173/main-flow.html
+http://127.0.0.1:4173/
 ```
+
+The root report page is now the best first M5 screen: after `npm run acceptance:m5-browserless`, it displays the latest R01-R04 acceptance result from `apps/web/reports-acceptance-run.json` and can be re-captured with `npm run m5:capture-browser-evidence`.
 
 `m4-acceptance.html` is the best first screen for review: it shows the latest browserless result, the DEV-402/403/406 gate status, structured automatic evidence coverage, the seeded account matrix, and a copyable acceptance summary. The manual evidence checkboxes are saved locally in the browser as review aids; the strict file-based close gate is `npm run m4:check-manual-evidence`.
 
@@ -140,6 +153,9 @@ All seeded accounts use password `correct-password`.
 | `pxacc_store` | Store-scoped billing and direct statement view. |
 | `pxacc_supplier_company` | Supplier-scoped company-term view. |
 | `pxacc_supplier_direct` | Supplier-scoped direct-term view. |
+| `pxrpt_admin` | Company report acceptance checks and export ownership. |
+| `pxrpt_store` | Store-scoped W11 report screenshot and R01/R02 scoped checks. |
+| `pxrpt_supplier` | Supplier-scoped report permission boundary checks. |
 
 More detail is in `docs/billing-acceptance-seed.md`.
 
