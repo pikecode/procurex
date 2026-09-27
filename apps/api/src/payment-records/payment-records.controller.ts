@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -61,6 +62,7 @@ export class PaymentRecordsController {
   constructor(
     private readonly paymentRecordsService: PaymentRecordsService,
     private readonly commandsService: CommandsService,
+    private readonly audit: AuditService,
   ) {}
 
   @Get()
@@ -90,12 +92,13 @@ export class PaymentRecordsController {
     @Body() body: CreateBody,
   ): Promise<PaymentRecordView> {
     const input = parseCreateBody(body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'payment-record.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: body as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -108,6 +111,16 @@ export class PaymentRecordsController {
       resourceType: 'PaymentRecord',
       resourceId: result.id,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'payment-record.create',
+      entityType: 'PaymentRecord',
+      entityId: result.id,
+      traceId,
+      reason: result.remark ?? undefined,
+      after: paymentAuditSnapshot(result),
     });
 
     return result;
@@ -122,12 +135,13 @@ export class PaymentRecordsController {
     @Body() body: ConfirmBody,
   ): Promise<PaymentRecordView> {
     const input = parseConfirmBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'payment-record.confirm',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -140,6 +154,15 @@ export class PaymentRecordsController {
       resourceType: 'PaymentRecord',
       resourceId: result.id,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'payment-record.confirm',
+      entityType: 'PaymentRecord',
+      entityId: result.id,
+      traceId,
+      after: paymentAuditSnapshot(result),
     });
 
     return result;
@@ -154,12 +177,13 @@ export class PaymentRecordsController {
     @Body() body: RejectBody,
   ): Promise<PaymentRecordView> {
     const input = parseRejectBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'payment-record.reject',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -172,6 +196,16 @@ export class PaymentRecordsController {
       resourceType: 'PaymentRecord',
       resourceId: result.id,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'payment-record.reject',
+      entityType: 'PaymentRecord',
+      entityId: result.id,
+      traceId,
+      reason: input.reason,
+      after: paymentAuditSnapshot(result),
     });
 
     return result;
@@ -186,12 +220,13 @@ export class PaymentRecordsController {
     @Body() body: CancelBody,
   ): Promise<PaymentRecordView> {
     const input = parseCancelBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'payment-record.cancel',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -205,9 +240,37 @@ export class PaymentRecordsController {
       resourceId: result.id,
       responseBody: result as never,
     });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'payment-record.cancel',
+      entityType: 'PaymentRecord',
+      entityId: result.id,
+      traceId,
+      reason: input.reason,
+      after: paymentAuditSnapshot(result),
+    });
 
     return result;
   }
+}
+
+function auditScope(auth: AuthenticatedSession) {
+  return { roles: auth.user.roles, ...(auth.user.scope ? { scope: auth.user.scope } : {}) };
+}
+
+function paymentAuditSnapshot(payment: PaymentRecordView) {
+  return {
+    paymentNo: payment.paymentNo,
+    direction: payment.direction,
+    channel: payment.channel,
+    storeId: payment.storeId,
+    supplierId: payment.supplierId,
+    amount: payment.amount,
+    status: payment.status,
+    allocationCount: payment.allocations.length,
+    evidenceFileCount: payment.evidenceFileIds.length,
+  };
 }
 
 function parseListQuery(query: ListQuery): ListPaymentRecordsInput {

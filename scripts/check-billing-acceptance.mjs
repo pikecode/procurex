@@ -42,11 +42,11 @@ async function request(url, options = {}) {
   return body.data ?? body;
 }
 
-async function login(baseUrl) {
+async function login(baseUrl, username = 'pxacc_admin') {
   const data = await request(`${baseUrl}/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'pxacc_admin', password: 'correct-password', client: 'web' }),
+    body: JSON.stringify({ username, password: 'correct-password', client: 'web' }),
   });
   return data.accessToken;
 }
@@ -57,6 +57,23 @@ function authHeaders(token, extra = {}) {
     'content-type': 'application/json',
     ...extra,
   };
+}
+
+async function paymentEvidence(baseUrl, token) {
+  const bytes = Buffer.from('%PDF-1.4\nPXACC payment evidence\n%%EOF\n');
+  const session = await request(`${baseUrl}/files/upload-sessions`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ purpose: 'PAYMENT', filename: 'pxacc-payment.pdf', mimeType: 'application/pdf', sizeBytes: bytes.length }),
+  });
+  const upload = await fetch(`${baseUrl}/files/${session.id}/content`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/octet-stream', 'x-upload-token': session.uploadToken },
+    body: bytes,
+  });
+  assert.equal(upload.status, 201);
+  await request(`${baseUrl}/files/${session.id}/complete`, { method: 'POST', headers: { authorization: `Bearer ${token}` } });
+  return session.id;
 }
 
 async function seedIds() {
@@ -78,6 +95,8 @@ async function run() {
   const { app, baseUrl } = await createAcceptanceApp();
   try {
     const token = await login(baseUrl);
+    const storeToken = await login(baseUrl, 'pxacc_store');
+    const supplierDirectToken = await login(baseUrl, 'pxacc_supplier_direct');
 
     const storedSupplier = await request(`${baseUrl}/supplier-statements?supplierId=${ids.stored.id}`, {
       headers: authHeaders(token),
@@ -147,6 +166,42 @@ async function run() {
       { gateId: 'DEV-403', evidenceId: 'direct-view' },
     ]);
 
+    const evidenceFileId = await paymentEvidence(baseUrl, storeToken);
+    const directPayment = await request(`${baseUrl}/payment-records`, {
+      method: 'POST',
+      headers: authHeaders(storeToken, { 'idempotency-key': 'pxacc-direct-payment' }),
+      body: JSON.stringify({
+        direction: 'STORE_TO_SUPPLIER',
+        businessDate: '2026-09-27',
+        remark: 'PXACC direct-term payment audit',
+        evidenceFileIds: [evidenceFileId],
+        items: [{
+          settlementItemId: directDetail.lines[0].settlementItemId,
+          expectedVersion: directPreview.items[0].sourceVersion,
+          expectedAmount: directPreview.items[0].payableAmount,
+        }],
+      }),
+    });
+    assert.deepEqual([directPayment.direction, directPayment.status, directPayment.amount], ['STORE_TO_SUPPLIER', 'PENDING', '162.50']);
+    const confirmedDirectPayment = await request(`${baseUrl}/payment-records/${directPayment.id}/confirm`, {
+      method: 'POST',
+      headers: authHeaders(supplierDirectToken, { 'idempotency-key': 'pxacc-direct-payment-confirm' }),
+      body: JSON.stringify({ expectedVersion: directPayment.version }),
+    });
+    assert.deepEqual([confirmedDirectPayment.status, confirmedDirectPayment.version], ['CONFIRMED', 2]);
+    const paymentAuditLogs = await request(`${baseUrl}/audit-logs`, { headers: authHeaders(token) });
+    const paymentAuditActions = new Set(paymentAuditLogs.map((entry) => entry.action));
+    assert.ok(paymentAuditActions.has('payment-record.create'));
+    assert.ok(paymentAuditActions.has('payment-record.confirm'));
+    record('4. Direct payment create and confirm audit trail', {
+      paymentNo: directPayment.paymentNo,
+      amount: confirmedDirectPayment.amount,
+      status: confirmedDirectPayment.status,
+      auditActions: Array.from(paymentAuditActions).filter((action) => action.startsWith('payment-record.')).sort(),
+    }, [
+      { gateId: 'DEV-404', evidenceId: 'payment-audit-create-confirm' },
+    ]);
+
     const companySupplier = await request(`${baseUrl}/supplier-statements?supplierId=${ids.company.id}`, {
       headers: authHeaders(token),
     });
@@ -160,7 +215,7 @@ async function run() {
       body: JSON.stringify({ settlementItemIds: [companyDetail.lines[0].settlementItemId] }),
     });
     assert.equal(blockedPreview.status, 404);
-    record('4. Company-term supplier payment is blocked before store receivable settlement', {
+    record('5. Company-term supplier payment is blocked before store receivable settlement', {
       blockedStatus: blockedPreview.status,
       supplierTotalAmount: companySupplier[0].totalAmount,
       payableAmount: companySupplier[0].payableAmount,
@@ -172,7 +227,7 @@ async function run() {
       headers: authHeaders(token),
     });
     assert.ok(payments.some((payment) => payment.paymentNo === 'PXACC-PAY-SHARED' && payment.status === 'PENDING' && payment.amount === '69.00'));
-    record('5. Shared supplier payable reservation is visible in payments', {
+    record('6. Shared supplier payable reservation is visible in payments', {
       paymentNo: 'PXACC-PAY-SHARED',
       status: 'PENDING',
       amount: '69.00',
@@ -189,7 +244,7 @@ async function run() {
     assert.ok(target?.offsetTargetItemId, 'Missing positive supplier adjustment target id');
     assert.deepEqual([credit.adjustmentAmount, credit.pendingReturnOrOffsetAmount, credit.processingStatus], ['-4.00', '4.00', 'PENDING_DISPOSAL']);
     assert.deepEqual([target.adjustmentAmount, target.pendingReturnOrOffsetAmount], ['10.00', '0.00']);
-    record('6. W10 exposes negative credit and positive offset target', {
+    record('7. W10 exposes negative credit and positive offset target', {
       creditOrderNo: credit.supplierOrderNo,
       creditAmount: credit.adjustmentAmount,
       pendingReturnOrOffsetAmount: credit.pendingReturnOrOffsetAmount,
@@ -231,7 +286,7 @@ async function run() {
     const auditActions = new Set(auditLogs.map((entry) => entry.action));
     assert.ok(auditActions.has('difference-disposal.create'));
     assert.ok(auditActions.has('difference-disposal.confirm'));
-    record('7. W10 offset disposal is created and confirmed', {
+    record('8. W10 offset disposal is created and confirmed', {
       method: disposal.method,
       direction: disposal.direction,
       amount: disposal.amount,
