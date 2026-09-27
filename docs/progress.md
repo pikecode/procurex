@@ -4,6 +4,8 @@ Last updated: 2026-09-27
 
 ## Current Position
 
+For new-window continuation, start with `docs/continuation.md`.
+
 M4 remains in progress: DEV-401/404/405 are closed; DEV-402/403/406 are partial. The W09 billing and W10 adjustment workbenches are implemented, and M5 reporting/export remains frozen until M4 acceptance closes.
 
 Latest follow-up audit also closes two remaining store-scope reads: recharge detail accepts STORE_FINANCE and rejects another store, and store catalog reads reject unconfigured or mismatched STORE/STORE_FINANCE scopes.
@@ -62,10 +64,12 @@ W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run bil
 
 Latest commits:
 
-Latest functional slice: `1593023 Add M4 browserless acceptance command`.
-Latest commit before this progress update: `1593023 Add M4 browserless acceptance command`.
+Latest functional slice: `56672e9 Add M4 acceptance summary page`.
+Latest commit before this progress update: `56672e9 Add M4 acceptance summary page`.
 
 ```text
+56672e9 Add M4 acceptance summary page
+4dde596 Refresh progress ledger after acceptance work
 1593023 Add M4 browserless acceptance command
 91bd150 Extend billing acceptance to W10 offsets
 dc2e5ea Add billing acceptance checker
