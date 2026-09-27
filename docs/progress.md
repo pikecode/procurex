@@ -82,10 +82,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `3bb78bc Check generated M4 manual checklist`.
-Latest commit before this progress update: `3bb78bc Check generated M4 manual checklist`.
+Latest functional slice: `d21b77a Run manual checklist check in M4 acceptance`.
+Latest commit before this progress update: `d21b77a Run manual checklist check in M4 acceptance`.
 
 ```text
+d21b77a Run manual checklist check in M4 acceptance
 3bb78bc Check generated M4 manual checklist
 85ebf3e Generate M4 manual acceptance checklist
 e2a0fe4 Add M4 manual acceptance path
