@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Added direct supplier-term HTTP acceptance: B04 list/detail returns goods plus freight; B06 maps to STORE_TO_SUPPLIER/DIRECT; B07 idempotent registration and B08 supplier confirmation settle the statement; confirmed snapshot preserves goods/freight/total amounts.
+- Verification: `npm run build`, `npm test` (35), `npm run test:integration` (29), `npm run contract:check`, and `git diff --check` passed.
+
 - Closed two remaining store-scope read gaps found during the M4 audit: recharge details now allow STORE_FINANCE and reject another store; store catalog reads now reject unconfigured or mismatched STORE/STORE_FINANCE scopes.
 - Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
 

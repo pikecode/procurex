@@ -22,11 +22,14 @@ O01/O02 preview and create now reject a configured store account's request for a
 
 DEV-401 now has HTTP acceptance coverage for P01 impact preview, P02 publish, P03 run status/process/replay, and version history; the preview confirms a no-impact scope returns zero deltas.
 
+DEV-402/404 now have a full direct supplier-term HTTP acceptance path: B04 list/detail includes goods and freight, B06 previews STORE_TO_SUPPLIER on DIRECT channel, B07 registration replays idempotently, B08 supplier confirmation settles the statement, and the confirmed goods/freight snapshot remains persisted.
+
 Latest completed implementation: the four statement families, payment records, adjustments, difference disposals, and clearing details now enforce authenticated store scope for both STORE and STORE_FINANCE accounts; cross-scope IDs resolve as not found, while company roles retain broad access. B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
 Latest commits:
 
 ```text
+Pending this commit: direct supplier-term HTTP acceptance
 1bc4666 Close DEV-401 backend gates
 3e7c8fd Cover price impact preview HTTP flow
 173bae4 Scope purchase previews by store
@@ -110,9 +113,9 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | Package | Current assessment against plan | Closure evidence still needed |
 |---|---|---|
 | DEV-401 | **Closed**: P01-P03, AT-08, AT-09, and W06/S10 backend flow evidence are complete | None for the current backend scope |
-| DEV-402 | B01-B04, amount and period logic exist; AT-16 price guard added | Direct-term payment direction and amount mapping are covered; finish all settlement-mode acceptance evidence |
+| DEV-402 | B01-B04, amount and period logic exist; AT-16 price guard and direct-term B04→B08 HTTP flow verified | Finish remaining settlement-mode and W09/S05/S08 acceptance evidence |
 | DEV-403 | Statement read paths, total/store sum, immediate per-order grouping, replenishment period, and account scope are tested | Required W09/S05/S08 flow evidence remains before closure |
-| DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Receiver-role authorization and AT-13 duplicate-entry concurrency are verified; close direct-term direction mapping and remaining evidence/role flows |
+| DEV-404 | B06-B11 lifecycle, AT-13 concurrency, receiver authorization, and direct-term B06-B08 HTTP flow verified; B12 is being completed | Finish remaining payment role and acceptance evidence |
 | DEV-405 | Clearing transaction logic and A04-A06 read/write paths exist | A06 now enforces store scope on clearing detail; verify AT-24 ledger/history recovery evidence and planned W08 workflow |
 | DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Receiver confirmation scope and AT-14 offline return are verified; finish reconciliation consistency before closure |
 
