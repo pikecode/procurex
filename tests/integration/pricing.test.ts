@@ -128,7 +128,7 @@ test('pricing service returns latest version effective at business time', async 
       productId: product.id,
       supplierId: supplier.id,
       salesPrice: '12.000000',
-      supplyPrice: '9.000000',
+      supplyPrice: '10.000000',
       effectiveAt: new Date('2026-09-10T00:00:00.000Z'),
       reason: 'Price increase',
     });
@@ -143,15 +143,27 @@ test('pricing service returns latest version effective at business time', async 
     assert.equal(succeededOrder?.adjustment?.newSalesPrice, '12');
     const updatedOrder = await prisma.supplierOrder.findUnique({ where: { id: order.id }, include: { items: true } });
     assert.equal(updatedOrder?.items[0]?.salesLineAmount.toString(), '120');
-    assert.equal(updatedOrder?.items[0]?.supplyLineAmount.toString(), '90');
+    assert.equal(updatedOrder?.items[0]?.supplyLineAmount.toString(), '100');
     assert.equal((await prisma.priceChangeAdjustment.count({ where: { runId: latest.runId } })), 1);
     const persistedAdjustmentDocuments = await prisma.adjustmentDocument.findMany({ where: { sourcePriceChangeId: succeededOrder!.adjustment!.id } });
     assert.equal(persistedAdjustmentDocuments.length, 1);
     assert.equal(persistedAdjustmentDocuments[0]?.side, 'SUPPLIER');
-    assert.equal(persistedAdjustmentDocuments[0]?.amount.toFixed(2), '10.00');
+    assert.equal(persistedAdjustmentDocuments[0]?.amount.toFixed(2), '20.00');
+    const nextPrice = await service.publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: '13.000000', supplyPrice: '11.000000', effectiveAt: new Date('2026-09-10T00:00:00.000Z'), reason: 'Second increase' });
+    const secondProcessed = await service.processRun(nextPrice.runId!);
+    assert.equal(secondProcessed.status, 'SUCCEEDED');
+    const secondChange = secondProcessed.orders.find((item) => item.supplierOrderId === order.id);
+    assert.deepEqual([secondChange?.adjustment?.previousSalesPrice, secondChange?.adjustment?.newSalesPrice], ['12', '13']);
+    assert.deepEqual([secondChange?.adjustment?.previousSupplyPrice, secondChange?.adjustment?.newSupplyPrice], ['10', '11']);
+    const secondAdjustmentSource = await prisma.priceChangeAdjustment.findUniqueOrThrow({ where: { id: secondChange!.adjustment!.id } });
+    assert.deepEqual([secondAdjustmentSource.salesDelta.toFixed(2), secondAdjustmentSource.supplyDelta.toFixed(2)], ['10.00', '10.00']);
+    const secondOrder = await prisma.supplierOrder.findUniqueOrThrow({ where: { id: order.id }, include: { items: true } });
+    assert.deepEqual([secondOrder.salesGoodsAmount.toFixed(2), secondOrder.supplyGoodsAmount.toFixed(2)], ['130.00', '110.00']);
+    const frozenSupplierSnapshot = await prisma.settlementItemSnapshot.findUniqueOrThrow({ where: { settlementItemId: supplierSettlementItemId } });
+    assert.equal(frozenSupplierSnapshot.totalAmount.toFixed(2), '80.00');
     await prisma.supplierOrder.update({ where: { id: order.id }, data: { status: SupplierOrderStatus.COMPLETED } });
     const repricedRequest = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id: request.id } });
-    assert.equal(repricedRequest.shortfallAmount.toFixed(2), '120.00');
+    assert.equal(repricedRequest.shortfallAmount.toFixed(2), '130.00');
     assert.equal(repricedRequest.paymentStatus, 'UNPAID');
     const storeSettlementItemId = Buffer.from(JSON.stringify({ kind: 'STORE_RECEIVABLE', supplierOrderId: order.id })).toString('base64url');
     await assert.rejects(
@@ -168,19 +180,19 @@ test('pricing service returns latest version effective at business time', async 
     const statementDetail = await new SupplierStatementsService({ client: prisma } as never).get(statement.id);
     const statementLine = statementDetail.lines.find((line) => line.supplierOrderId === order.id);
     assert.equal(statementLine?.goodsAmount, '80.00');
-    assert.equal(statementLine?.priceAdjustments[0]?.supplyDelta, '10.00');
-    assert.equal(statementDetail.adjustmentAmount, '10.00');
-    assert.equal(statementDetail.payableAmount, '98.00');
+    assert.equal(statementLine?.priceAdjustments.reduce((sum, adjustment) => sum + Number(adjustment.supplyDelta), 0).toFixed(2), '30.00');
+    assert.equal(statementDetail.adjustmentAmount, '30.00');
+    assert.equal(statementDetail.payableAmount, '118.00');
     const persistedB05 = await new AdjustmentsService({ client: prisma } as never).list({ storeId: store.id, supplierId: supplier.id });
-    const supplierAdjustment = persistedB05.find((item) => item.sourcePriceChangeId === succeededOrder?.adjustment?.id && item.direction === 'SUPPLIER_PAYABLE_INCREASE');
+    const supplierAdjustment = persistedB05.find((item) => item.supplierOrderId === order.id && item.direction === 'SUPPLIER_PAYABLE_INCREASE');
     assert.ok(supplierAdjustment);
-    assert.equal(supplierAdjustment.adjustmentAmount, '10.00');
+    assert.equal(supplierAdjustment.adjustmentAmount, '30.00');
     assert.equal(supplierAdjustment.processingStatus, 'PENDING_DISPOSAL');
     assert.equal(supplierAdjustment.pendingReturnOrOffsetAmount, '0.00');
     const adjustments = await service.listAdjustments(latest.runId!);
     assert.equal(adjustments.length, 1);
     assert.equal(adjustments[0]?.salesDelta, '20');
-    assert.equal(adjustments[0]?.supplyDelta, '10');
+    assert.equal(adjustments[0]?.supplyDelta, '20');
     const sameTimeRevision = await service.publishPrice({
       productId: product.id,
       supplierId: supplier.id,
@@ -190,7 +202,7 @@ test('pricing service returns latest version effective at business time', async 
       reason: 'Correction',
     });
     assert.equal(latest.revision, 2);
-    assert.equal(sameTimeRevision.revision, 3);
+    assert.equal(sameTimeRevision.revision, 4);
 
     const beforeChange = await service.getEffectivePrice(product.id, supplier.id, new Date('2026-09-05T00:00:00.000Z'));
     assert.equal(beforeChange.salesPrice, '10');
@@ -200,7 +212,7 @@ test('pricing service returns latest version effective at business time', async 
     assert.equal(afterChange.versionId, sameTimeRevision.versionId);
     assert.equal(afterChange.salesPrice, '13');
     assert.equal(afterChange.supplyPrice, '10');
-    assert.equal(afterChange.revision, 3);
+    assert.equal(afterChange.revision, 4);
 
     await assert.rejects(
       service.getEffectivePrice(product.id, supplier.id, new Date('2026-08-31T00:00:00.000Z')),
