@@ -31,7 +31,7 @@ Latest completed implementation: the four statement families, payment records, a
 Latest commits:
 
 ```text
-Pending this commit: AT-17 credit limit guard HTTP regression
+e0399b6 Verify credit limit cannot undercut used credit
 8879613 Cover direct term statement HTTP settlement
 219f35d Refresh M4 progress ledger
 1bc4666 Close DEV-401 backend gates
