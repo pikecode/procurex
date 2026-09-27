@@ -3,6 +3,7 @@
 ## 2026-09-27
 
 - M4/W09：新增无依赖静态账单工作台，覆盖四类账单、周期/状态筛选、账单详情、付款明细选择、服务端预览、私有凭证上传、付款登记和收款确认；凭证下载改为上传者、付款关联门店/供应商或总部角色可读。验证：TypeScript 构建、36 项单测、31 项集成测试、Web 脚本语法、契约检查、diff 检查通过。
+- M4/S05/S08：为账单工作台补充窄屏布局，复用同一权限和付款流程，支持移动端查看账单、横向查看明细和提交付款。验证：构建、Web 脚本语法、diff 检查通过。
 - DEV-404 I06/I07 私有目录首段：增加上传会话、受限二进制上传、文件头与 SHA-256 校验、上传者下载、B07 PAYMENT 凭证关联、数据库迁移及 HTTP 往返验收。构建及专用集成测试通过。凭证字段暂时可选；付款相对方下载授权仍待补齐。
 
 - Continued M4 scope audit: `STORE_FINANCE` now has the documented store-side B12 read/confirm permission, and its bound store is enforced across payment, adjustment, difference-disposal, and clearing reads/mutations. Verification: build, 35 unit tests, 28 integration tests, contract check, and diff check passed.
