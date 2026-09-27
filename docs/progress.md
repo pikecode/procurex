@@ -52,6 +52,8 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 
 Latest commits:
 
+Latest functional slice: `68e4814 Verify W10 B05 to B12 HTTP flow`.
+
 ```text
 25288bb Record W10 workbench review
 9023643 Clarify adjustment disposal states
