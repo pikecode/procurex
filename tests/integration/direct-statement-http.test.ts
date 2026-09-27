@@ -96,9 +96,9 @@ test('direct supplier-term statement pays and confirms goods plus freight over H
     assert.deepEqual([snapshot?.goodsAmount.toFixed(2), snapshot?.freightAmount.toFixed(2), snapshot?.totalAmount.toFixed(2)], ['120.00', '18.50', '138.50']);
   } finally {
     await app.close();
-    await prisma.paymentRecord.deleteMany({ where: { supplierId: { in: await prisma.supplier.findMany({ where: { code: supplierCode }, select: { id: true } }).then((rows) => rows.map(({ id }) => id)) } } });
     if (storeId) {
       const orders = await prisma.supplierOrder.findMany({ where: { storeId }, select: { id: true } });
+      await prisma.paymentRecord.deleteMany({ where: { allocations: { some: { supplierOrderId: { in: orders.map(({ id }) => id) } } } } });
       await prisma.shipment.deleteMany({ where: { supplierOrderId: { in: orders.map(({ id }) => id) } } });
       await prisma.supplierOrder.deleteMany({ where: { storeId } });
     }
@@ -109,6 +109,73 @@ test('direct supplier-term statement pays and confirms goods plus freight over H
     await prisma.commandRecord.deleteMany({ where: { actor: { username: { in: [username, supplierUsername] } } } });
     await prisma.userSession.deleteMany({ where: { user: { username: { in: [username, supplierUsername] } } } });
     await prisma.user.deleteMany({ where: { username: { in: [username, supplierUsername] } } });
+    await prisma.$disconnect();
+  }
+});
+
+test('company-term supplier payment stays blocked until store receivable is confirmed', async () => {
+  const suffix = Date.now();
+  const storeCode = `TERMSTORE${suffix}`, supplierCode = `TERMSUP${suffix}`, templateCode = `TERMTPL${suffix}`;
+  const storeUsername = `it_term_store_${suffix}`, financeUsername = `it_term_finance_${suffix}`;
+  const { app, url } = await appStart();
+  let orderId: string | undefined;
+  try {
+    const [storeRole, financeRole] = await Promise.all([
+      prisma.role.upsert({ where: { code: 'STORE' }, update: {}, create: { code: 'STORE', name: 'Store' } }),
+      prisma.role.upsert({ where: { code: 'HQ_FINANCE' }, update: {}, create: { code: 'HQ_FINANCE', name: 'HQ Finance' } }),
+    ]);
+    const [store, supplier, template] = await Promise.all([
+      prisma.store.create({ data: { code: storeCode, name: 'Company term store' } }),
+      prisma.supplier.create({ data: { code: supplierCode, name: 'Company term supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.COMPANY_TERM, defaultSettlementCycle: 'MONTHLY' } }),
+      prisma.orderTemplate.create({ data: { code: templateCode, name: 'Company term template' } }),
+    ]);
+    await Promise.all([
+      prisma.user.create({ data: { username: storeUsername, displayName: storeUsername, passwordHash: await hashPassword('correct-password'), roles: { create: [{ roleId: storeRole.id }] }, scopes: { create: { scopeType: 'STORE', storeId: store.id } } } }),
+      prisma.user.create({ data: { username: financeUsername, displayName: financeUsername, passwordHash: await hashPassword('correct-password'), roles: { create: [{ roleId: financeRole.id }] } } }),
+    ]);
+    const request = await prisma.purchaseRequest.create({ data: { requestNo: `TERMREQ${suffix}`, storeId: store.id, templateId: template.id, status: PurchaseRequestStatus.CONFIRMED, salesGoodsAmount: '100.00', supplyGoodsAmount: '80.00' } });
+    const order = await prisma.supplierOrder.create({ data: { supplierOrderNo: `TERMORDER${suffix}`, requestId: request.id, storeId: store.id, supplierId: supplier.id, settlementMode: SettlementMode.COMPANY_TERM, settlementCycleSnapshot: 'MONTHLY', status: SupplierOrderStatus.COMPLETED, fulfillmentStatus: FulfillmentStatus.COMPLETED, firstShippedAt: new Date('2026-09-10T00:00:00.000Z'), salesGoodsAmount: '100.00', supplyGoodsAmount: '80.00' } });
+    orderId = order.id;
+    await prisma.shipment.create({ data: { shipmentNo: `TERMSHIP${suffix}`, supplierOrderId: order.id, sequence: 1, kind: 'INITIAL', shippedAt: new Date('2026-09-10T00:00:00.000Z'), freight: '0.00' } });
+    const storeToken = await token(url, storeUsername);
+    const financeToken = await token(url, financeUsername);
+    const supplierPayableId = Buffer.from(JSON.stringify({ kind: 'SUPPLIER_PAYABLE', supplierOrderId: order.id })).toString('base64url');
+    const blockedPreview = await fetch(`${url}/payment-records/preview`, { method: 'POST', headers: { authorization: `Bearer ${financeToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ settlementItemIds: [supplierPayableId] }) });
+    assert.equal(blockedPreview.status, 404);
+    assert.match(JSON.stringify(await blockedPreview.json()), /STORE_RECEIVABLE_UNSETTLED/);
+
+    const storeReceivableId = Buffer.from(JSON.stringify({ kind: 'STORE_RECEIVABLE', supplierOrderId: order.id })).toString('base64url');
+    const storePreviewResponse = await fetch(`${url}/payment-records/preview`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ settlementItemIds: [storeReceivableId] }) });
+    assert.equal(storePreviewResponse.status, 201);
+    const storePreview = (await storePreviewResponse.json()) as { data: { direction: string; items: Array<{ sourceVersion: number; payableAmount: string }> } };
+    assert.equal(storePreview.data.direction, 'STORE_TO_COMPANY');
+    const storePaymentResponse = await fetch(`${url}/payment-records`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json', 'idempotency-key': `term-store-payment-${suffix}` }, body: JSON.stringify({ direction: 'STORE_TO_COMPANY', businessDate: '2026-09-27', items: [{ settlementItemId: storeReceivableId, expectedVersion: storePreview.data.items[0]!.sourceVersion, expectedAmount: storePreview.data.items[0]!.payableAmount }] }) });
+    assert.equal(storePaymentResponse.status, 201);
+    const storePayment = (await storePaymentResponse.json()) as { data: { id: string; version: number } };
+    const storeConfirm = await fetch(`${url}/payment-records/${storePayment.data.id}/confirm`, { method: 'POST', headers: { authorization: `Bearer ${financeToken}`, 'content-type': 'application/json', 'idempotency-key': `term-store-confirm-${suffix}` }, body: JSON.stringify({ expectedVersion: storePayment.data.version }) });
+    assert.equal(storeConfirm.status, 201);
+    assert.equal(((await storeConfirm.json()) as { data: { status: string } }).data.status, 'CONFIRMED');
+
+    const payablePreviewResponse = await fetch(`${url}/payment-records/preview`, { method: 'POST', headers: { authorization: `Bearer ${financeToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ settlementItemIds: [supplierPayableId] }) });
+    assert.equal(payablePreviewResponse.status, 201);
+    const payablePreview = (await payablePreviewResponse.json()) as { data: { direction: string; totalPayableAmount: string; blockedItems: unknown[] } };
+    assert.equal(payablePreview.data.direction, 'COMPANY_TO_SUPPLIER');
+    assert.equal(payablePreview.data.totalPayableAmount, '80.00');
+    assert.deepEqual(payablePreview.data.blockedItems, []);
+  } finally {
+    await app.close();
+    await prisma.commandRecord.deleteMany({ where: { actor: { username: { in: [storeUsername, financeUsername] } } } });
+    if (orderId) await prisma.paymentRecord.deleteMany({ where: { allocations: { some: { supplierOrderId: orderId } } } });
+    if (orderId) {
+      await prisma.shipment.deleteMany({ where: { supplierOrderId: orderId } });
+      await prisma.supplierOrder.deleteMany({ where: { id: orderId } });
+    }
+    await prisma.purchaseRequest.deleteMany({ where: { requestNo: `TERMREQ${suffix}` } });
+    await prisma.store.deleteMany({ where: { code: storeCode } });
+    await prisma.supplier.deleteMany({ where: { code: supplierCode } });
+    await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
+    await prisma.userSession.deleteMany({ where: { user: { username: { in: [storeUsername, financeUsername] } } } });
+    await prisma.user.deleteMany({ where: { username: { in: [storeUsername, financeUsername] } } });
     await prisma.$disconnect();
   }
 });

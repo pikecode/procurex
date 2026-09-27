@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Added a company-term HTTP settlement gate scenario: B06 rejects company supplier payment with STORE_RECEIVABLE_UNSETTLED until STORE_TO_COMPANY payment is confirmed, then makes the supplier payable available.
+- Verification: `npm run build`, `npm test` (36), `npm run test:integration` (30), `npm run contract:check`, and `git diff --check` passed.
+
 - Added DEV-403 AC-20 integration proof across supplier-total and supplier-store views: a payment reserved from the child statement is reflected as pending and unavailable to pay from the parent statement through the same settlement item ID.
 - Verification: `npm run build`, `npm test` (36), `npm run test:integration` (29), `npm run contract:check`, and `git diff --check` passed.
 
