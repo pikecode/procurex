@@ -8,13 +8,14 @@ Use this as the first document when continuing development in a new window.
 
 M4 is locally closed against the current acceptance gates. DEV-401 through DEV-406 are closed, `npm run acceptance:m4-close` passes, Chrome is ready, local PostgreSQL is reachable, automatic evidence is complete, and the manual browser evidence package is 6/6.
 
-M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, W11 visibility, R04 export task listing, DEV-505 stale export recovery and export health monitoring, W13 reconciliation/operations visibility, and Chrome-captured W11/W13 screenshots.
+M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, W11 visibility, R04 export task listing and failed retry, DEV-505 stale export recovery and export health monitoring, W13 reconciliation/operations visibility, and Chrome-captured W11/W13 screenshots.
 
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
 
 ```text
+16d0edd Add report export health monitoring
 6f10226 Recover stale report exports
 b636e45 Refresh progress ledger after W13 workbench
 d4b76d5 Add W13 reconciliation workbench
@@ -75,8 +76,9 @@ This performs:
 4. Store-scope and supplier profit-permission checks.
 5. R04 export task list check.
 6. DEV-505 export health check: admin sees a stale `PROCESSING` job before recovery, supplier gets 403, then the worker recovers the job to READY.
-7. R05 reconciliation issue list check.
-8. W11 Web visibility check.
+7. DEV-505 failed export retry check: a FAILED job is requeued through `POST /exports/{id}/retry`, reaches READY, and a second retry returns 409.
+8. R05 reconciliation issue list check.
+9. W11 Web visibility check.
 
 The screenshot capture logs in as `pxrpt_store`, renders the M5 acceptance summary on the W11 report page, runs the September 2026 R01 scoped query, creates an export job, waits for READY in the export task list, and writes local evidence to:
 
@@ -145,7 +147,7 @@ http://127.0.0.1:4173/main-flow.html
 http://127.0.0.1:4173/
 ```
 
-The root report page is now the best first M5 reporting screen: after `npm run acceptance:m5-browserless`, it displays the latest R01-R05/DEV-505 acceptance result from `apps/web/reports-acceptance-run.json` and can be re-captured with `npm run m5:capture-browser-evidence`.
+The root report page is now the best first M5 reporting screen: after `npm run acceptance:m5-browserless`, it displays the latest 10-step R01-R05/DEV-505 acceptance result from `apps/web/reports-acceptance-run.json` and can be re-captured with `npm run m5:capture-browser-evidence`.
 
 `ops.html` is the best first M5 operations screen: it shows DEV-505 export task health and R05 reconciliation issues for the seeded admin account.
 
@@ -219,7 +221,7 @@ Run `npm run acceptance:m4-close` for the final local M4 close check after brows
 Do these in order:
 
 1. Keep `npm run acceptance:m5-browserless`, `npm run m5:capture-browser-evidence`, and `npm run m5:capture-ops-evidence` green after M5 changes.
-2. Continue M5 in plan order: remaining DEV-505 retry/monitoring hardening, then DEV-503 notifications or DEV-504 audit expansion if the plan needs visible operations next.
+2. Continue M5 in plan order: DEV-503 notifications or DEV-504 audit expansion, plus broader async-task recovery only when it affects an implemented flow.
 3. Run `npm run acceptance:m4-close` after any billing, payment, settlement, or adjustment change.
 
 Do not reopen M4 unless a regression appears in `acceptance:m4-close` or a reviewer rejects the collected browser evidence.

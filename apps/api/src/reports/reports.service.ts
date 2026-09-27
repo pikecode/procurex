@@ -63,6 +63,16 @@ export class ReportsService implements OnModuleInit {
     return !job || job.expiresAt <= new Date() || job.status !== 'READY' || !authorizedExport(job, roles, scope) ? null : job.csvContent;
   }
 
+  async retryExport(id: string, userId: string, roles: string[], scope?: unknown) {
+    const job = await this.database.client.exportJob.findFirst({ where: { id, requestedById: userId } });
+    if (!job || job.expiresAt <= new Date() || !authorizedExport(job, roles, scope)) return null;
+    if (job.status !== 'FAILED') return { retryable: false, status: job.status };
+    const claimed = await this.database.client.exportJob.updateMany({ where: { id: job.id, status: 'FAILED', expiresAt: { gt: new Date() } }, data: { status: 'QUEUED', csvContent: null, errorMessage: null } });
+    if (claimed.count !== 1) return { retryable: false, status: job.status };
+    setImmediate(() => { void this.processQueuedExports(); });
+    return { retryable: true, job: { jobId: job.id, reportType: job.reportType, status: 'QUEUED', createdAt: job.createdAt.toISOString(), expiresAt: job.expiresAt.toISOString(), error: null } };
+  }
+
   async exportHealth(): Promise<ExportHealthView> {
     const now = new Date();
     const staleBefore = new Date(now.getTime() - exportProcessingLeaseMs);

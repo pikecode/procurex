@@ -118,6 +118,32 @@ test('export health reports stale processing jobs and recent failures', async ()
   assert.deepEqual(health.recentFailures.map((job) => job.jobId), ['failed']);
 });
 
+test('failed exports can be retried in the saved scope only', async () => {
+  const updates: any[] = [];
+  const row = { id: 'failed', requestedById: 'user', reportType: 'order-amounts', permissionScope: { type: 'STORE', storeId: 'store-1' }, expiresAt: new Date(Date.now() + 60000), status: 'FAILED', createdAt: new Date('2026-09-27T00:00:00.000Z'), errorMessage: 'boom' };
+  const service = new ReportsService({ client: { exportJob: {
+    findFirst: async () => row,
+    findMany: async () => [],
+    updateMany: async (query: any) => { updates.push(query); return { count: 1 }; },
+  } } } as any);
+  const wrongScope = await service.retryExport('failed', 'user', ['STORE'], { type: 'STORE', storeId: 'store-2' });
+  assert.equal(wrongScope, null);
+  const retry = await service.retryExport('failed', 'user', ['STORE'], { type: 'STORE', storeId: 'store-1' });
+  assert.equal(retry?.retryable, true);
+  assert.equal((retry as any).job.status, 'QUEUED');
+  assert.equal(updates[0].where.status, 'FAILED');
+  assert.deepEqual(updates[0].data, { status: 'QUEUED', csvContent: null, errorMessage: null });
+});
+
+test('ready exports are not retryable', async () => {
+  const service = new ReportsService({ client: { exportJob: {
+    findFirst: async () => ({ id: 'ready', requestedById: 'user', reportType: 'order-amounts', permissionScope: {}, expiresAt: new Date(Date.now() + 60000), status: 'READY', createdAt: new Date(), errorMessage: null }),
+  } } } as any);
+  const retry = await service.retryExport('ready', 'user', ['ADMIN'], undefined);
+  assert.equal(retry?.retryable, false);
+  assert.equal(retry?.status, 'READY');
+});
+
 test('adjustment queries cannot cross a bound account scope', async () => {
   const controller = new AdjustmentsController({ list: async () => [] } as any);
   const request = { auth: { user: { scope: { type: 'STORE', storeId: '00000000-0000-4000-8000-000000000001' } } } } as any;

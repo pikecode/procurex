@@ -41,8 +41,9 @@ async function loadExportJobs() {
   try {
     const jobs = await call('/exports');
     $('exports-empty').classList.toggle('hidden', !!jobs.length);
-    $('export-jobs').innerHTML = jobs.map((job) => `<tr><td>${new Date(job.createdAt).toLocaleString('zh-CN')}</td><td><strong>${esc(reportNames[job.reportType] || job.reportType)}</strong></td><td><span class="tag ${job.status === 'READY' ? 'tag-ok' : job.status === 'FAILED' ? 'tag-fail' : 'tag-pending'}">${esc(job.status)}</span>${job.error ? `<small>${esc(job.error)}</small>` : ''}</td><td>${new Date(job.expiresAt).toLocaleString('zh-CN')}</td><td>${job.status === 'READY' ? `<button class="secondary" data-export-download="${esc(job.jobId)}">下载</button>` : ''}</td></tr>`).join('');
+    $('export-jobs').innerHTML = jobs.map((job) => `<tr><td>${new Date(job.createdAt).toLocaleString('zh-CN')}</td><td><strong>${esc(reportNames[job.reportType] || job.reportType)}</strong></td><td><span class="tag ${job.status === 'READY' ? 'tag-ok' : job.status === 'FAILED' ? 'tag-fail' : 'tag-pending'}">${esc(job.status)}</span>${job.error ? `<small>${esc(job.error)}</small>` : ''}</td><td>${new Date(job.expiresAt).toLocaleString('zh-CN')}</td><td>${job.status === 'READY' ? `<button class="secondary" data-export-download="${esc(job.jobId)}">下载</button>` : job.status === 'FAILED' ? `<button class="secondary" data-export-retry="${esc(job.jobId)}">重试</button>` : ''}</td></tr>`).join('');
     $('export-jobs').querySelectorAll('[data-export-download]').forEach((button) => button.addEventListener('click', async () => { try { await downloadExportJob(button.dataset.exportDownload); } catch (error) { $('notice').textContent = error.message; $('notice').classList.remove('hidden'); } }));
+    $('export-jobs').querySelectorAll('[data-export-retry]').forEach((button) => button.addEventListener('click', async () => { try { await retryExportJob(button.dataset.exportRetry); } catch (error) { $('notice').textContent = error.message; $('notice').classList.remove('hidden'); } }));
   } catch (error) {
     $('notice').textContent = error.message;
     $('notice').classList.remove('hidden');
@@ -57,6 +58,10 @@ async function downloadExportJob(jobId) {
   link.download = `procurex-${jobId}.csv`;
   link.click();
   URL.revokeObjectURL(url);
+}
+async function retryExportJob(jobId) {
+  await call(`/exports/${jobId}/retry`, { method: 'POST' });
+  await loadExportJobs();
 }
 document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => { active = tab.dataset.report; document.querySelectorAll('.tab').forEach((item) => item.classList.toggle('active', item === tab)); updateMeta(); if (latest) runReport(); }));
 function updateMeta() { const meta = reportMeta[active]; $('report-title').textContent = meta.title; $('report-desc').textContent = meta.desc; $('table-title').textContent = meta.table; }

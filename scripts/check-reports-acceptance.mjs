@@ -157,10 +157,35 @@ async function run() {
       supplierHealthStatus: supplierExportHealth.status,
     });
 
+    const failedExport = await database.client.exportJob.create({
+      data: {
+        requestedById: adminMe.user.id,
+        reportType: 'order-amounts',
+        filters: { from: '2026-09-01', to: '2026-09-30', storeId },
+        permissionScope: adminMe.user.scope ?? {},
+        asOf: new Date(),
+        status: 'FAILED',
+        errorMessage: 'Transient CSV generation failure',
+        expiresAt: new Date(Date.now() + 60000),
+      },
+    });
+    const retried = await request(`${baseUrl}/exports/${failedExport.id}/retry`, { method: 'POST', headers: authHeaders(adminToken) });
+    assert.equal(retried.status, 'QUEUED');
+    const retryReady = await pollExport(baseUrl, adminToken, failedExport.id);
+    assert.equal(retryReady.status, 'READY');
+    const retryReadyAgain = await fetch(`${baseUrl}/exports/${failedExport.id}/retry`, { method: 'POST', headers: authHeaders(adminToken) });
+    assert.equal(retryReadyAgain.status, 409);
+    record('9. DEV-505 failed export retries through the public API', {
+      jobId: failedExport.id,
+      retriedStatus: retried.status,
+      finalStatus: retryReady.status,
+      retryReadyAgainStatus: retryReadyAgain.status,
+    });
+
     const reconciliationIssues = await request(`${baseUrl}/reconciliation-issues`, { headers: authHeaders(adminToken) });
     const pxIssues = reconciliationIssues.filter((issue) => issue.storeCode === 'PXRPT-STORE');
     assert.deepEqual(pxIssues.map((issue) => issue.type).sort(), ['STORE_BALANCE_LEDGER_MISMATCH', 'STORE_CREDIT_USED_MISMATCH']);
-    record('9. R05 reconciliation lists account mismatches without auto-fixing', {
+    record('10. R05 reconciliation lists account mismatches without auto-fixing', {
       issueCount: pxIssues.length,
       types: pxIssues.map((issue) => issue.type).sort().join(','),
     });
@@ -175,6 +200,7 @@ async function run() {
     console.log('  R03 profit: 42.00 with freight 8.00 separate');
     console.log(`  R04 export job: ${exportJob.jobId} READY, CSV bytes ${csv.length}`);
     console.log(`  DEV-505 stale export recovered: ${staleExport.id} ${recovered.status}`);
+    console.log(`  DEV-505 failed export retried: ${failedExport.id} ${retryReady.status}`);
   } finally {
     await app.close();
   }

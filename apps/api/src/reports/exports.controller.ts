@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
@@ -31,6 +31,15 @@ export class ExportsController {
   @RequireRoles('ADMIN', 'HQ_FINANCE')
   async health() {
     return this.reports.exportHealth();
+  }
+
+  @Post(':id/retry')
+  @HttpCode(202)
+  async retry(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    const result = await this.reports.retryExport(id, request.auth!.user.id, request.auth!.user.roles, request.auth!.user.scope);
+    if (!result) throw new NotFoundException({ code: 'EXPORT_NOT_FOUND', message: 'Export job was not found or expired' });
+    if (!result.retryable) throw new ConflictException({ code: 'EXPORT_NOT_RETRYABLE', message: `Only FAILED exports can be retried; current status is ${result.status}` });
+    return result.job;
   }
 
   @Get(':id')
