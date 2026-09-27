@@ -62,7 +62,7 @@ R04 export reliability now has the first DEV-505 slices: the worker scans both f
 
 `apps/web/ops.html` now provides the W13 operations/reconciliation view. It logs in with an authorized company account, renders `GET /exports/health` as a DEV-505导出任务健康卡片, and renders `GET /reconciliation-issues` as a read-only exception list. `npm run m5:capture-ops-evidence` captures Chrome evidence under `var/m5-browser-evidence/ops-reconciliation.png`; the latest local screenshot showed 5 current local reconciliation issues and 0 export health exception rows after the clean acceptance seed.
 
-DEV-503 now has I08 in-app notification list/read plus three real business triggers. `Notification` persists recipient, channel, status, title/body, payload, read timestamp, and a per-recipient event key; `GET /notifications` returns the current user's latest 50 messages with unread count, and `POST /notifications/{id}/read` marks only the current user's message as read. `notifications:seed-acceptance` seeds admin/store messages, `notifications:check-acceptance` verifies list/read/isolation over HTTP, and W13 renders a "站内消息" card. Supplier shipment creation writes a "待收货提醒" notification to active users scoped to the destination store; receipt with missing quantity writes a "收货差异待处理" notification to active users scoped to the supplier; supplier discrepancy resolution writes a store notification such as "差异已同意少收". `main-flow:check-demo` verifies all three messages through real `PXFLOW` order, shipment, receipt, and F05 resolution steps.
+DEV-503 now has I08 in-app notification list/read plus real business triggers. `Notification` persists recipient, channel, status, title/body, payload, read timestamp, and a per-recipient event key; `GET /notifications` returns the current user's latest 50 messages with unread count, and `POST /notifications/{id}/read` marks only the current user's message as read. `notifications:seed-acceptance` seeds admin reconciliation and overdue receipt facts, `notifications:send-overdue-receipt-reminders -- --hours=24` scans shipped-but-not-received uncompleted shipments and creates de-duplicated "超时收货提醒", `notifications:check-acceptance` verifies list/read/isolation plus reminder idempotency over HTTP, and W13 renders a "站内消息" card. Supplier shipment creation writes a "待收货提醒" notification to active users scoped to the destination store; receipt with missing quantity writes a "收货差异待处理" notification to active users scoped to the supplier; supplier discrepancy resolution writes a store notification such as "差异已同意少收". `main-flow:check-demo` verifies all three immediate business messages through real `PXFLOW` order, shipment, receipt, and F05 resolution steps.
 
 DEV-504 now has the first audit log slices. `AuditLog` persists actor, active roles/scope, action, entity, traceId, reason, before/after JSON, and createdAt. `GET /audit-logs` is restricted to ADMIN/HQ_FINANCE and returns the latest 50 entries with actor display text. The supplier shipment, store receipt, discrepancy resolution, W10 difference-disposal create/confirm, and payment create/confirm/reject/cancel command paths write audit rows only after the command succeeds, so idempotent replay does not duplicate the audit trail. W13 renders a "审计日志" table; `main-flow:check-demo` verifies the fulfillment actions, and `billing:check-acceptance` verifies direct payment create/confirm plus difference-disposal actions.
 
@@ -112,10 +112,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice in this update: DEV-504 audit logs for payment create/confirm/reject/cancel.
-Latest commit before this progress update: `d4d6614 Audit difference disposal actions`.
+Latest functional slice in this update: DEV-503 overdue receipt reminder scan.
+Latest commit before this progress update: `0bd495e Audit payment record actions`.
 
 ```text
+0bd495e Audit payment record actions
 d4d6614 Audit difference disposal actions
 b2b21ea Add audit logs for fulfillment actions
 ca3b382 Notify stores after discrepancy resolution

@@ -1,9 +1,13 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../dist/apps/api/src/app.module.js';
 import { ApiExceptionFilter } from '../dist/apps/api/src/common/api-exception.filter.js';
 import { ResponseEnvelopeInterceptor } from '../dist/apps/api/src/common/response-envelope.interceptor.js';
+
+const execFileAsync = promisify(execFile);
 
 async function createAcceptanceApp() {
   const app = await NestFactory.create(AppModule, { logger: false });
@@ -54,9 +58,11 @@ async function run() {
     const adminAfterRead = await request(`${baseUrl}/notifications`, { headers: authHeaders(adminToken) });
     assert.equal(adminAfterRead.unreadCount, 0);
 
+    await execFileAsync(process.execPath, ['--env-file-if-exists=.env', 'scripts/send-overdue-receipt-reminders.mjs', '--hours=24']);
     const storeMessages = await request(`${baseUrl}/notifications`, { headers: authHeaders(storeToken) });
     assert.equal(storeMessages.unreadCount, 1);
-    assert.equal(storeMessages.notifications[0]?.title, '待收货提醒');
+    assert.equal(storeMessages.notifications[0]?.title, '超时收货提醒');
+    assert.equal(storeMessages.notifications[0]?.payload?.type, 'OVERDUE_RECEIPT');
     assert.notEqual(storeMessages.notifications[0]?.id, adminNotificationId);
 
     console.log('Notifications acceptance check passed.');
