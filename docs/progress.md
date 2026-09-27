@@ -4,7 +4,7 @@ Last updated: 2026-09-27
 
 ## Current Position
 
-The backend has partial M4 settlement implementation. M5 reporting/export work was started before M4 was closed and is now frozen while the core settlement path is completed.
+M4 remains in progress: DEV-401/404/405 are closed; DEV-402/403/406 are partial. The W09 billing and W10 adjustment workbenches are implemented, and M5 reporting/export remains frozen until M4 acceptance closes.
 
 Latest follow-up audit also closes two remaining store-scope reads: recharge detail accepts STORE_FINANCE and rejects another store, and store catalog reads reject unconfigured or mismatched STORE/STORE_FINANCE scopes.
 
@@ -53,6 +53,7 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 Latest commits:
 
 Latest functional slice: `68e4814 Verify W10 B05 to B12 HTTP flow`.
+Latest commit before this progress update: `607a164 Point progress ledger at W10 HTTP acceptance`.
 
 ```text
 25288bb Record W10 workbench review
@@ -158,7 +159,7 @@ Progress is tracked by M4 package gates rather than an unweighted percentage. DE
 | DEV-403 | Statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, account scope, and cross-view shared-item reservation are tested | Complete browser-level W09/S05/S08 acceptance |
 | DEV-404 | **Closed**: B06-B11 payment lifecycle, AT-13 concurrency, receiver authorization, direct-term adjustment payment, company-term store-first HTTP gate, mandatory I06/I07 PAYMENT evidence, participant download scope, expired-upload cleanup, and local DB/private-file restore evidence verified | Production storage/backup operations remain M6 |
 | DEV-405 | **Closed**: A04-A06, store scope, and W08 selected-only clearing/accounting flow verified | None for the current M4 package; production backup policy remains DEV-603/M6 |
-| DEV-406 | Persisted adjustments, repeated-change netting (+20 then +10), positive adjustment payment, offsets/returns, receiver scopes, and snapshot-versus-adjustment database reconciliation are covered | Implement W10 adjustment/difference workbench and complete its end-to-end acceptance |
+| DEV-406 | Persisted adjustments, repeated-change netting (+20 then +10), positive adjustment payment, offsets/returns, receiver scopes, snapshot reconciliation, W10 workbench, and B05→B12 real-database HTTP flow are covered | Complete browser-level W10 acceptance |
 
 W09 first usable web flow is now implemented in `apps/web/billing.html`: role-filtered store, supplier total, supplier-store, and direct statements; detail lines; payment preview/registration with private evidence upload; payment list; receiver confirmation; and counterparty-scoped evidence download. Existing API and browser script checks pass. The same page now has narrow-screen S05/S08 layout rules; broader end-to-end browser acceptance remains open.
 
@@ -542,7 +543,7 @@ Current price history behavior:
 
 ## Recommended Next Step
 
-W10 now covers adjustment reads, same-side positive adjustment offsets, offline returns, and receiver confirmation through B05/B12; the backend suites pass. Next follow the plan order: close DEV-402 and DEV-403 browser acceptance, then finish DEV-406 W10 end-to-end acceptance once a browser runtime is available. M5 remains frozen until all M4 packages are closed.
+W10 implementation and its real-database B05→B12 HTTP flow are complete. Next follow the plan order: close DEV-402 and DEV-403 browser acceptance, then run browser acceptance for W10 once a browser runtime is available. M5 remains frozen until all M4 packages are closed.
 
 ## Where To Look
 
