@@ -62,12 +62,40 @@ test('export list only returns current user jobs in the current saved scope', as
 test('export worker claims queued jobs once', async () => {
   const updates: any[] = [];
   const service = new ReportsService({ client: { exportJob: {
-    findMany: async () => [{ id: 'job', reportType: 'order-amounts', filters: {}, expiresAt: new Date(Date.now() + 60000), createdAt: new Date() }],
+    findMany: async () => [{ id: 'job', status: 'QUEUED', reportType: 'order-amounts', filters: {}, expiresAt: new Date(Date.now() + 60000), createdAt: new Date() }],
     updateMany: async (query: any) => { updates.push(query); return { count: 1 }; },
     update: async () => ({}),
   } } } as any);
   await (service as any).processQueuedExports();
   assert.equal(updates[0].where.status, 'QUEUED');
+});
+
+test('export worker retries stale processing jobs', async () => {
+  const updates: any[] = [];
+  const service = new ReportsService({ client: { exportJob: {
+    findMany: async (query: any) => {
+      assert.equal(query.where.OR[1].status, 'PROCESSING');
+      assert.ok(query.where.OR[1].createdAt.lte instanceof Date);
+      return [{ id: 'stale-job', status: 'PROCESSING', reportType: 'order-amounts', filters: {}, expiresAt: new Date(Date.now() + 60000), createdAt: new Date(Date.now() - 11 * 60 * 1000) }];
+    },
+    updateMany: async (query: any) => { updates.push(query); return { count: 1 }; },
+    update: async () => ({}),
+  } } } as any);
+  await (service as any).processQueuedExports();
+  assert.equal(updates[0].where.status, 'PROCESSING');
+  assert.ok(updates[0].where.createdAt.lte instanceof Date);
+  assert.equal(updates[0].data.errorMessage, null);
+});
+
+test('export expiration closes processing jobs', async () => {
+  let updateQuery: any;
+  const service = new ReportsService({ client: { exportJob: {
+    updateMany: async (query: any) => { updateQuery = query; return { count: 1 }; },
+  } } } as any);
+  await (service as any).expireExports();
+  assert.ok(updateQuery.where.status.in.includes('PROCESSING'));
+  assert.equal(updateQuery.data.status, 'FAILED');
+  assert.equal(updateQuery.data.csvContent, null);
 });
 
 test('adjustment queries cannot cross a bound account scope', async () => {

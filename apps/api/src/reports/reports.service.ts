@@ -6,6 +6,7 @@ import { DatabaseService } from '../database/database.service.js';
 export type ReportFilters = { from?: string; to?: string; storeId?: string; supplierId?: string; productId?: string };
 export type ReportType = 'order-amounts' | 'product-quantities' | 'profit';
 const currency = 'CNY';
+const exportProcessingLeaseMs = 10 * 60 * 1000;
 
 @Injectable()
 export class ReportsService implements OnModuleInit {
@@ -53,15 +54,21 @@ export class ReportsService implements OnModuleInit {
   }
 
   private async processQueuedExports() {
-    const jobs = await this.database.client.exportJob.findMany({ where: { status: 'QUEUED', expiresAt: { gt: new Date() } }, take: 5, orderBy: { createdAt: 'asc' } });
+    const staleBefore = new Date(Date.now() - exportProcessingLeaseMs);
+    const jobs = await this.database.client.exportJob.findMany({
+      where: { expiresAt: { gt: new Date() }, OR: [{ status: 'QUEUED' }, { status: 'PROCESSING', createdAt: { lte: staleBefore } }] },
+      take: 5,
+      orderBy: { createdAt: 'asc' },
+    });
     await Promise.all(jobs.map(async (job) => {
-      const claimed = await this.database.client.exportJob.updateMany({ where: { id: job.id, status: 'QUEUED' }, data: { status: 'PROCESSING' } });
+      const claimWhere = job.status === 'PROCESSING' ? { id: job.id, status: 'PROCESSING' as const, createdAt: { lte: staleBefore } } : { id: job.id, status: 'QUEUED' as const };
+      const claimed = await this.database.client.exportJob.updateMany({ where: claimWhere, data: { status: 'PROCESSING', errorMessage: null } });
       if (claimed.count === 1) await this.generateExport(job.id, job.reportType as ReportType, job.filters as ReportFilters);
     }));
   }
 
   private async expireExports() {
-    await this.database.client.exportJob.updateMany({ where: { expiresAt: { lte: new Date() }, status: { in: ['QUEUED', 'READY', 'FAILED'] } }, data: { status: 'FAILED', csvContent: null, errorMessage: 'Export expired' } });
+    await this.database.client.exportJob.updateMany({ where: { expiresAt: { lte: new Date() }, status: { in: ['QUEUED', 'PROCESSING', 'READY', 'FAILED'] } }, data: { status: 'FAILED', csvContent: null, errorMessage: 'Export expired' } });
   }
 
   private async generateExport(id: string, type: ReportType, filters: ReportFilters) {

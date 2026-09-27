@@ -6,6 +6,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../dist/apps/api/src/app.module.js';
 import { ApiExceptionFilter } from '../dist/apps/api/src/common/api-exception.filter.js';
 import { ResponseEnvelopeInterceptor } from '../dist/apps/api/src/common/response-envelope.interceptor.js';
+import { DatabaseService } from '../dist/apps/api/src/database/database.service.js';
+import { ReportsService } from '../dist/apps/api/src/reports/reports.service.js';
 
 const result = {
   generatedAt: new Date().toISOString(),
@@ -60,9 +62,12 @@ async function pollExport(baseUrl, token, jobId) {
 async function run() {
   const { app, baseUrl } = await createAcceptanceApp();
   try {
+    const database = app.get(DatabaseService);
+    const reports = app.get(ReportsService);
     const adminToken = await login(baseUrl, 'pxrpt_admin');
     const storeToken = await login(baseUrl, 'pxrpt_store');
     const supplierToken = await login(baseUrl, 'pxrpt_supplier');
+    const adminMe = await request(`${baseUrl}/me`, { headers: authHeaders(adminToken) });
     const storeMe = await request(`${baseUrl}/me`, { headers: authHeaders(storeToken) });
     const storeId = storeMe.user.scope.storeId;
 
@@ -125,10 +130,31 @@ async function run() {
       listedJobs: exportJobs.length,
     });
 
+    const staleExport = await database.client.exportJob.create({
+      data: {
+        requestedById: adminMe.user.id,
+        reportType: 'order-amounts',
+        filters: { from: '2026-09-01', to: '2026-09-30', storeId },
+        permissionScope: adminMe.user.scope ?? {},
+        asOf: new Date(Date.now() - 11 * 60 * 1000),
+        status: 'PROCESSING',
+        errorMessage: 'Worker interrupted before completion',
+        createdAt: new Date(Date.now() - 11 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 60000),
+      },
+    });
+    await reports.processQueuedExports();
+    const recovered = await pollExport(baseUrl, adminToken, staleExport.id);
+    assert.equal(recovered.status, 'READY');
+    record('8. DEV-505 stale PROCESSING export recovers to READY', {
+      jobId: staleExport.id,
+      status: recovered.status,
+    });
+
     const reconciliationIssues = await request(`${baseUrl}/reconciliation-issues`, { headers: authHeaders(adminToken) });
     const pxIssues = reconciliationIssues.filter((issue) => issue.storeCode === 'PXRPT-STORE');
     assert.deepEqual(pxIssues.map((issue) => issue.type).sort(), ['STORE_BALANCE_LEDGER_MISMATCH', 'STORE_CREDIT_USED_MISMATCH']);
-    record('8. R05 reconciliation lists account mismatches without auto-fixing', {
+    record('9. R05 reconciliation lists account mismatches without auto-fixing', {
       issueCount: pxIssues.length,
       types: pxIssues.map((issue) => issue.type).sort().join(','),
     });
@@ -142,6 +168,7 @@ async function run() {
     console.log('  R02 PX Reports Rice quantity: 14.000000');
     console.log('  R03 profit: 42.00 with freight 8.00 separate');
     console.log(`  R04 export job: ${exportJob.jobId} READY, CSV bytes ${csv.length}`);
+    console.log(`  DEV-505 stale export recovered: ${staleExport.id} ${recovered.status}`);
   } finally {
     await app.close();
   }
