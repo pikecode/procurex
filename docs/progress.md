@@ -43,7 +43,7 @@ Latest completed implementation: the four statement families, payment records, a
 Latest commits:
 
 ```text
-Pending this commit: W08 selected-only clearing evidence
+16790b9 Verify clearing affects selected credit only
 628d1cd Verify company term waits for store payment
 dc41992 Verify shared statement item reservation
 3e0f341 Cover immediate grouping across statement views
