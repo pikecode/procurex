@@ -58,6 +58,8 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 
 `apps/web/index.html` now renders the latest M5 browserless result from `reports-acceptance-run.json` inside the W11 report page. It also shows the latest export tasks with READY/FAILED/processing status and download actions backed by `GET /exports`. `npm run m5:capture-browser-evidence` logs in as the store-scoped report account, loads the M5 acceptance summary, runs the R01 September 2026 query, creates an export job, and captures Chrome evidence under `var/m5-browser-evidence/`. The latest capture showed `PASSED`, 8 acceptance steps, 2 scoped orders, goods `156.00`, freight `8.00`, total `164.00`, one visible READY export row, and R05 mismatch evidence for balance-ledger plus credit-used checks.
 
+`apps/web/ops.html` now provides the W13 operations/reconciliation view. It logs in with an authorized company account and renders `GET /reconciliation-issues` as a read-only exception list. `npm run m5:capture-ops-evidence` captures Chrome evidence under `var/m5-browser-evidence/ops-reconciliation.png`; the latest local screenshot showed 5 current local issues, including the 2 seeded `PXRPT` R05 mismatches.
+
 The main-flow acceptance runner now writes a browser-readable result to `apps/web/main-flow-run.json`, and `apps/web/main-flow.html` renders the latest order-to-payment handoff status. `npm run web:check` now guards this page as well, so the main flow is visible even before a full interactive order-entry workbench is built.
 
 W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run billing:seed-acceptance` creates `PXACC` demo data for company-term, stored-value, credit-backed, and direct supplier-term statements, plus a shared pending supplier payable reservation visible from supplier total and supplier-store views; it also seeds W10 positive/negative supplier adjustments for offset. `npm run billing:check-acceptance` verifies those facts through a temporary API and creates/confirms one W10 offset disposal. See `docs/billing-acceptance-seed.md` for accounts and checks.
@@ -104,10 +106,12 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `452ea4d Add R05 reconciliation issue checks`.
-Latest commit before this progress update: `452ea4d Add R05 reconciliation issue checks`.
+Latest functional slice: `d4b76d5 Add W13 reconciliation workbench`.
+Latest commit before this progress update: `d4b76d5 Add W13 reconciliation workbench`.
 
 ```text
+d4b76d5 Add W13 reconciliation workbench
+65b2d92 Refresh progress ledger after R05 reconciliation
 452ea4d Add R05 reconciliation issue checks
 7fd6c4a Add R04 export task list
 2449286 Refresh progress ledger after M5 browser evidence

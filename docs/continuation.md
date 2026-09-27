@@ -8,7 +8,7 @@ Use this as the first document when continuing development in a new window.
 
 M4 is locally closed against the current acceptance gates. DEV-401 through DEV-406 are closed, `npm run acceptance:m4-close` passes, Chrome is ready, local PostgreSQL is reachable, automatic evidence is complete, and the manual browser evidence package is 6/6.
 
-M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, W11 visibility, R04 export task listing, and a Chrome-captured W11 acceptance screenshot.
+M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, W11 visibility, R04 export task listing, W13 reconciliation visibility, and Chrome-captured W11/W13 screenshots.
 
 ## Latest High-Signal Work
 
@@ -57,6 +57,7 @@ Run the M5 reporting/export browserless chain:
 ```bash
 npm run acceptance:m5-browserless
 npm run m5:capture-browser-evidence
+npm run m5:capture-ops-evidence
 ```
 
 This performs:
@@ -74,6 +75,8 @@ The screenshot capture logs in as `pxrpt_store`, renders the M5 acceptance summa
 ```text
 var/m5-browser-evidence/reports-dashboard.png
 var/m5-browser-evidence/manifest.json
+var/m5-browser-evidence/ops-reconciliation.png
+var/m5-browser-evidence/ops-manifest.json
 ```
 
 Generated local file:
