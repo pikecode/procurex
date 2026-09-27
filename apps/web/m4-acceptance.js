@@ -8,21 +8,40 @@ const gateDefinitions = [
     id: 'DEV-402',
     title: '结算金额与周期',
     state: 'Partial',
-    autoEvidence: ['company-term block', 'direct-term preview', 'stored-value payable', 'credit period'],
+    autoEvidence: [
+      ['stored-value-payable', '储值单生成供应商应付'],
+      ['credit-period', '信用账期半月周期'],
+      ['direct-term-preview', '直营账期预览为 DIRECT'],
+      ['company-term-block', '公司账期先收后付阻断'],
+    ],
     manualEvidence: ['W09/S05/S08 四种结算模式截图', '周期标签与付款状态复核'],
   },
   {
     id: 'DEV-403',
     title: '账单家族与共享项',
     state: 'Partial',
-    autoEvidence: ['store statement', 'supplier total statement', 'supplier-store statement', 'direct statement', 'shared pending amount'],
+    autoEvidence: [
+      ['store-view', '门店账单视图'],
+      ['supplier-total-view', '供应商总单视图'],
+      ['supplier-store-view', '供应商分店账单视图'],
+      ['direct-view', '直营账单视图'],
+      ['shared-pending-reservation', '共享结算项显示待确认金额'],
+      ['shared-payment-visible', '共享付款记录可见'],
+    ],
     manualEvidence: ['四类账单视图切换录屏', '共享结算项不可重复付款复核'],
   },
   {
     id: 'DEV-406',
     title: '调整与差额处置',
     state: 'Partial',
-    autoEvidence: ['W10 offset disposal', 'positive adjustment payment availability', 'pending and disposed states'],
+    autoEvidence: [
+      ['adjustment-list', 'W10 调整列表'],
+      ['adjustment-detail', 'W10 调整详情'],
+      ['offset-target', '正调整可作为抵扣目标'],
+      ['offset-created', '抵扣处置已创建'],
+      ['receiver-confirmed', '收款方确认通过'],
+      ['disposed-state', '处置状态已确认'],
+    ],
     manualEvidence: ['W10 列表/详情截图', '离线返还、抵扣、收款确认录屏'],
   },
 ];
@@ -109,12 +128,24 @@ function findValue(steps, key) {
 }
 
 function renderGates(billingSteps = []) {
-  const stepText = billingSteps.map((step) => `${step.title} ${Object.values(step.data || {}).join(' ')}`).join(' ').toLowerCase();
+  const evidenceByGate = collectEvidence(billingSteps);
   $('gates').innerHTML = gateDefinitions.map((gate) => {
-    const matched = gate.autoEvidence.filter((item) => stepText.includes(item.toLowerCase().split(' ')[0]));
-    const evidence = matched.length || billingSteps.length ? '自动证据已生成' : '等待自动证据';
-    return `<article class="gate-card"><div class="gate-top"><span class="gate-id">${esc(gate.id)}</span><span class="gate-state">${esc(gate.state)}</span></div><h3>${esc(gate.title)}</h3><div class="gate-evidence">${esc(evidence)}</div><ul>${gate.autoEvidence.map((item) => `<li>${esc(item)}</li>`).join('')}</ul><div class="manual-title">最终关闭还需要</div><ol>${gate.manualEvidence.map((item) => `<li>${esc(item)}</li>`).join('')}</ol></article>`;
+    const passed = evidenceByGate.get(gate.id) || new Set();
+    const count = gate.autoEvidence.filter(([id]) => passed.has(id)).length;
+    const evidence = count ? `自动证据 ${count}/${gate.autoEvidence.length}` : '等待自动证据';
+    return `<article class="gate-card"><div class="gate-top"><span class="gate-id">${esc(gate.id)}</span><span class="gate-state">${esc(gate.state)}</span></div><h3>${esc(gate.title)}</h3><div class="gate-evidence">${esc(evidence)}</div><ul>${gate.autoEvidence.map(([id, label]) => `<li class="${passed.has(id) ? 'passed' : ''}">${esc(label)}</li>`).join('')}</ul><div class="manual-title">最终关闭还需要</div><ol>${gate.manualEvidence.map((item) => `<li>${esc(item)}</li>`).join('')}</ol></article>`;
   }).join('');
+}
+
+function collectEvidence(steps) {
+  const evidenceByGate = new Map();
+  for (const step of steps) {
+    for (const gate of step.gates || []) {
+      if (!evidenceByGate.has(gate.gateId)) evidenceByGate.set(gate.gateId, new Set());
+      evidenceByGate.get(gate.gateId).add(gate.evidenceId);
+    }
+  }
+  return evidenceByGate;
 }
 
 function renderAccounts() {

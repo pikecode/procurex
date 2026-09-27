@@ -19,8 +19,8 @@ const result = {
   steps: [],
 };
 
-function record(title, data) {
-  result.steps.push({ title, data });
+function record(title, data, gates = []) {
+  result.steps.push({ title, data, gates });
 }
 
 async function createAcceptanceApp() {
@@ -101,7 +101,12 @@ async function run() {
       supplierStoreTotalAmount: storedSupplierStore[0].totalAmount,
       pendingPaymentAmount: storedSupplier[0].pendingPaymentAmount,
       payableAmount: storedSupplier[0].payableAmount,
-    });
+    }, [
+      { gateId: 'DEV-402', evidenceId: 'stored-value-payable' },
+      { gateId: 'DEV-403', evidenceId: 'supplier-total-view' },
+      { gateId: 'DEV-403', evidenceId: 'supplier-store-view' },
+      { gateId: 'DEV-403', evidenceId: 'shared-pending-reservation' },
+    ]);
 
     const creditStore = await request(`${baseUrl}/store-statements?storeId=${ids.store.id}&supplierId=${ids.credit.id}`, {
       headers: authHeaders(token),
@@ -112,7 +117,10 @@ async function run() {
       cycle: creditStore[0].cycle,
       periodStart: creditStore[0].periodStart,
       totalAmount: creditStore[0].totalAmount,
-    });
+    }, [
+      { gateId: 'DEV-402', evidenceId: 'credit-period' },
+      { gateId: 'DEV-403', evidenceId: 'store-view' },
+    ]);
 
     const directStatements = await request(`${baseUrl}/direct-statements?storeId=${ids.store.id}&supplierId=${ids.direct.id}`, {
       headers: authHeaders(token),
@@ -134,7 +142,10 @@ async function run() {
       direction: directPreview.direction,
       channel: directPreview.channel,
       totalPayableAmount: directPreview.totalPayableAmount,
-    });
+    }, [
+      { gateId: 'DEV-402', evidenceId: 'direct-term-preview' },
+      { gateId: 'DEV-403', evidenceId: 'direct-view' },
+    ]);
 
     const companySupplier = await request(`${baseUrl}/supplier-statements?supplierId=${ids.company.id}`, {
       headers: authHeaders(token),
@@ -153,7 +164,9 @@ async function run() {
       blockedStatus: blockedPreview.status,
       supplierTotalAmount: companySupplier[0].totalAmount,
       payableAmount: companySupplier[0].payableAmount,
-    });
+    }, [
+      { gateId: 'DEV-402', evidenceId: 'company-term-block' },
+    ]);
 
     const payments = await request(`${baseUrl}/payment-records?supplierId=${ids.stored.id}&direction=COMPANY_TO_SUPPLIER`, {
       headers: authHeaders(token),
@@ -163,7 +176,9 @@ async function run() {
       paymentNo: 'PXACC-PAY-SHARED',
       status: 'PENDING',
       amount: '69.00',
-    });
+    }, [
+      { gateId: 'DEV-403', evidenceId: 'shared-payment-visible' },
+    ]);
 
     const adjustments = await request(`${baseUrl}/adjustments?storeId=${ids.store.id}&supplierId=${ids.stored.id}`, {
       headers: authHeaders(token),
@@ -180,7 +195,11 @@ async function run() {
       pendingReturnOrOffsetAmount: credit.pendingReturnOrOffsetAmount,
       targetOrderNo: target.supplierOrderNo,
       targetAmount: target.adjustmentAmount,
-    });
+    }, [
+      { gateId: 'DEV-406', evidenceId: 'adjustment-list' },
+      { gateId: 'DEV-406', evidenceId: 'adjustment-detail' },
+      { gateId: 'DEV-406', evidenceId: 'offset-target' },
+    ]);
 
     const creditDetail = await request(`${baseUrl}/adjustments/${encodeURIComponent(credit.id)}`, {
       headers: authHeaders(token),
@@ -214,7 +233,11 @@ async function run() {
       amount: disposal.amount,
       status: confirmedDisposal.status,
       version: confirmedDisposal.version,
-    });
+    }, [
+      { gateId: 'DEV-406', evidenceId: 'offset-created' },
+      { gateId: 'DEV-406', evidenceId: 'receiver-confirmed' },
+      { gateId: 'DEV-406', evidenceId: 'disposed-state' },
+    ]);
 
     console.log('Billing acceptance check passed.');
     console.log('  Stored-value shared pending amount: 69.00');

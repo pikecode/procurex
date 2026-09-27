@@ -118,7 +118,10 @@ assertIncludes(m4Js, 'acceptance:m4-browserless', 'M4 acceptance command');
 assertIncludes(m4Js, 'DEV-402', 'M4 gate walkthrough');
 assertIncludes(m4Js, 'DEV-403', 'M4 gate walkthrough');
 assertIncludes(m4Js, 'DEV-406', 'M4 gate walkthrough');
+assertIncludes(m4Js, 'collectEvidence', 'M4 gate evidence mapping');
+assertIncludes(m4Js, 'stored-value-payable', 'M4 structured gate evidence');
 assertIncludes(m4Css, '.gate-card', 'M4 gate styles');
+assertIncludes(m4Css, '.passed', 'M4 gate evidence styles');
 
 assertIncludes(mainFlowDemoHtml, '主流程操作台', 'main-flow demo page');
 assertIncludes(mainFlowDemoHtml, '/main-flow-demo.js', 'main-flow demo script');

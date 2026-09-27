@@ -6,6 +6,8 @@
 .gate-card h3{font-size:14px;margin:0 0 8px;color:#24342c}
 .gate-evidence{font-size:10px;color:#187c59;background:#f0f8f3;border:1px solid #e1f0e7;border-radius:5px;padding:7px 8px;margin-bottom:10px}
 .gate-card ul,.gate-card ol{margin:0;padding-left:17px;color:#647169;font-size:10px;line-height:1.8}
+.gate-card li.passed{color:#187c59;font-weight:700}
+.gate-card li.passed::marker{content:'✓ '}
 .gate-card ol{color:#8a6b3d}
 .manual-title{font-size:9px;color:#9a6b1d;margin:12px 0 5px;font-weight:700}
 .account-card{margin-bottom:19px}
