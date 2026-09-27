@@ -6,6 +6,8 @@ This file is the visible checkpoint for product direction. It maps implemented w
 
 For the exact M4 closure checklist, use `docs/m4-exit-checklist.md`.
 
+For the end-to-end ordering-to-payment flow, use `docs/main-flow-acceptance.md`. It separates backend evidence from what is actually visible to a user.
+
 ## Direction Check
 
 The current direction is aligned with the confirmed plan: close M4 settlement, billing, payment, clearing, and adjustment acceptance before reopening M5 reporting/operations.
@@ -40,6 +42,7 @@ Open these pages:
 | W09/S05/S08 billing | `apps/web/billing.html` | Four statement families, statement detail, payment preview, payment registration with evidence upload, receiver confirmation, payment list, evidence download. | Implemented; HTTP/static smoke passed; browser E2E blocked by missing browser runtime. |
 | W10 adjustments | `apps/web/billing.html` adjustment views | Adjustment filtering, original vs actual period comparison, detail, B12 offline return, receiver confirmation, offset to positive adjustment. | Implemented; HTTP/database B05 to B12 flow passed; browser E2E blocked by missing browser runtime. |
 | W11 reporting | `apps/web/index.html` | R01-R03 reports, filters, summaries, CSV/export flow. | Implemented early; frozen until M4 acceptance closes. |
+| Main order flow | Not yet implemented | Store order, procurement confirmation, supplier shipment, store receipt, discrepancy handling. | Backend APIs and integration tests exist; visible Web/mini-program flow is missing. |
 
 ## Requirement-To-Evidence Map
 
@@ -83,9 +86,10 @@ Until a browser runtime is available, W09/W10 can only be verified by:
 
 ## Next Work Order
 
-1. Close DEV-402 browser/manual acceptance for settlement modes.
-2. Close DEV-403 browser/manual acceptance for W09/S05/S08.
-3. Close DEV-406 browser/manual acceptance for W10.
-4. Only then unfreeze M5 reporting/operations work.
+1. Add a narrow visible main-flow demo or scripted acceptance runner for order to receipt to payment handoff.
+2. Close DEV-402 browser/manual acceptance for settlement modes.
+3. Close DEV-403 browser/manual acceptance for W09/S05/S08.
+4. Close DEV-406 browser/manual acceptance for W10.
+5. Only then unfreeze M5 reporting/operations work.
 
 Do not add new reporting, notification, or deployment scope until M4 is accepted.

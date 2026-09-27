@@ -551,9 +551,12 @@ For a user-visible status map, use `docs/acceptance-dashboard.md`. It maps each 
 
 For the exact remaining M4 exit gates, use `docs/m4-exit-checklist.md`. M4 remains open until DEV-402, DEV-403, and DEV-406 meet that checklist's close conditions.
 
+The ordering-to-payment main flow is tracked in `docs/main-flow-acceptance.md`. Current assessment: backend APIs and integration tests cover the main path, but the visible product flow starts mostly at billing/payment. The next execution step should create a narrow visible main-flow demo or scripted acceptance runner before adding more detailed settlement work.
+
 ## Where To Look
 
 - Visible acceptance map: `docs/acceptance-dashboard.md`
+- Main flow acceptance map: `docs/main-flow-acceptance.md`
 - M4 exit checklist: `docs/m4-exit-checklist.md`
 - Completed chronological notes: `docs/development-log.md`
 - Planned milestones: `docs/development-plan.md`
