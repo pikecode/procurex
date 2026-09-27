@@ -6,7 +6,7 @@ Use this as the first document when continuing development in a new window.
 
 ## Current State
 
-The project is still in M4. DEV-401, DEV-404, and DEV-405 are closed against current backend gates. DEV-402, DEV-403, and DEV-406 remain partial because their final browser-level screenshots or recordings have not been collected yet. `npm run m4:status` is the fastest current snapshot: Chrome is ready, automatic evidence/checklists/screenshots are ready, and the local PostgreSQL endpoint is blocked until Docker Desktop or another PostgreSQL instance is started.
+The project is still in M4. DEV-401, DEV-404, and DEV-405 are closed against current backend gates. DEV-402, DEV-403, and DEV-406 remain partial because their final browser-level screenshots or recordings have not been collected yet. `npm run m4:status` is the fastest current snapshot: Chrome is ready, local PostgreSQL is reachable, automatic evidence/checklists/screenshots are ready, and the manual evidence package is still 0/6.
 
 The direction has not shifted: finish M4 settlement/billing/payment/adjustment acceptance before reopening M5 reporting or operations scope.
 
