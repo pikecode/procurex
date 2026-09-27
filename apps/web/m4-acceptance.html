@@ -15,6 +15,7 @@
     <div id="notice" class="notice hidden"></div>
     <section class="summary-grid" id="summary"></section>
     <section class="gate-grid" id="gates"></section>
+    <section class="data-card evidence-card"><div class="data-head"><div><h3>验收摘要</h3><p>汇总自动证据和本地人工勾选，便于接力复核</p></div><button id="copy-summary" class="secondary">复制摘要</button></div><textarea id="evidence-summary" readonly></textarea></section>
     <section class="data-card account-card"><div class="data-head"><div><h3>验收账号</h3><p>用于复核 W09/S05/S08 与 W10 的角色视角</p></div><a class="secondary link-button" href="/billing.html">打开账单工作台</a></div><div class="account-grid" id="accounts"></div></section>
     <section class="data-card"><div class="data-head"><div><h3>验收明细</h3><p>W09/S05/S08、W10 与主流程 runner 的关键事实</p></div><button id="refresh" class="secondary">刷新</button></div><div class="table-wrap"><table><thead><tr><th>验收项</th><th>关键状态</th><th>金额 / 结果</th><th>说明</th></tr></thead><tbody id="steps"></tbody></table><div id="empty" class="empty hidden"><span>◌</span><strong>暂无验收结果</strong><small>先运行 npm run acceptance:m4-browserless</small></div></div></section>
     <footer>M4 仍需真实浏览器截图/录屏后才能最终关闭；此页记录当前最高信号的浏览器外证据。</footer>

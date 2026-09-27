@@ -75,7 +75,7 @@ http://127.0.0.1:4173/billing.html
 http://127.0.0.1:4173/main-flow.html
 ```
 
-`m4-acceptance.html` is the best first screen for review: it shows the latest browserless result, the DEV-402/403/406 gate status, structured automatic evidence coverage, the seeded account matrix, and the manual evidence still needed for M4 closure. The manual evidence checkboxes are saved locally in the browser and are review aids, not backend acceptance data.
+`m4-acceptance.html` is the best first screen for review: it shows the latest browserless result, the DEV-402/403/406 gate status, structured automatic evidence coverage, the seeded account matrix, a copyable acceptance summary, and the manual evidence still needed for M4 closure. The manual evidence checkboxes are saved locally in the browser and are review aids, not backend acceptance data.
 
 If port `4173` is occupied, run a one-off static server on another port:
 

@@ -85,8 +85,10 @@ async function loadResult() {
     $('status-label').textContent = '未生成';
     $('generated').textContent = '运行 acceptance:m4-browserless 后查看';
     $('summary').innerHTML = metric('运行命令', 'acceptance:m4-browserless', '会生成 M4 和主流程结果', true);
+    window.currentBillingSteps = [];
     renderGates();
     renderAccounts();
+    renderEvidenceSummary([], null);
     $('steps').innerHTML = '';
     $('empty').classList.remove('hidden');
     $('notice').textContent = error.message;
@@ -111,6 +113,7 @@ function render(billing, mainFlow) {
   window.currentBillingSteps = billingSteps;
   renderGates(billingSteps);
   renderAccounts();
+  renderEvidenceSummary(billingSteps, billing);
   $('empty').classList.toggle('hidden', allSteps.length > 0);
   $('steps').innerHTML = allSteps.map((step) => {
     const parts = splitData(step.data);
@@ -191,9 +194,47 @@ function bindManualChecks() {
       else manualEvidence.delete(input.dataset.manualEvidence);
       saveManualEvidence(manualEvidence);
       renderGates(window.currentBillingSteps || []);
+      renderEvidenceSummary(window.currentBillingSteps || [], window.currentBillingResult || null);
     });
   }
 }
 
+function renderEvidenceSummary(billingSteps = [], billing = null) {
+  window.currentBillingResult = billing;
+  const evidenceByGate = collectEvidence(billingSteps);
+  const manualEvidence = loadManualEvidence();
+  const lines = [
+    'ProcureX M4 acceptance summary',
+    `Generated: ${billing?.generatedAt ? new Date(billing.generatedAt).toLocaleString('zh-CN') : 'not generated'}`,
+    `Command: npm run acceptance:m4-browserless`,
+    '',
+  ];
+  for (const gate of gateDefinitions) {
+    const automatic = evidenceByGate.get(gate.id) || new Set();
+    const automaticLabels = gate.autoEvidence.filter(([id]) => automatic.has(id)).map(([, label]) => label);
+    const manualDone = gate.manualEvidence.filter(([id]) => manualEvidence.has(`${gate.id}:${id}`)).map(([, label]) => label);
+    const manualTodo = gate.manualEvidence.filter(([id]) => !manualEvidence.has(`${gate.id}:${id}`)).map(([, label]) => label);
+    lines.push(`${gate.id} ${gate.title}`);
+    lines.push(`  Automatic evidence: ${automaticLabels.length}/${gate.autoEvidence.length}`);
+    for (const label of automaticLabels) lines.push(`    - ${label}`);
+    lines.push(`  Manual evidence: ${manualDone.length}/${gate.manualEvidence.length}`);
+    for (const label of manualDone) lines.push(`    - done: ${label}`);
+    for (const label of manualTodo) lines.push(`    - todo: ${label}`);
+    lines.push('');
+  }
+  $('evidence-summary').value = lines.join('\n').trim();
+}
+
+async function copyEvidenceSummary() {
+  const text = $('evidence-summary').value;
+  if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+  else $('evidence-summary').select();
+  $('copy-summary').textContent = '已复制';
+  setTimeout(() => {
+    $('copy-summary').textContent = '复制摘要';
+  }, 1200);
+}
+
 $('refresh').addEventListener('click', loadResult);
+$('copy-summary').addEventListener('click', copyEvidenceSummary);
 loadResult();
