@@ -27,6 +27,15 @@ Latest completed implementation: the four statement families, payment records, a
 Latest commits:
 
 ```text
+1bc4666 Close DEV-401 backend gates
+3e7c8fd Cover price impact preview HTTP flow
+173bae4 Scope purchase previews by store
+6113241 Scope receipt creation by store
+30ef897 Scope discrepancy resolution by supplier
+a4195b2 Scope supplier order mutations
+5134e59 Scope supplier order reads by supplier
+1293338 Scope purchase request reads by store
+942352a Harden recharge and catalog store scopes
 96aee8f Allow finance scope disposal confirmation
 b54145c Enforce finance store scopes
 7c5cda1 Cover settlement period boundaries
