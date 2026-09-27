@@ -109,7 +109,14 @@ async function loadNotifications() {
 
 async function loadAuditLogs() {
   try {
-    const logs = await call('/audit-logs');
+    const filters = new URLSearchParams();
+    const form = new FormData($('audit-filter-form'));
+    for (const name of ['action', 'entityType', 'traceId']) {
+      const value = String(form.get(name) || '').trim();
+      if (value) filters.set(name, value);
+    }
+    const suffix = filters.toString() ? `?${filters}` : '';
+    const logs = await call(`/audit-logs${suffix}`);
     $('audit-logs-empty').classList.toggle('hidden', logs.length > 0);
     $('audit-logs').innerHTML = logs.map((item) => `<tr><td><strong>${esc(item.action)}</strong><br><small>${esc(item.reason || '')}</small></td><td>${esc(item.entityType)}<br><small>${esc(item.entityId)}</small></td><td>${esc(item.actorName)}</td><td><small>${esc(item.traceId)}</small></td><td>${esc(new Date(item.createdAt).toLocaleString('zh-CN'))}</td></tr>`).join('');
   } catch (error) {
@@ -137,5 +144,7 @@ $('refresh').addEventListener('click', loadOperations);
 $('refresh-issues').addEventListener('click', loadOperations);
 $('refresh-notifications').addEventListener('click', loadOperations);
 $('refresh-audit-logs').addEventListener('click', loadOperations);
+$('audit-filter-form').addEventListener('submit', async (event) => { event.preventDefault(); await loadAuditLogs(); });
+$('clear-audit-filters').addEventListener('click', async () => { $('audit-filter-form').reset(); await loadAuditLogs(); });
 showSession();
 loadMe();

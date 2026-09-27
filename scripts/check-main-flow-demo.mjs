@@ -190,6 +190,11 @@ async function run() {
     assert.ok(actions.has('supplier-order.shipment.create'));
     assert.ok(actions.has('shipment.receipt.create'));
     assert.ok(actions.has('discrepancy.resolve'));
+    const createdAuditLogs = await request(`${baseUrl}/audit-logs?action=purchase-request.create`, {
+      headers: authHeaders(token),
+    });
+    assert.ok(createdAuditLogs.length > 0);
+    assert.ok(createdAuditLogs.every((entry) => entry.action === 'purchase-request.create'));
 
     console.log('Main flow demo check passed.');
     console.log(`  Order: ${completedOrder.status} / ${completedOrder.fulfillmentStatus}`);

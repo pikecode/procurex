@@ -34,6 +34,15 @@ export type AuditLogView = {
   createdAt: string;
 };
 
+export type ListAuditLogsInput = {
+  action?: string;
+  entityType?: string;
+  entityId?: string;
+  actorUserId?: string;
+  traceId?: string;
+  limit?: number;
+};
+
 @Injectable()
 export class AuditService {
   constructor(private readonly database: DatabaseService) {}
@@ -54,11 +63,18 @@ export class AuditService {
     });
   }
 
-  async listRecent(): Promise<AuditLogView[]> {
+  async listRecent(input: ListAuditLogsInput = {}): Promise<AuditLogView[]> {
     const rows = await this.database.client.auditLog.findMany({
+      where: {
+        action: input.action,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        actorUserId: input.actorUserId,
+        traceId: input.traceId,
+      },
       include: { actor: { select: { displayName: true, username: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: 50,
+      take: input.limit ?? 50,
     });
     return rows.map(auditLogView);
   }
