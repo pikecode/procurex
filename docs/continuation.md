@@ -15,6 +15,7 @@ The direction has not shifted: M4 settlement/billing/payment/adjustment acceptan
 Recent commits closed the visible and repeatable M4 acceptance evidence:
 
 ```text
+77e7fb2 Close M4 local acceptance gates
 89e07ff Record M4 browserless acceptance after DB restore
 560600d Add M4 manual evidence package check
 5d21c5d Add M4 status report
