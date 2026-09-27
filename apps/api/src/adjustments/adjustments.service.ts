@@ -41,6 +41,8 @@ export type AdjustmentSummaryView = {
   supplierOrderId: string;
   supplierOrderNo: string;
   sourceReturnId: string;
+  disposalCreditItemId?: string;
+  offsetTargetItemId?: string;
   sourcePriceChangeId?: string;
   sourceDiscrepancyId: string;
   originalStatementId: string;
@@ -80,6 +82,7 @@ export type AdjustmentLineView = {
 
 export type AdjustmentDisposalView = {
   disposalId: string;
+  version: number;
   disposalNo: string;
   status: DifferenceDisposalStatus;
   amount: string;
@@ -100,6 +103,9 @@ type PriceWithRelations = {
   supplyDelta: Decimal;
   createdAt: Date;
   disposalBySide?: Partial<Record<'STORE' | 'SUPPLIER', AdjustmentDisposalView>>;
+  disposalCreditItemIdBySide?: Partial<Record<'STORE' | 'SUPPLIER', string>>;
+  disposalCreditAmountBySide?: Partial<Record<'STORE' | 'SUPPLIER', Decimal>>;
+  offsetTargetItemIdBySide?: Partial<Record<'STORE' | 'SUPPLIER', string>>;
   orderItem: OrderItem & { product: Product; supplierOrder: SupplierOrder & { supplier: Supplier; shipments: Shipment[]; request: { submittedAt: Date } } };
 };
 
@@ -218,13 +224,29 @@ export class AdjustmentsService {
           const disposal = document.disposalItems?.[0]?.disposal;
           return disposal ? [[document.side, {
             disposalId: disposal.id,
+            version: disposal.version,
             disposalNo: disposal.disposalNo,
             status: disposal.status,
             amount: document.disposalItems?.[0]!.amount.toFixed(2) ?? '0.00',
             confirmedAt: disposal.confirmedAt?.toISOString() ?? null,
           }]] : [];
         })) as PriceWithRelations['disposalBySide'];
-        return salesDelta.isZero() && supplyDelta.isZero() ? [] : [{ ...row, salesDelta, supplyDelta, disposalBySide }];
+        const disposalCreditItemIdBySide = Object.fromEntries((['STORE', 'SUPPLIER'] as const).flatMap((side) => {
+          const credits = persisted.filter((document) => document.side === side && new Decimal(document.amount).isNegative());
+          return credits.length === 1 ? [[side, credits[0]!.id]] : [];
+        })) as PriceWithRelations['disposalCreditItemIdBySide'];
+        const disposalCreditAmountBySide = Object.fromEntries((['STORE', 'SUPPLIER'] as const).flatMap((side) => {
+          const credit = persisted.find((document) => document.side === side && new Decimal(document.amount).isNegative());
+          return credit ? [[side, new Decimal(credit.amount).abs()]] : [];
+        })) as PriceWithRelations['disposalCreditAmountBySide'];
+        const offsetTargetItemIdBySide = Object.fromEntries((['STORE', 'SUPPLIER'] as const).flatMap((side) => {
+          const target = persisted.find((document) => document.side === side && new Decimal(document.amount).isPositive());
+          const net = side === 'STORE' ? salesDelta : supplyDelta;
+          return target && new Decimal(target.amount).eq(net)
+            ? [[side, encodeAdjustmentSettlementItemId(target.id, row.supplierOrderId, side)]]
+            : [];
+        })) as PriceWithRelations['offsetTargetItemIdBySide'];
+        return salesDelta.isZero() && supplyDelta.isZero() ? [] : [{ ...row, salesDelta, supplyDelta, disposalBySide, disposalCreditItemIdBySide, disposalCreditAmountBySide, offsetTargetItemIdBySide }];
       }
       const storeKind = order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE';
       const storeSnapshot = snapshotsById.get(encodeSettlementItemId(storeKind, order.id));
@@ -243,6 +265,8 @@ export class AdjustmentsService {
       }
       current.salesDelta = current.salesDelta.plus(row.salesDelta);
       current.supplyDelta = current.supplyDelta.plus(row.supplyDelta);
+      current.disposalCreditItemIdBySide = {};
+      current.offsetTargetItemIdBySide = {};
       if (row.createdAt > current.createdAt) current.createdAt = row.createdAt;
     }
     return [...net.values()];
@@ -255,6 +279,10 @@ function isStoreScope(type?: string): boolean {
 
 function encodeSettlementItemId(kind: 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT', supplierOrderId: string): string {
   return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
+}
+
+function encodeAdjustmentSettlementItemId(adjustmentDocumentId: string, supplierOrderId: string, adjustmentSide: 'STORE' | 'SUPPLIER'): string {
+  return Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', supplierOrderId, adjustmentDocumentId, adjustmentSide })).toString('base64url');
 }
 
 function toPriceSummaryViews(row: PriceWithRelations): AdjustmentSummaryView[] {
@@ -276,6 +304,8 @@ function toPriceSummary(row: PriceWithRelations, side: 'STORE' | 'SUPPLIER', del
     direction: side === 'STORE' ? (increase ? 'STORE_RECEIVABLE_INCREASE' : 'STORE_RECEIVABLE_DECREASE') : (increase ? 'SUPPLIER_PAYABLE_INCREASE' : 'SUPPLIER_PAYABLE_DECREASE'),
     storeId: order.storeId, supplierId: order.supplierId, supplierOrderId: order.id, supplierOrderNo: order.supplierOrderNo,
     sourceReturnId: '', sourcePriceChangeId: row.id, sourceDiscrepancyId: '',
+    ...(delta.isNegative() && row.disposalCreditItemIdBySide?.[side] && row.disposalCreditAmountBySide?.[side]?.eq(delta.abs()) ? { disposalCreditItemId: row.disposalCreditItemIdBySide[side] } : {}),
+    ...(delta.isPositive() && row.offsetTargetItemIdBySide?.[side] ? { offsetTargetItemId: row.offsetTargetItemIdBySide[side] } : {}),
     originalStatementId: encodeSupplierStatementId({ supplierId: order.supplierId, cycle, periodStart: originalPeriod.periodStart, periodEndExclusive: originalPeriod.periodEndExclusive }),
     originalPeriodKey: originalPeriod.periodKey, originalPeriodStart: originalPeriod.periodStart, originalPeriodEndExclusive: originalPeriod.periodEndExclusive,
     actualPeriodKey: actualPeriod.periodKey, periodStart: actualPeriod.periodStart, periodEndExclusive: actualPeriod.periodEndExclusive, cycle,
@@ -351,6 +381,7 @@ function toDetailView(row: ReturnWithRelations): AdjustmentDetailView {
     disposal: disposalItem
       ? {
           disposalId: disposalItem.disposalId,
+          version: disposalItem.disposal.version,
           disposalNo: disposalItem.disposal.disposalNo,
           status: disposalItem.disposal.status,
           amount: disposalItem.amount.toFixed(2),

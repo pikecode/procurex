@@ -48,12 +48,12 @@ Latest recovery evidence: an independent PostgreSQL backup/restore drill complet
 
 Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Full browser E2E remains open because this environment has no browser automation surface.
 
-W10 workbench is now in progress: `billing.html`/`billing.js`/`billing.css` provide adjustment filtering, original and actual period comparison, pending disposal amount/status, and detail lookup through B05. This is read-only; disposal creation/confirmation and browser E2E are not yet implemented. Build, JS syntax, local HTTP smoke, and diff checks pass. The next DEV-406 slice is to expose the persisted negative adjustment credit ID through B05, then connect the existing B12 create/confirm flow with authorized company finance and receiver roles.
+W10 workbench now provides adjustment filtering, original/actual period comparison, detail, B12 offline-return registration and receiver confirmation, plus offsets to a selected positive adjustment on the same settlement side. B05 exposes actionable source/target item IDs only when a price adjustment maps to one persisted document; ambiguous multi-run netting remains read-only. Browser E2E remains open. Verification baseline: 36 unit tests, 31 integration tests, build, contract check, Web syntax, HTTP smoke, and diff check pass.
 
 Latest commits:
 
 ```text
-W10 read-only adjustment workbench (uncommitted)
+W10 adjustment and difference workbench (uncommitted)
 427953d Refresh progress after adjustment payment acceptance
 9b24dce Verify direct adjustment payment lifecycle
 5cbc373 Verify B05 reads persisted price adjustment
@@ -332,8 +332,8 @@ Current F06/F07 behavior:
 - Funding logic is still a first pass. It records stored-value summaries and O11 reconciliation results but does not yet implement the complete immutable allocation/ledger behavior described in the long-term design.
 - F03 stores permanently reduced quantity on shipment items. Replenishment gap allocation is supported when the caller provides explicit `gapAllocations`.
 - F05 RETURN currently records internal shortage-return resolution. Downstream supplier statement/payment disposal remains future work.
-- Settlement and reconciliation remain future work.
-- Frontend pages are not implemented yet.
+- M4 settlement and reconciliation are partially implemented; DEV-402/403/406 are still open. See the package gate table near the top of this file.
+- W09 billing and W10 adjustment pages are implemented for the recorded flows; browser E2E remains unverified because no browser executable or automation runtime is available here.
 
 ### Store Finance
 
@@ -536,7 +536,7 @@ Current price history behavior:
 
 ## Recommended Next Step
 
-Continue the already-started DEV-406 W10 workbench: expose the persistent B12 credit item ID for negative price adjustments, connect disposal creation/receiver confirmation, and add HTTP acceptance. DEV-402 and DEV-403 still require their remaining browser acceptance packages; verify and close them before M5. M5 remains frozen until M4 packages are closed.
+W10 now covers adjustment reads, same-side positive adjustment offsets, offline returns, and receiver confirmation through B05/B12; the backend suites pass. Next follow the plan order: close the remaining DEV-402 and DEV-403 acceptance gates, including browser E2E when a browser runtime is available, then finish DEV-406 W10 end-to-end acceptance. M5 remains frozen until all M4 packages are closed.
 
 ## Where To Look
 

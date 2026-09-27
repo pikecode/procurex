@@ -58,12 +58,15 @@ test('sequential side settlement keeps the pre-change side adjustment only', asy
 test('B05 reads persisted adjustment documents when available', async () => {
   const service = createService({});
   (service as any).database.client.adjustmentDocument = {
-    findMany: async () => [{ sourcePriceChangeId: 'change-1', side: 'SUPPLIER', amount: new Decimal(10), createdAt: changedAt }],
+    findMany: async () => [{ id: 'adjustment-target', sourcePriceChangeId: 'change-1', side: 'SUPPLIER', amount: new Decimal(10), createdAt: changedAt }],
   };
   const adjustments = await service.list({});
   assert.equal(adjustments.length, 1);
   assert.equal(adjustments[0]?.direction, 'SUPPLIER_PAYABLE_INCREASE');
   assert.equal(adjustments[0]?.adjustmentAmount, '10.00');
+  const target = JSON.parse(Buffer.from(adjustments[0]!.offsetTargetItemId!, 'base64url').toString());
+  assert.equal(target.adjustmentDocumentId, 'adjustment-target');
+  assert.equal(target.adjustmentSide, 'SUPPLIER');
 });
 
 test('B05 exposes confirmed persisted adjustment disposal by side', async () => {
@@ -72,7 +75,7 @@ test('B05 exposes confirmed persisted adjustment disposal by side', async () => 
     findMany: async () => [{
       id: 'adjustment-1', sourcePriceChangeId: 'change-1', side: 'SUPPLIER', amount: new Decimal(-10), createdAt: changedAt,
       disposalItems: [{ amount: new Decimal(10), disposal: {
-        id: 'disposal-1', disposalNo: 'DD-1', status: 'CONFIRMED', confirmedAt: new Date('2026-09-23T00:00:00Z'),
+        id: 'disposal-1', disposalNo: 'DD-1', status: 'CONFIRMED', version: 2, confirmedAt: new Date('2026-09-23T00:00:00Z'),
       } }],
     }],
   };
@@ -82,4 +85,6 @@ test('B05 exposes confirmed persisted adjustment disposal by side', async () => 
   const detail = await service.get(adjustments[0]!.id);
   assert.equal(detail.disposal?.disposalId, 'disposal-1');
   assert.equal(detail.disposal?.status, 'CONFIRMED');
+  assert.equal(detail.disposal?.version, 2);
+  assert.equal(detail.disposalCreditItemId, 'adjustment-1');
 });

@@ -213,7 +213,7 @@ A02 不自动采购确认，A05 不变履约状态。清账按所选来源全部
 | B02 | `GET /supplier-statements`、`GET /supplier-statements/{id}` | 公司向供应商供货价周期总单；明细带价格调整来源；供应商自身或公司授权角色 |
 | B03 | `GET /supplier-store-statements`、`GET /supplier-store-statements/{id}` | 供货价分店单、parentStatementId、与总单共享的 settlementItemIds，明细带价格调整来源 |
 | B04 | `GET /direct-statements`、`GET /direct-statements/{id}` | 供应商直接账期，门店与供应商结算；明细带价格调整来源；不混入公司应付总单 |
-| B05 | `GET /adjustments`、`GET /adjustments/{id}` | 差额、原账单原周期、实际结算周期、来源修订、处理状态 |
+| B05 | `GET /adjustments`、`GET /adjustments/{id}` | 差额、原账单原周期、实际结算周期、来源修订、处理状态；单笔负向改价可返回 `disposalCreditItemId`，单笔正向改价可返回 `offsetTargetItemId`；关联处置返回其 `version` 供 B12 确认 |
 
 公共筛选为 storeId、supplierId、cycle、periodStart、periodEndExclusive、settlementStatus、page。范围由服务端收窄。详情返回商品额、运费、调整额、调整结算项 ID、已确认支付、待确认支付、待支付、待返还/抵扣、待核对标记和修订号。正向调整结算项可进入 B06-B08；负向调整继续走 B12。门店销售账单不能跳转读供货价分店单。
 
