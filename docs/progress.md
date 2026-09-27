@@ -84,7 +84,7 @@ Direct supplier-term statements now use their B04 settlement item ID with the B0
 
 Latest completed work: B12 permits a negative adjustment credit to offset a positive adjustment settlement item on the matching STORE or SUPPLIER side. Available amount subtracts reserved/confirmed payment allocations and pending/confirmed disposals. Unit and HTTP/database integration coverage verifies the offset record links both adjustment documents. Build, 28 unit tests, 26 integration tests, contract check, and diff check pass.
 
-DEV-401 progress: fixed and integration-tested AT-09. If an older effective price run is processed after a newer applicable run, the old run no longer overwrites order prices or creates a duplicate adjustment; its item completes with zero delta. This closes the AT-09 ordering case only; DEV-401 remains partial until the other concurrency case and W06/S10 acceptance are verified.
+DEV-401 is now closed against the backend acceptance gates: AT-08 serializes revaluation with final receipt, AT-09 preserves the newer effective revision when runs are processed out of order, and the HTTP pricing flow covers P01 preview, P02 publish, P03 status/process/replay, adjustment history, and version history.
 
 DEV-402 progress: P02 price publishing now rejects unequal sales/supply prices when the supplier is configured for direct supplier-term settlement. Setting a template supplier to direct settlement performs the same check against the template's latest prices. A database integration test covers rejection and equal-price success. This closes the identified AT-16 price guard slice; broader direct-term statement and payment acceptance remains.
 
@@ -100,14 +100,14 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 
 | Package | Current assessment against plan | Closure evidence still needed |
 |---|---|---|
-| DEV-401 | P01-P03 backend is substantially implemented | AT-08 now serializes revaluation with final receipt and AT-09 ordering is verified; close the planned W06/S10 workflow, then mark package complete |
+| DEV-401 | **Closed**: P01-P03, AT-08, AT-09, and W06/S10 backend flow evidence are complete | None for the current backend scope |
 | DEV-402 | B01-B04, amount and period logic exist; AT-16 price guard added | Direct-term payment direction and amount mapping are covered; finish all settlement-mode acceptance evidence |
 | DEV-403 | Statement read paths, total/store sum, immediate per-order grouping, replenishment period, and account scope are tested | Required W09/S05/S08 flow evidence remains before closure |
 | DEV-404 | B06-B11 payment lifecycle exists; B12 is being completed | Receiver-role authorization and AT-13 duplicate-entry concurrency are verified; close direct-term direction mapping and remaining evidence/role flows |
 | DEV-405 | Clearing transaction logic and A04-A06 read/write paths exist | A06 now enforces store scope on clearing detail; verify AT-24 ledger/history recovery evidence and planned W08 workflow |
 | DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Receiver confirmation scope and AT-14 offline return are verified; finish reconciliation consistency before closure |
 
-The next execution order is therefore to stop adding isolated B12 refinements and close acceptance packages explicitly: **DEV-401 → DEV-402 → DEV-403 → DEV-404 → DEV-405 → DEV-406**. For each package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure. This order replaces the earlier recommendation to keep iterating B12 alone.
+The next execution order is therefore to close acceptance packages explicitly: **DEV-402 → DEV-403 → DEV-404 → DEV-405 → DEV-406**. For each package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure.
 
 DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. Receiver scope and AT-14 offline return are now covered; M4 remains incomplete pending reconciliation consistency and the remaining package gates.
 
@@ -115,7 +115,7 @@ DEV-405 clearing creation now conditionally updates each funding allocation by v
 
 ## Progress Metrics
 
-The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status currently is **0 closed, 6 partial, 0 not started**. This whole-package count is a gate status, not a sensitive progress metric; use the closure-evidence column in the plan alignment review to show movement between commits. Do not publish an overall percentage until the plan has an itemized denominator for all milestones.
+The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status currently is **1 closed, 5 partial, 0 not started**. This whole-package count is a gate status, not a sensitive progress metric; use the closure-evidence column in the plan alignment review to show movement between commits. Do not publish an overall percentage until the plan has an itemized denominator for all milestones.
 
 ## Verification Baseline
 
@@ -480,7 +480,7 @@ Current price history behavior:
 
 ## Recommended Next Step
 
-Follow the M4 plan order: DEV-401's AT-08 race is hardened and AT-09 is verified; finish its W06/S10 acceptance, then close DEV-402 and DEV-403 before finalizing DEV-404–406. AT-16 now has database-backed price consistency evidence. M5 remains frozen until M4 packages are closed.
+Follow the M4 plan order: DEV-402 and DEV-403 are next, followed by DEV-404–406. DEV-401's backend gates are closed with AT-08/AT-09 and W06/S10 HTTP evidence. AT-16 now has database-backed price consistency evidence. M5 remains frozen until M4 packages are closed.
 
 ## Where To Look
 

@@ -210,6 +210,8 @@
 - Added DEV-401 HTTP acceptance coverage for P01 impact preview alongside the existing P02/P03 publish, process, replay, run, adjustment, and version-history flow. The preview verifies a no-impact scope returns zero deltas.
 - Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
 
+- Closed DEV-401 against the current backend gates: AT-08 receipt/revaluation ordering, AT-09 out-of-order price runs, and W06/S10 P01-P03 HTTP flow are all covered. M4 tracking moves to 1 closed, 5 partial.
+
 - Added `STORE_FINANCE` to B12 read/confirm authorization, matching the documented shared store-side permission. Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
 
 - Closed a STORE_FINANCE scope gap across DEV-404/405/406: payment records, adjustments, difference disposals, and clearing details now enforce the bound store for both STORE and STORE_FINANCE accounts. Added the clearing regression assertion. Verification: `npm run build`, `npm test` (35), `npm run test:integration` (28), `npm run contract:check`, and `git diff --check` passed.
