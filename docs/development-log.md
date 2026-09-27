@@ -17,6 +17,7 @@
 - M4 gate 定义收口：新增 `apps/web/m4-gates.json` 作为 DEV-402/403/406 自动证据和人工证据的单一来源，页面与 `m4:gate-status` 共用同一份定义，避免验收口径漂移。
 - M4 人工验收路径：`apps/web/m4-gates.json` 补充每个 gate 的账号、入口、操作和预期结果；`m4-acceptance.html` 新增人工验收路径区，减少浏览器验收执行时的猜测。
 - M4 人工验收文档：新增 `m4:write-manual-checklist`，从 `apps/web/m4-gates.json` 生成 `docs/m4-manual-acceptance.md`，用于离线复核、交接和截图/录屏收集。
+- M4 人工验收文档防漂移：`m4:check-manual-checklist` 断言 `docs/m4-manual-acceptance.md` 与 `apps/web/m4-gates.json` 同步，避免页面、命令和离线文档口径分叉。
 - DEV-406/W10：账单工作台新增调整列表、处置状态筛选、原周期/实际周期对照和调整详情；B12 操作随后在同日接通。初始只读切片验证：构建、Web 脚本语法、本地 HTTP 冒烟、diff 检查通过。
 - DEV-406/B05/W10：B05 对可精确映射的单笔负向改价暴露 B12 信用项 ID 和处置版本；账单页支持公司财务登记线下返还、收款方确认。净额无法映射到单张负向调整单时不显示登记动作。验证：36 项单测、31 项集成测试、构建、契约检查、Web 脚本语法与 diff 检查通过。
 - DEV-406/W10：B05 同时为单笔正向改价返回可用于抵扣的结算项 ID；工作台允许公司财务选择同结算侧的正向调整作抵扣目标，B12 继续校验余额及主体。验证：构建、单测、集成测试、契约检查、Web 语法及 diff 检查通过。

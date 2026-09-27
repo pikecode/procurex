@@ -2,6 +2,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 const gates = JSON.parse(await readFile('apps/web/m4-gates.json', 'utf8'));
 const generatedAt = new Date().toISOString().slice(0, 10);
+const outputPath = 'docs/m4-manual-acceptance.md';
+const checkOnly = process.argv.includes('--check');
 
 const lines = [
   '# M4 Manual Acceptance Checklist',
@@ -49,5 +51,15 @@ for (const gate of gates) {
 lines.push('M4 remains open until the manual evidence boxes above are completed and reviewed alongside the browserless baseline.');
 lines.push('');
 
-await writeFile('docs/m4-manual-acceptance.md', `${lines.join('\n')}\n`);
-console.log('Wrote docs/m4-manual-acceptance.md from apps/web/m4-gates.json');
+const nextContent = `${lines.join('\n')}\n`;
+
+if (checkOnly) {
+  const currentContent = await readFile(outputPath, 'utf8');
+  if (currentContent !== nextContent) {
+    throw new Error(`${outputPath} is out of date. Run npm run m4:write-manual-checklist.`);
+  }
+  console.log(`${outputPath} is up to date.`);
+} else {
+  await writeFile(outputPath, nextContent);
+  console.log(`Wrote ${outputPath} from apps/web/m4-gates.json`);
+}

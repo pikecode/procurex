@@ -122,6 +122,7 @@ For the generated manual acceptance checklist, run:
 
 ```bash
 npm run m4:write-manual-checklist
+npm run m4:check-manual-checklist
 ```
 
 Open `docs/m4-manual-acceptance.md` when collecting screenshots or recordings.
