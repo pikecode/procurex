@@ -52,6 +52,8 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 
 `npm run web:check` now provides a browserless visibility guard for W09/W10/W11. It verifies the billing page, adjustment section, payment/evidence controls, difference-disposal controls, report page, JavaScript syntax, and required web assets. It is not a replacement for browser E2E, but it prevents silent removal of the visible workbench entry points.
 
+The main-flow acceptance runner now writes a browser-readable result to `apps/web/main-flow-run.json`, and `apps/web/main-flow.html` renders the latest order-to-payment handoff status. `npm run web:check` now guards this page as well, so the main flow is visible even before a full interactive order-entry workbench is built.
+
 Latest commits:
 
 Latest functional slice: `68e4814 Verify W10 B05 to B12 HTTP flow`.

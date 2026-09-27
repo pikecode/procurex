@@ -1,5 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AppModule } from '../dist/apps/api/src/app.module.js';
@@ -11,6 +13,12 @@ import { hashPassword } from '../dist/packages/domain/src/password.js';
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public';
+const flowResult = {
+  generatedAt: new Date().toISOString(),
+  title: 'Main Flow Acceptance',
+  summary: 'Store order to supplier payment preview',
+  steps: [],
+};
 
 function createClient() {
   return new PrismaClient({
@@ -60,6 +68,7 @@ function logStep(title, data) {
   for (const [key, value] of Object.entries(data)) {
     console.log(`  ${key}: ${value}`);
   }
+  flowResult.steps.push({ title, data });
 }
 
 async function seed(prisma, runId) {
@@ -331,6 +340,10 @@ async function run() {
     });
 
     console.log('\nMain flow acceptance runner passed.');
+    await writeFile(
+      resolve(process.cwd(), 'apps/web/main-flow-run.json'),
+      `${JSON.stringify({ ...flowResult, generatedAt: new Date().toISOString(), status: 'PASSED' }, null, 2)}\n`,
+    );
   } finally {
     await app.close();
     await cleanup(prisma, seeded).catch((error) => {

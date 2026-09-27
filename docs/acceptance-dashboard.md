@@ -42,7 +42,7 @@ Open these pages:
 | W09/S05/S08 billing | `apps/web/billing.html` | Four statement families, statement detail, payment preview, payment registration with evidence upload, receiver confirmation, payment list, evidence download. | Implemented; HTTP/static smoke passed; browser E2E blocked by missing browser runtime. |
 | W10 adjustments | `apps/web/billing.html` adjustment views | Adjustment filtering, original vs actual period comparison, detail, B12 offline return, receiver confirmation, offset to positive adjustment. | Implemented; HTTP/database B05 to B12 flow passed; browser E2E blocked by missing browser runtime. |
 | W11 reporting | `apps/web/index.html` | R01-R03 reports, filters, summaries, CSV/export flow. | Implemented early; frozen until M4 acceptance closes. |
-| Main order flow | `npm run acceptance:main-flow` | Store order, procurement confirmation, supplier shipment, store receipt, statement read, supplier payment preview. | Scripted backend acceptance runner passes; visible Web/mini-program flow is still missing. |
+| Main order flow | `npm run acceptance:main-flow` and `apps/web/main-flow.html` | Store order, procurement confirmation, supplier shipment, store receipt, statement read, supplier payment preview. | Scripted acceptance runner passes and writes a browser-readable result page; interactive Web/mini-program flow is still missing. |
 
 ## Requirement-To-Evidence Map
 
@@ -81,15 +81,15 @@ Until a browser runtime is available, W09/W10 can only be verified by:
 - API integration tests.
 - Static HTTP smoke checks.
 - JavaScript syntax checks.
-- `npm run web:check`, which confirms the W09/W10 page exposes the billing, payment, evidence, adjustment, offline-return, and offset entry points.
+- `npm run web:check`, which confirms the W09/W10 page exposes the billing, payment, evidence, adjustment, offline-return, and offset entry points, and confirms the main-flow result page can render runner output.
 - Manual review of `apps/web/billing.html`, `apps/web/billing.js`, and `apps/web/billing.css`.
 
 ## Next Work Order
 
-1. Add a narrow visible main-flow demo or scripted acceptance runner for order to receipt to payment handoff.
-2. Close DEV-402 browser/manual acceptance for settlement modes.
-3. Close DEV-403 browser/manual acceptance for W09/S05/S08.
-4. Close DEV-406 browser/manual acceptance for W10.
+1. Close DEV-402 browser/manual acceptance for settlement modes.
+2. Close DEV-403 browser/manual acceptance for W09/S05/S08.
+3. Close DEV-406 browser/manual acceptance for W10.
+4. Build an interactive main-flow operator workbench after M4 acceptance is no longer at risk.
 5. Only then unfreeze M5 reporting/operations work.
 
 Do not add new reporting, notification, or deployment scope until M4 is accepted.

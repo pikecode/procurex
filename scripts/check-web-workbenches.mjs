@@ -30,20 +30,30 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, reportHtml] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, mainFlowJs] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
   readProjectFile('apps/web/app.js'),
   readProjectFile('apps/web/index.html'),
+  readProjectFile('apps/web/main-flow.html'),
+  readProjectFile('apps/web/main-flow.js'),
 ]);
 
-for (const path of ['apps/web/style.css', 'apps/web/billing.css', 'apps/web/billing.js', 'apps/web/app.js']) {
+for (const path of [
+  'apps/web/style.css',
+  'apps/web/billing.css',
+  'apps/web/billing.js',
+  'apps/web/app.js',
+  'apps/web/main-flow.html',
+  'apps/web/main-flow.js',
+]) {
   assertExists(path, 'web asset');
 }
 
 checkSyntax('apps/web/billing.js');
 checkSyntax('apps/web/app.js');
+checkSyntax('apps/web/main-flow.js');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
 assertIncludes(billingHtml, '账单调整与差额', 'W10 adjustment page');
@@ -72,5 +82,11 @@ assertIncludes(billingCss, '@media', 'responsive billing styles');
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');
 assertIncludes(appJs, '/reports/${active}', 'W11 report endpoints');
 assertIncludes(appJs, '/exports', 'R04 export workflow');
+
+assertIncludes(mainFlowHtml, '主流程验收', 'main-flow acceptance page');
+assertIncludes(mainFlowHtml, '/main-flow.js', 'main-flow acceptance script');
+assertIncludes(mainFlowJs, 'main-flow-run.json', 'main-flow runner output');
+assertIncludes(mainFlowJs, 'totalPayableAmount', 'main-flow payment preview evidence');
+assertIncludes(mainFlowJs, 'fulfillmentStatus', 'main-flow receipt completion evidence');
 
 console.log('Web workbench check passed.');

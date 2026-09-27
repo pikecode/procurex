@@ -10,3 +10,4 @@ var/private-files/
 docs/.omc/
 packages/backend/generated/
 *.tsbuildinfo
+apps/web/main-flow-run.json

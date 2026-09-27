@@ -62,6 +62,8 @@ purchase request creation
 
 It prints the created IDs, statuses, and amounts for each step, then cleans up the seeded data. This is not a browser replacement, but it is the fastest repeatable proof that the main backend path reaches the billing/payment handoff.
 
+After a successful run, the runner also writes `apps/web/main-flow-run.json`. Open `apps/web/main-flow.html` through `npm run start:web` to review the latest status, step table, completion state, and payment-preview amount from the browser.
+
 Latest local result: the runner passed and printed a complete flow with `PENDING_PROCUREMENT → CONFIRMED/PUSHED → SHIPPED → COMPLETED → store statement OPEN → supplier payable preview COMPANY_TO_SUPPLIER 90.00`.
 
 ## What This Means
@@ -80,12 +82,9 @@ The visible work currently starts mainly at billing and payment.
 
 The project has not abandoned the original demand, but the execution has become backend-heavy and settlement-heavy. That is useful for correctness, but it is not enough for user confidence.
 
-The next visible-product priority should be one of these:
+The next visible-product priority is:
 
-1. Build a simple main-flow demo page that drives the existing APIs from order to receipt.
-2. Or create a scripted acceptance runner that seeds data and prints every main-flow step with resulting IDs, amounts, and statuses.
-
-The first option helps users see the product. The second option is faster and gives strong repeatable evidence. Ideally both are done before expanding M5.
+The scripted runner and browser-readable result page are now in place. The next product-facing step is a real operator workbench that drives the APIs interactively instead of only showing the latest acceptance output.
 
 ## Recommended Next Step
 
