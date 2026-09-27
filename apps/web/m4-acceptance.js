@@ -4,57 +4,7 @@ const amountKey = (key) => key.includes('Amount') || key === 'amount' || key ===
 const statusKey = (key) => key.includes('status') || key.includes('Status') || key === 'direction' || key === 'channel' || key === 'cycle' || key === 'method';
 const manualStorageKey = 'procurex:m4-manual-evidence';
 
-const gateDefinitions = [
-  {
-    id: 'DEV-402',
-    title: '结算金额与周期',
-    state: 'Partial',
-    autoEvidence: [
-      ['stored-value-payable', '储值单生成供应商应付'],
-      ['credit-period', '信用账期半月周期'],
-      ['direct-term-preview', '直营账期预览为 DIRECT'],
-      ['company-term-block', '公司账期先收后付阻断'],
-    ],
-    manualEvidence: [
-      ['settlement-mode-screens', 'W09/S05/S08 四种结算模式截图'],
-      ['period-payment-review', '周期标签与付款状态复核'],
-    ],
-  },
-  {
-    id: 'DEV-403',
-    title: '账单家族与共享项',
-    state: 'Partial',
-    autoEvidence: [
-      ['store-view', '门店账单视图'],
-      ['supplier-total-view', '供应商总单视图'],
-      ['supplier-store-view', '供应商分店账单视图'],
-      ['direct-view', '直营账单视图'],
-      ['shared-pending-reservation', '共享结算项显示待确认金额'],
-      ['shared-payment-visible', '共享付款记录可见'],
-    ],
-    manualEvidence: [
-      ['statement-family-recording', '四类账单视图切换录屏'],
-      ['shared-item-repeat-payment-review', '共享结算项不可重复付款复核'],
-    ],
-  },
-  {
-    id: 'DEV-406',
-    title: '调整与差额处置',
-    state: 'Partial',
-    autoEvidence: [
-      ['adjustment-list', 'W10 调整列表'],
-      ['adjustment-detail', 'W10 调整详情'],
-      ['offset-target', '正调整可作为抵扣目标'],
-      ['offset-created', '抵扣处置已创建'],
-      ['receiver-confirmed', '收款方确认通过'],
-      ['disposed-state', '处置状态已确认'],
-    ],
-    manualEvidence: [
-      ['adjustment-list-detail-screens', 'W10 列表/详情截图'],
-      ['return-offset-confirm-recording', '离线返还、抵扣、收款确认录屏'],
-    ],
-  },
-];
+let gateDefinitions = [];
 
 const accounts = [
   ['pxacc_admin', 'ADMIN / HQ_FINANCE', '全部账单、W10 调整、付款登记与确认'],
@@ -73,9 +23,15 @@ async function fetchJson(path) {
   return response.json();
 }
 
+async function loadGateDefinitions() {
+  if (!gateDefinitions.length) gateDefinitions = await fetchJson('/m4-gates.json');
+  return gateDefinitions;
+}
+
 async function loadResult() {
   $('notice').classList.add('hidden');
   try {
+    await loadGateDefinitions();
     const [billing, mainFlow] = await Promise.all([
       fetchJson('/billing-acceptance-run.json'),
       fetchJson('/main-flow-run.json'),

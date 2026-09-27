@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, mainFlowDemoHtml, mainFlowDemoJs] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -42,6 +42,7 @@ const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, main
   readProjectFile('apps/web/m4-acceptance.html'),
   readProjectFile('apps/web/m4-acceptance.js'),
   readProjectFile('apps/web/m4-acceptance.css'),
+  readProjectFile('apps/web/m4-gates.json'),
   readProjectFile('apps/web/main-flow-demo.html'),
   readProjectFile('apps/web/main-flow-demo.js'),
 ]);
@@ -56,6 +57,7 @@ for (const path of [
   'apps/web/m4-acceptance.html',
   'apps/web/m4-acceptance.js',
   'apps/web/m4-acceptance.css',
+  'apps/web/m4-gates.json',
   'apps/web/main-flow-demo.html',
   'apps/web/main-flow-demo.js',
 ]) {
@@ -116,16 +118,17 @@ assertIncludes(m4Html, '/m4-acceptance.js', 'M4 acceptance script');
 assertIncludes(m4Html, '/m4-acceptance.css', 'M4 acceptance styles');
 assertIncludes(m4Js, 'billing-acceptance-run.json', 'M4 billing acceptance output');
 assertIncludes(m4Js, 'main-flow-run.json', 'M4 main-flow acceptance output');
+assertIncludes(m4Js, 'm4-gates.json', 'M4 gate definitions');
 assertIncludes(m4Js, 'acceptance:m4-browserless', 'M4 acceptance command');
-assertIncludes(m4Js, 'DEV-402', 'M4 gate walkthrough');
-assertIncludes(m4Js, 'DEV-403', 'M4 gate walkthrough');
-assertIncludes(m4Js, 'DEV-406', 'M4 gate walkthrough');
 assertIncludes(m4Js, 'collectEvidence', 'M4 gate evidence mapping');
-assertIncludes(m4Js, 'stored-value-payable', 'M4 structured gate evidence');
 assertIncludes(m4Js, 'localStorage', 'M4 manual evidence checklist');
 assertIncludes(m4Js, 'data-manual-evidence', 'M4 manual evidence checklist');
 assertIncludes(m4Js, 'renderEvidenceSummary', 'M4 evidence summary');
 assertIncludes(m4Js, 'navigator.clipboard', 'M4 evidence summary copy');
+assertIncludes(m4Gates, 'DEV-402', 'M4 gate definitions');
+assertIncludes(m4Gates, 'DEV-403', 'M4 gate definitions');
+assertIncludes(m4Gates, 'DEV-406', 'M4 gate definitions');
+assertIncludes(m4Gates, 'stored-value-payable', 'M4 structured gate evidence');
 assertIncludes(m4Css, '.gate-card', 'M4 gate styles');
 assertIncludes(m4Css, '.passed', 'M4 gate evidence styles');
 assertIncludes(m4Css, '.manual-check', 'M4 manual evidence styles');
