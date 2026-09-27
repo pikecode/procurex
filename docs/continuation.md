@@ -15,6 +15,7 @@ The direction has not shifted: finish M4 settlement/billing/payment/adjustment a
 Recent commits added visible and repeatable acceptance evidence:
 
 ```text
+89e07ff Record M4 browserless acceptance after DB restore
 560600d Add M4 manual evidence package check
 5d21c5d Add M4 status report
 cfb5762 Add local database preflight check

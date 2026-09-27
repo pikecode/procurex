@@ -98,10 +98,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `560600d Add M4 manual evidence package check`.
-Latest commit before this progress update: `560600d Add M4 manual evidence package check`.
+Latest functional slice: `89e07ff Record M4 browserless acceptance after DB restore`.
+Latest commit before this progress update: `89e07ff Record M4 browserless acceptance after DB restore`.
 
 ```text
+89e07ff Record M4 browserless acceptance after DB restore
 560600d Add M4 manual evidence package check
 5d21c5d Add M4 status report
 cfb5762 Add local database preflight check
