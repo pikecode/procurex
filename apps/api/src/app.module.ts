@@ -16,6 +16,7 @@ import { FilesModule } from './files/files.module.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { PurchaseRequestsModule } from './purchase-requests/purchase-requests.module.js';
 import { RechargesModule } from './recharges/recharges.module.js';
+import { ReconciliationModule } from './reconciliation/reconciliation.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { ShipmentsModule } from './shipments/shipments.module.js';
 import { StoreStatementsModule } from './store-statements/store-statements.module.js';
@@ -50,6 +51,7 @@ import { UsersModule } from './users/users.module.js';
     DiscrepanciesModule,
     FreightConfirmationsModule,
     RechargesModule,
+    ReconciliationModule,
     ReportsModule,
     StoreStatementsModule,
     SupplierStatementsModule,

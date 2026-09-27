@@ -125,6 +125,14 @@ async function run() {
       listedJobs: exportJobs.length,
     });
 
+    const reconciliationIssues = await request(`${baseUrl}/reconciliation-issues`, { headers: authHeaders(adminToken) });
+    const pxIssues = reconciliationIssues.filter((issue) => issue.storeCode === 'PXRPT-STORE');
+    assert.deepEqual(pxIssues.map((issue) => issue.type).sort(), ['STORE_BALANCE_LEDGER_MISMATCH', 'STORE_CREDIT_USED_MISMATCH']);
+    record('8. R05 reconciliation lists account mismatches without auto-fixing', {
+      issueCount: pxIssues.length,
+      types: pxIssues.map((issue) => issue.type).sort().join(','),
+    });
+
     await writeFile(
       resolve(process.cwd(), 'apps/web/reports-acceptance-run.json'),
       `${JSON.stringify({ ...result, generatedAt: new Date().toISOString(), status: 'PASSED' }, null, 2)}\n`,

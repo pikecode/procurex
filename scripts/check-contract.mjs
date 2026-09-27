@@ -35,6 +35,7 @@ const [
   pricingController,
   purchaseRequestsController,
   rechargesController,
+  reconciliationController,
   storeStatementsController,
   directStatementsController,
   supplierOrdersController,
@@ -66,6 +67,7 @@ const [
     readProjectFile('apps/api/src/pricing/pricing.controller.ts'),
   readProjectFile('apps/api/src/purchase-requests/purchase-requests.controller.ts'),
   readProjectFile('apps/api/src/recharges/recharges.controller.ts'),
+  readProjectFile('apps/api/src/reconciliation/reconciliation.controller.ts'),
   readProjectFile('apps/api/src/store-statements/store-statements.controller.ts'),
   readProjectFile('apps/api/src/direct-statements/direct-statements.controller.ts'),
     readProjectFile('apps/api/src/supplier-orders/supplier-orders.controller.ts'),
@@ -225,6 +227,7 @@ assertIncludes(supplierOrdersController, 'gapAllocations', 'supplier orders cont
 assertIncludes(apiDesign, '`GET /reports/order-amounts`', 'api design');
 assertIncludes(apiDesign, '`GET /reports/product-quantities`', 'api design');
 assertIncludes(apiDesign, '`GET /reports/profit`', 'api design');
+assertIncludes(apiDesign, '`GET /reconciliation-issues`', 'api design');
 assertIncludes(reportsController, "@Get('order-amounts')", 'reports controller');
 assertIncludes(reportsController, "@Get('product-quantities')", 'reports controller');
 assertIncludes(reportsController, "@Get('profit')", 'reports controller');
@@ -237,6 +240,8 @@ assertIncludes(exportsController, '@Get(\':id/download\')', 'exports controller'
 assertIncludes(prismaSchema, 'model ExportJob', 'export job schema');
 assertIncludes(prismaSchema, 'PROCESSING', 'export processing status');
 assertIncludes(reportsController, "@RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER')", 'reports controller');
+assertIncludes(reconciliationController, "@Controller('reconciliation-issues')", 'reconciliation controller');
+assertIncludes(reconciliationController, "@RequireRoles('ADMIN', 'HQ_FINANCE')", 'reconciliation controller');
 assertIncludes(prismaSchema, 'model ShipmentGapAllocation', 'prisma schema');
 assertIncludes(prismaSchema, 'freightConfirmationId String?', 'prisma schema');
 assertIncludes(apiDesign, '`POST /shipments/{id}/receipts`', 'api design');

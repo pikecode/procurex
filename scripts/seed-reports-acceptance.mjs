@@ -2,6 +2,9 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import {
   DeliveryMode,
   FulfillmentStatus,
+  FundingAllocationMethod,
+  LedgerDirection,
+  LedgerSourceType,
   PaymentStatus,
   PurchaseRequestStatus,
   SettlementMode,
@@ -43,8 +46,11 @@ async function cleanup() {
     select: { id: true },
   });
   const orderIds = orders.map((order) => order.id);
+  const accountIds = await prisma.storeAccount.findMany({ where: { storeId: { in: stores.map((store) => store.id) } }, select: { id: true } });
 
   await prisma.exportJob.deleteMany({ where: { requestedById: { in: users.map((user) => user.id) } } });
+  await prisma.accountLedger.deleteMany({ where: { accountId: { in: accountIds.map((account) => account.id) } } });
+  await prisma.fundingAllocation.deleteMany({ where: { storeId: { in: stores.map((store) => store.id) } } });
   await prisma.paymentAllocation.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
   await prisma.paymentRecord.deleteMany({ where: { OR: [{ storeId: { in: stores.map((store) => store.id) } }, { supplierId: { in: suppliers.map((supplier) => supplier.id) } }] } });
   await prisma.settlementItemSnapshot.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
@@ -57,6 +63,7 @@ async function cleanup() {
   await prisma.requestItem.deleteMany({ where: { request: { storeId: { in: stores.map((store) => store.id) } } } });
   await prisma.purchaseRequest.deleteMany({ where: { storeId: { in: stores.map((store) => store.id) } } });
   await prisma.storeTemplateBinding.deleteMany({ where: { storeId: { in: stores.map((store) => store.id) } } });
+  await prisma.storeAccount.deleteMany({ where: { storeId: { in: stores.map((store) => store.id) } } });
   await prisma.templateItemSupplier.deleteMany({ where: { supplierId: { in: suppliers.map((supplier) => supplier.id) } } });
   await prisma.templateItem.deleteMany({ where: { template: { code: { startsWith: prefix } } } });
   await prisma.orderTemplate.deleteMany({ where: { code: { startsWith: prefix } } });
@@ -190,6 +197,24 @@ async function run() {
   await createOrder({ store, supplier: companySupplier, template, product, no: 'COMPANY-B', mode: SettlementMode.STORED_VALUE, completedAt: '2026-09-21T04:00:00.000Z', quantity: 6, salesUnitPrice: 10, supplyUnitPrice: 7, freight: '3.00' });
   await createOrder({ store: otherStore, supplier: directSupplier, template, product: otherProduct, no: 'DIRECT', mode: SettlementMode.SUPPLIER_TERM, completedAt: '2026-09-22T04:00:00.000Z', quantity: 5, salesUnitPrice: 20, supplyUnitPrice: 20, freight: '2.00' });
 
+  const account = await prisma.storeAccount.create({ data: { storeId: store.id, balance: '120.00', creditUsed: '80.00' } });
+  await prisma.accountLedger.create({
+    data: {
+      accountId: account.id,
+      direction: LedgerDirection.CREDIT,
+      amount: '100.00',
+      balanceAfter: '100.00',
+      sourceType: LedgerSourceType.RECHARGE,
+      sourceId: store.id,
+      note: 'PXRPT reconciliation mismatch seed',
+      occurredAt: new Date('2026-09-01T04:00:00.000Z'),
+    },
+  });
+  await Promise.all([
+    prisma.fundingAllocation.create({ data: { storeId: store.id, method: FundingAllocationMethod.CREDIT, targetAmount: '30.00', creditOutstanding: '30.00' } }),
+    prisma.fundingAllocation.create({ data: { storeId: store.id, method: FundingAllocationMethod.CREDIT, targetAmount: '20.00', creditOutstanding: '20.00' } }),
+  ]);
+
   const seed = {
     generatedAt: new Date().toISOString(),
     username: 'pxrpt_admin',
@@ -197,6 +222,7 @@ async function run() {
     storeId: store.id,
     supplierId: companySupplier.id,
     productId: product.id,
+    reconciliationStoreId: store.id,
     expected: {
       orderAmountTotal: '166.00',
       scopedOrderAmountTotal: '164.00',
