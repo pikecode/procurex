@@ -15,6 +15,7 @@ The direction has not shifted: finish M4 settlement/billing/payment/adjustment a
 Recent commits added visible and repeatable acceptance evidence:
 
 ```text
+6a38fcb Add M4 manual evidence checklist
 1260b1b Map M4 gates to acceptance evidence
 2eae05a Add M4 acceptance gate walkthrough
 ea81b68 Add main flow demo checker

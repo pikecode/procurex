@@ -70,10 +70,11 @@ The gate cards also provide a local manual-evidence checklist. Reviewers can mar
 
 Latest commits:
 
-Latest functional slice: `1260b1b Map M4 gates to acceptance evidence`.
-Latest commit before this progress update: `1260b1b Map M4 gates to acceptance evidence`.
+Latest functional slice: `6a38fcb Add M4 manual evidence checklist`.
+Latest commit before this progress update: `6a38fcb Add M4 manual evidence checklist`.
 
 ```text
+6a38fcb Add M4 manual evidence checklist
 1260b1b Map M4 gates to acceptance evidence
 2eae05a Add M4 acceptance gate walkthrough
 ea81b68 Add main flow demo checker
