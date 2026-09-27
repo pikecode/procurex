@@ -53,7 +53,8 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 Latest commits:
 
 ```text
-W10 adjustment and difference workbench (uncommitted)
+00e520a Connect W10 adjustment workbench to B12
+59c7966 Add adjustment read workbench to billing page
 427953d Refresh progress after adjustment payment acceptance
 9b24dce Verify direct adjustment payment lifecycle
 5cbc373 Verify B05 reads persisted price adjustment
