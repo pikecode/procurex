@@ -227,12 +227,17 @@ async function run() {
       body: JSON.stringify({ expectedVersion: disposal.version }),
     });
     assert.deepEqual([confirmedDisposal.status, confirmedDisposal.version], ['CONFIRMED', 2]);
+    const auditLogs = await request(`${baseUrl}/audit-logs`, { headers: authHeaders(token) });
+    const auditActions = new Set(auditLogs.map((entry) => entry.action));
+    assert.ok(auditActions.has('difference-disposal.create'));
+    assert.ok(auditActions.has('difference-disposal.confirm'));
     record('7. W10 offset disposal is created and confirmed', {
       method: disposal.method,
       direction: disposal.direction,
       amount: disposal.amount,
       status: confirmedDisposal.status,
       version: confirmedDisposal.version,
+      auditActions: Array.from(auditActions).filter((action) => action.startsWith('difference-disposal.')).sort(),
     }, [
       { gateId: 'DEV-406', evidenceId: 'offset-created' },
       { gateId: 'DEV-406', evidenceId: 'receiver-confirmed' },

@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -39,6 +40,7 @@ export class DifferenceDisposalsController {
   constructor(
     private readonly differenceDisposalsService: DifferenceDisposalsService,
     private readonly commandsService: CommandsService,
+    private readonly audit: AuditService,
   ) {}
 
   @Get(':id')
@@ -56,12 +58,13 @@ export class DifferenceDisposalsController {
     @Body() body: CreateBody,
   ): Promise<DifferenceDisposalView> {
     const input = parseCreateBody(body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'difference-disposal.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: body as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -74,6 +77,23 @@ export class DifferenceDisposalsController {
       resourceType: 'DifferenceDisposal',
       resourceId: result.id,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'difference-disposal.create',
+      entityType: 'DifferenceDisposal',
+      entityId: result.id,
+      traceId,
+      reason: input.reason,
+      after: {
+        disposalNo: result.disposalNo,
+        direction: result.direction,
+        method: result.method,
+        status: result.status,
+        amount: result.amount,
+        itemCount: result.items.length,
+      },
     });
 
     return result;
@@ -88,12 +108,13 @@ export class DifferenceDisposalsController {
     @Body() body: ConfirmBody,
   ): Promise<DifferenceDisposalView> {
     const input = parseConfirmBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'difference-disposal.confirm',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -107,9 +128,29 @@ export class DifferenceDisposalsController {
       resourceId: result.id,
       responseBody: result as never,
     });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'difference-disposal.confirm',
+      entityType: 'DifferenceDisposal',
+      entityId: result.id,
+      traceId,
+      after: {
+        disposalNo: result.disposalNo,
+        direction: result.direction,
+        method: result.method,
+        status: result.status,
+        amount: result.amount,
+        confirmedAt: result.confirmedAt,
+      },
+    });
 
     return result;
   }
+}
+
+function auditScope(auth: AuthenticatedSession) {
+  return { roles: auth.user.roles, ...(auth.user.scope ? { scope: auth.user.scope } : {}) };
 }
 
 function parseCreateBody(body: CreateBody): CreateDifferenceDisposalInput {

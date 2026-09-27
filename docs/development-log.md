@@ -42,6 +42,7 @@
 - M5/DEV-503 差异通知触发：门店收货生成少收差异时，系统给供应商范围内 active `SUPPLIER` 用户写入“收货差异待处理”站内通知，payload 关联 supplierOrder/shipment/receipt/discrepancy；`PXFLOW` 种子新增 `pxflow_supplier`，`main-flow:check-demo` 用第二张真实订单制造少收并验证供应商通知。验证：构建、46 项单测、`main-flow:seed-demo`、`main-flow:check-demo`、`git diff --check` 通过。
 - M5/DEV-503 差异处理结果通知：供应商 F05 处理收货差异后，系统给目标门店 active `STORE`/`STORE_FINANCE` 用户写入处理结果通知，ACCEPT 显示“差异已同意少收”，REPLENISH/RETURN 使用对应标题；`main-flow:check-demo` 用供应商账号处理差异后验证门店收到结果。验证：构建、46 项单测、`main-flow:seed-demo`、`main-flow:check-demo`、`git diff --check` 通过。
 - M5/DEV-504 审计日志首段：新增 `AuditLog` 表、迁移和 `GET /audit-logs` ADMIN/HQ_FINANCE 查询接口；供应商发货、门店收货、供应商处理差异在命令成功后写入 actor/scope/action/entity/traceId/after/reason，idempotent replay 不重复写入。W13 增加“审计日志”表，`main-flow:check-demo` 验证三类动作可查询。验证：迁移部署、Prisma generate、构建、46 项单测、`main-flow:seed-demo`、`main-flow:check-demo`、`web:check`、`git diff --check` 通过。
+- M5/DEV-504 资金处置审计：W10 差额处置创建和收款方确认成功后写入 `difference-disposal.create` / `difference-disposal.confirm` 审计日志，包含方向、方法、金额、状态和原因；`billing:check-acceptance` 在真实 OFFSET 创建/确认后验证两类审计动作可查询。验证：构建、46 项单测、`billing:seed-acceptance`、`billing:check-acceptance`、`web:check`、`git diff --check` 通过。
 - DEV-406/W10：账单工作台新增调整列表、处置状态筛选、原周期/实际周期对照和调整详情；B12 操作随后在同日接通。初始只读切片验证：构建、Web 脚本语法、本地 HTTP 冒烟、diff 检查通过。
 - DEV-406/B05/W10：B05 对可精确映射的单笔负向改价暴露 B12 信用项 ID 和处置版本；账单页支持公司财务登记线下返还、收款方确认。净额无法映射到单张负向调整单时不显示登记动作。验证：36 项单测、31 项集成测试、构建、契约检查、Web 脚本语法与 diff 检查通过。
 - DEV-406/W10：B05 同时为单笔正向改价返回可用于抵扣的结算项 ID；工作台允许公司财务选择同结算侧的正向调整作抵扣目标，B12 继续校验余额及主体。验证：构建、单测、集成测试、契约检查、Web 语法及 diff 检查通过。

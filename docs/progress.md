@@ -64,7 +64,7 @@ R04 export reliability now has the first DEV-505 slices: the worker scans both f
 
 DEV-503 now has I08 in-app notification list/read plus three real business triggers. `Notification` persists recipient, channel, status, title/body, payload, read timestamp, and a per-recipient event key; `GET /notifications` returns the current user's latest 50 messages with unread count, and `POST /notifications/{id}/read` marks only the current user's message as read. `notifications:seed-acceptance` seeds admin/store messages, `notifications:check-acceptance` verifies list/read/isolation over HTTP, and W13 renders a "站内消息" card. Supplier shipment creation writes a "待收货提醒" notification to active users scoped to the destination store; receipt with missing quantity writes a "收货差异待处理" notification to active users scoped to the supplier; supplier discrepancy resolution writes a store notification such as "差异已同意少收". `main-flow:check-demo` verifies all three messages through real `PXFLOW` order, shipment, receipt, and F05 resolution steps.
 
-DEV-504 now has the first audit log slice. `AuditLog` persists actor, active roles/scope, action, entity, traceId, reason, before/after JSON, and createdAt. `GET /audit-logs` is restricted to ADMIN/HQ_FINANCE and returns the latest 50 entries with actor display text. The supplier shipment, store receipt, and discrepancy resolution command paths write audit rows only after the command succeeds, so idempotent replay does not duplicate the audit trail. W13 renders a "审计日志" table, and `main-flow:check-demo` verifies all three actions are queryable.
+DEV-504 now has the first audit log slices. `AuditLog` persists actor, active roles/scope, action, entity, traceId, reason, before/after JSON, and createdAt. `GET /audit-logs` is restricted to ADMIN/HQ_FINANCE and returns the latest 50 entries with actor display text. The supplier shipment, store receipt, discrepancy resolution, and W10 difference-disposal create/confirm command paths write audit rows only after the command succeeds, so idempotent replay does not duplicate the audit trail. W13 renders a "审计日志" table; `main-flow:check-demo` verifies the fulfillment actions, and `billing:check-acceptance` verifies the difference-disposal actions.
 
 The main-flow acceptance runner now writes a browser-readable result to `apps/web/main-flow-run.json`, and `apps/web/main-flow.html` renders the latest order-to-payment handoff status. `npm run web:check` now guards this page as well, so the main flow is visible even before a full interactive order-entry workbench is built.
 
@@ -112,10 +112,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice in this update: DEV-504 audit logs for shipment, receipt, and discrepancy resolution.
-Latest commit before this progress update: `ca3b382 Notify stores after discrepancy resolution`.
+Latest functional slice in this update: DEV-504 audit logs for W10 difference disposal create/confirm.
+Latest commit before this progress update: `b2b21ea Add audit logs for fulfillment actions`.
 
 ```text
+b2b21ea Add audit logs for fulfillment actions
 ca3b382 Notify stores after discrepancy resolution
 b7ee08c Notify suppliers about receipt discrepancies
 bf3c999 Notify stores after supplier shipment

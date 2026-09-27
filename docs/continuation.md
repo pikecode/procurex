@@ -8,13 +8,14 @@ Use this as the first document when continuing development in a new window.
 
 M4 is locally closed against the current acceptance gates. DEV-401 through DEV-406 are closed, `npm run acceptance:m4-close` passes, Chrome is ready, local PostgreSQL is reachable, automatic evidence is complete, and the manual browser evidence package is 6/6.
 
-M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, I08 in-app notification list/read, real DEV-503 supplier-shipment, receipt-discrepancy, and discrepancy-resolution notification triggers, DEV-504 audit logs for shipment/receipt/discrepancy resolution, W11 visibility, R04 export task listing and failed retry, DEV-505 stale export recovery and export health monitoring, W13 reconciliation/operations/notification/audit visibility, and Chrome-captured W11/W13 screenshots.
+M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, I08 in-app notification list/read, real DEV-503 supplier-shipment, receipt-discrepancy, and discrepancy-resolution notification triggers, DEV-504 audit logs for shipment/receipt/discrepancy resolution and W10 difference-disposal create/confirm, W11 visibility, R04 export task listing and failed retry, DEV-505 stale export recovery and export health monitoring, W13 reconciliation/operations/notification/audit visibility, and Chrome-captured W11/W13 screenshots.
 
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
 
 ```text
+b2b21ea Add audit logs for fulfillment actions
 ca3b382 Notify stores after discrepancy resolution
 b7ee08c Notify suppliers about receipt discrepancies
 bf3c999 Notify stores after supplier shipment
