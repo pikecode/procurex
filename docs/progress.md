@@ -50,6 +50,8 @@ Latest W09/S05/S08 verification: the local API health endpoint and `billing.html
 
 W10 workbench now provides adjustment filtering, original/actual period comparison, detail, B12 offline-return registration and receiver confirmation, plus offsets to a selected positive adjustment on the same settlement side. A real-database HTTP test now follows a negative price adjustment through B05 list/detail into B12 creation and receiver confirmation. B05 exposes actionable source/target IDs only when a price adjustment maps to one persisted document; ambiguous multi-run netting remains read-only. Browser E2E remains open. Verification: 36 unit tests, 31 integration tests, build, contract check, Web syntax, HTTP smoke, diff check, and the targeted W10 HTTP test pass.
 
+`npm run web:check` now provides a browserless visibility guard for W09/W10/W11. It verifies the billing page, adjustment section, payment/evidence controls, difference-disposal controls, report page, JavaScript syntax, and required web assets. It is not a replacement for browser E2E, but it prevents silent removal of the visible workbench entry points.
+
 Latest commits:
 
 Latest functional slice: `68e4814 Verify W10 B05 to B12 HTTP flow`.

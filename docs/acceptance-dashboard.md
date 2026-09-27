@@ -59,6 +59,12 @@ The backend acceptance baseline is:
 npm run db:validate && npm run db:migrate && npm run build && npm test && npm run test:integration && npm run contract:check
 ```
 
+The browserless workbench visibility check is:
+
+```bash
+npm run web:check
+```
+
 The latest progress ledger records successful runs with 36 unit tests and 31 integration tests for the W09/W10 slices. Always rerun the full baseline before marking a package closed.
 
 ## Browser E2E Blocker
@@ -70,6 +76,7 @@ Until a browser runtime is available, W09/W10 can only be verified by:
 - API integration tests.
 - Static HTTP smoke checks.
 - JavaScript syntax checks.
+- `npm run web:check`, which confirms the W09/W10 page exposes the billing, payment, evidence, adjustment, offline-return, and offset entry points.
 - Manual review of `apps/web/billing.html`, `apps/web/billing.js`, and `apps/web/billing.css`.
 
 ## Next Work Order
