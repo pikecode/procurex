@@ -125,6 +125,7 @@ For the M4 gate status summary, run:
 npm run m4:prepare-manual-acceptance
 npm run m4:check-browser-runtime
 npm run m4:gate-status
+npm run m4:capture-browser-evidence
 ```
 
 For the generated manual acceptance checklist, run:
