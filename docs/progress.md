@@ -44,6 +44,8 @@ DEV-406 positive adjustment payments now have direct-term HTTP evidence: B06 pre
 
 Latest completed implementation: the four statement families, payment records, adjustments, difference disposals, and clearing details now enforce authenticated store scope for both STORE and STORE_FINANCE accounts; cross-scope IDs resolve as not found, while company roles retain broad access. B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
+Latest recovery evidence: an independent PostgreSQL backup/restore drill completed against the local database. Backup capture took 237ms and restore plus verification took 521ms. The restored database preserved 5 supplier orders, 4 payment records, 4 stores, and a READY PAYMENT FileObject; the restored private evidence file matched its source SHA-256. This is local AT-24 evidence; production backup policy and the RPO/RTO target remain DEV-603/M6 work.
+
 Latest commits:
 
 ```text
@@ -144,7 +146,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | DEV-402 | B01-B04, amount/period logic, AT-16 price guard, direct-term B04→B08 flow, AT-17 credit-limit guard, and AC-21 stored-value supplier payable verified | Finish remaining settlement-mode and W09/S05/S08 acceptance evidence |
 | DEV-403 | Statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, account scope, and cross-view shared-item reservation are tested | Remaining W09/S05/S08 flow evidence before closure |
 | DEV-404 | B06-B11 payment lifecycle, AT-13 concurrency, receiver authorization, direct-term adjustment payment, and company-term store-first HTTP gate verified; initial I06/I07 private-directory upload and PAYMENT evidence linking implemented | Make evidence required after migrating existing payment callers; authorize counterparty downloads; finish file-link acceptance and recovery/cleanup policy |
-| DEV-405 | A04-A06, store scope, and W08 selected-only clearing/accounting flow verified | AT-24 requires a real backup and credential/file recovery drill with measured RPO/RTO |
+| DEV-405 | **Closed**: A04-A06, store scope, and W08 selected-only clearing/accounting flow verified | None for the current M4 package; production backup policy remains DEV-603/M6 |
 | DEV-406 | Persisted adjustments, netting, positive adjustment payment, offsets/returns, receiver scopes, and snapshot-versus-adjustment database reconciliation are covered | Finish remaining reconciliation consistency and settlement-side acceptance gates |
 
 W09 first usable web flow is now implemented in `apps/web/billing.html`: role-filtered store, supplier total, supplier-store, and direct statements; detail lines; payment preview/registration with private evidence upload; payment list; receiver confirmation; and counterparty-scoped evidence download. Existing API and browser script checks pass. The same page now has narrow-screen S05/S08 layout rules; broader end-to-end browser acceptance remains open.
@@ -154,7 +156,7 @@ W09 detail now exposes each persisted positive adjustment settlement item and am
 I07 authorization now has HTTP evidence that a supplier linked to a payment can download its payment proof, while the route remains restricted to payment participants or authorized finance roles.
 The same acceptance now verifies an unrelated supplier receives 404 for that proof.
 
-The next execution order is therefore to close acceptance packages explicitly: **DEV-402 → DEV-403 → DEV-404 → DEV-405 → DEV-406**. For each package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure.
+The next execution order is therefore to close acceptance packages explicitly: **DEV-402 → DEV-403 → DEV-404 → DEV-406**. DEV-405 is closed against its plan conditions; its local recovery evidence is recorded, while production backup policy remains in DEV-603/M6. For each remaining package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure.
 
 DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. Receiver scope and AT-14 offline return are now covered; M4 remains incomplete pending reconciliation consistency and the remaining package gates.
 
@@ -162,7 +164,7 @@ DEV-405 clearing creation now conditionally updates each funding allocation by v
 
 ## Progress Metrics
 
-The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status currently is **1 closed, 5 partial, 0 not started**. This whole-package count is a gate status, not a sensitive progress metric; use the closure-evidence column in the plan alignment review to show movement between commits. Do not publish an overall percentage until the plan has an itemized denominator for all milestones.
+The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status currently is **2 closed, 4 partial, 0 not started**. This whole-package count is a gate status, not a sensitive progress metric; use the closure-evidence column in the plan alignment review to show movement between commits. Do not publish an overall percentage until the plan has an itemized denominator for all milestones.
 
 ## Verification Baseline
 
