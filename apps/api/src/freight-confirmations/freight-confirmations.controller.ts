@@ -1,4 +1,5 @@
 import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -25,6 +26,7 @@ export class FreightConfirmationsController {
   constructor(
     private readonly freightConfirmationsService: FreightConfirmationsService,
     private readonly commandsService: CommandsService,
+    private readonly audit: AuditService,
   ) {}
 
   @Post(':id/confirm')
@@ -57,12 +59,13 @@ export class FreightConfirmationsController {
     action: 'freight-confirmation.confirm' | 'freight-confirmation.reject',
   ): Promise<FreightConfirmationView> {
     const input = parseReviewBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action,
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -79,9 +82,29 @@ export class FreightConfirmationsController {
       resourceId: result.id,
       responseBody: result as never,
     });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action,
+      entityType: 'FreightConfirmation',
+      entityId: result.id,
+      traceId,
+      reason: input.review.reason,
+      after: {
+        supplierOrderId: result.supplierOrderId,
+        amount: result.amount,
+        status: result.status,
+        confirmedAt: result.confirmedAt,
+        rejectedAt: result.rejectedAt,
+      },
+    });
 
     return result;
   }
+}
+
+function auditScope(auth: AuthenticatedSession) {
+  return { roles: auth.user.roles, ...(auth.user.scope ? { scope: auth.user.scope } : {}) };
 }
 
 function parseReviewBody(id: string, body: ReviewBody): { id: string; review: ReviewFreightConfirmationInput } {

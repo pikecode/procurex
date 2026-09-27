@@ -348,3 +348,6 @@
 
 - Added DEV-504 audit-log filters for action, entity, actor, traceId, and limit, plus W13 filter controls. `main-flow:check-demo` now verifies the action filter against real purchase-request audit rows.
 - Verification: `npm run acceptance:m4-browserless`, `npm run acceptance:m5-browserless`, `npm run contract:check`, `npm run web:check`, and `git diff --check` passed.
+
+- Expanded DEV-504 audit coverage to supplier-order rejection, supplier funding reconciliation, freight-confirmation create, and freight-confirmation confirm/reject commands. Integration coverage asserts those audit rows are written once across idempotent replays.
+- Verification: `npm run build`, `npm run test:integration`, `npm run acceptance:m4-browserless`, `npm run acceptance:m5-browserless`, `npm run contract:check`, `npm run web:check`, and `git diff --check` passed.

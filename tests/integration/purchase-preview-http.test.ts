@@ -407,6 +407,12 @@ test('purchase request create persists request once per idempotency key', async 
       stored: { required: '120.00', paid: '120.00', available: '150.00', shortfall: '0.00' },
       canConfirm: true,
     });
+    const fundingAuditLogs = await prisma.auditLog.findMany({
+      where: { actorUserId: user.id, action: 'supplier-order.funding.reconcile', traceId: 'trace-reconcile-funding' },
+      orderBy: { createdAt: 'asc' },
+    });
+    assert.equal(fundingAuditLogs.length, 2);
+    assert.ok(fundingAuditLogs.every((log) => log.entityId === supplierOrder.id));
 
     const requests = await prisma.purchaseRequest.findMany({ where: { storeId: store.id } });
     assert.equal(requests.length, 1);
@@ -1022,6 +1028,11 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(rejectedSupplierOrder.status, 'REJECTED');
     assert.equal(rejectedSupplierOrder.fulfillmentStatus, 'CANCELED');
     assert.equal(rejectedSupplierOrder.rejectedReason, 'Out of stock');
+    const rejectAuditLogs = await prisma.auditLog.findMany({
+      where: { actorUserId: user.id, action: 'supplier-order.reject', traceId: 'trace-reject-supplier-order' },
+    });
+    assert.equal(rejectAuditLogs.length, 1);
+    assert.equal(rejectAuditLogs[0]?.entityId, supplierOrderA.id);
     const requestAfterSupplierReject = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id: created.data.id } });
     assert.equal(requestAfterSupplierReject.status, 'PARTIAL_PUSHED');
     const rejectedRequestItem = await prisma.requestItem.findFirstOrThrow({
@@ -1369,6 +1380,15 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       where: { id: freightConfirmation.data.id },
     });
     assert.equal(persistedFreight.status, 'CONFIRMED');
+    const freightAuditLogs = await prisma.auditLog.findMany({
+      where: {
+        actorUserId: user.id,
+        traceId: { in: ['trace-create-freight-confirmation', 'trace-confirm-freight-confirmation'] },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    assert.equal(freightAuditLogs.length, 2);
+    assert.deepEqual(freightAuditLogs.map((log) => log.action).sort(), ['freight-confirmation.confirm', 'supplier-order.freight-confirmation.create']);
 
     const orderBeforeReplenishmentShipment = await prisma.supplierOrder.findUniqueOrThrow({
       where: { id: supplierBOrderAfterReallocate.id },

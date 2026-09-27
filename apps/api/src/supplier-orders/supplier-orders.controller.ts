@@ -156,12 +156,13 @@ export class SupplierOrdersController {
     @Body() body: CreateFreightConfirmationBody,
   ): Promise<FreightConfirmationView> {
     const input = parseCreateFreightConfirmationBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'supplier-order.freight-confirmation.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -174,6 +175,20 @@ export class SupplierOrdersController {
       resourceType: 'FreightConfirmation',
       resourceId: result.id,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'supplier-order.freight-confirmation.create',
+      entityType: 'FreightConfirmation',
+      entityId: result.id,
+      traceId,
+      reason: input.confirmation.reason,
+      after: {
+        supplierOrderId: result.supplierOrderId,
+        amount: result.amount,
+        status: result.status,
+      },
     });
 
     return result;
@@ -188,12 +203,13 @@ export class SupplierOrdersController {
     @Body() body: RejectBody,
   ): Promise<RejectSupplierOrderResult> {
     const input = parseRejectBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'supplier-order.reject',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -206,6 +222,21 @@ export class SupplierOrdersController {
       resourceType: 'SupplierOrder',
       resourceId: result.supplierOrderId,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'supplier-order.reject',
+      entityType: 'SupplierOrder',
+      entityId: result.supplierOrderId,
+      traceId,
+      reason: input.reason,
+      after: {
+        requestId: result.requestId,
+        status: result.status,
+        fulfillmentStatus: result.fulfillmentStatus,
+        rejectedAt: result.rejectedAt,
+      },
     });
 
     return result;
@@ -220,12 +251,13 @@ export class SupplierOrdersController {
     @Body() body: ReconcileFundingBody,
   ): Promise<ReconcileSupplierOrderFundingResult> {
     const input = parseReconcileFundingBody(id, body);
+    const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
       actorUserId: auth.user.id,
       action: 'supplier-order.funding.reconcile',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
-      traceId: getOrCreateTraceId(request),
+      traceId,
     });
 
     if (command.state === 'replay' || command.state === 'failed') {
@@ -238,6 +270,21 @@ export class SupplierOrdersController {
       resourceType: 'SupplierOrder',
       resourceId: result.supplierOrderId,
       responseBody: result as never,
+    });
+    await this.audit.record({
+      actorUserId: auth.user.id,
+      activeScope: auditScope(auth),
+      action: 'supplier-order.funding.reconcile',
+      entityType: 'SupplierOrder',
+      entityId: result.supplierOrderId,
+      traceId,
+      after: {
+        requestId: result.requestId,
+        requestStatus: result.requestStatus,
+        paymentStatus: result.paymentStatus,
+        shortfallAmount: result.shortfallAmount,
+        availableAmount: result.funding.stored.available,
+      },
     });
 
     return result;
