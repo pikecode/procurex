@@ -25,7 +25,7 @@ There was one recorded deviation: R01-R04 and W11 reporting/export work started 
 | DEV-405 clearing | Closed | A04-A06 selected-credit clearing, ledger/account updates, scope checks, and local restore evidence are covered. |
 | DEV-406 adjustments and difference disposal | Closed | B05/B12, persisted adjustments, returns, offsets, overpayments, W10 workbench, and browser evidence are covered in the local close gate. |
 | DEV-501/502 reporting and export | Active | R01-R04 and W11 are implemented with browserless acceptance, CSV export, task listing, and Chrome evidence. |
-| DEV-503 notifications | Active | I08 in-app notification list/read and owner isolation are implemented, seeded, visible on W13; supplier shipment creates store "待收货提醒", and receipt discrepancy creates supplier "收货差异待处理". |
+| DEV-503 notifications | Active | I08 in-app notification list/read and owner isolation are implemented, seeded, visible on W13; supplier shipment creates store "待收货提醒", receipt discrepancy creates supplier "收货差异待处理", and discrepancy resolution notifies the store. |
 | DEV-504/505 operations and recovery | Active | R05/W13 reconciliation is visible; stale export recovery, export health monitoring, and failed export retry are covered for R04. |
 
 ## Visible Workbenches
@@ -60,7 +60,7 @@ Open these pages:
 | Four statement families | B01 store, B02 supplier total, B03 supplier-store, B04 direct statements. | Browser-level W09/S05/S08 acceptance. |
 | Payment and evidence | B06-B11, private file upload/download, required PAYMENT evidence, participant authorization. | Production storage policy and deployment configuration. |
 | Price change and adjustments | P01-P03, persisted adjustment documents, repeated-change netting, B05 reads, B12 returns/offsets. | Browser-level W10 acceptance and final M4 closure review. |
-| Reporting/export/operations | R01-R05 backend, W11 report page, W13 operations page, R04 export recovery, export health monitoring, failed export retry, I08 in-app notification list/read, supplier-shipment notification trigger, and receipt-discrepancy notification trigger. | Remaining M5 work is adding more notification triggers, WeChat adaptation, audit expansion, and broader recovery only for newly implemented async flows. |
+| Reporting/export/operations | R01-R05 backend, W11 report page, W13 operations page, R04 export recovery, export health monitoring, failed export retry, I08 in-app notification list/read, supplier-shipment notification trigger, receipt-discrepancy notification trigger, and discrepancy-resolution notification trigger. | Remaining M5 work is adding more notification triggers, WeChat adaptation, audit expansion, and broader recovery only for newly implemented async flows. |
 
 ## Verification Commands
 

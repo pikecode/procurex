@@ -5,6 +5,8 @@ import {
   FulfillmentStatus,
   ReplenishmentGapStatus,
   SupplierOrderStatus,
+  UserScopeType,
+  UserStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
 import type { Discrepancy, DiscrepancyReturn, ReplenishmentGap } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
@@ -131,7 +133,10 @@ export class DiscrepanciesService {
 
       const orderItem = await tx.orderItem.findUniqueOrThrow({
         where: { id: discrepancy.orderItemId },
-        select: { supplierOrderId: true },
+        select: {
+          supplierOrderId: true,
+          supplierOrder: { select: { supplierOrderNo: true, storeId: true, supplierId: true } },
+        },
       });
       const orderItems = await tx.orderItem.findMany({
         where: { supplierOrderId: orderItem.supplierOrderId },
@@ -151,11 +156,61 @@ export class DiscrepanciesService {
         },
       });
 
+      const recipients = await tx.user.findMany({
+        where: {
+          status: UserStatus.ACTIVE,
+          scopes: { some: { scopeType: UserScopeType.STORE, storeId: orderItem.supplierOrder.storeId } },
+          roles: { some: { role: { code: { in: ['STORE', 'STORE_FINANCE'] } } } },
+        },
+        select: { id: true },
+      });
+      if (recipients.length) {
+        const { title, body } = discrepancyResolutionMessage(input.action, orderItem.supplierOrder.supplierOrderNo);
+        await tx.notification.createMany({
+          data: recipients.map((recipient) => ({
+            recipientId: recipient.id,
+            eventKey: `DISCREPANCY_RESOLVED:${discrepancy.id}:${input.action}`,
+            channel: 'IN_APP',
+            title,
+            body,
+            payload: {
+              type: 'DISCREPANCY_RESOLVED',
+              action: input.action,
+              route: '/main-flow-demo.html',
+              supplierOrderId: orderItem.supplierOrderId,
+              storeId: orderItem.supplierOrder.storeId,
+              supplierId: orderItem.supplierOrder.supplierId,
+              discrepancyId: discrepancy.id,
+            },
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       return updated;
     });
 
     return toDiscrepancyView(resolved);
   }
+}
+
+function discrepancyResolutionMessage(action: DiscrepancyActionType, supplierOrderNo: string): { title: string; body: string } {
+  if (action === DiscrepancyActionType.REPLENISH) {
+    return {
+      title: '差异已安排补发',
+      body: `供应商订单 ${supplierOrderNo} 的收货差异已安排补发，请跟进后续到货。`,
+    };
+  }
+  if (action === DiscrepancyActionType.RETURN) {
+    return {
+      title: '差异退回待确认',
+      body: `供应商订单 ${supplierOrderNo} 的收货差异已退回，请重新核对收货。`,
+    };
+  }
+  return {
+    title: '差异已同意少收',
+    body: `供应商订单 ${supplierOrderNo} 的收货差异已同意少收，系统将按差异结果继续履约。`,
+  };
 }
 
 function toDiscrepancyView(

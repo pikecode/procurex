@@ -163,11 +163,29 @@ async function run() {
     });
     const discrepancyNotification = supplierNotifications.notifications.find((item) => item.payload?.receiptId === discrepancyReceipt.id);
     assert.equal(discrepancyNotification?.title, '收货差异待处理');
+    const discrepancyId = discrepancyNotification.payload.discrepancyIds[0];
+    const resolvedDiscrepancy = await request(`${baseUrl}/discrepancies/${discrepancyId}/resolve`, {
+      method: 'POST',
+      headers: authHeaders(supplierLogin.accessToken, { 'idempotency-key': `flow-demo-discrepancy-resolve-${Date.now()}` }),
+      body: JSON.stringify({
+        expectedVersion: 1,
+        action: 'ACCEPT',
+        reason: 'PXFLOW demo accepts short receipt',
+      }),
+    });
+    assert.equal(resolvedDiscrepancy.status, 'RESOLVED');
+
+    const storeNotificationsAfterResolution = await request(`${baseUrl}/notifications`, {
+      headers: authHeaders(storeLogin.accessToken),
+    });
+    const resolutionNotification = storeNotificationsAfterResolution.notifications.find((item) => item.payload?.discrepancyId === discrepancyId);
+    assert.equal(resolutionNotification?.title, '差异已同意少收');
 
     console.log('Main flow demo check passed.');
     console.log(`  Order: ${completedOrder.status} / ${completedOrder.fulfillmentStatus}`);
     console.log(`  Store notification: ${shipmentNotification.title}`);
     console.log(`  Supplier notification: ${discrepancyNotification.title}`);
+    console.log(`  Resolution notification: ${resolutionNotification.title}`);
     console.log(`  Payment preview: ${preview.direction} ${preview.totalPayableAmount}`);
   } finally {
     await app.close();
