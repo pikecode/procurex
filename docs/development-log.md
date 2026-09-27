@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Added DEV-406 database integration for repricing after supplier-side settlement: keeps the 80.00 snapshot, creates a persisted +10.00 supplier adjustment document, and exposes 90.00 payable components without changing the frozen statement base.
+- Verification: `npm run build`, `npm test` (36), `npm run test:integration` (30), `npm run contract:check`, and `git diff --check` passed.
+
 - Strengthened DEV-405 W08 clearing acceptance: clearing selected 200 from two credits leaves the unselected 50 active, preserves cumulative net-paid and cash balance, reduces only outstanding credit, and writes the matching clearing debit ledger.
 - Verification: `npm run build`, `npm test` (36), `npm run test:integration` (30), `npm run contract:check`, and `git diff --check` passed.
 

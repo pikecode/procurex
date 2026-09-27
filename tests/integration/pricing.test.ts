@@ -113,6 +113,16 @@ test('pricing service returns latest version effective at business time', async 
         items: { create: { productId: product.id, quantity: '1', salesUnitPrice: '10', supplyUnitPrice: '8', salesLineAmount: '10.00', supplyLineAmount: '8.00' } },
       },
     });
+    const supplierSettlementItemId = Buffer.from(JSON.stringify({ kind: 'SUPPLIER_PAYABLE', supplierOrderId: order.id })).toString('base64url');
+    await prisma.settlementItemSnapshot.create({ data: {
+      settlementItemId: supplierSettlementItemId,
+      supplierOrderId: order.id,
+      kind: 'SUPPLIER_PAYABLE',
+      goodsAmount: '80.00',
+      freightAmount: '0.00',
+      totalAmount: '80.00',
+      sourceVersion: order.version,
+    } });
     const latest = await service.publishPrice({
       productId: product.id,
       supplierId: supplier.id,
@@ -134,6 +144,10 @@ test('pricing service returns latest version effective at business time', async 
     assert.equal(updatedOrder?.items[0]?.salesLineAmount.toString(), '120');
     assert.equal(updatedOrder?.items[0]?.supplyLineAmount.toString(), '90');
     assert.equal((await prisma.priceChangeAdjustment.count({ where: { runId: latest.runId } })), 1);
+    const persistedAdjustmentDocuments = await prisma.adjustmentDocument.findMany({ where: { sourcePriceChangeId: succeededOrder!.adjustment!.id } });
+    assert.equal(persistedAdjustmentDocuments.length, 1);
+    assert.equal(persistedAdjustmentDocuments[0]?.side, 'SUPPLIER');
+    assert.equal(persistedAdjustmentDocuments[0]?.amount.toFixed(2), '10.00');
     await prisma.supplierOrder.update({ where: { id: order.id }, data: { status: SupplierOrderStatus.COMPLETED } });
     const repricedRequest = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id: request.id } });
     assert.equal(repricedRequest.shortfallAmount.toFixed(2), '120.00');
@@ -144,7 +158,6 @@ test('pricing service returns latest version effective at business time', async 
       (error: unknown) => error instanceof NotFoundException && JSON.stringify(error.getResponse()).includes('UNRESOLVED_FUNDING_SHORTFALL'),
     );
     await prisma.purchaseRequest.update({ where: { id: request.id }, data: { shortfallAmount: '0.00' } });
-    const supplierSettlementItemId = Buffer.from(JSON.stringify({ kind: 'SUPPLIER_PAYABLE', supplierOrderId: order.id })).toString('base64url');
     await assert.rejects(
       new PaymentRecordsService({ client: prisma } as never).preview([supplierSettlementItemId]),
       (error: unknown) => error instanceof NotFoundException && JSON.stringify(error.getResponse()).includes('STORE_RECEIVABLE_UNSETTLED'),
@@ -153,8 +166,10 @@ test('pricing service returns latest version effective at business time', async 
     assert.ok(statement);
     const statementDetail = await new SupplierStatementsService({ client: prisma } as never).get(statement.id);
     const statementLine = statementDetail.lines.find((line) => line.supplierOrderId === order.id);
-    assert.equal(statementLine?.goodsAmount, '90.00');
+    assert.equal(statementLine?.goodsAmount, '80.00');
     assert.equal(statementLine?.priceAdjustments[0]?.supplyDelta, '10.00');
+    assert.equal(statementDetail.adjustmentAmount, '10.00');
+    assert.equal(statementDetail.payableAmount, '98.00');
     const adjustments = await service.listAdjustments(latest.runId!);
     assert.equal(adjustments.length, 1);
     assert.equal(adjustments[0]?.salesDelta, '20');
