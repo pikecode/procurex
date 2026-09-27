@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Added direct-term positive adjustment payment acceptance: preview, register, and supplier-confirm a persisted +20.00 adjustment; B04 reaches SETTLED with original goods/freight snapshot unchanged.
+- Verification: `npm run build`, `npm test` (36), `npm run test:integration` (30), `npm run contract:check`, and `git diff --check` passed.
+
 - Extended the settled-side price adjustment integration through B05: reads the persisted supplier adjustment document as a pending +10.00 payable adjustment while the original snapshot remains frozen.
 - Verification: `npm run build`, `npm test` (36), `npm run test:integration` (30), `npm run contract:check`, and `git diff --check` passed.
 

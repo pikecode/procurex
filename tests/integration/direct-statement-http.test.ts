@@ -94,11 +94,38 @@ test('direct supplier-term statement pays and confirms goods plus freight over H
     assert.deepEqual([settled.data.settlementStatus, settled.data.confirmedPaidAmount, settled.data.totalAmount], ['SETTLED', '138.50', '138.50']);
     const snapshot = await prisma.settlementItemSnapshot.findUnique({ where: { settlementItemId: line.settlementItemId } });
     assert.deepEqual([snapshot?.goodsAmount.toFixed(2), snapshot?.freightAmount.toFixed(2), snapshot?.totalAmount.toFixed(2)], ['120.00', '18.50', '138.50']);
+
+    const adjustment = await prisma.adjustmentDocument.create({ data: {
+      sourcePriceChangeId: crypto.randomUUID(), supplierOrderId: order.id, storeId: store.id, supplierId: supplier.id,
+      side: 'STORE', amount: '20.00', originalPeriodKey: 'MONTHLY:2026-09-01:2026-10-01',
+      settlementPeriodKey: 'MONTHLY:2026-09-01:2026-10-01', sourceRevision: order.version,
+    } });
+    const adjustmentItemId = Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', supplierOrderId: order.id, adjustmentDocumentId: adjustment.id, adjustmentSide: 'STORE' })).toString('base64url');
+    const adjustmentPreviewResponse = await fetch(`${url}/payment-records/preview`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ settlementItemIds: [adjustmentItemId] }) });
+    assert.equal(adjustmentPreviewResponse.status, 201);
+    const adjustmentPreview = (await adjustmentPreviewResponse.json()) as { data: { direction: string; channel: string; totalPayableAmount: string; items: Array<{ sourceVersion: number; payableAmount: string; kind: string }> } };
+    assert.deepEqual([adjustmentPreview.data.direction, adjustmentPreview.data.channel, adjustmentPreview.data.totalPayableAmount], ['STORE_TO_SUPPLIER', 'DIRECT', '20.00']);
+    assert.equal(adjustmentPreview.data.items[0]?.kind, 'ADJUSTMENT');
+    const adjustmentPaymentResponse = await fetch(`${url}/payment-records`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json', 'idempotency-key': `direct-adjustment-payment-${suffix}` }, body: JSON.stringify({ direction: 'STORE_TO_SUPPLIER', businessDate: '2026-09-27', items: [{ settlementItemId: adjustmentItemId, expectedVersion: adjustmentPreview.data.items[0]!.sourceVersion, expectedAmount: adjustmentPreview.data.items[0]!.payableAmount }] }) });
+    assert.equal(adjustmentPaymentResponse.status, 201);
+    const adjustmentPayment = (await adjustmentPaymentResponse.json()) as { data: { id: string; amount: string; version: number } };
+    assert.deepEqual([adjustmentPayment.data.amount, adjustmentPayment.data.version], ['20.00', 1]);
+    const adjustmentConfirmResponse = await fetch(`${url}/payment-records/${adjustmentPayment.data.id}/confirm`, { method: 'POST', headers: { authorization: `Bearer ${supplierToken}`, 'content-type': 'application/json', 'idempotency-key': `direct-adjustment-confirm-${suffix}` }, body: JSON.stringify({ expectedVersion: adjustmentPayment.data.version }) });
+    assert.equal(adjustmentConfirmResponse.status, 201);
+    const adjustmentConfirmed = (await adjustmentConfirmResponse.json()) as { data: { status: string; amount: string } };
+    assert.deepEqual([adjustmentConfirmed.data.status, adjustmentConfirmed.data.amount], ['CONFIRMED', '20.00']);
+    const adjustedStatementResponse = await fetch(`${url}/direct-statements/${statement.id}`, { headers: { authorization: `Bearer ${storeToken}` } });
+    assert.equal(adjustedStatementResponse.status, 200);
+    const adjustedStatement = (await adjustedStatementResponse.json()) as { data: { settlementStatus: string; adjustmentAmount: string; confirmedPaidAmount: string; payableAmount: string } };
+    assert.deepEqual([adjustedStatement.data.settlementStatus, adjustedStatement.data.adjustmentAmount, adjustedStatement.data.confirmedPaidAmount, adjustedStatement.data.payableAmount], ['SETTLED', '20.00', '158.50', '0.00']);
+    const frozenSnapshot = await prisma.settlementItemSnapshot.findUniqueOrThrow({ where: { settlementItemId: line.settlementItemId } });
+    assert.equal(frozenSnapshot.totalAmount.toFixed(2), '138.50');
   } finally {
     await app.close();
     if (storeId) {
       const orders = await prisma.supplierOrder.findMany({ where: { storeId }, select: { id: true } });
       await prisma.paymentRecord.deleteMany({ where: { allocations: { some: { supplierOrderId: { in: orders.map(({ id }) => id) } } } } });
+      await prisma.adjustmentDocument.deleteMany({ where: { supplierOrderId: { in: orders.map(({ id }) => id) } } });
       await prisma.shipment.deleteMany({ where: { supplierOrderId: { in: orders.map(({ id }) => id) } } });
       await prisma.supplierOrder.deleteMany({ where: { storeId } });
     }
