@@ -104,6 +104,14 @@ npm run db:validate && npm run db:migrate && npm run build && npm test && npm ru
 
 Browserless evidence may prove that APIs, page entry points, and scripts exist. It does not prove that the user can complete the workflow in the browser.
 
+The highest-signal browserless M4 chain is:
+
+```bash
+npm run acceptance:m4-browserless
+```
+
+It builds the project, reseeds W09/W10 `PXACC` evidence, verifies W09/S05/S08 and W10 through temporary API calls, runs the main-flow acceptance runner, and checks the Web workbench entry points.
+
 ## Current Blocker
 
 No Chromium, Chrome, or Firefox executable is currently available in this environment. A previous temporary Playwright Chromium download was stopped after about 9 MB of 182 MB. Browser E2E can resume when a browser runtime is installed or made available.

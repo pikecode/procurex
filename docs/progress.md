@@ -56,6 +56,8 @@ The main-flow acceptance runner now writes a browser-readable result to `apps/we
 
 W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run billing:seed-acceptance` creates `PXACC` demo data for company-term, stored-value, credit-backed, and direct supplier-term statements, plus a shared pending supplier payable reservation visible from supplier total and supplier-store views; it also seeds W10 positive/negative supplier adjustments for offset. `npm run billing:check-acceptance` verifies those facts through a temporary API and creates/confirms one W10 offset disposal. See `docs/billing-acceptance-seed.md` for accounts and checks.
 
+`npm run acceptance:m4-browserless` now collects the strongest non-browser M4 checks into one command: build, W09/W10 seeded HTTP acceptance, main-flow acceptance output, and Web workbench visibility.
+
 Latest commits:
 
 Latest functional slice: `68e4814 Verify W10 B05 to B12 HTTP flow`.

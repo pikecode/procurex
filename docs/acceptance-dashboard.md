@@ -70,6 +70,12 @@ The browserless workbench visibility check is:
 npm run web:check
 ```
 
+The current browserless M4 acceptance chain is:
+
+```bash
+npm run acceptance:m4-browserless
+```
+
 For local manual billing acceptance data:
 
 ```bash
