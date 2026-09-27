@@ -62,6 +62,7 @@ Open:
 
 ```text
 http://127.0.0.1:4173/m4-acceptance.html
+http://127.0.0.1:4173/main-flow-demo.html
 http://127.0.0.1:4173/billing.html
 http://127.0.0.1:4173/main-flow.html
 ```
@@ -78,12 +79,19 @@ All seeded accounts use password `correct-password`.
 
 | Account | Use |
 |---|---|
+| `pxflow_user` | Interactive main-flow demo from order creation to payment preview. |
 | `pxacc_admin` | ADMIN/HQ finance view for all billing tabs and checks. |
 | `pxacc_store` | Store-scoped billing and direct statement view. |
 | `pxacc_supplier_company` | Supplier-scoped company-term view. |
 | `pxacc_supplier_direct` | Supplier-scoped direct-term view. |
 
 More detail is in `docs/billing-acceptance-seed.md`.
+
+For the interactive main-flow demo, run:
+
+```bash
+npm run main-flow:seed-demo
+```
 
 ## Remaining Work
 

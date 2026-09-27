@@ -66,6 +66,33 @@ After a successful run, the runner also writes `apps/web/main-flow-run.json`. Op
 
 Latest local result: the runner passed and printed a complete flow with `PENDING_PROCUREMENT → CONFIRMED/PUSHED → SHIPPED → COMPLETED → store statement OPEN → supplier payable preview COMPANY_TO_SUPPLIER 90.00`.
 
+## Interactive Demo
+
+Run:
+
+```bash
+npm run build
+npm run main-flow:seed-demo
+npm run start:api
+npm run start:web
+```
+
+Open `http://127.0.0.1:4173/main-flow-demo.html`.
+
+The demo uses `PXFLOW` seed data and account `pxflow_user` / `correct-password`. It drives the existing APIs in order:
+
+```text
+login
+→ purchase request creation
+→ procurement confirmation
+→ supplier shipment
+→ store receipt
+→ supplier statement read
+→ supplier payment preview
+```
+
+This is a narrow operator workbench for manual visibility. The repeatable proof remains `npm run acceptance:main-flow` and `npm run acceptance:m4-browserless`.
+
 ## What This Means
 
 The backend main flow is broad and largely connected. The visible product flow is incomplete because the first half of the user journey has no Web/mini-program workbench yet:
@@ -84,7 +111,7 @@ The project has not abandoned the original demand, but the execution has become 
 
 The next visible-product priority is:
 
-The scripted runner and browser-readable result page are now in place. The next product-facing step is a real operator workbench that drives the APIs interactively instead of only showing the latest acceptance output.
+The scripted runner, browser-readable result page, and narrow operator demo are now in place. The next product-facing step is to expand this into role-specific store/purchaser/supplier screens after M4 browser acceptance is no longer blocked.
 
 ## Recommended Next Step
 

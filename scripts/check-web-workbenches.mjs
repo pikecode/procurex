@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, mainFlowDemoHtml, mainFlowDemoJs] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -41,6 +41,8 @@ const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, main
   readProjectFile('apps/web/main-flow.js'),
   readProjectFile('apps/web/m4-acceptance.html'),
   readProjectFile('apps/web/m4-acceptance.js'),
+  readProjectFile('apps/web/main-flow-demo.html'),
+  readProjectFile('apps/web/main-flow-demo.js'),
 ]);
 
 for (const path of [
@@ -52,6 +54,8 @@ for (const path of [
   'apps/web/main-flow.js',
   'apps/web/m4-acceptance.html',
   'apps/web/m4-acceptance.js',
+  'apps/web/main-flow-demo.html',
+  'apps/web/main-flow-demo.js',
 ]) {
   assertExists(path, 'web asset');
 }
@@ -60,6 +64,7 @@ checkSyntax('apps/web/billing.js');
 checkSyntax('apps/web/app.js');
 checkSyntax('apps/web/main-flow.js');
 checkSyntax('apps/web/m4-acceptance.js');
+checkSyntax('apps/web/main-flow-demo.js');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
 assertIncludes(billingHtml, '账单调整与差额', 'W10 adjustment page');
@@ -92,6 +97,7 @@ assertIncludes(packageJson.scripts['billing:seed-acceptance'], 'seed-billing-acc
 assertIncludes(packageJson.scripts['billing:check-acceptance'], 'check-billing-acceptance.mjs', 'billing acceptance check script');
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'billing:check-acceptance', 'M4 browserless acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'acceptance:main-flow', 'M4 browserless acceptance script');
+assertIncludes(packageJson.scripts['main-flow:seed-demo'], 'seed-main-flow-demo.mjs', 'main-flow demo seed script');
 
 assertIncludes(mainFlowHtml, '主流程验收', 'main-flow acceptance page');
 assertIncludes(mainFlowHtml, '/main-flow.js', 'main-flow acceptance script');
@@ -104,5 +110,11 @@ assertIncludes(m4Html, '/m4-acceptance.js', 'M4 acceptance script');
 assertIncludes(m4Js, 'billing-acceptance-run.json', 'M4 billing acceptance output');
 assertIncludes(m4Js, 'main-flow-run.json', 'M4 main-flow acceptance output');
 assertIncludes(m4Js, 'acceptance:m4-browserless', 'M4 acceptance command');
+
+assertIncludes(mainFlowDemoHtml, '主流程操作台', 'main-flow demo page');
+assertIncludes(mainFlowDemoHtml, '/main-flow-demo.js', 'main-flow demo script');
+assertIncludes(mainFlowDemoJs, 'main-flow-demo-seed.json', 'main-flow demo seed output');
+assertIncludes(mainFlowDemoJs, '/purchase-requests', 'main-flow demo purchase request call');
+assertIncludes(mainFlowDemoJs, '/shipments/', 'main-flow demo receipt call');
 
 console.log('Web workbench check passed.');

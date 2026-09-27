@@ -7,6 +7,7 @@
 - DEV-406/W10：`PXACC` 种子新增一正一负供应商改价调整，验收检查通过 B05 取回负调整信用项和正调整抵扣目标，再调用 B12 创建 OFFSET 并确认处置，形成可重复的浏览器外 W10 动作证据。
 - M4 验收：新增 `acceptance:m4-browserless` 聚合命令，串联构建、W09/W10 种子与 HTTP 检查、主流程验收 runner、Web workbench visibility check，作为浏览器 runtime 可用前的最高信号验收链。
 - M4 验收可视化：`billing:check-acceptance` 现在写出 `apps/web/billing-acceptance-run.json`，新增 `apps/web/m4-acceptance.html` 汇总 W09/S05/S08、W10 offset 和主流程 runner 的最新结果；静态 HTTP 检查已确认页面和两个 JSON 可访问。
+- 主流程可视化：新增 `main-flow:seed-demo` 和 `apps/web/main-flow-demo.html`，使用 `PXFLOW` 种子数据在浏览器中按步骤调用真实 API 完成登录、下单、采购确认、供应商发货、门店收货、供应商账单和付款预览。临时 API 验证同序列到达 `COMPLETED` 和 `COMPANY_TO_SUPPLIER 90.00`。
 - DEV-406/W10：账单工作台新增调整列表、处置状态筛选、原周期/实际周期对照和调整详情；B12 操作随后在同日接通。初始只读切片验证：构建、Web 脚本语法、本地 HTTP 冒烟、diff 检查通过。
 - DEV-406/B05/W10：B05 对可精确映射的单笔负向改价暴露 B12 信用项 ID 和处置版本；账单页支持公司财务登记线下返还、收款方确认。净额无法映射到单张负向调整单时不显示登记动作。验证：36 项单测、31 项集成测试、构建、契约检查、Web 脚本语法与 diff 检查通过。
 - DEV-406/W10：B05 同时为单笔正向改价返回可用于抵扣的结算项 ID；工作台允许公司财务选择同结算侧的正向调整作抵扣目标，B12 继续校验余额及主体。验证：构建、单测、集成测试、契约检查、Web 语法及 diff 检查通过。

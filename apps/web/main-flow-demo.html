@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProcureX · 主流程操作台</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <aside class="sidebar"><div class="brand"><span class="mark">P</span><span>ProcureX<small>采购协同平台</small></span></div><div class="nav-label">工作台</div><a class="nav-item" href="/m4-acceptance.html">M4 验收</a><a class="nav-item active" href="/main-flow-demo.html">主流程操作台</a><a class="nav-item" href="/main-flow.html">主流程验收</a><a class="nav-item" href="/billing.html">财务结算</a><a class="nav-item" href="/">报表与分析</a><div class="side-foot"><span class="pulse"></span>调用真实 API</div></aside>
+  <main class="main">
+    <header class="topbar"><div class="crumb">工作台 <span>/</span> 主流程操作台</div><div class="profile"><span id="identity">未登录</span><span class="avatar">P</span></div></header>
+    <section class="page-head"><div><div class="eyebrow">Order To Payment</div><h1>下单到付款预览</h1><p>使用 `main-flow:seed-demo` 生成的数据，按步骤驱动真实 API。</p></div><div class="updated"><span class="pulse"></span><span id="seed-status">等待种子数据</span></div></section>
+    <div id="notice" class="notice hidden"></div>
+    <section class="summary-grid" id="summary"></section>
+    <section class="data-card"><div class="data-head"><div><h3>执行步骤</h3><p>每个按钮会调用一次真实后端接口</p></div><button id="reset" class="secondary">重新加载种子</button></div><div class="table-wrap"><table><thead><tr><th>步骤</th><th>状态</th><th>结果</th><th></th></tr></thead><tbody id="steps"></tbody></table><div id="empty" class="empty hidden"><span>◌</span><strong>暂无种子数据</strong><small>先运行 npm run build && npm run main-flow:seed-demo</small></div></div></section>
+    <footer>操作台用于人工查看主流程；自动证明仍以 `acceptance:main-flow` 和 `acceptance:m4-browserless` 为准。</footer>
+  </main>
+  <script src="/main-flow-demo.js"></script>
+</body>
+</html>
