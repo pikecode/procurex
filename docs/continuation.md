@@ -45,9 +45,10 @@ This performs:
 1. TypeScript build.
 2. W09/W10 `PXACC` acceptance seeding.
 3. W09/S05/S08 and W10 HTTP acceptance checks.
-4. Main-flow acceptance runner.
-5. Interactive main-flow demo seeding and HTTP check.
-6. Web workbench visibility check.
+4. DEV-402/403/406 automatic gate-status check.
+5. Main-flow acceptance runner.
+6. Interactive main-flow demo seeding and HTTP check.
+7. Web workbench visibility check.
 
 Generated local files:
 
@@ -103,6 +104,12 @@ For the interactive main-flow demo, run:
 ```bash
 npm run main-flow:seed-demo
 npm run main-flow:check-demo
+```
+
+For the M4 gate status summary, run:
+
+```bash
+npm run m4:gate-status
 ```
 
 ## Remaining Work
