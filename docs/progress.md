@@ -152,6 +152,7 @@ W09 first usable web flow is now implemented in `apps/web/billing.html`: role-fi
 W09 detail now exposes each persisted positive adjustment settlement item and amount, so the payment picker can register adjustment payments alongside order lines. Statement services normalize adjustment amounts through Decimal for both database values and test/integration projections.
 
 I07 authorization now has HTTP evidence that a supplier linked to a payment can download its payment proof, while the route remains restricted to payment participants or authorized finance roles.
+The same acceptance now verifies an unrelated supplier receives 404 for that proof.
 
 The next execution order is therefore to close acceptance packages explicitly: **DEV-402 → DEV-403 → DEV-404 → DEV-405 → DEV-406**. For each package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure.
 

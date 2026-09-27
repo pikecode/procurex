@@ -23,6 +23,7 @@ test('private payment evidence uploads, completes and downloads only for its own
     prisma.role.upsert({ where: { code: 'SUPPLIER' }, update: {}, create: { code: 'SUPPLIER', name: 'Supplier' } }),
   ]);
   const supplier = await prisma.supplier.create({ data: { code: `ITFILE${suffix}`, name: 'Evidence supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } });
+  const otherSupplier = await prisma.supplier.create({ data: { code: `ITFILEOTHER${suffix}`, name: 'Other evidence supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } });
   const user = await prisma.user.create({ data: { username, displayName: username, passwordHash: await hashPassword('correct-password'), roles: { create: [{ roleId: role.id }] } } });
   const supplierUsername = `it_file_supplier_${suffix}`;
   const supplierUser = await prisma.user.create({ data: { username: supplierUsername, displayName: supplierUsername, passwordHash: await hashPassword('correct-password'), roles: { create: [{ roleId: supplierRole.id }] }, scopes: { create: { scopeType: 'SUPPLIER', supplierId: supplier.id } } } });
@@ -58,6 +59,13 @@ test('private payment evidence uploads, completes and downloads only for its own
     const supplierDownload = await fetch(`${url}/files/${session.id}/download`, { headers: { authorization: `Bearer ${supplierToken}` } });
     assert.equal(supplierDownload.status, 200);
     assert.deepEqual(Buffer.from(await supplierDownload.arrayBuffer()), bytes);
+    const otherSupplierUsername = `it_file_other_supplier_${suffix}`;
+    const otherSupplierUser = await prisma.user.create({ data: { username: otherSupplierUsername, displayName: otherSupplierUsername, passwordHash: await hashPassword('correct-password'), roles: { create: [{ roleId: supplierRole.id }] }, scopes: { create: { scopeType: 'SUPPLIER', supplierId: otherSupplier.id } } } });
+    const otherLogin = await fetch(`${url}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: otherSupplierUsername, password: 'correct-password', client: 'web' }) });
+    const otherToken = ((await otherLogin.json()) as { data: { accessToken: string } }).data.accessToken;
+    const deniedDownload = await fetch(`${url}/files/${session.id}/download`, { headers: { authorization: `Bearer ${otherToken}` } });
+    assert.equal(deniedDownload.status, 404);
+    await prisma.user.delete({ where: { id: otherSupplierUser.id } });
     await prisma.paymentRecord.delete({ where: { id: payment.id } });
   } finally {
     await app.close();
@@ -67,6 +75,7 @@ test('private payment evidence uploads, completes and downloads only for its own
     await prisma.user.delete({ where: { id: user.id } });
     await prisma.user.delete({ where: { id: supplierUser.id } });
     await prisma.supplier.delete({ where: { id: supplier.id } });
+    await prisma.supplier.delete({ where: { id: otherSupplier.id } });
     await prisma.$disconnect();
   }
 });
