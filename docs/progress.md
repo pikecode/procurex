@@ -46,13 +46,14 @@ Latest completed implementation: the four statement families, payment records, a
 
 Latest recovery evidence: an independent PostgreSQL backup/restore drill completed against the local database. Backup capture took 237ms and restore plus verification took 521ms. The restored database preserved 5 supplier orders, 4 payment records, 4 stores, and a READY PAYMENT FileObject; the restored private evidence file matched its source SHA-256. This is local AT-24 evidence; production backup policy and the RPO/RTO target remain DEV-603/M6 work.
 
-Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Full browser E2E remains open because this environment has no browser automation surface.
+Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Browser E2E remains open: no browser binary is installed; a temporary Playwright Chromium download transferred only 9 MB of 182 MB in about two minutes and was stopped.
 
 W10 workbench now provides adjustment filtering, original/actual period comparison, detail, B12 offline-return registration and receiver confirmation, plus offsets to a selected positive adjustment on the same settlement side. B05 exposes actionable source/target item IDs only when a price adjustment maps to one persisted document; ambiguous multi-run netting remains read-only. Browser E2E remains open. Verification baseline: 36 unit tests, 31 integration tests, build, contract check, Web syntax, HTTP smoke, and diff check pass.
 
 Latest commits:
 
 ```text
+25288bb Record W10 workbench review
 9023643 Clarify adjustment disposal states
 dd39150 Record W10 commits in progress ledger
 00e520a Connect W10 adjustment workbench to B12
@@ -539,7 +540,7 @@ Current price history behavior:
 
 ## Recommended Next Step
 
-W10 now covers adjustment reads, same-side positive adjustment offsets, offline returns, and receiver confirmation through B05/B12; the backend suites pass. Next follow the plan order: close the remaining DEV-402 and DEV-403 acceptance gates, including browser E2E when a browser runtime is available, then finish DEV-406 W10 end-to-end acceptance. M5 remains frozen until all M4 packages are closed.
+W10 now covers adjustment reads, same-side positive adjustment offsets, offline returns, and receiver confirmation through B05/B12; the backend suites pass. Next follow the plan order: close DEV-402 and DEV-403 browser acceptance, then finish DEV-406 W10 end-to-end acceptance once a browser runtime is available. M5 remains frozen until all M4 packages are closed.
 
 ## Where To Look
 
