@@ -54,9 +54,9 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 
 `npm run web:check` now provides a browserless visibility guard for W09/W10/W11. It verifies the billing page, adjustment section, payment/evidence controls, difference-disposal controls, report page, JavaScript syntax, and required web assets. It is not a replacement for browser E2E, but it prevents silent removal of the visible workbench entry points.
 
-`npm run acceptance:m5-browserless` now covers the M5 reporting/export slice. It builds the project, seeds isolated `PXRPT` data, verifies R01 scoped completed-order amount, R02 product quantity and three-month range rejection, R03 profit excluding direct supplier-term orders with freight separate, R04 export job READY plus CSV download, store-scope enforcement, supplier profit denial, and W11 Web visibility. The latest run passed and wrote `apps/web/reports-acceptance-run.json`.
+`npm run acceptance:m5-browserless` now covers the M5 reporting/export slice. It builds the project, seeds isolated `PXRPT` data, verifies R01 scoped completed-order amount, R02 product quantity and three-month range rejection, R03 profit excluding direct supplier-term orders with freight separate, R04 export job READY plus CSV download and task listing, store-scope enforcement, supplier profit denial, and W11 Web visibility. The latest run passed and wrote `apps/web/reports-acceptance-run.json`.
 
-`apps/web/index.html` now renders the latest M5 browserless result from `reports-acceptance-run.json` inside the W11 report page. `npm run m5:capture-browser-evidence` logs in as the store-scoped report account, loads the M5 acceptance summary, runs the R01 September 2026 query, and captures Chrome evidence under `var/m5-browser-evidence/`. The latest capture showed `PASSED`, 7 acceptance steps, 2 scoped orders, goods `156.00`, freight `8.00`, and total `164.00`.
+`apps/web/index.html` now renders the latest M5 browserless result from `reports-acceptance-run.json` inside the W11 report page. It also shows the latest export tasks with READY/FAILED/processing status and download actions backed by `GET /exports`. `npm run m5:capture-browser-evidence` logs in as the store-scoped report account, loads the M5 acceptance summary, runs the R01 September 2026 query, creates an export job, and captures Chrome evidence under `var/m5-browser-evidence/`. The latest capture showed `PASSED`, 7 acceptance steps, 2 scoped orders, goods `156.00`, freight `8.00`, total `164.00`, and 3 visible READY export rows.
 
 The main-flow acceptance runner now writes a browser-readable result to `apps/web/main-flow-run.json`, and `apps/web/main-flow.html` renders the latest order-to-payment handoff status. `npm run web:check` now guards this page as well, so the main flow is visible even before a full interactive order-entry workbench is built.
 
@@ -104,10 +104,12 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `387fca8 Add M5 browser evidence view`.
-Latest commit before this progress update: `387fca8 Add M5 browser evidence view`.
+Latest functional slice: `7fd6c4a Add R04 export task list`.
+Latest commit before this progress update: `7fd6c4a Add R04 export task list`.
 
 ```text
+7fd6c4a Add R04 export task list
+2449286 Refresh progress ledger after M5 browser evidence
 387fca8 Add M5 browser evidence view
 20f62b9 Refresh progress ledger after M5 acceptance chain
 15b66b3 Add M5 reports acceptance chain

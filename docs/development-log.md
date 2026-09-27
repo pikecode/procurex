@@ -31,6 +31,7 @@
 - M4 本地关闭：`acceptance:m4-close` 已通过，DEV-402/403/406 gate 状态更新为 Closed，`docs/m4-manual-acceptance.md` 已刷新为 6/6 手工证据完成；下一步可按计划恢复 M5 或后续里程碑。
 - M5 报表验收链：新增 `reports:seed-acceptance`、`reports:check-acceptance` 和 `acceptance:m5-browserless`，覆盖 R01 完成订单金额、R02 商品数量和三个月限制、R03 利润排除直接账期并单列运费、R04 导出 job READY 与 CSV 下载，以及门店范围/利润权限边界。
 - M5 可视化验收：W11 报表页现在展示最近一次 `reports-acceptance-run.json` 的 7 项验收结果；新增 `m5:capture-browser-evidence` 用本机 Chrome 登录 `pxrpt_store`，加载验收卡片并查询 2026-09 R01 门店范围数据，截图输出到 `var/m5-browser-evidence/`。验证：`acceptance:m5-browserless`、`web:check`、`m5:capture-browser-evidence`、`git diff --check` 通过。
+- M5/R04 导出任务可观测：新增 `GET /exports` 返回本人最近未过期且当前范围仍有权查看的导出任务；W11 报表页新增导出任务面板，展示 READY/FAILED/处理中状态和下载按钮；`reports:check-acceptance` 断言导出任务列表包含 READY job，Chrome 证据截图显示 3 条 READY 导出任务。验证：构建、37 项单测、`acceptance:m5-browserless`、`contract:check`、`web:check`、`m5:capture-browser-evidence`、`git diff --check` 通过。
 - DEV-406/W10：账单工作台新增调整列表、处置状态筛选、原周期/实际周期对照和调整详情；B12 操作随后在同日接通。初始只读切片验证：构建、Web 脚本语法、本地 HTTP 冒烟、diff 检查通过。
 - DEV-406/B05/W10：B05 对可精确映射的单笔负向改价暴露 B12 信用项 ID 和处置版本；账单页支持公司财务登记线下返还、收款方确认。净额无法映射到单张负向调整单时不显示登记动作。验证：36 项单测、31 项集成测试、构建、契约检查、Web 脚本语法与 diff 检查通过。
 - DEV-406/W10：B05 同时为单笔正向改价返回可用于抵扣的结算项 ID；工作台允许公司财务选择同结算侧的正向调整作抵扣目标，B12 继续校验余额及主体。验证：构建、单测、集成测试、契约检查、Web 语法及 diff 检查通过。
