@@ -186,6 +186,8 @@
 
 # 2026-09-27
 
+- Re-audited B07 against the API design: payment registration still lacks evidenceFileIds persistence/validation because I06/I07 file upload and private storage are not implemented. Recorded this as an explicit DEV-404 gate rather than accepting arbitrary file IDs.
+
 - Added direct-term positive adjustment payment acceptance: preview, register, and supplier-confirm a persisted +20.00 adjustment; B04 reaches SETTLED with original goods/freight snapshot unchanged.
 - Verification: `npm run build`, `npm test` (36), `npm run test:integration` (30), `npm run contract:check`, and `git diff --check` passed.
 

@@ -47,6 +47,7 @@ Latest completed implementation: the four statement families, payment records, a
 Latest commits:
 
 ```text
+427953d Refresh progress after adjustment payment acceptance
 9b24dce Verify direct adjustment payment lifecycle
 5cbc373 Verify B05 reads persisted price adjustment
 146a13b Verify settled price adjustments persist separately
@@ -142,7 +143,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | DEV-401 | **Closed**: P01-P03, AT-08, AT-09, and W06/S10 backend flow evidence are complete | None for the current backend scope |
 | DEV-402 | B01-B04, amount/period logic, AT-16 price guard, direct-term B04→B08 flow, AT-17 credit-limit guard, and AC-21 stored-value supplier payable verified | Finish remaining settlement-mode and W09/S05/S08 acceptance evidence |
 | DEV-403 | Statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, account scope, and cross-view shared-item reservation are tested | Remaining W09/S05/S08 flow evidence before closure |
-| DEV-404 | B06-B11 lifecycle, AT-13 concurrency, receiver authorization, direct-term B06-B08 with role checks, and company-term store-first HTTP gate verified; B12 is being completed | Finish remaining payment workflow acceptance evidence |
+| DEV-404 | B06-B11 payment lifecycle, AT-13 concurrency, receiver authorization, direct-term adjustment payment, and company-term store-first HTTP gate verified | Payment proof files require the I06/I07 upload flow; the repository has no file API/model or storage configuration yet |
 | DEV-405 | A04-A06, store scope, and W08 selected-only clearing/accounting flow verified | AT-24 requires a real backup and credential/file recovery drill with measured RPO/RTO |
 | DEV-406 | Persisted adjustments, netting, positive adjustment payment, offsets/returns, receiver scopes, and snapshot-versus-adjustment database reconciliation are covered | Finish remaining reconciliation consistency and settlement-side acceptance gates |
 
