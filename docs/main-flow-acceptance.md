@@ -93,9 +93,16 @@ login
 
 This is a narrow operator workbench for manual visibility. The repeatable proof remains `npm run acceptance:main-flow` and `npm run acceptance:m4-browserless`.
 
+The demo flow can also be verified without a browser:
+
+```bash
+npm run main-flow:seed-demo
+npm run main-flow:check-demo
+```
+
 ## What This Means
 
-The backend main flow is broad and largely connected. The visible product flow is incomplete because the first half of the user journey has no Web/mini-program workbench yet:
+The backend main flow is broad and largely connected. A narrow Web demo now exists, but the full role-specific product flow is still incomplete:
 
 - Store order entry.
 - Purchaser confirmation/splitting.
@@ -111,17 +118,8 @@ The project has not abandoned the original demand, but the execution has become 
 
 The next visible-product priority is:
 
-The scripted runner, browser-readable result page, and narrow operator demo are now in place. The next product-facing step is to expand this into role-specific store/purchaser/supplier screens after M4 browser acceptance is no longer blocked.
+The scripted runner, browser-readable result page, narrow operator demo, and demo checker are now in place. The next product-facing step is to expand this into role-specific store/purchaser/supplier screens after M4 browser acceptance is no longer blocked.
 
 ## Recommended Next Step
 
-Build a small Web "main flow demo" page under `apps/web` that covers:
-
-1. Login.
-2. Purchase request creation.
-3. Procurement confirmation.
-4. Supplier shipment.
-5. Store receipt.
-6. Statement/payment handoff link to `billing.html`.
-
-Keep it narrow and acceptance-focused. It does not need every production UI state, but it must prove the main path is visible and not only backend-tested.
+Keep M4 closure first: run real browser/manual acceptance for W09/S05/S08 and W10 when a browser runtime is available. After that, evolve `main-flow-demo.html` into role-specific store, purchaser, supplier, and receipt workbenches.

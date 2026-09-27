@@ -98,6 +98,8 @@ assertIncludes(packageJson.scripts['billing:check-acceptance'], 'check-billing-a
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'billing:check-acceptance', 'M4 browserless acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'acceptance:main-flow', 'M4 browserless acceptance script');
 assertIncludes(packageJson.scripts['main-flow:seed-demo'], 'seed-main-flow-demo.mjs', 'main-flow demo seed script');
+assertIncludes(packageJson.scripts['main-flow:check-demo'], 'check-main-flow-demo.mjs', 'main-flow demo check script');
+assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'main-flow:check-demo', 'M4 browserless acceptance script');
 
 assertIncludes(mainFlowHtml, '主流程验收', 'main-flow acceptance page');
 assertIncludes(mainFlowHtml, '/main-flow.js', 'main-flow acceptance script');

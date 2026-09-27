@@ -25,8 +25,9 @@
     "acceptance:main-flow": "node --env-file-if-exists=.env scripts/run-main-flow-acceptance.mjs",
     "billing:seed-acceptance": "node --env-file-if-exists=.env scripts/seed-billing-acceptance.mjs",
     "billing:check-acceptance": "node --env-file-if-exists=.env scripts/check-billing-acceptance.mjs",
-    "acceptance:m4-browserless": "npm run build && npm run billing:seed-acceptance && npm run billing:check-acceptance && npm run acceptance:main-flow && npm run web:check",
-    "main-flow:seed-demo": "node --env-file-if-exists=.env scripts/seed-main-flow-demo.mjs"
+    "acceptance:m4-browserless": "npm run build && npm run billing:seed-acceptance && npm run billing:check-acceptance && npm run main-flow:seed-demo && npm run main-flow:check-demo && npm run acceptance:main-flow && npm run web:check",
+    "main-flow:seed-demo": "node --env-file-if-exists=.env scripts/seed-main-flow-demo.mjs",
+    "main-flow:check-demo": "node --env-file-if-exists=.env scripts/check-main-flow-demo.mjs"
   },
   "dependencies": {
     "@nestjs/common": "12.1.0",

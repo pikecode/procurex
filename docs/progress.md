@@ -62,7 +62,7 @@ W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run bil
 
 `apps/web/m4-acceptance.html` now renders the generated `billing-acceptance-run.json` and `main-flow-run.json` together, so a reviewer can see the latest M4 browserless acceptance result from the Web workbench rather than reading terminal logs only.
 
-`apps/web/main-flow-demo.html` now provides a narrow interactive operator demo. `npm run main-flow:seed-demo` creates `PXFLOW` master data and a browser-readable seed file, then the page can call the real APIs through login, order creation, procurement confirmation, supplier shipment, store receipt, supplier statement, and payment preview. A temporary API verification ran the same sequence and reached `COMPANY_TO_SUPPLIER` payable preview for `90.00`.
+`apps/web/main-flow-demo.html` now provides a narrow interactive operator demo. `npm run main-flow:seed-demo` creates `PXFLOW` master data and a browser-readable seed file, then the page can call the real APIs through login, order creation, procurement confirmation, supplier shipment, store receipt, supplier statement, and payment preview. `npm run main-flow:check-demo` runs the same sequence through a temporary API and reaches `COMPANY_TO_SUPPLIER` payable preview for `90.00`.
 
 Latest commits:
 
