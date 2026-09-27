@@ -80,10 +80,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `e2a0fe4 Add M4 manual acceptance path`.
-Latest commit before this progress update: `e2a0fe4 Add M4 manual acceptance path`.
+Latest functional slice: `85ebf3e Generate M4 manual acceptance checklist`.
+Latest commit before this progress update: `85ebf3e Generate M4 manual acceptance checklist`.
 
 ```text
+85ebf3e Generate M4 manual acceptance checklist
 e2a0fe4 Add M4 manual acceptance path
 babc65a Share M4 gate definitions
 5705727 Add M4 gate status command
