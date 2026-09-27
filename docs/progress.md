@@ -78,10 +78,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `babc65a Share M4 gate definitions`.
-Latest commit before this progress update: `babc65a Share M4 gate definitions`.
+Latest functional slice: `e2a0fe4 Add M4 manual acceptance path`.
+Latest commit before this progress update: `e2a0fe4 Add M4 manual acceptance path`.
 
 ```text
+e2a0fe4 Add M4 manual acceptance path
 babc65a Share M4 gate definitions
 5705727 Add M4 gate status command
 a61c0db Add copyable M4 acceptance summary
