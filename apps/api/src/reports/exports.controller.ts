@@ -27,6 +27,12 @@ export class ExportsController {
     return this.reports.listExports(request.auth!.user.id, request.auth!.user.roles, request.auth!.user.scope);
   }
 
+  @Get('health')
+  @RequireRoles('ADMIN', 'HQ_FINANCE')
+  async health() {
+    return this.reports.exportHealth();
+  }
+
   @Get(':id')
   async status(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     const job = await this.reports.exportStatus(id, request.auth!.user.id, request.auth!.user.roles, request.auth!.user.scope);

@@ -178,7 +178,10 @@ assertIncludes(mainFlowDemoJs, '/shipments/', 'main-flow demo receipt call');
 assertIncludes(opsHtml, '运营与对账', 'W13 ops page');
 assertIncludes(opsHtml, '/ops.js', 'W13 ops script');
 assertIncludes(opsHtml, 'id="issues"', 'R05 issue table');
+assertIncludes(opsHtml, 'id="export-health-summary"', 'DEV-505 export health summary');
 assertIncludes(opsJs, '/reconciliation-issues', 'R05 reconciliation endpoint');
+assertIncludes(opsJs, '/exports/health', 'DEV-505 export health endpoint');
+assertIncludes(opsJs, '超时处理中', 'DEV-505 stale export health label');
 assertIncludes(opsJs, 'STORE_BALANCE_LEDGER_MISMATCH', 'R05 issue labels');
 
 console.log('Web workbench check passed.');

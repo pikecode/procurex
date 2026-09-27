@@ -5,8 +5,18 @@ import { DatabaseService } from '../database/database.service.js';
 
 export type ReportFilters = { from?: string; to?: string; storeId?: string; supplierId?: string; productId?: string };
 export type ReportType = 'order-amounts' | 'product-quantities' | 'profit';
+export type ExportHealthView = {
+  generatedAt: string;
+  leaseMinutes: number;
+  recentWindowHours: number;
+  totalJobsSampled: number;
+  byStatus: Array<{ status: string; count: number }>;
+  staleProcessing: Array<{ jobId: string; reportType: string; createdAt: string; ageMinutes: number; error: string | null }>;
+  recentFailures: Array<{ jobId: string; reportType: string; createdAt: string; error: string | null }>;
+};
 const currency = 'CNY';
 const exportProcessingLeaseMs = 10 * 60 * 1000;
+const exportHealthWindowMs = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class ReportsService implements OnModuleInit {
@@ -51,6 +61,35 @@ export class ReportsService implements OnModuleInit {
   async exportContent(id: string, userId: string, roles: string[], scope?: unknown) {
     const job = await this.database.client.exportJob.findFirst({ where: { id, requestedById: userId } });
     return !job || job.expiresAt <= new Date() || job.status !== 'READY' || !authorizedExport(job, roles, scope) ? null : job.csvContent;
+  }
+
+  async exportHealth(): Promise<ExportHealthView> {
+    const now = new Date();
+    const staleBefore = new Date(now.getTime() - exportProcessingLeaseMs);
+    const recentFailureCutoff = new Date(now.getTime() - exportHealthWindowMs);
+    const jobs = await this.database.client.exportJob.findMany({
+      where: { OR: [{ expiresAt: { gt: now } }, { status: 'FAILED', createdAt: { gte: recentFailureCutoff } }] },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    const counts = new Map<string, number>();
+    for (const job of jobs) counts.set(job.status, (counts.get(job.status) ?? 0) + 1);
+    const staleProcessing = jobs
+      .filter((job) => job.status === 'PROCESSING' && job.createdAt <= staleBefore && job.expiresAt > now)
+      .map((job) => ({ jobId: job.id, reportType: job.reportType, createdAt: job.createdAt.toISOString(), ageMinutes: Math.floor((now.getTime() - job.createdAt.getTime()) / 60000), error: job.errorMessage }));
+    const recentFailures = jobs
+      .filter((job) => job.status === 'FAILED' && job.createdAt >= recentFailureCutoff)
+      .slice(0, 10)
+      .map((job) => ({ jobId: job.id, reportType: job.reportType, createdAt: job.createdAt.toISOString(), error: job.errorMessage }));
+    return {
+      generatedAt: now.toISOString(),
+      leaseMinutes: Math.floor(exportProcessingLeaseMs / 60000),
+      recentWindowHours: Math.floor(exportHealthWindowMs / 3600000),
+      totalJobsSampled: jobs.length,
+      byStatus: ['QUEUED', 'PROCESSING', 'READY', 'FAILED'].map((status) => ({ status, count: counts.get(status) ?? 0 })),
+      staleProcessing,
+      recentFailures,
+    };
   }
 
   private async processQueuedExports() {

@@ -6,7 +6,7 @@ Last updated: 2026-09-27
 
 For new-window continuation, start with `docs/continuation.md`.
 
-M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export has resumed with a repeatable browserless acceptance chain and a browser-visible W11 acceptance summary.
+M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export has resumed with a repeatable browserless acceptance chain, browser-visible W11 acceptance summary, W13 operations view, and DEV-505 export recovery/health monitoring.
 
 Latest follow-up audit also closes two remaining store-scope reads: recharge detail accepts STORE_FINANCE and rejects another store, and store catalog reads reject unconfigured or mismatched STORE/STORE_FINANCE scopes.
 
@@ -54,13 +54,13 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 
 `npm run web:check` now provides a browserless visibility guard for W09/W10/W11. It verifies the billing page, adjustment section, payment/evidence controls, difference-disposal controls, report page, JavaScript syntax, and required web assets. It is not a replacement for browser E2E, but it prevents silent removal of the visible workbench entry points.
 
-`npm run acceptance:m5-browserless` now covers the M5 reporting/export/reconciliation slice. It builds the project, seeds isolated `PXRPT` data, verifies R01 scoped completed-order amount, R02 product quantity and three-month range rejection, R03 profit excluding direct supplier-term orders with freight separate, R04 export job READY plus CSV download and task listing, DEV-505 recovery of a stale `PROCESSING` export job, R05 account reconciliation mismatches, store-scope enforcement, supplier profit denial, and W11 Web visibility. The latest run passed and wrote `apps/web/reports-acceptance-run.json`.
+`npm run acceptance:m5-browserless` now covers the M5 reporting/export/reconciliation slice. It builds the project, seeds isolated `PXRPT` data, verifies R01 scoped completed-order amount, R02 product quantity and three-month range rejection, R03 profit excluding direct supplier-term orders with freight separate, R04 export job READY plus CSV download and task listing, DEV-505 export health detection plus recovery of a stale `PROCESSING` export job, R05 account reconciliation mismatches, store-scope enforcement, supplier profit denial, and W11 Web visibility. The latest run passed and wrote `apps/web/reports-acceptance-run.json`.
 
 `apps/web/index.html` now renders the latest M5 browserless result from `reports-acceptance-run.json` inside the W11 report page. It also shows the latest export tasks with READY/FAILED/processing status and download actions backed by `GET /exports`. `npm run m5:capture-browser-evidence` logs in as the store-scoped report account, loads the M5 acceptance summary, runs the R01 September 2026 query, creates an export job, and captures Chrome evidence under `var/m5-browser-evidence/`. The latest capture showed `PASSED`, 9 acceptance steps, 2 scoped orders, goods `156.00`, freight `8.00`, total `164.00`, one visible READY export row, DEV-505 stale export recovery, and R05 mismatch evidence for balance-ledger plus credit-used checks.
 
-R04 export reliability now has the first DEV-505 slice: the worker scans both fresh `QUEUED` jobs and `PROCESSING` jobs older than a 10-minute lease, reclaims them with an atomic status/age condition, clears stale error text on retry, and marks expired `PROCESSING` jobs as `FAILED`. This avoids a service crash or interrupted worker leaving an export permanently stuck while keeping the existing no-migration schema.
+R04 export reliability now has the first DEV-505 slices: the worker scans both fresh `QUEUED` jobs and `PROCESSING` jobs older than a 10-minute lease, reclaims them with an atomic status/age condition, clears stale error text on retry, and marks expired `PROCESSING` jobs as `FAILED`. `GET /exports/health` exposes admin/HQ-only status counts, stale processing jobs, and recent failures for W13. This avoids a service crash or interrupted worker leaving an export permanently stuck while keeping the existing no-migration schema.
 
-`apps/web/ops.html` now provides the W13 operations/reconciliation view. It logs in with an authorized company account and renders `GET /reconciliation-issues` as a read-only exception list. `npm run m5:capture-ops-evidence` captures Chrome evidence under `var/m5-browser-evidence/ops-reconciliation.png`; the latest local screenshot showed 5 current local issues, including the 2 seeded `PXRPT` R05 mismatches.
+`apps/web/ops.html` now provides the W13 operations/reconciliation view. It logs in with an authorized company account, renders `GET /exports/health` as a DEV-505导出任务健康卡片, and renders `GET /reconciliation-issues` as a read-only exception list. `npm run m5:capture-ops-evidence` captures Chrome evidence under `var/m5-browser-evidence/ops-reconciliation.png`; the latest local screenshot showed 5 current local reconciliation issues and 0 export health exception rows after the clean acceptance seed.
 
 The main-flow acceptance runner now writes a browser-readable result to `apps/web/main-flow-run.json`, and `apps/web/main-flow.html` renders the latest order-to-payment handoff status. `npm run web:check` now guards this page as well, so the main flow is visible even before a full interactive order-entry workbench is built.
 
@@ -108,10 +108,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice in this update: DEV-505 export recovery for stale R04 jobs.
-Latest commit before this progress update: `b636e45 Refresh progress ledger after W13 workbench`.
+Latest functional slice in this update: DEV-505 export health monitoring on W13.
+Latest commit before this progress update: `6f10226 Recover stale report exports`.
 
 ```text
+6f10226 Recover stale report exports
 b636e45 Refresh progress ledger after W13 workbench
 d4b76d5 Add W13 reconciliation workbench
 65b2d92 Refresh progress ledger after R05 reconciliation

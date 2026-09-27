@@ -143,12 +143,18 @@ async function run() {
         expiresAt: new Date(Date.now() + 60000),
       },
     });
+    const healthBeforeRecovery = await request(`${baseUrl}/exports/health`, { headers: authHeaders(adminToken) });
+    assert.ok(healthBeforeRecovery.staleProcessing.some((job) => job.jobId === staleExport.id));
+    const supplierExportHealth = await fetch(`${baseUrl}/exports/health`, { headers: authHeaders(supplierToken) });
+    assert.equal(supplierExportHealth.status, 403);
     await reports.processQueuedExports();
     const recovered = await pollExport(baseUrl, adminToken, staleExport.id);
     assert.equal(recovered.status, 'READY');
-    record('8. DEV-505 stale PROCESSING export recovers to READY', {
+    record('8. DEV-505 export health detects stale jobs before recovery', {
       jobId: staleExport.id,
+      staleBeforeRecovery: healthBeforeRecovery.staleProcessing.length,
       status: recovered.status,
+      supplierHealthStatus: supplierExportHealth.status,
     });
 
     const reconciliationIssues = await request(`${baseUrl}/reconciliation-issues`, { headers: authHeaders(adminToken) });

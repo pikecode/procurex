@@ -98,6 +98,26 @@ test('export expiration closes processing jobs', async () => {
   assert.equal(updateQuery.data.csvContent, null);
 });
 
+test('export health reports stale processing jobs and recent failures', async () => {
+  const now = Date.now();
+  const service = new ReportsService({ client: { exportJob: {
+    findMany: async (query: any) => {
+      assert.equal(query.take, 200);
+      assert.equal(query.where.OR[1].status, 'FAILED');
+      return [
+        { id: 'stale', status: 'PROCESSING', reportType: 'profit', createdAt: new Date(now - 11 * 60 * 1000), expiresAt: new Date(now + 60000), errorMessage: 'interrupted' },
+        { id: 'ready', status: 'READY', reportType: 'order-amounts', createdAt: new Date(now - 1000), expiresAt: new Date(now + 60000), errorMessage: null },
+        { id: 'failed', status: 'FAILED', reportType: 'product-quantities', createdAt: new Date(now - 2000), expiresAt: new Date(now + 60000), errorMessage: 'boom' },
+      ];
+    },
+  } } } as any);
+  const health = await service.exportHealth();
+  assert.equal(health.leaseMinutes, 10);
+  assert.equal(health.byStatus.find((row) => row.status === 'PROCESSING')?.count, 1);
+  assert.deepEqual(health.staleProcessing.map((job) => job.jobId), ['stale']);
+  assert.deepEqual(health.recentFailures.map((job) => job.jobId), ['failed']);
+});
+
 test('adjustment queries cannot cross a bound account scope', async () => {
   const controller = new AdjustmentsController({ list: async () => [] } as any);
   const request = { auth: { user: { scope: { type: 'STORE', storeId: '00000000-0000-4000-8000-000000000001' } } } } as any;

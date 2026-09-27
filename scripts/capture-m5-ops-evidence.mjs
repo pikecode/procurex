@@ -181,11 +181,15 @@ async function prepareOpsPage(cdp) {
       };
       await waitFor(() => !document.querySelector('#workspace')?.classList.contains('hidden'), 'workspace');
       await waitFor(() => document.querySelectorAll('#issues tr').length >= 2, 'reconciliation issues');
+      await waitFor(() => document.querySelector('#export-health-summary')?.textContent.includes('导出任务'), 'export health');
       return {
         issueRows: document.querySelectorAll('#issues tr').length,
+        exportHealthRows: document.querySelectorAll('#export-health-jobs tr').length,
         summaryText: document.querySelector('#summary').textContent.trim(),
+        exportHealthText: document.querySelector('#export-health-summary').textContent.trim(),
         hasBalanceIssue: document.querySelector('#issues').textContent.includes('账户余额与最新流水不一致'),
-        hasCreditIssue: document.querySelector('#issues').textContent.includes('挂账占用与资金占用不一致')
+        hasCreditIssue: document.querySelector('#issues').textContent.includes('挂账占用与资金占用不一致'),
+        hasExportHealth: document.querySelector('#export-health-summary').textContent.includes('超时处理中')
       };
     })()
   `);
@@ -210,6 +214,7 @@ try {
   console.log(`  Browser: ${browser}`);
   console.log(`  Screenshot: ${file}`);
   console.log(`  Issue rows: ${state.issueRows}`);
+  console.log(`  Export health rows: ${state.exportHealthRows}`);
   console.log(`  Manifest: ${resolve(outputDir, 'ops-manifest.json')}`);
 } finally {
   chrome.kill('SIGTERM');

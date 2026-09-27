@@ -7,6 +7,12 @@ const labels = {
   STORE_BALANCE_LEDGER_MISMATCH: '账户余额与最新流水不一致',
   STORE_CREDIT_USED_MISMATCH: '挂账占用与资金占用不一致',
 };
+const exportStatusLabels = {
+  QUEUED: '排队',
+  PROCESSING: '处理中',
+  READY: '已完成',
+  FAILED: '失败',
+};
 
 function metric(label, value, foot, emphasis = false) {
   return `<div class="metric ${emphasis ? 'emphasis' : ''}"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div><div class="metric-foot">${esc(foot)}</div></div>`;
@@ -31,7 +37,7 @@ async function loadMe() {
   try {
     const me = await call('/me');
     showSession(me.user || me);
-    await loadIssues();
+    await loadOperations();
   } catch {
     token = null;
     sessionStorage.removeItem('procurex-token');
@@ -39,8 +45,12 @@ async function loadMe() {
   }
 }
 
-async function loadIssues() {
+async function loadOperations() {
   $('notice').classList.add('hidden');
+  await Promise.all([loadIssues(), loadExportHealth()]);
+}
+
+async function loadIssues() {
   try {
     const issues = await call('/reconciliation-issues');
     const stores = new Set(issues.map((issue) => issue.storeId));
@@ -56,6 +66,26 @@ async function loadIssues() {
   }
 }
 
+async function loadExportHealth() {
+  try {
+    const health = await call('/exports/health');
+    const statusText = health.byStatus.map((row) => `${exportStatusLabels[row.status] || row.status} ${row.count}`).join(' / ');
+    const watchedJobs = [
+      ...health.staleProcessing.map((job) => ({ kind: '超时处理中', tag: 'tag-fail', ...job, note: `超过 ${health.leaseMinutes} 分钟未完成，当前 ${job.ageMinutes} 分钟` })),
+      ...health.recentFailures.map((job) => ({ kind: '近24小时失败', tag: 'tag-pending', ...job, note: job.error || '导出生成失败' })),
+    ];
+    $('export-health-summary').innerHTML =
+      metric('导出任务', health.totalJobsSampled, statusText || '最近任务样本') +
+      metric('超时处理中', health.staleProcessing.length, `租约 ${health.leaseMinutes} 分钟`, health.staleProcessing.length > 0) +
+      metric('近24小时失败', health.recentFailures.length, '失败任务需要复核', health.recentFailures.length > 0);
+    $('export-health-empty').classList.toggle('hidden', watchedJobs.length > 0);
+    $('export-health-jobs').innerHTML = watchedJobs.map((job) => `<tr><td><span class="tag ${job.tag}">${esc(job.kind)}</span></td><td><strong>${esc(job.jobId.slice(0, 8))}</strong><br><small>${esc(job.jobId)}</small></td><td>${esc(job.reportType)}</td><td>${esc(new Date(job.createdAt).toLocaleString('zh-CN'))}</td><td>${esc(job.note)}</td></tr>`).join('');
+  } catch (error) {
+    $('notice').textContent = error.message;
+    $('notice').classList.remove('hidden');
+  }
+}
+
 $('login-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   $('login-error').textContent = '';
@@ -65,12 +95,13 @@ $('login-form').addEventListener('submit', async (event) => {
     token = result.accessToken;
     sessionStorage.setItem('procurex-token', token);
     showSession(result.user);
-    await loadIssues();
+    await loadOperations();
   } catch (error) {
     $('login-error').textContent = error.message;
   }
 });
 $('logout').addEventListener('click', async () => { try { await call('/auth/logout', { method: 'POST' }); } catch {} token = null; sessionStorage.removeItem('procurex-token'); showSession(); });
-$('refresh').addEventListener('click', loadIssues);
+$('refresh').addEventListener('click', loadOperations);
+$('refresh-issues').addEventListener('click', loadOperations);
 showSession();
 loadMe();
