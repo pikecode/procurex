@@ -339,3 +339,6 @@
 
 - Added DEV-406 AT-14 integration coverage: a negative adjustment without a follow-up order can be recorded as an `OFFLINE_RETURN` with no target debit and confirmed by the supplier receiver role.
 - Verification: `npm run build` and `npm run test:integration` (28) passed.
+
+- Hardened DEV-406 settlement-item locking: payment registration and difference offset creation now use PostgreSQL blocking transaction advisory locks instead of a JavaScript retry loop, keeping the same sorted lock order while reducing transaction polling.
+- Verification: `npm run acceptance:m4-browserless`, `npm run acceptance:m5-browserless`, `npm run contract:check`, `npm run web:check`, and `git diff --check` passed.

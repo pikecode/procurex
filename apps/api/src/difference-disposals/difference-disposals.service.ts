@@ -359,11 +359,7 @@ export class DifferenceDisposalsService {
 }
 
 async function waitForSettlementLock(tx: Prisma.TransactionClient, id: string): Promise<void> {
-  for (;;) {
-    const rows = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(hashtextextended(${id}::text, 0)) AS locked`;
-    if (rows[0]?.locked) return;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id}::text, 0))`;
 }
 
 function toDifferenceDisposalView(disposal: DifferenceDisposal & { items: DifferenceDisposalItem[] }): DifferenceDisposalView {

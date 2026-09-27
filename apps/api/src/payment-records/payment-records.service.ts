@@ -496,7 +496,7 @@ export class PaymentRecordsService {
         }),
         skipDuplicates: true,
       });
-      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
+      return await tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
     });
 
     return toPaymentRecordView(confirmed);
@@ -540,7 +540,7 @@ export class PaymentRecordsService {
       });
       if (changed.count !== 1) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Payment record has already changed' });
       await tx.paymentAllocation.updateMany({ where: { paymentId: id, state: PaymentAllocationState.RESERVED }, data: { state: PaymentAllocationState.RELEASED } });
-      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
+      return await tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
     });
 
     return toPaymentRecordView(rejected);
@@ -584,7 +584,7 @@ export class PaymentRecordsService {
       });
       if (changed.count !== 1) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Payment record has already changed' });
       await tx.paymentAllocation.updateMany({ where: { paymentId: id, state: PaymentAllocationState.RESERVED }, data: { state: PaymentAllocationState.RELEASED } });
-      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
+      return await tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
     });
 
     return toPaymentRecordView(cancelled);
@@ -596,11 +596,7 @@ function isStoreScope(type?: string): boolean {
 }
 
 async function waitForSettlementLock(tx: Prisma.TransactionClient, id: string): Promise<void> {
-  for (;;) {
-    const rows = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(hashtextextended(${id}::text, 0)) AS locked`;
-    if (rows[0]?.locked) return;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id}::text, 0))`;
 }
 
 function toPreviewItem(
