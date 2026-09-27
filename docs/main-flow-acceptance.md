@@ -39,6 +39,31 @@ This flow is mostly implemented in the backend and covered by integration tests.
 | 12. Receiver confirmation | B08, DEV-404 | payment confirmation | Receiver authorization and direct/company gates covered | W09/S05/S08 in `apps/web/billing.html` | Browser E2E still blocked |
 | 13. Adjustments and difference disposal | B05/B12, DEV-406 | adjustment reads, offline return, offset, receiver confirmation | B05 to B12 HTTP/database flow covered | W10 section in `apps/web/billing.html` | Browser E2E still blocked |
 
+## Scripted Acceptance Runner
+
+Run this after building:
+
+```bash
+npm run build
+npm run acceptance:main-flow
+```
+
+The runner starts a temporary local API instance, creates isolated test master data, and executes:
+
+```text
+purchase request creation
+→ procurement confirmation
+→ supplier shipment
+→ store receipt
+→ store statement read
+→ supplier statement read
+→ supplier payment preview
+```
+
+It prints the created IDs, statuses, and amounts for each step, then cleans up the seeded data. This is not a browser replacement, but it is the fastest repeatable proof that the main backend path reaches the billing/payment handoff.
+
+Latest local result: the runner passed and printed a complete flow with `PENDING_PROCUREMENT → CONFIRMED/PUSHED → SHIPPED → COMPLETED → store statement OPEN → supplier payable preview COMPANY_TO_SUPPLIER 90.00`.
+
 ## What This Means
 
 The backend main flow is broad and largely connected. The visible product flow is incomplete because the first half of the user journey has no Web/mini-program workbench yet:

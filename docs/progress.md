@@ -553,6 +553,8 @@ For the exact remaining M4 exit gates, use `docs/m4-exit-checklist.md`. M4 remai
 
 The ordering-to-payment main flow is tracked in `docs/main-flow-acceptance.md`. Current assessment: backend APIs and integration tests cover the main path, but the visible product flow starts mostly at billing/payment. The next execution step should create a narrow visible main-flow demo or scripted acceptance runner before adding more detailed settlement work.
 
+`npm run acceptance:main-flow` now provides that scripted runner. It starts a temporary API instance, seeds isolated data, runs purchase request creation, procurement confirmation, supplier shipment, store receipt, statement reads, and supplier payment preview, then cleans up. Latest local run passed and printed the expected 120.00 store statement and 90.00 supplier payable preview.
+
 ## Where To Look
 
 - Visible acceptance map: `docs/acceptance-dashboard.md`

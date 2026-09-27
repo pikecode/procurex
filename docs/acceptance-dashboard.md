@@ -42,7 +42,7 @@ Open these pages:
 | W09/S05/S08 billing | `apps/web/billing.html` | Four statement families, statement detail, payment preview, payment registration with evidence upload, receiver confirmation, payment list, evidence download. | Implemented; HTTP/static smoke passed; browser E2E blocked by missing browser runtime. |
 | W10 adjustments | `apps/web/billing.html` adjustment views | Adjustment filtering, original vs actual period comparison, detail, B12 offline return, receiver confirmation, offset to positive adjustment. | Implemented; HTTP/database B05 to B12 flow passed; browser E2E blocked by missing browser runtime. |
 | W11 reporting | `apps/web/index.html` | R01-R03 reports, filters, summaries, CSV/export flow. | Implemented early; frozen until M4 acceptance closes. |
-| Main order flow | Not yet implemented | Store order, procurement confirmation, supplier shipment, store receipt, discrepancy handling. | Backend APIs and integration tests exist; visible Web/mini-program flow is missing. |
+| Main order flow | `npm run acceptance:main-flow` | Store order, procurement confirmation, supplier shipment, store receipt, statement read, supplier payment preview. | Scripted backend acceptance runner passes; visible Web/mini-program flow is still missing. |
 
 ## Requirement-To-Evidence Map
 

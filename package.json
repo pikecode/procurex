@@ -21,7 +21,8 @@
     "test": "node --test dist/tests/unit/*.test.js",
     "test:integration": "node --env-file-if-exists=.env --test --test-concurrency=1 dist/tests/integration/*.test.js",
     "contract:check": "node scripts/check-contract.mjs",
-    "web:check": "node scripts/check-web-workbenches.mjs"
+    "web:check": "node scripts/check-web-workbenches.mjs",
+    "acceptance:main-flow": "node --env-file-if-exists=.env scripts/run-main-flow-acceptance.mjs"
   },
   "dependencies": {
     "@nestjs/common": "12.1.0",
