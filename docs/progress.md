@@ -46,6 +46,8 @@ Latest completed implementation: the four statement families, payment records, a
 
 Latest recovery evidence: an independent PostgreSQL backup/restore drill completed against the local database. Backup capture took 237ms and restore plus verification took 521ms. The restored database preserved 5 supplier orders, 4 payment records, 4 stores, and a READY PAYMENT FileObject; the restored private evidence file matched its source SHA-256. This is local AT-24 evidence; production backup policy and the RPO/RTO target remain DEV-603/M6 work.
 
+Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Full browser E2E remains open because this environment has no browser automation surface.
+
 Latest commits:
 
 ```text

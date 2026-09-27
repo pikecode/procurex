@@ -9,6 +9,7 @@
 - I07 越权回归：无关供应商访问其他供应商关联付款凭证返回 404；全量验证保持 36 项单测、31 项集成测试通过。
 - DEV-404 I06/I07 私有目录首段：增加上传会话、受限二进制上传、文件头与 SHA-256 校验、上传者下载、B07 PAYMENT 凭证关联、数据库迁移及 HTTP 往返验收。构建及专用集成测试通过。凭证字段暂时可选；付款相对方下载授权仍待补齐。
 - DEV-405/AT-24：在独立 PostgreSQL 数据库完成真实备份恢复演练，核验 5 个执行单、4 个付款记录、4 个门店及 READY PAYMENT FileObject；私有凭证文件恢复后 SHA-256 一致。备份捕获耗时 237ms，恢复及核验耗时 521ms。该结果作为本地 AT-24 证据，生产备份策略和 RPO/RTO 目标保留到 DEV-603/M6；DEV-405 按 A04-A06 完成条件关闭。
+- W09/S05/S08：完成账单工作台静态冒烟，API 健康检查和 `billing.html` HTTP 加载通过，`billing.js` 语法检查通过；全量后端验证为 36 项单测、31 项集成测试、构建、契约检查和 diff 检查通过。完整浏览器 E2E 仍待具备浏览器自动化环境后执行，未将静态冒烟计为完整页面验收。
 
 - Continued M4 scope audit: `STORE_FINANCE` now has the documented store-side B12 read/confirm permission, and its bound store is enforced across payment, adjustment, difference-disposal, and clearing reads/mutations. Verification: build, 35 unit tests, 28 integration tests, contract check, and diff check passed.
 - Hardened W08 account reads: `GET /stores/{id}/account` and `GET /stores/{id}/ledgers` now include STORE_FINANCE and enforce the authenticated bound store. Added controller regression coverage. Verification: build, 35 unit tests, 28 integration tests, contract check, and diff check passed.
