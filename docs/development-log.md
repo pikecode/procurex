@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Extended direct-term payment HTTP acceptance with role boundaries: supplier cannot initiate preview and store cannot confirm its own payment; authorized supplier confirmation still succeeds.
+- Verification: `npm run build`, `npm test` (35), `npm run test:integration` (29), `npm run contract:check`, and `git diff --check` passed.
+
 - Added DEV-402 AT-17 HTTP regression: a credit limit below currently used credit is rejected and neither persisted limit nor used credit changes.
 - Verification: `npm run build`, `npm test` (35), `npm run test:integration` (29), `npm run contract:check`, and `git diff --check` passed.
 

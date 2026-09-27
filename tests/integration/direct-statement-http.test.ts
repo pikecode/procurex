@@ -77,6 +77,10 @@ test('direct supplier-term statement pays and confirms goods plus freight over H
     assert.equal(paymentResponse.status, 201);
     const payment = (await paymentResponse.json()) as { data: { id: string; amount: string; status: string; version: number } };
     assert.deepEqual([payment.data.amount, payment.data.status], ['138.50', 'PENDING']);
+    const supplierPreviewDenied = await fetch(`${url}/payment-records/preview`, { method: 'POST', headers: { authorization: `Bearer ${supplierToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ settlementItemIds: [line.settlementItemId] }) });
+    assert.equal(supplierPreviewDenied.status, 403);
+    const storeConfirmDenied = await fetch(`${url}/payment-records/${payment.data.id}/confirm`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json', 'idempotency-key': `direct-store-confirm-denied-${suffix}` }, body: JSON.stringify({ expectedVersion: payment.data.version }) });
+    assert.equal(storeConfirmDenied.status, 403);
     const replayResponse = await create();
     assert.equal(replayResponse.status, 201);
     assert.equal(((await replayResponse.json()) as { data: { id: string } }).data.id, payment.data.id);
