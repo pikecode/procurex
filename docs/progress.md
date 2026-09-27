@@ -140,14 +140,14 @@ DEV-403 progress: fixed `IMMEDIATE` statement grouping in store, supplier-total,
 
 The delivery order is M0 → M1 → M2 → M3 → M4 → M5 → M6. Actual work did not follow it cleanly: R01-R04 and W11 from M5 were implemented before M4 was closed. M5 is now frozen, but those early features do not count toward closing M4.
 
-Recent work has advanced B12 materially (credit sources, target balance, locking, positive adjustment payment, and now adjustment-to-adjustment offset). The apparent stall comes from tracking only whole-package closure: all six M4 packages remain partial, so repeated B12 slices never change the headline. There was also genuine over-focus on DEV-406; several successive commits refined the same settlement area while the ordered DEV-401–405 completion gates were not explicitly closed. This is a tracking and prioritization failure, not evidence that the implementation made no progress.
+Progress is tracked by M4 package gates rather than an unweighted percentage. DEV-401, DEV-404, and DEV-405 are closed; DEV-402, DEV-403, and DEV-406 remain partial. The current order returns to DEV-402 and DEV-403 before the remaining adjustment reconciliation work.
 
 | Package | Current assessment against plan | Closure evidence still needed |
 |---|---|---|
 | DEV-401 | **Closed**: P01-P03, AT-08, AT-09, and W06/S10 backend flow evidence are complete | None for the current backend scope |
-| DEV-402 | B01-B04, amount/period logic, AT-16 price guard, direct-term B04→B08 flow, AT-17 credit-limit guard, and AC-21 stored-value supplier payable verified | Finish remaining settlement-mode and W09/S05/S08 acceptance evidence |
-| DEV-403 | Statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, account scope, and cross-view shared-item reservation are tested | Remaining W09/S05/S08 flow evidence before closure |
-| DEV-404 | B06-B11 payment lifecycle, AT-13 concurrency, receiver authorization, direct-term adjustment payment, company-term store-first HTTP gate, mandatory I06/I07 PAYMENT evidence, participant download scope, and expired-upload cleanup verified | None for listed DEV-404 package; production storage/backup operations remain M6 |
+| DEV-402 | B01-B04, amount/period logic, AT-16 price guard, direct-term B04→B08 flow, AT-17 credit-limit guard, and AC-21 stored-value supplier payable verified | Close remaining W09/S05/S08 acceptance for the settlement modes |
+| DEV-403 | Statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, account scope, and cross-view shared-item reservation are tested | Complete browser-level W09/S05/S08 acceptance |
+| DEV-404 | **Closed**: B06-B11 payment lifecycle, AT-13 concurrency, receiver authorization, direct-term adjustment payment, company-term store-first HTTP gate, mandatory I06/I07 PAYMENT evidence, participant download scope, expired-upload cleanup, and local DB/private-file restore evidence verified | Production storage/backup operations remain M6 |
 | DEV-405 | **Closed**: A04-A06, store scope, and W08 selected-only clearing/accounting flow verified | None for the current M4 package; production backup policy remains DEV-603/M6 |
 | DEV-406 | Persisted adjustments, netting, positive adjustment payment, offsets/returns, receiver scopes, and snapshot-versus-adjustment database reconciliation are covered | Finish remaining reconciliation consistency and settlement-side acceptance gates |
 
@@ -158,7 +158,7 @@ W09 detail now exposes each persisted positive adjustment settlement item and am
 I07 authorization now has HTTP evidence that a supplier linked to a payment can download its payment proof, while the route remains restricted to payment participants or authorized finance roles.
 The same acceptance now verifies an unrelated supplier receives 404 for that proof.
 
-The next execution order is therefore to close acceptance packages explicitly: **DEV-402 → DEV-403 → DEV-404 → DEV-406**. DEV-405 is closed against its plan conditions; its local recovery evidence is recorded, while production backup policy remains in DEV-603/M6. For each remaining package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure.
+The next execution order is therefore to close acceptance packages explicitly: **DEV-402 → DEV-403 → DEV-406**. DEV-404 and DEV-405 are closed against their M4 package conditions; local recovery evidence is recorded, while production backup policy remains in DEV-603/M6. For each remaining package, list its plan conditions, run the smallest missing integration evidence, implement only the failing/missing condition, and update its status only when all conditions pass. Revisit M5 after M4 closure.
 
 DEV-406 continues after the scope hardening commit. Payment previews now subtract both PENDING and CONFIRMED difference offsets from payable availability, preventing a second payment reservation while an offset awaits confirmation. Payment and offset creation now use the same PostgreSQL transaction advisory locks for settlement item IDs; credit return IDs are locked before duplicate disposal checks. Payment list/detail, preview, registration, confirmation, rejection, and cancellation now apply the authenticated store or supplier scope. Payment and disposal state transitions now use conditional version/status updates so only one concurrent request can complete a transition. B01-B04 statement summaries now aggregate RESERVED and CONFIRMED payment allocations into paid, pending, and payable amounts. Receiver scope and AT-14 offline return are now covered; M4 remains incomplete pending reconciliation consistency and the remaining package gates.
 
@@ -166,7 +166,7 @@ DEV-405 clearing creation now conditionally updates each funding allocation by v
 
 ## Progress Metrics
 
-The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status currently is **2 closed, 4 partial, 0 not started**. This whole-package count is a gate status, not a sensitive progress metric; use the closure-evidence column in the plan alignment review to show movement between commits. Do not publish an overall percentage until the plan has an itemized denominator for all milestones.
+The earlier 70%–75% backend and 40%–45% release figures were estimates without a repeatable acceptance-item denominator, so they are retired. Trackable M4 status currently is **3 closed, 3 partial, 0 not started**. This whole-package count is a gate status, not a sensitive progress metric; use the closure-evidence column in the plan alignment review to show movement between commits. Do not publish an overall percentage until the plan has an itemized denominator for all milestones.
 
 ## Verification Baseline
 
