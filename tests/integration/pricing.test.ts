@@ -6,6 +6,7 @@ import { DeliveryMode, FulfillmentStatus, PurchaseRequestStatus, SettlementMode,
 import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
 import { PricingService } from '../../apps/api/src/pricing/pricing.service.js';
 import { PaymentRecordsService } from '../../apps/api/src/payment-records/payment-records.service.js';
+import { AdjustmentsService } from '../../apps/api/src/adjustments/adjustments.service.js';
 import { SupplierStatementsService } from '../../apps/api/src/supplier-statements/supplier-statements.service.js';
 
 const connectionString =
@@ -170,6 +171,12 @@ test('pricing service returns latest version effective at business time', async 
     assert.equal(statementLine?.priceAdjustments[0]?.supplyDelta, '10.00');
     assert.equal(statementDetail.adjustmentAmount, '10.00');
     assert.equal(statementDetail.payableAmount, '98.00');
+    const persistedB05 = await new AdjustmentsService({ client: prisma } as never).list({ storeId: store.id, supplierId: supplier.id });
+    const supplierAdjustment = persistedB05.find((item) => item.sourcePriceChangeId === succeededOrder?.adjustment?.id && item.direction === 'SUPPLIER_PAYABLE_INCREASE');
+    assert.ok(supplierAdjustment);
+    assert.equal(supplierAdjustment.adjustmentAmount, '10.00');
+    assert.equal(supplierAdjustment.processingStatus, 'PENDING_DISPOSAL');
+    assert.equal(supplierAdjustment.pendingReturnOrOffsetAmount, '0.00');
     const adjustments = await service.listAdjustments(latest.runId!);
     assert.equal(adjustments.length, 1);
     assert.equal(adjustments[0]?.salesDelta, '20');

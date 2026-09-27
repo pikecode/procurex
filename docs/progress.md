@@ -38,13 +38,14 @@ DEV-404 company-term ordering now has HTTP acceptance: the supplier payable is b
 
 DEV-405 W08 clearing now has stronger HTTP/database evidence: clearing one selected 200 credit leaves an unselected 50 credit outstanding, preserves the 240 cumulative net-paid amount and 320.50 cash balance, and records a 200 debit clearing ledger row.
 
-DEV-406 now has a database integration proving a price run after a supplier payable snapshot keeps the original 80.00 line base, persists a supplier-side 10.00 adjustment document, and reports the adjustment separately without rewriting the snapshot.
+DEV-406 now has a database integration proving a price run after a supplier payable snapshot keeps the original 80.00 line base, persists a supplier-side 10.00 adjustment document, exposes it through B05 as pending disposal, and reports the adjustment separately without rewriting the snapshot.
 
 Latest completed implementation: the four statement families, payment records, adjustments, difference disposals, and clearing details now enforce authenticated store scope for both STORE and STORE_FINANCE accounts; cross-scope IDs resolve as not found, while company roles retain broad access. B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
 Latest commits:
 
 ```text
+Pending this commit: verify B05 reads persisted settled-side adjustment
 146a13b Verify settled price adjustments persist separately
 c0ad0de Refresh progress after clearing acceptance
 16790b9 Verify clearing affects selected credit only

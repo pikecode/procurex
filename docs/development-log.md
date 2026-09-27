@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Extended the settled-side price adjustment integration through B05: reads the persisted supplier adjustment document as a pending +10.00 payable adjustment while the original snapshot remains frozen.
+- Verification: `npm run build`, `npm test` (36), `npm run test:integration` (30), `npm run contract:check`, and `git diff --check` passed.
+
 - Added DEV-406 database integration for repricing after supplier-side settlement: keeps the 80.00 snapshot, creates a persisted +10.00 supplier adjustment document, and exposes 90.00 payable components without changing the frozen statement base.
 - Verification: `npm run build`, `npm test` (36), `npm run test:integration` (30), `npm run contract:check`, and `git diff --check` passed.
 
