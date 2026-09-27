@@ -92,10 +92,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `c5f925f Add M4 browser evidence capture`.
-Latest commit before this progress update: `c5f925f Add M4 browser evidence capture`.
+Latest functional slice: `cfb5762 Add local database preflight check`.
+Latest commit before this progress update: `cfb5762 Add local database preflight check`.
 
 ```text
+cfb5762 Add local database preflight check
 c5f925f Add M4 browser evidence capture
 913d4e5 Add M4 manual acceptance launcher
 5b3db41 Add M4 manual acceptance preflight
