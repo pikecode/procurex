@@ -41,3 +41,5 @@ All accounts use password `correct-password`.
 The script is repeatable. It deletes prior `PXACC` seed data before inserting the current acceptance dataset.
 
 `npm run billing:check-acceptance` starts a temporary local API and verifies the seeded W09/S05/S08 evidence through real HTTP requests. It also creates and confirms one W10 offset disposal from the negative supplier adjustment to the positive supplier adjustment.
+
+After `npm run acceptance:m4-browserless`, open `apps/web/m4-acceptance.html` through the static web server to review the latest M4 and main-flow acceptance output in one place.

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProcureX · M4 验收</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <aside class="sidebar"><div class="brand"><span class="mark">P</span><span>ProcureX<small>采购协同平台</small></span></div><div class="nav-label">工作台</div><a class="nav-item active" href="/m4-acceptance.html">M4 验收</a><a class="nav-item" href="/main-flow.html">主流程验收</a><a class="nav-item" href="/billing.html">财务结算</a><a class="nav-item" href="/">报表与分析</a><div class="side-foot"><span class="pulse"></span>来自 acceptance:m4-browserless</div></aside>
+  <main class="main">
+    <header class="topbar"><div class="crumb">工作台 <span>/</span> M4 验收</div><div class="profile"><span id="status-label">等待结果</span><span class="avatar">P</span></div></header>
+    <section class="page-head"><div><div class="eyebrow">M4 · Browserless Acceptance</div><h1>结算与主流程验收</h1><p>展示最近一次 `npm run acceptance:m4-browserless` 的结果。</p></div><div class="updated"><span class="pulse"></span><span id="generated">尚未生成</span></div></section>
+    <div id="notice" class="notice hidden"></div>
+    <section class="summary-grid" id="summary"></section>
+    <section class="data-card"><div class="data-head"><div><h3>验收明细</h3><p>W09/S05/S08、W10 与主流程 runner 的关键事实</p></div><button id="refresh" class="secondary">刷新</button></div><div class="table-wrap"><table><thead><tr><th>验收项</th><th>关键状态</th><th>金额 / 结果</th><th>说明</th></tr></thead><tbody id="steps"></tbody></table><div id="empty" class="empty hidden"><span>◌</span><strong>暂无验收结果</strong><small>先运行 npm run acceptance:m4-browserless</small></div></div></section>
+    <footer>M4 仍需真实浏览器截图/录屏后才能最终关闭；此页记录当前最高信号的浏览器外证据。</footer>
+  </main>
+  <script src="/m4-acceptance.js"></script>
+</body>
+</html>

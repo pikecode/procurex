@@ -1,5 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AppModule } from '../dist/apps/api/src/app.module.js';
@@ -10,6 +12,16 @@ import { PrismaClient } from '../dist/packages/backend/generated/prisma/client.j
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public';
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+const result = {
+  generatedAt: new Date().toISOString(),
+  title: 'M4 Billing Acceptance',
+  summary: 'W09/S05/S08 billing and W10 adjustment offset',
+  steps: [],
+};
+
+function record(title, data) {
+  result.steps.push({ title, data });
+}
 
 async function createAcceptanceApp() {
   const app = await NestFactory.create(AppModule, { logger: false });
@@ -84,12 +96,23 @@ async function run() {
       [storedSupplierStore[0].totalAmount, storedSupplierStore[0].pendingPaymentAmount, storedSupplierStore[0].payableAmount],
       ['154.00', '69.00', '91.00'],
     );
+    record('1. Stored-value supplier total and supplier-store share pending reservation', {
+      supplierTotalAmount: storedSupplier[0].totalAmount,
+      supplierStoreTotalAmount: storedSupplierStore[0].totalAmount,
+      pendingPaymentAmount: storedSupplier[0].pendingPaymentAmount,
+      payableAmount: storedSupplier[0].payableAmount,
+    });
 
     const creditStore = await request(`${baseUrl}/store-statements?storeId=${ids.store.id}&supplierId=${ids.credit.id}`, {
       headers: authHeaders(token),
     });
     assert.equal(creditStore.length, 1);
     assert.deepEqual([creditStore[0].cycle, creditStore[0].periodStart, creditStore[0].totalAmount], ['HALF_MONTHLY', '2026-09-16', '215.00']);
+    record('2. Credit-backed store statement uses half-month period', {
+      cycle: creditStore[0].cycle,
+      periodStart: creditStore[0].periodStart,
+      totalAmount: creditStore[0].totalAmount,
+    });
 
     const directStatements = await request(`${baseUrl}/direct-statements?storeId=${ids.store.id}&supplierId=${ids.direct.id}`, {
       headers: authHeaders(token),
@@ -107,6 +130,11 @@ async function run() {
       [directPreview.direction, directPreview.channel, directPreview.totalPayableAmount],
       ['STORE_TO_SUPPLIER', 'DIRECT', '162.50'],
     );
+    record('3. Direct supplier-term preview uses direct channel', {
+      direction: directPreview.direction,
+      channel: directPreview.channel,
+      totalPayableAmount: directPreview.totalPayableAmount,
+    });
 
     const companySupplier = await request(`${baseUrl}/supplier-statements?supplierId=${ids.company.id}`, {
       headers: authHeaders(token),
@@ -121,11 +149,21 @@ async function run() {
       body: JSON.stringify({ settlementItemIds: [companyDetail.lines[0].settlementItemId] }),
     });
     assert.equal(blockedPreview.status, 404);
+    record('4. Company-term supplier payment is blocked before store receivable settlement', {
+      blockedStatus: blockedPreview.status,
+      supplierTotalAmount: companySupplier[0].totalAmount,
+      payableAmount: companySupplier[0].payableAmount,
+    });
 
     const payments = await request(`${baseUrl}/payment-records?supplierId=${ids.stored.id}&direction=COMPANY_TO_SUPPLIER`, {
       headers: authHeaders(token),
     });
     assert.ok(payments.some((payment) => payment.paymentNo === 'PXACC-PAY-SHARED' && payment.status === 'PENDING' && payment.amount === '69.00'));
+    record('5. Shared supplier payable reservation is visible in payments', {
+      paymentNo: 'PXACC-PAY-SHARED',
+      status: 'PENDING',
+      amount: '69.00',
+    });
 
     const adjustments = await request(`${baseUrl}/adjustments?storeId=${ids.store.id}&supplierId=${ids.stored.id}`, {
       headers: authHeaders(token),
@@ -136,6 +174,13 @@ async function run() {
     assert.ok(target?.offsetTargetItemId, 'Missing positive supplier adjustment target id');
     assert.deepEqual([credit.adjustmentAmount, credit.pendingReturnOrOffsetAmount, credit.processingStatus], ['-4.00', '4.00', 'PENDING_DISPOSAL']);
     assert.deepEqual([target.adjustmentAmount, target.pendingReturnOrOffsetAmount], ['10.00', '0.00']);
+    record('6. W10 exposes negative credit and positive offset target', {
+      creditOrderNo: credit.supplierOrderNo,
+      creditAmount: credit.adjustmentAmount,
+      pendingReturnOrOffsetAmount: credit.pendingReturnOrOffsetAmount,
+      targetOrderNo: target.supplierOrderNo,
+      targetAmount: target.adjustmentAmount,
+    });
 
     const creditDetail = await request(`${baseUrl}/adjustments/${encodeURIComponent(credit.id)}`, {
       headers: authHeaders(token),
@@ -163,6 +208,13 @@ async function run() {
       body: JSON.stringify({ expectedVersion: disposal.version }),
     });
     assert.deepEqual([confirmedDisposal.status, confirmedDisposal.version], ['CONFIRMED', 2]);
+    record('7. W10 offset disposal is created and confirmed', {
+      method: disposal.method,
+      direction: disposal.direction,
+      amount: disposal.amount,
+      status: confirmedDisposal.status,
+      version: confirmedDisposal.version,
+    });
 
     console.log('Billing acceptance check passed.');
     console.log('  Stored-value shared pending amount: 69.00');
@@ -170,6 +222,10 @@ async function run() {
     console.log('  Direct preview: STORE_TO_SUPPLIER / DIRECT / 162.50');
     console.log('  Company-term supplier payment remains blocked before store receivable settlement.');
     console.log('  W10 offset disposal: -4.00 supplier adjustment offset and confirmed.');
+    await writeFile(
+      resolve(process.cwd(), 'apps/web/billing-acceptance-run.json'),
+      `${JSON.stringify({ ...result, generatedAt: new Date().toISOString(), status: 'PASSED' }, null, 2)}\n`,
+    );
   } finally {
     await app.close();
     await prisma.$disconnect();

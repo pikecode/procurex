@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, mainFlowJs] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -39,6 +39,8 @@ const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, main
   readProjectFile('apps/web/index.html'),
   readProjectFile('apps/web/main-flow.html'),
   readProjectFile('apps/web/main-flow.js'),
+  readProjectFile('apps/web/m4-acceptance.html'),
+  readProjectFile('apps/web/m4-acceptance.js'),
 ]);
 
 for (const path of [
@@ -48,6 +50,8 @@ for (const path of [
   'apps/web/app.js',
   'apps/web/main-flow.html',
   'apps/web/main-flow.js',
+  'apps/web/m4-acceptance.html',
+  'apps/web/m4-acceptance.js',
 ]) {
   assertExists(path, 'web asset');
 }
@@ -55,6 +59,7 @@ for (const path of [
 checkSyntax('apps/web/billing.js');
 checkSyntax('apps/web/app.js');
 checkSyntax('apps/web/main-flow.js');
+checkSyntax('apps/web/m4-acceptance.js');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
 assertIncludes(billingHtml, '账单调整与差额', 'W10 adjustment page');
@@ -93,5 +98,11 @@ assertIncludes(mainFlowHtml, '/main-flow.js', 'main-flow acceptance script');
 assertIncludes(mainFlowJs, 'main-flow-run.json', 'main-flow runner output');
 assertIncludes(mainFlowJs, 'totalPayableAmount', 'main-flow payment preview evidence');
 assertIncludes(mainFlowJs, 'fulfillmentStatus', 'main-flow receipt completion evidence');
+
+assertIncludes(m4Html, 'M4 验收', 'M4 acceptance page');
+assertIncludes(m4Html, '/m4-acceptance.js', 'M4 acceptance script');
+assertIncludes(m4Js, 'billing-acceptance-run.json', 'M4 billing acceptance output');
+assertIncludes(m4Js, 'main-flow-run.json', 'M4 main-flow acceptance output');
+assertIncludes(m4Js, 'acceptance:m4-browserless', 'M4 acceptance command');
 
 console.log('Web workbench check passed.');

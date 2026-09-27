@@ -58,6 +58,8 @@ W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run bil
 
 `npm run acceptance:m4-browserless` now collects the strongest non-browser M4 checks into one command: build, W09/W10 seeded HTTP acceptance, main-flow acceptance output, and Web workbench visibility.
 
+`apps/web/m4-acceptance.html` now renders the generated `billing-acceptance-run.json` and `main-flow-run.json` together, so a reviewer can see the latest M4 browserless acceptance result from the Web workbench rather than reading terminal logs only.
+
 Latest commits:
 
 Latest functional slice: `1593023 Add M4 browserless acceptance command`.
