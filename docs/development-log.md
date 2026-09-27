@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Added DEV-403 AC-20 integration proof across supplier-total and supplier-store views: a payment reserved from the child statement is reflected as pending and unavailable to pay from the parent statement through the same settlement item ID.
+- Verification: `npm run build`, `npm test` (36), `npm run test:integration` (29), `npm run contract:check`, and `git diff --check` passed.
+
 - Added immediate-cycle grouping regression coverage for store, supplier-total, and supplier-store statements, complementing existing direct-statement coverage; each keeps same-day execution orders separate.
 - Verification: `npm run build`, `npm test` (36), `npm run test:integration` (29), `npm run contract:check`, and `git diff --check` passed.
 

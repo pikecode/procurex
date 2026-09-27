@@ -2557,6 +2557,40 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierStoreStatementDetail.data.lines[0]?.goodsAmount, '88.00');
     assert.equal(supplierStoreStatementDetail.data.lines[0]?.freightAmount, '18.50');
     assert.equal(supplierStoreStatementDetail.data.lines[0]?.totalAmount, '106.50');
+    const childViewPaymentPreviewResponse = await fetch(`${baseUrl}/payment-records/preview`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${financeToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ settlementItemIds: [supplierStoreStatementDetail.data.lines[0]!.settlementItemId] }),
+    });
+    assert.equal(childViewPaymentPreviewResponse.status, 201);
+    const childViewPaymentPreview = (await childViewPaymentPreviewResponse.json()) as {
+      data: { direction: string; items: Array<{ settlementItemId: string; sourceVersion: number; payableAmount: string }> };
+    };
+    assert.equal(childViewPaymentPreview.data.direction, 'COMPANY_TO_SUPPLIER');
+    const sharedItemPaymentResponse = await fetch(`${baseUrl}/payment-records`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${financeToken}`, 'content-type': 'application/json', 'idempotency-key': 'pay-from-supplier-store-statement-once' },
+      body: JSON.stringify({
+        direction: 'COMPANY_TO_SUPPLIER', businessDate: '2026-09-24',
+        items: [{ settlementItemId: childViewPaymentPreview.data.items[0]!.settlementItemId, expectedVersion: childViewPaymentPreview.data.items[0]!.sourceVersion, expectedAmount: childViewPaymentPreview.data.items[0]!.payableAmount }],
+      }),
+    });
+    assert.equal(sharedItemPaymentResponse.status, 201);
+    const sharedItemPayment = (await sharedItemPaymentResponse.json()) as { data: { amount: string; status: string } };
+    assert.deepEqual([sharedItemPayment.data.amount, sharedItemPayment.data.status], ['98.50', 'PENDING']);
+    const parentViewPaymentPreviewResponse = await fetch(`${baseUrl}/payment-records/preview`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${financeToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ settlementItemIds: [supplierStatementDetail.data.lines[0]!.settlementItemId] }),
+    });
+    assert.equal(parentViewPaymentPreviewResponse.status, 201);
+    const parentViewPaymentPreview = (await parentViewPaymentPreviewResponse.json()) as {
+      data: { totalPayableAmount: string; totalPendingPaymentAmount: string; items: Array<{ payableAmount: string; pendingPaymentAmount: string }> };
+    };
+    assert.equal(parentViewPaymentPreview.data.totalPayableAmount, '0.00');
+    assert.equal(parentViewPaymentPreview.data.totalPendingPaymentAmount, '98.50');
+    assert.equal(parentViewPaymentPreview.data.items[0]?.payableAmount, '0.00');
+    assert.equal(parentViewPaymentPreview.data.items[0]?.pendingPaymentAmount, '98.50');
     const storeGoodsTotal = supplierStoreStatements.data.reduce((sum, statement) => sum + Number(statement.goodsAmount), 0).toFixed(2);
     const storeFreightTotal = supplierStoreStatements.data.reduce((sum, statement) => sum + Number(statement.freightAmount), 0).toFixed(2);
     const storeTotal = supplierStoreStatements.data.reduce((sum, statement) => sum + Number(statement.totalAmount), 0).toFixed(2);
