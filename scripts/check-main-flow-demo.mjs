@@ -80,6 +80,18 @@ async function run() {
     });
     assert.equal(shipment.kind, 'INITIAL');
 
+    const storeLogin = await request(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: seed.storeUsername, password: seed.password, client: 'web' }),
+    });
+    const storeNotifications = await request(`${baseUrl}/notifications`, {
+      headers: authHeaders(storeLogin.accessToken),
+    });
+    const shipmentNotification = storeNotifications.notifications.find((item) => item.payload?.shipmentId === shipment.id);
+    assert.equal(storeNotifications.unreadCount, 1);
+    assert.equal(shipmentNotification?.title, '待收货提醒');
+
     const orderAfterShipment = await request(`${baseUrl}/supplier-orders/${supplierOrder.id}`, {
       headers: authHeaders(token),
     });
@@ -118,6 +130,7 @@ async function run() {
 
     console.log('Main flow demo check passed.');
     console.log(`  Order: ${completedOrder.status} / ${completedOrder.fulfillmentStatus}`);
+    console.log(`  Store notification: ${shipmentNotification.title}`);
     console.log(`  Payment preview: ${preview.direction} ${preview.totalPayableAmount}`);
   } finally {
     await app.close();

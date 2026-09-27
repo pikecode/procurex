@@ -11,6 +11,8 @@ import {
   ReplenishmentGapStatus,
   ShipmentKind,
   SupplierOrderStatus,
+  UserScopeType,
+  UserStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
 import type {
   OrderItem,
@@ -444,6 +446,34 @@ export class SupplierOrdersService {
           version: { increment: 1 },
         },
       });
+
+      const recipients = await tx.user.findMany({
+        where: {
+          status: UserStatus.ACTIVE,
+          scopes: { some: { scopeType: UserScopeType.STORE, storeId: order.storeId } },
+          roles: { some: { role: { code: { in: ['STORE', 'STORE_FINANCE'] } } } },
+        },
+        select: { id: true },
+      });
+      if (recipients.length) {
+        await tx.notification.createMany({
+          data: recipients.map((recipient) => ({
+            recipientId: recipient.id,
+            eventKey: `SHIPMENT_CREATED:${created.id}`,
+            channel: 'IN_APP',
+            title: '待收货提醒',
+            body: `供应商订单 ${order.supplierOrderNo} 已发货，请复核收货。`,
+            payload: {
+              type: 'SHIPMENT_CREATED',
+              route: '/main-flow-demo.html',
+              supplierOrderId: order.id,
+              shipmentId: created.id,
+              shipmentNo: created.shipmentNo,
+            },
+          })),
+          skipDuplicates: true,
+        });
+      }
 
       return tx.shipment.findUniqueOrThrow({
         where: { id: created.id },

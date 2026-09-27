@@ -10,6 +10,7 @@ const connectionString =
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const prefix = 'PXFLOW';
 const username = 'pxflow_user';
+const storeUsername = 'pxflow_store';
 const password = 'correct-password';
 
 async function roles() {
@@ -71,6 +72,7 @@ async function cleanup() {
 async function run() {
   await cleanup();
   const roleRows = await roles();
+  const roleByCode = Object.fromEntries(roleRows.map((role) => [role.code, role]));
   const [store, supplier, template, category, unit] = await Promise.all([
     prisma.store.create({ data: { code: `${prefix}-STORE`, name: 'PX Flow Demo Store' } }),
     prisma.supplier.create({ data: { code: `${prefix}-SUP`, name: 'PX Flow Demo Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.STORED_VALUE, defaultSettlementCycle: 'MONTHLY' } }),
@@ -85,6 +87,15 @@ async function run() {
       displayName: 'PX Flow Demo User',
       passwordHash: await hashPassword(password),
       roles: { create: roleRows.map((role) => ({ roleId: role.id })) },
+    },
+  });
+  await prisma.user.create({
+    data: {
+      username: storeUsername,
+      displayName: 'PX Flow Store User',
+      passwordHash: await hashPassword(password),
+      roles: { create: [{ roleId: roleByCode.STORE.id }] },
+      scopes: { create: { scopeType: 'STORE', storeId: store.id } },
     },
   });
   await prisma.storeAccount.create({ data: { storeId: store.id, balance: '1000.00' } });
@@ -106,6 +117,7 @@ async function run() {
   const seed = {
     generatedAt: new Date().toISOString(),
     username,
+    storeUsername,
     password,
     storeId: store.id,
     supplierId: supplier.id,

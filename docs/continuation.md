@@ -8,13 +8,14 @@ Use this as the first document when continuing development in a new window.
 
 M4 is locally closed against the current acceptance gates. DEV-401 through DEV-406 are closed, `npm run acceptance:m4-close` passes, Chrome is ready, local PostgreSQL is reachable, automatic evidence is complete, and the manual browser evidence package is 6/6.
 
-M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, I08 in-app notification list/read, W11 visibility, R04 export task listing and failed retry, DEV-505 stale export recovery and export health monitoring, W13 reconciliation/operations/notification visibility, and Chrome-captured W11/W13 screenshots.
+M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, I08 in-app notification list/read, the first real DEV-503 supplier-shipment notification trigger, W11 visibility, R04 export task listing and failed retry, DEV-505 stale export recovery and export health monitoring, W13 reconciliation/operations/notification visibility, and Chrome-captured W11/W13 screenshots.
 
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
 
 ```text
+8923fde Add in-app notifications foundation
 48a9cdc Add failed report export retry
 16d0edd Add report export health monitoring
 6f10226 Recover stale report exports
@@ -170,6 +171,7 @@ All seeded accounts use password `correct-password`.
 | Account | Use |
 |---|---|
 | `pxflow_user` | Interactive main-flow demo from order creation to payment preview. |
+| `pxflow_store` | Store-scoped main-flow notification check after supplier shipment. |
 | `pxacc_admin` | ADMIN/HQ finance view for all billing tabs and checks. |
 | `pxacc_store` | Store-scoped billing and direct statement view. |
 | `pxacc_supplier_company` | Supplier-scoped company-term view. |
@@ -223,7 +225,7 @@ Run `npm run acceptance:m4-close` for the final local M4 close check after brows
 Do these in order:
 
 1. Keep `npm run acceptance:m5-browserless`, `npm run m5:capture-browser-evidence`, and `npm run m5:capture-ops-evidence` green after M5 changes.
-2. Continue M5 in plan order: deepen DEV-503 by connecting real business events to notifications, or continue DEV-504 audit expansion if operations evidence is more urgent.
+2. Continue M5 in plan order: deepen DEV-503 by adding the next business notification trigger, or continue DEV-504 audit expansion if operations evidence is more urgent.
 3. Run `npm run acceptance:m4-close` after any billing, payment, settlement, or adjustment change.
 
 Do not reopen M4 unless a regression appears in `acceptance:m4-close` or a reviewer rejects the collected browser evidence.
