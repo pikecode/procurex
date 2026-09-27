@@ -35,7 +35,9 @@ All accounts use password `correct-password`.
 | `PXACC-SO-STORED` | Stored-value order still appears in supplier payable statements; a pending shared payment reservation is visible from supplier total and supplier-store views. |
 | `PXACC-SO-CREDIT` | Credit-backed order appears with a half-month period starting `2026-09-16`. |
 | `PXACC-SO-DIRECT` | Direct statement preview shows `STORE_TO_SUPPLIER` and channel `DIRECT`. |
+| `PXACC-SO-STORED-ADJ-CREDIT` | Negative supplier adjustment exposes a B12 credit item for disposal. |
+| `PXACC-SO-STORED-ADJ-TARGET` | Positive supplier adjustment exposes a target settlement item for offset. |
 
 The script is repeatable. It deletes prior `PXACC` seed data before inserting the current acceptance dataset.
 
-`npm run billing:check-acceptance` starts a temporary local API and verifies the seeded W09/S05/S08 evidence through real HTTP requests.
+`npm run billing:check-acceptance` starts a temporary local API and verifies the seeded W09/S05/S08 evidence through real HTTP requests. It also creates and confirms one W10 offset disposal from the negative supplier adjustment to the positive supplier adjustment.

@@ -6,6 +6,8 @@ import {
   PaymentRecordDirection,
   PaymentRecordStatus,
   PaymentStatus,
+  PriceChangeRunOrderStatus,
+  PriceChangeRunStatus,
   PurchaseRequestStatus,
   SettlementMode,
   ShipmentKind,
@@ -49,8 +51,24 @@ async function cleanup() {
     select: { id: true },
   });
   const orderIds = orders.map((order) => order.id);
+  const runOrders = await prisma.priceChangeRunOrder.findMany({
+    where: { supplierOrderId: { in: orderIds } },
+    select: { runId: true },
+  });
+  const runIds = [...new Set(runOrders.map((order) => order.runId))];
 
   await prisma.commandRecord.deleteMany({ where: { actorUserId: { in: users.map((user) => user.id) } } });
+  await prisma.differenceDisposalItem.deleteMany({
+    where: { OR: [{ adjustmentDocument: { supplierOrderId: { in: orderIds } } }, { disposal: { OR: [{ storeId: { in: stores.map((store) => store.id) } }, { supplierId: { in: suppliers.map((supplier) => supplier.id) } }] } }] },
+  });
+  await prisma.differenceDisposal.deleteMany({
+    where: { OR: [{ storeId: { in: stores.map((store) => store.id) } }, { supplierId: { in: suppliers.map((supplier) => supplier.id) } }] },
+  });
+  await prisma.adjustmentDocumentItem.deleteMany({ where: { adjustment: { supplierOrderId: { in: orderIds } } } });
+  await prisma.adjustmentDocument.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
+  await prisma.priceChangeAdjustment.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
+  await prisma.priceChangeRunOrder.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
+  await prisma.priceChangeRun.deleteMany({ where: { id: { in: runIds } } });
   await prisma.paymentAllocation.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
   await prisma.paymentRecord.deleteMany({
     where: { OR: [{ storeId: { in: stores.map((store) => store.id) } }, { supplierId: { in: suppliers.map((supplier) => supplier.id) } }] },
@@ -161,6 +179,58 @@ async function createOrder({ store, supplier, template, product, no, mode, cycle
   return order;
 }
 
+async function createSupplierPriceAdjustment({ order, amount, label }) {
+  const item = await prisma.orderItem.findFirstOrThrow({ where: { supplierOrderId: order.id } });
+  const quantity = Number(item.quantity);
+  const previousSupply = Number(item.supplyUnitPrice);
+  const newSupply = previousSupply + Number(amount) / quantity;
+  const run = await prisma.priceChangeRun.create({
+    data: {
+      status: PriceChangeRunStatus.SUCCEEDED,
+      affectedOrderCount: 1,
+      salesDelta: '0.00',
+      supplyDelta: amount,
+    },
+  });
+  await prisma.priceChangeRunOrder.create({
+    data: {
+      runId: run.id,
+      supplierOrderId: order.id,
+      status: PriceChangeRunOrderStatus.SUCCEEDED,
+      salesDelta: '0.00',
+      supplyDelta: amount,
+    },
+  });
+  const adjustment = await prisma.priceChangeAdjustment.create({
+    data: {
+      runId: run.id,
+      supplierOrderId: order.id,
+      orderItemId: item.id,
+      previousSalesPrice: item.salesUnitPrice,
+      newSalesPrice: item.salesUnitPrice,
+      previousSupplyPrice: previousSupply.toFixed(6),
+      newSupplyPrice: newSupply.toFixed(6),
+      salesDelta: '0.00',
+      supplyDelta: amount,
+    },
+  });
+  const document = await prisma.adjustmentDocument.create({
+    data: {
+      sourcePriceChangeId: adjustment.id,
+      supplierOrderId: order.id,
+      storeId: order.storeId,
+      supplierId: order.supplierId,
+      side: 'SUPPLIER',
+      amount,
+      originalPeriodKey: 'MONTHLY:2026-09-01:2026-10-01',
+      settlementPeriodKey: 'MONTHLY:2026-09-01:2026-10-01',
+      sourceRevision: order.version,
+      items: { create: [{ orderItemId: item.id, amount }] },
+    },
+  });
+  return { run, adjustment, document, label };
+}
+
 async function run() {
   await cleanup();
   const role = await roles();
@@ -192,8 +262,12 @@ async function run() {
 
   const companyOrder = await createOrder({ store, supplier: suppliers.company, template, product, no: 'COMPANY', mode: SettlementMode.COMPANY_TERM, cycle: 'MONTHLY', shippedAt: '2026-09-08T04:00:00.000Z', sales: '120.00', supply: '90.00', freight: '10.00' });
   const storedOrder = await createOrder({ store, supplier: suppliers.stored, template, product, no: 'STORED', mode: SettlementMode.STORED_VALUE, cycle: 'MONTHLY', shippedAt: '2026-09-09T04:00:00.000Z', sales: '80.00', supply: '64.00', freight: '5.00' });
+  const storedAdjustmentCreditOrder = await createOrder({ store, supplier: suppliers.stored, template, product, no: 'STORED-ADJ-CREDIT', mode: SettlementMode.STORED_VALUE, cycle: 'MONTHLY', shippedAt: '2026-09-11T04:00:00.000Z', sales: '50.00', supply: '40.00', freight: '0.00' });
+  const storedAdjustmentTargetOrder = await createOrder({ store, supplier: suppliers.stored, template, product, no: 'STORED-ADJ-TARGET', mode: SettlementMode.STORED_VALUE, cycle: 'MONTHLY', shippedAt: '2026-09-12T04:00:00.000Z', sales: '60.00', supply: '45.00', freight: '0.00' });
   await createOrder({ store, supplier: suppliers.credit, template, product, no: 'CREDIT', mode: SettlementMode.CREDIT, cycle: 'HALF_MONTHLY', shippedAt: '2026-09-16T04:00:00.000Z', sales: '200.00', supply: '170.00', freight: '15.00' });
   await createOrder({ store, supplier: suppliers.direct, template, product, no: 'DIRECT', mode: SettlementMode.SUPPLIER_TERM, cycle: 'MONTHLY', shippedAt: '2026-09-18T04:00:00.000Z', sales: '150.00', supply: '150.00', freight: '12.50' });
+  await createSupplierPriceAdjustment({ order: storedAdjustmentCreditOrder, amount: '-4.00', label: 'supplier credit' });
+  await createSupplierPriceAdjustment({ order: storedAdjustmentTargetOrder, amount: '10.00', label: 'supplier target' });
 
   const payment = await prisma.paymentRecord.create({
     data: {
@@ -227,6 +301,7 @@ async function run() {
   console.log('  Seeded evidence:');
   console.log(`    Company-term order: ${companyOrder.supplierOrderNo}, supplier preview blocked until store receivable is paid`);
   console.log(`    Stored-value order: ${storedOrder.supplierOrderNo}, supplier payable reserved by ${payment.paymentNo}`);
+  console.log('    W10 adjustments: PXACC-SO-STORED-ADJ-CREDIT -4.00 can offset PXACC-SO-STORED-ADJ-TARGET +10.00');
   console.log('    Credit order: PXACC-SO-CREDIT, half-month period starts 2026-09-16');
   console.log('    Direct order: PXACC-SO-DIRECT, preview channel should be DIRECT');
 }

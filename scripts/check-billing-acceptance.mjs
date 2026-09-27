@@ -78,11 +78,11 @@ async function run() {
     assert.equal(storedSupplierStore.length, 1);
     assert.deepEqual(
       [storedSupplier[0].totalAmount, storedSupplier[0].pendingPaymentAmount, storedSupplier[0].payableAmount],
-      ['69.00', '69.00', '0.00'],
+      ['154.00', '69.00', '91.00'],
     );
     assert.deepEqual(
       [storedSupplierStore[0].totalAmount, storedSupplierStore[0].pendingPaymentAmount, storedSupplierStore[0].payableAmount],
-      ['69.00', '69.00', '0.00'],
+      ['154.00', '69.00', '91.00'],
     );
 
     const creditStore = await request(`${baseUrl}/store-statements?storeId=${ids.store.id}&supplierId=${ids.credit.id}`, {
@@ -127,11 +127,49 @@ async function run() {
     });
     assert.ok(payments.some((payment) => payment.paymentNo === 'PXACC-PAY-SHARED' && payment.status === 'PENDING' && payment.amount === '69.00'));
 
+    const adjustments = await request(`${baseUrl}/adjustments?storeId=${ids.store.id}&supplierId=${ids.stored.id}`, {
+      headers: authHeaders(token),
+    });
+    const credit = adjustments.find((adjustment) => adjustment.supplierOrderNo === 'PXACC-SO-STORED-ADJ-CREDIT' && adjustment.direction === 'SUPPLIER_PAYABLE_DECREASE');
+    const target = adjustments.find((adjustment) => adjustment.supplierOrderNo === 'PXACC-SO-STORED-ADJ-TARGET' && adjustment.direction === 'SUPPLIER_PAYABLE_INCREASE');
+    assert.ok(credit?.disposalCreditItemId, 'Missing negative supplier adjustment credit id');
+    assert.ok(target?.offsetTargetItemId, 'Missing positive supplier adjustment target id');
+    assert.deepEqual([credit.adjustmentAmount, credit.pendingReturnOrOffsetAmount, credit.processingStatus], ['-4.00', '4.00', 'PENDING_DISPOSAL']);
+    assert.deepEqual([target.adjustmentAmount, target.pendingReturnOrOffsetAmount], ['10.00', '0.00']);
+
+    const creditDetail = await request(`${baseUrl}/adjustments/${encodeURIComponent(credit.id)}`, {
+      headers: authHeaders(token),
+    });
+    assert.equal(creditDetail.lines[0]?.supplyAdjustmentAmount, '-4.00');
+    const disposal = await request(`${baseUrl}/difference-disposals`, {
+      method: 'POST',
+      headers: authHeaders(token, { 'idempotency-key': 'pxacc-adjustment-offset' }),
+      body: JSON.stringify({
+        method: 'OFFSET',
+        creditItemIds: [credit.disposalCreditItemId],
+        targetDebitItemIds: [target.offsetTargetItemId],
+        amount: '4.00',
+        businessDate: '2026-09-27',
+        reason: 'PXACC acceptance offset',
+      }),
+    });
+    assert.deepEqual([disposal.method, disposal.direction, disposal.status, disposal.amount], ['OFFSET', 'SUPPLIER_TO_COMPANY', 'PENDING', '4.00']);
+    assert.equal(disposal.items[0]?.adjustmentDocumentId, credit.disposalCreditItemId);
+    assert.equal(disposal.items[0]?.targetDebitItemId, target.offsetTargetItemId);
+
+    const confirmedDisposal = await request(`${baseUrl}/difference-disposals/${disposal.id}/confirm`, {
+      method: 'POST',
+      headers: authHeaders(token, { 'idempotency-key': 'pxacc-adjustment-offset-confirm' }),
+      body: JSON.stringify({ expectedVersion: disposal.version }),
+    });
+    assert.deepEqual([confirmedDisposal.status, confirmedDisposal.version], ['CONFIRMED', 2]);
+
     console.log('Billing acceptance check passed.');
     console.log('  Stored-value shared pending amount: 69.00');
     console.log('  Credit period: HALF_MONTHLY 2026-09-16');
     console.log('  Direct preview: STORE_TO_SUPPLIER / DIRECT / 162.50');
     console.log('  Company-term supplier payment remains blocked before store receivable settlement.');
+    console.log('  W10 offset disposal: -4.00 supplier adjustment offset and confirmed.');
   } finally {
     await app.close();
     await prisma.$disconnect();

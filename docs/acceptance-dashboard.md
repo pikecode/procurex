@@ -77,7 +77,7 @@ npm run billing:seed-acceptance
 npm run billing:check-acceptance
 ```
 
-Use `docs/billing-acceptance-seed.md` for the seeded accounts and expected W09/S05/S08 evidence.
+Use `docs/billing-acceptance-seed.md` for the seeded accounts and expected W09/S05/S08 evidence. The checker also verifies one W10 positive/negative adjustment offset and confirmation path.
 
 The latest progress ledger records successful runs with 36 unit tests and 31 integration tests for the W09/W10 slices. Always rerun the full baseline before marking a package closed.
 
