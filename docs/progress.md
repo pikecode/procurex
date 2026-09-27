@@ -68,10 +68,11 @@ The same M4 acceptance page now includes a gate walkthrough for DEV-402, DEV-403
 
 Latest commits:
 
-Latest functional slice: `ea81b68 Add main flow demo checker`.
-Latest commit before this progress update: `ea81b68 Add main flow demo checker`.
+Latest functional slice: `2eae05a Add M4 acceptance gate walkthrough`.
+Latest commit before this progress update: `2eae05a Add M4 acceptance gate walkthrough`.
 
 ```text
+2eae05a Add M4 acceptance gate walkthrough
 ea81b68 Add main flow demo checker
 4afe8a6 Add interactive main flow demo
 7db7c4d Refresh progress ledger for handoff
