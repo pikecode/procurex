@@ -26,6 +26,17 @@ enum ExportJobStatus {
   FAILED
 }
 
+enum NotificationChannel {
+  IN_APP
+  WECHAT
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  FAILED
+}
+
 enum StoreStatus {
   ACTIVE
   DISABLED
@@ -184,31 +195,33 @@ enum PriceChangeRunOrderStatus {
 }
 
 model User {
-  id           String          @id @default(uuid()) @db.Uuid
-  phone        String?         @unique @db.VarChar(32)
-  username     String          @unique @db.VarChar(80)
-  displayName  String          @db.VarChar(120)
-  passwordHash String?         @db.VarChar(200)
-  status       UserStatus      @default(ACTIVE)
-  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime        @updatedAt @db.Timestamptz(6)
-  roles        UserRole[]
-  commands     CommandRecord[]
-  sessions     UserSession[]
-  scopes       UserScope[]
-  exportJobs   ExportJob[]
-  files        FileObject[]
+  id            String          @id @default(uuid()) @db.Uuid
+  phone         String?         @unique @db.VarChar(32)
+  username      String          @unique @db.VarChar(80)
+  displayName   String          @db.VarChar(120)
+  passwordHash  String?         @db.VarChar(200)
+  status        UserStatus      @default(ACTIVE)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime        @updatedAt @db.Timestamptz(6)
+  roles         UserRole[]
+  commands      CommandRecord[]
+  sessions      UserSession[]
+  scopes        UserScope[]
+  exportJobs    ExportJob[]
+  notifications Notification[]
+  files         FileObject[]
 }
 
 model UserScope {
-  id         String         @id @default(uuid()) @db.Uuid
-  userId     String         @unique @db.Uuid
+  id         String        @id @default(uuid()) @db.Uuid
+  userId     String        @unique @db.Uuid
   scopeType  UserScopeType
-  storeId    String?        @db.Uuid
-  supplierId String?        @db.Uuid
-  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  store      Store?         @relation(fields: [storeId], references: [id])
-  supplier   Supplier?      @relation(fields: [supplierId], references: [id])
+  storeId    String?       @db.Uuid
+  supplierId String?       @db.Uuid
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store      Store?        @relation(fields: [storeId], references: [id])
+  supplier   Supplier?     @relation(fields: [supplierId], references: [id])
+
   @@index([storeId])
   @@index([supplierId])
 }
@@ -229,6 +242,23 @@ model ExportJob {
 
   @@index([requestedById, createdAt])
   @@index([status, expiresAt])
+}
+
+model Notification {
+  id          String              @id @default(uuid()) @db.Uuid
+  recipientId String              @db.Uuid
+  eventKey    String              @db.VarChar(160)
+  channel     NotificationChannel @default(IN_APP)
+  status      NotificationStatus  @default(UNREAD)
+  title       String              @db.VarChar(160)
+  body        String              @db.VarChar(500)
+  payload     Json
+  readAt      DateTime?           @db.Timestamptz(6)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
+  recipient   User                @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([recipientId, eventKey, channel])
+  @@index([recipientId, status, createdAt])
 }
 
 model UserSession {
@@ -491,15 +521,15 @@ model PriceScope {
 }
 
 model PriceVersion {
-  id          String     @id @default(uuid()) @db.Uuid
-  scopeId     String     @db.Uuid
-  salesPrice  Decimal    @db.Decimal(20, 6)
-  supplyPrice Decimal    @db.Decimal(20, 6)
-  effectiveAt DateTime   @db.Timestamptz(6)
-  reason      String     @default("") @db.VarChar(500)
-  revision    Int        @default(1)
-  createdAt   DateTime   @default(now()) @db.Timestamptz(6)
-  scope       PriceScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  id          String                  @id @default(uuid()) @db.Uuid
+  scopeId     String                  @db.Uuid
+  salesPrice  Decimal                 @db.Decimal(20, 6)
+  supplyPrice Decimal                 @db.Decimal(20, 6)
+  effectiveAt DateTime                @db.Timestamptz(6)
+  reason      String                  @default("") @db.VarChar(500)
+  revision    Int                     @default(1)
+  createdAt   DateTime                @default(now()) @db.Timestamptz(6)
+  scope       PriceScope              @relation(fields: [scopeId], references: [id], onDelete: Cascade)
   runVersions PriceChangeRunVersion[]
 
   @@unique([scopeId, revision])
@@ -507,21 +537,21 @@ model PriceVersion {
 }
 
 model PriceChangeRun {
-  id                 String               @id @default(uuid()) @db.Uuid
-  status             PriceChangeRunStatus @default(PENDING)
-  affectedOrderCount Int                  @default(0)
-  salesDelta         Decimal              @default(0) @db.Decimal(20, 2)
-  supplyDelta        Decimal              @default(0) @db.Decimal(20, 2)
-  createdAt          DateTime             @default(now()) @db.Timestamptz(6)
+  id                 String                  @id @default(uuid()) @db.Uuid
+  status             PriceChangeRunStatus    @default(PENDING)
+  affectedOrderCount Int                     @default(0)
+  salesDelta         Decimal                 @default(0) @db.Decimal(20, 2)
+  supplyDelta        Decimal                 @default(0) @db.Decimal(20, 2)
+  createdAt          DateTime                @default(now()) @db.Timestamptz(6)
   versions           PriceChangeRunVersion[]
   orders             PriceChangeRunOrder[]
 }
 
 model PriceChangeRunVersion {
-  runId         String          @db.Uuid
+  runId          String         @db.Uuid
   priceVersionId String         @db.Uuid
-  run           PriceChangeRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
-  priceVersion  PriceVersion   @relation(fields: [priceVersionId], references: [id], onDelete: Cascade)
+  run            PriceChangeRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  priceVersion   PriceVersion   @relation(fields: [priceVersionId], references: [id], onDelete: Cascade)
 
   @@id([runId, priceVersionId])
   @@index([priceVersionId])
@@ -535,26 +565,26 @@ model PriceChangeRunOrder {
   supplyDelta     Decimal                   @db.Decimal(20, 2)
   adjustment      PriceChangeAdjustment?
   run             PriceChangeRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
-  supplierOrder   SupplierOrder              @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
+  supplierOrder   SupplierOrder             @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
 
   @@id([runId, supplierOrderId])
   @@index([supplierOrderId])
 }
 
 model PriceChangeAdjustment {
-  id                String            @id @default(uuid()) @db.Uuid
-  runId             String            @db.Uuid
-  supplierOrderId   String            @db.Uuid
-  orderItemId       String            @db.Uuid
-  previousSalesPrice Decimal          @db.Decimal(20, 6)
-  newSalesPrice     Decimal           @db.Decimal(20, 6)
-  previousSupplyPrice Decimal          @db.Decimal(20, 6)
-  newSupplyPrice    Decimal           @db.Decimal(20, 6)
-  salesDelta        Decimal           @db.Decimal(20, 2)
-  supplyDelta       Decimal           @db.Decimal(20, 2)
-  createdAt         DateTime          @default(now()) @db.Timestamptz(6)
-  run               PriceChangeRunOrder @relation(fields: [runId, supplierOrderId], references: [runId, supplierOrderId], onDelete: Cascade)
-  orderItem         OrderItem         @relation(fields: [orderItemId], references: [id])
+  id                  String              @id @default(uuid()) @db.Uuid
+  runId               String              @db.Uuid
+  supplierOrderId     String              @db.Uuid
+  orderItemId         String              @db.Uuid
+  previousSalesPrice  Decimal             @db.Decimal(20, 6)
+  newSalesPrice       Decimal             @db.Decimal(20, 6)
+  previousSupplyPrice Decimal             @db.Decimal(20, 6)
+  newSupplyPrice      Decimal             @db.Decimal(20, 6)
+  salesDelta          Decimal             @db.Decimal(20, 2)
+  supplyDelta         Decimal             @db.Decimal(20, 2)
+  createdAt           DateTime            @default(now()) @db.Timestamptz(6)
+  run                 PriceChangeRunOrder @relation(fields: [runId, supplierOrderId], references: [runId, supplierOrderId], onDelete: Cascade)
+  orderItem           OrderItem           @relation(fields: [orderItemId], references: [id])
 
   @@unique([runId, orderItemId])
   @@unique([runId, supplierOrderId])
@@ -562,31 +592,32 @@ model PriceChangeAdjustment {
 }
 
 model AdjustmentDocument {
-  id                 String                    @id @default(uuid()) @db.Uuid
+  id                  String                   @id @default(uuid()) @db.Uuid
   sourcePriceChangeId String                   @db.Uuid
-  supplierOrderId    String                   @db.Uuid
-  storeId            String                   @db.Uuid
-  supplierId         String                   @db.Uuid
-  side               String                   @db.VarChar(20)
-  amount             Decimal                  @db.Decimal(20, 2)
-  originalPeriodKey  String                   @db.VarChar(128)
-  settlementPeriodKey String                 @db.VarChar(128)
-  sourceRevision     Int
-  createdAt          DateTime                 @default(now()) @db.Timestamptz(6)
-  items              AdjustmentDocumentItem[]
-  disposalItems      DifferenceDisposalItem[]
+  supplierOrderId     String                   @db.Uuid
+  storeId             String                   @db.Uuid
+  supplierId          String                   @db.Uuid
+  side                String                   @db.VarChar(20)
+  amount              Decimal                  @db.Decimal(20, 2)
+  originalPeriodKey   String                   @db.VarChar(128)
+  settlementPeriodKey String                   @db.VarChar(128)
+  sourceRevision      Int
+  createdAt           DateTime                 @default(now()) @db.Timestamptz(6)
+  items               AdjustmentDocumentItem[]
+  disposalItems       DifferenceDisposalItem[]
 
   @@unique([sourcePriceChangeId, side])
   @@index([storeId, supplierId, settlementPeriodKey])
 }
 
 model AdjustmentDocumentItem {
-  id             String             @id @default(uuid()) @db.Uuid
-  adjustmentId  String             @db.Uuid
-  orderItemId    String             @db.Uuid
-  amount         Decimal            @db.Decimal(20, 2)
-  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
-  adjustment     AdjustmentDocument @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  id           String             @id @default(uuid()) @db.Uuid
+  adjustmentId String             @db.Uuid
+  orderItemId  String             @db.Uuid
+  amount       Decimal            @db.Decimal(20, 2)
+  createdAt    DateTime           @default(now()) @db.Timestamptz(6)
+  adjustment   AdjustmentDocument @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+
   @@unique([adjustmentId, orderItemId])
   @@index([orderItemId])
 }
@@ -639,73 +670,73 @@ model RequestItem {
 }
 
 model SupplierOrder {
-  id                   String                @id @default(uuid()) @db.Uuid
-  supplierOrderNo      String                @unique @db.VarChar(80)
-  requestId            String                @db.Uuid
-  storeId              String                @db.Uuid
-  supplierId           String                @db.Uuid
-  settlementMode       SettlementMode       @default(COMPANY_TERM)
-  settlementCycleSnapshot String             @default("MONTHLY") @db.VarChar(40)
-  status               SupplierOrderStatus   @default(DRAFT)
-  fulfillmentStatus    FulfillmentStatus     @default(PENDING)
-  completedAt          DateTime?             @db.Timestamptz(6)
-  firstShippedAt       DateTime?             @db.Timestamptz(6)
-  pushedAt             DateTime?             @db.Timestamptz(6)
-  rejectedAt           DateTime?             @db.Timestamptz(6)
-  rejectedReason       String?               @db.VarChar(300)
-  salesGoodsAmount     Decimal               @default(0) @db.Decimal(20, 2)
-  supplyGoodsAmount    Decimal               @default(0) @db.Decimal(20, 2)
-  version              Int                   @default(1)
-  createdAt            DateTime              @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime              @updatedAt @db.Timestamptz(6)
-  request              PurchaseRequest       @relation(fields: [requestId], references: [id])
-  store                Store                 @relation(fields: [storeId], references: [id])
-  supplier             Supplier              @relation(fields: [supplierId], references: [id])
-  items                OrderItem[]
-  shipments            Shipment[]
-  freightConfirmations FreightConfirmation[]
-  fundingAllocations   FundingAllocation[]
-  paymentAllocations   PaymentAllocation[]
+  id                      String                   @id @default(uuid()) @db.Uuid
+  supplierOrderNo         String                   @unique @db.VarChar(80)
+  requestId               String                   @db.Uuid
+  storeId                 String                   @db.Uuid
+  supplierId              String                   @db.Uuid
+  settlementMode          SettlementMode           @default(COMPANY_TERM)
+  settlementCycleSnapshot String                   @default("MONTHLY") @db.VarChar(40)
+  status                  SupplierOrderStatus      @default(DRAFT)
+  fulfillmentStatus       FulfillmentStatus        @default(PENDING)
+  completedAt             DateTime?                @db.Timestamptz(6)
+  firstShippedAt          DateTime?                @db.Timestamptz(6)
+  pushedAt                DateTime?                @db.Timestamptz(6)
+  rejectedAt              DateTime?                @db.Timestamptz(6)
+  rejectedReason          String?                  @db.VarChar(300)
+  salesGoodsAmount        Decimal                  @default(0) @db.Decimal(20, 2)
+  supplyGoodsAmount       Decimal                  @default(0) @db.Decimal(20, 2)
+  version                 Int                      @default(1)
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime                 @updatedAt @db.Timestamptz(6)
+  request                 PurchaseRequest          @relation(fields: [requestId], references: [id])
+  store                   Store                    @relation(fields: [storeId], references: [id])
+  supplier                Supplier                 @relation(fields: [supplierId], references: [id])
+  items                   OrderItem[]
+  shipments               Shipment[]
+  freightConfirmations    FreightConfirmation[]
+  fundingAllocations      FundingAllocation[]
+  paymentAllocations      PaymentAllocation[]
   settlementItemSnapshots SettlementItemSnapshot[]
-  priceChangeRuns      PriceChangeRunOrder[]
+  priceChangeRuns         PriceChangeRunOrder[]
 
   @@index([requestId])
   @@index([supplierId, firstShippedAt])
 }
 
 model SettlementItemSnapshot {
-  id               String       @id @default(uuid()) @db.Uuid
-  settlementItemId String       @unique @db.VarChar(300)
-  supplierOrderId  String       @db.Uuid
-  kind             String       @db.VarChar(40)
-  goodsAmount      Decimal      @db.Decimal(20, 2)
-  freightAmount    Decimal      @db.Decimal(20, 2)
-  totalAmount      Decimal      @db.Decimal(20, 2)
+  id               String        @id @default(uuid()) @db.Uuid
+  settlementItemId String        @unique @db.VarChar(300)
+  supplierOrderId  String        @db.Uuid
+  kind             String        @db.VarChar(40)
+  goodsAmount      Decimal       @db.Decimal(20, 2)
+  freightAmount    Decimal       @db.Decimal(20, 2)
+  totalAmount      Decimal       @db.Decimal(20, 2)
   sourceVersion    Int
-  createdAt        DateTime     @default(now()) @db.Timestamptz(6)
+  createdAt        DateTime      @default(now()) @db.Timestamptz(6)
   supplierOrder    SupplierOrder @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
 
   @@index([supplierOrderId])
 }
 
 model OrderItem {
-  id                 String              @id @default(uuid()) @db.Uuid
-  supplierOrderId    String              @db.Uuid
-  productId          String              @db.Uuid
-  quantity           Decimal             @db.Decimal(20, 6)
-  shippedQuantity    Decimal             @default(0) @db.Decimal(20, 6)
-  receivedQuantity   Decimal             @default(0) @db.Decimal(20, 6)
-  salesUnitPrice     Decimal             @db.Decimal(20, 6)
-  supplyUnitPrice    Decimal             @db.Decimal(20, 6)
-  salesLineAmount    Decimal             @db.Decimal(20, 2)
-  supplyLineAmount   Decimal             @db.Decimal(20, 2)
-  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
-  supplierOrder      SupplierOrder       @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
-  product            Product             @relation(fields: [productId], references: [id])
-  shipmentItems      ShipmentItem[]
-  discrepancies      Discrepancy[]
-  replenishmentGaps  ReplenishmentGap[]
-  discrepancyReturns DiscrepancyReturn[]
+  id                     String                  @id @default(uuid()) @db.Uuid
+  supplierOrderId        String                  @db.Uuid
+  productId              String                  @db.Uuid
+  quantity               Decimal                 @db.Decimal(20, 6)
+  shippedQuantity        Decimal                 @default(0) @db.Decimal(20, 6)
+  receivedQuantity       Decimal                 @default(0) @db.Decimal(20, 6)
+  salesUnitPrice         Decimal                 @db.Decimal(20, 6)
+  supplyUnitPrice        Decimal                 @db.Decimal(20, 6)
+  salesLineAmount        Decimal                 @db.Decimal(20, 2)
+  supplyLineAmount       Decimal                 @db.Decimal(20, 2)
+  createdAt              DateTime                @default(now()) @db.Timestamptz(6)
+  supplierOrder          SupplierOrder           @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
+  product                Product                 @relation(fields: [productId], references: [id])
+  shipmentItems          ShipmentItem[]
+  discrepancies          Discrepancy[]
+  replenishmentGaps      ReplenishmentGap[]
+  discrepancyReturns     DiscrepancyReturn[]
   priceChangeAdjustments PriceChangeAdjustment[]
 
   @@unique([supplierOrderId, productId])
@@ -978,36 +1009,36 @@ model PaymentRecord {
 }
 
 model FileObject {
-  id        String         @id @default(uuid()) @db.Uuid
-  filename  String         @db.VarChar(255)
-  mimeType  String         @db.VarChar(100)
-  sizeBytes BigInt
-  objectKey String         @unique @db.VarChar(100)
-  checksum  String?        @db.VarChar(64)
-  uploadTokenHash String   @db.VarChar(64)
-  purpose   String         @db.VarChar(40)
-  status    String         @default("UPLOADING") @db.VarChar(20)
-  ownerId   String         @db.Uuid
-  paymentId String?        @db.Uuid
-  createdAt DateTime       @default(now()) @db.Timestamptz(6)
-  owner     User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  payment   PaymentRecord? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  id              String         @id @default(uuid()) @db.Uuid
+  filename        String         @db.VarChar(255)
+  mimeType        String         @db.VarChar(100)
+  sizeBytes       BigInt
+  objectKey       String         @unique @db.VarChar(100)
+  checksum        String?        @db.VarChar(64)
+  uploadTokenHash String         @db.VarChar(64)
+  purpose         String         @db.VarChar(40)
+  status          String         @default("UPLOADING") @db.VarChar(20)
+  ownerId         String         @db.Uuid
+  paymentId       String?        @db.Uuid
+  createdAt       DateTime       @default(now()) @db.Timestamptz(6)
+  owner           User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  payment         PaymentRecord? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   @@index([ownerId, status])
   @@index([paymentId])
 }
 
 model Overpayment {
-  id             String        @id @default(uuid()) @db.Uuid
-  paymentId      String        @db.Uuid
-  storeId        String        @db.Uuid
-  supplierId     String        @db.Uuid
-  amount         Decimal       @db.Decimal(20, 2)
+  id             String                   @id @default(uuid()) @db.Uuid
+  paymentId      String                   @db.Uuid
+  storeId        String                   @db.Uuid
+  supplierId     String                   @db.Uuid
+  amount         Decimal                  @db.Decimal(20, 2)
   sourceRevision Int
-  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
-  payment        PaymentRecord @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  store          Store         @relation(fields: [storeId], references: [id])
-  supplier       Supplier      @relation(fields: [supplierId], references: [id])
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(6)
+  payment        PaymentRecord            @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  store          Store                    @relation(fields: [storeId], references: [id])
+  supplier       Supplier                 @relation(fields: [supplierId], references: [id])
   disposalItems  DifferenceDisposalItem[]
 
   @@unique([paymentId, storeId, supplierId, sourceRevision])
@@ -1054,19 +1085,19 @@ model DifferenceDisposal {
 }
 
 model DifferenceDisposalItem {
-  id                String             @id @default(uuid()) @db.Uuid
-  disposalId        String             @db.Uuid
-  creditItemId      String?            @db.Uuid
-  overpaymentId     String?            @db.Uuid
-  adjustmentDocumentId String?         @db.Uuid
-  targetDebitItemId String?            @db.VarChar(300)
-  amount            Decimal            @db.Decimal(20, 2)
-  sourceVersion     Int
-  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
-  disposal          DifferenceDisposal @relation(fields: [disposalId], references: [id], onDelete: Cascade)
-  discrepancyReturn DiscrepancyReturn? @relation(fields: [creditItemId], references: [id])
-  overpayment      Overpayment?        @relation(fields: [overpaymentId], references: [id])
-  adjustmentDocument AdjustmentDocument? @relation(fields: [adjustmentDocumentId], references: [id])
+  id                   String              @id @default(uuid()) @db.Uuid
+  disposalId           String              @db.Uuid
+  creditItemId         String?             @db.Uuid
+  overpaymentId        String?             @db.Uuid
+  adjustmentDocumentId String?             @db.Uuid
+  targetDebitItemId    String?             @db.VarChar(300)
+  amount               Decimal             @db.Decimal(20, 2)
+  sourceVersion        Int
+  createdAt            DateTime            @default(now()) @db.Timestamptz(6)
+  disposal             DifferenceDisposal  @relation(fields: [disposalId], references: [id], onDelete: Cascade)
+  discrepancyReturn    DiscrepancyReturn?  @relation(fields: [creditItemId], references: [id])
+  overpayment          Overpayment?        @relation(fields: [overpaymentId], references: [id])
+  adjustmentDocument   AdjustmentDocument? @relation(fields: [adjustmentDocumentId], references: [id])
 
   @@unique([creditItemId])
   @@unique([overpaymentId])

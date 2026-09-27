@@ -182,14 +182,18 @@ async function prepareOpsPage(cdp) {
       await waitFor(() => !document.querySelector('#workspace')?.classList.contains('hidden'), 'workspace');
       await waitFor(() => document.querySelectorAll('#issues tr').length >= 2, 'reconciliation issues');
       await waitFor(() => document.querySelector('#export-health-summary')?.textContent.includes('导出任务'), 'export health');
+      await waitFor(() => document.querySelector('#notifications')?.textContent.includes('对账异常待核查'), 'notifications');
       return {
         issueRows: document.querySelectorAll('#issues tr').length,
         exportHealthRows: document.querySelectorAll('#export-health-jobs tr').length,
+        notificationRows: document.querySelectorAll('#notifications tr').length,
         summaryText: document.querySelector('#summary').textContent.trim(),
         exportHealthText: document.querySelector('#export-health-summary').textContent.trim(),
+        notificationText: document.querySelector('#notifications').textContent.trim(),
         hasBalanceIssue: document.querySelector('#issues').textContent.includes('账户余额与最新流水不一致'),
         hasCreditIssue: document.querySelector('#issues').textContent.includes('挂账占用与资金占用不一致'),
-        hasExportHealth: document.querySelector('#export-health-summary').textContent.includes('超时处理中')
+        hasExportHealth: document.querySelector('#export-health-summary').textContent.includes('超时处理中'),
+        hasNotification: document.querySelector('#notifications').textContent.includes('对账异常待核查')
       };
     })()
   `);
@@ -215,6 +219,7 @@ try {
   console.log(`  Screenshot: ${file}`);
   console.log(`  Issue rows: ${state.issueRows}`);
   console.log(`  Export health rows: ${state.exportHealthRows}`);
+  console.log(`  Notification rows: ${state.notificationRows}`);
   console.log(`  Manifest: ${resolve(outputDir, 'ops-manifest.json')}`);
 } finally {
   chrome.kill('SIGTERM');

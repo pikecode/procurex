@@ -13,6 +13,12 @@ function assertIncludes(source, expected, label) {
   }
 }
 
+function assertMatches(source, pattern, label) {
+  if (!pattern.test(source)) {
+    throw new Error(`${label} is missing expected contract pattern: ${pattern}`);
+  }
+}
+
 const [
   apiDesign,
   packageJson,
@@ -190,7 +196,7 @@ assertIncludes(apiDesign, '`POST /jobs/{id}/process`', 'api design');
 assertIncludes(pricingController, "@Post('jobs/:id/process')", 'pricing job process controller');
 assertIncludes(apiDesign, '`GET /jobs/{id}/adjustments`', 'api design');
 assertIncludes(pricingController, "@Get('jobs/:id/adjustments')", 'pricing job adjustments controller');
-assertIncludes(prismaSchema, 'reason      String     @default("") @db.VarChar(500)', 'price version change reason');
+assertMatches(prismaSchema, /reason\s+String\s+@default\(""\)\s+@db\.VarChar\(500\)/, 'price version change reason');
 assertIncludes(prismaSchema, 'model PriceChangeRun', 'price change run model');
 assertIncludes(prismaSchema, 'model PriceChangeRunOrder', 'price change run order model');
 assertIncludes(prismaSchema, 'model PriceChangeAdjustment', 'price change adjustment model');

@@ -47,7 +47,7 @@ async function loadMe() {
 
 async function loadOperations() {
   $('notice').classList.add('hidden');
-  await Promise.all([loadIssues(), loadExportHealth()]);
+  await Promise.all([loadIssues(), loadExportHealth(), loadNotifications()]);
 }
 
 async function loadIssues() {
@@ -86,6 +86,27 @@ async function loadExportHealth() {
   }
 }
 
+async function loadNotifications() {
+  try {
+    const data = await call('/notifications');
+    const notifications = data.notifications || [];
+    $('notifications-empty').classList.toggle('hidden', notifications.length > 0);
+    $('notifications').innerHTML = notifications.map((item) => `<tr><td><span class="tag ${item.status === 'UNREAD' ? 'tag-pending' : 'tag-ok'}">${item.status === 'UNREAD' ? '未读' : '已读'}</span></td><td><strong>${esc(item.title)}</strong><br><small>${esc(item.channel)}</small></td><td>${esc(item.body)}</td><td>${esc(new Date(item.createdAt).toLocaleString('zh-CN'))}</td><td>${item.status === 'UNREAD' ? `<button class="secondary" data-notification-read="${esc(item.id)}">已读</button>` : ''}</td></tr>`).join('');
+    $('notifications').querySelectorAll('[data-notification-read]').forEach((button) => button.addEventListener('click', async () => {
+      try {
+        await call(`/notifications/${button.dataset.notificationRead}/read`, { method: 'POST' });
+        await loadNotifications();
+      } catch (error) {
+        $('notice').textContent = error.message;
+        $('notice').classList.remove('hidden');
+      }
+    }));
+  } catch (error) {
+    $('notice').textContent = error.message;
+    $('notice').classList.remove('hidden');
+  }
+}
+
 $('login-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   $('login-error').textContent = '';
@@ -103,5 +124,6 @@ $('login-form').addEventListener('submit', async (event) => {
 $('logout').addEventListener('click', async () => { try { await call('/auth/logout', { method: 'POST' }); } catch {} token = null; sessionStorage.removeItem('procurex-token'); showSession(); });
 $('refresh').addEventListener('click', loadOperations);
 $('refresh-issues').addEventListener('click', loadOperations);
+$('refresh-notifications').addEventListener('click', loadOperations);
 showSession();
 loadMe();

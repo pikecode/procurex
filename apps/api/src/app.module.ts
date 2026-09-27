@@ -11,6 +11,7 @@ import { DifferenceDisposalsModule } from './difference-disposals/difference-dis
 import { DiscrepanciesModule } from './discrepancies/discrepancies.module.js';
 import { FreightConfirmationsModule } from './freight-confirmations/freight-confirmations.module.js';
 import { HealthController } from './health.controller.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { PaymentRecordsModule } from './payment-records/payment-records.module.js';
 import { FilesModule } from './files/files.module.js';
 import { PricingModule } from './pricing/pricing.module.js';
@@ -52,6 +53,7 @@ import { UsersModule } from './users/users.module.js';
     FreightConfirmationsModule,
     RechargesModule,
     ReconciliationModule,
+    NotificationsModule,
     ReportsModule,
     StoreStatementsModule,
     SupplierStatementsModule,
