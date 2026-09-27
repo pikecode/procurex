@@ -48,7 +48,7 @@ Latest completed implementation: the four statement families, payment records, a
 
 Latest recovery evidence: an independent PostgreSQL backup/restore drill completed against the local database. Backup capture took 237ms and restore plus verification took 521ms. The restored database preserved 5 supplier orders, 4 payment records, 4 stores, and a READY PAYMENT FileObject; the restored private evidence file matched its source SHA-256. This is local AT-24 evidence; production backup policy and the RPO/RTO target remain DEV-603/M6 work.
 
-Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Browser E2E remains open: no browser binary is installed; a temporary Playwright Chromium download transferred only 9 MB of 182 MB in about two minutes and was stopped.
+Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Browser E2E remains open, but Google Chrome is now available locally; the current blocker is collecting DEV-402/403/406 manual browser evidence after the local PostgreSQL endpoint is reachable.
 
 W10 workbench now provides adjustment filtering, original/actual period comparison, detail, B12 offline-return registration and receiver confirmation, plus offsets to a selected positive adjustment on the same settlement side. A real-database HTTP test now follows a negative price adjustment through B05 list/detail into B12 creation and receiver confirmation. B05 exposes actionable source/target IDs only when a price adjustment maps to one persisted document; ambiguous multi-run netting remains read-only. Browser E2E remains open. Verification: 36 unit tests, 31 integration tests, build, contract check, Web syntax, HTTP smoke, diff check, and the targeted W10 HTTP test pass.
 
@@ -72,7 +72,7 @@ The same gate definition file now includes manual execution steps for each gate.
 
 `npm run m4:check-browser-runtime` checks whether a local Chromium, Chrome, or Firefox runtime is available for manual M4 acceptance. The current environment reports Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`, so the remaining M4 work is evidence collection rather than browser installation.
 
-`npm run m4:prepare-manual-acceptance` is the single preflight command for manual M4 review. It runs the browser runtime check, gate-status check, manual checklist sync check, and prints the exact service commands, URLs, accounts, and DEV-402/403/406 manual acceptance path.
+`npm run m4:prepare-manual-acceptance` is the single preflight command for manual M4 review. It prints the M4 status snapshot, runs the browser runtime check, database reachability check, gate-status check, manual checklist sync check, and prints the exact service commands, URLs, accounts, and DEV-402/403/406 manual acceptance path.
 
 `npm run m4:start-manual-acceptance` starts the API and Web static server together and opens the M4 review pages in Chrome on macOS. Use it after `npm run acceptance:m4-browserless` when collecting the remaining screenshots or recordings.
 
@@ -94,10 +94,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `cfb5762 Add local database preflight check`.
-Latest commit before this progress update: `cfb5762 Add local database preflight check`.
+Latest functional slice: `5d21c5d Add M4 status report`.
+Latest commit before this progress update: `5d21c5d Add M4 status report`.
 
 ```text
+5d21c5d Add M4 status report
 cfb5762 Add local database preflight check
 c5f925f Add M4 browser evidence capture
 913d4e5 Add M4 manual acceptance launcher
