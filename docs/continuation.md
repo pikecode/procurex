@@ -106,7 +106,7 @@ apps/web/reports-acceptance-run.json
 
 This file is intentionally ignored by git.
 
-The W13 ops evidence logs in as `pxrpt_admin`, renders `GET /exports/health`, `GET /notifications`, and `GET /reconciliation-issues`, and writes `ops-manifest.json` with export health, notification, and reconciliation issue row counts.
+The W13 ops evidence logs in as `pxrpt_admin`, renders `GET /exports/health`, `GET /notifications`, `GET /audit-logs`, and `GET /reconciliation-issues`, and writes `ops-manifest.json` with export health, notification, audit, and reconciliation issue row counts.
 
 Run the strongest browserless M4 chain:
 
