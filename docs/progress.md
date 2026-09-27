@@ -84,10 +84,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `d21b77a Run manual checklist check in M4 acceptance`.
-Latest commit before this progress update: `d21b77a Run manual checklist check in M4 acceptance`.
+Latest functional slice: `dfc3512 Add M4 browser runtime check`.
+Latest commit before this progress update: `dfc3512 Add M4 browser runtime check`.
 
 ```text
+dfc3512 Add M4 browser runtime check
 d21b77a Run manual checklist check in M4 acceptance
 3bb78bc Check generated M4 manual checklist
 85ebf3e Generate M4 manual acceptance checklist

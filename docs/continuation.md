@@ -15,6 +15,7 @@ The direction has not shifted: finish M4 settlement/billing/payment/adjustment a
 Recent commits added visible and repeatable acceptance evidence:
 
 ```text
+dfc3512 Add M4 browser runtime check
 d21b77a Run manual checklist check in M4 acceptance
 3bb78bc Check generated M4 manual checklist
 85ebf3e Generate M4 manual acceptance checklist
