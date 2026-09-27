@@ -45,7 +45,7 @@ Latest completed implementation: the four statement families, payment records, a
 Latest commits:
 
 ```text
-Pending this commit: verify B05 reads persisted settled-side adjustment
+5cbc373 Verify B05 reads persisted price adjustment
 146a13b Verify settled price adjustments persist separately
 c0ad0de Refresh progress after clearing acceptance
 16790b9 Verify clearing affects selected credit only
