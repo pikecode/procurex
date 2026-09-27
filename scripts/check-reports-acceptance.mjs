@@ -10,7 +10,7 @@ import { ResponseEnvelopeInterceptor } from '../dist/apps/api/src/common/respons
 const result = {
   generatedAt: new Date().toISOString(),
   title: 'M5 Reports Acceptance',
-  summary: 'R01-R04 reporting and CSV export',
+  summary: 'R01-R05 reporting, CSV export, and reconciliation',
   steps: [],
 };
 

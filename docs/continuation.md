@@ -8,7 +8,7 @@ Use this as the first document when continuing development in a new window.
 
 M4 is locally closed against the current acceptance gates. DEV-401 through DEV-406 are closed, `npm run acceptance:m4-close` passes, Chrome is ready, local PostgreSQL is reachable, automatic evidence is complete, and the manual browser evidence package is 6/6.
 
-M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R04 reporting/export, W11 visibility, R04 export task listing, and a Chrome-captured W11 acceptance screenshot.
+M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, W11 visibility, R04 export task listing, and a Chrome-captured W11 acceptance screenshot.
 
 ## Latest High-Signal Work
 
@@ -63,10 +63,11 @@ This performs:
 
 1. TypeScript build.
 2. `PXRPT` report acceptance seeding.
-3. R01/R02/R03/R04 HTTP acceptance checks.
+3. R01/R02/R03/R04/R05 HTTP acceptance checks.
 4. Store-scope and supplier profit-permission checks.
 5. R04 export task list check.
-6. W11 Web visibility check.
+6. R05 reconciliation issue list check.
+7. W11 Web visibility check.
 
 The screenshot capture logs in as `pxrpt_store`, renders the M5 acceptance summary on the W11 report page, runs the September 2026 R01 scoped query, creates an export job, waits for READY in the export task list, and writes local evidence to:
 
