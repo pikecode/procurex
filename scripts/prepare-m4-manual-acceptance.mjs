@@ -15,6 +15,8 @@ const gates = JSON.parse(await readFile('apps/web/m4-gates.json', 'utf8'));
 
 console.log('Preparing M4 manual browser acceptance');
 console.log('');
+console.log(run('npm', ['run', 'm4:status']));
+console.log('');
 console.log(run('npm', ['run', 'm4:check-browser-runtime']));
 console.log('');
 console.log(run('npm', ['run', 'db:check']));

@@ -24,6 +24,7 @@
 - M4 人工验收启动器：新增 `m4:start-manual-acceptance`，同时启动 API 与 Web 静态服务，并在 macOS 上打开 Chrome 到 M4 验收页、账单页和主流程 demo 页；按 Ctrl+C 停止服务。
 - M4 浏览器入口截图证据：新增 `m4:capture-browser-evidence`，使用本机 Chrome headless 抓取 M4 验收页、账单入口页和主流程 demo 页，输出到 `var/m4-browser-evidence/` 及 manifest，作为浏览器入口可渲染证据。
 - 本地 DB preflight：新增 `db:check`，直接探测 `DATABASE_URL` 的 TCP 端口；`m4:prepare-manual-acceptance` 会先检查数据库，避免 Docker/Postgres 未启动时掉进 Prisma 长堆栈。
+- M4 状态总览：新增 `m4:status`，汇总浏览器 runtime、数据库可达性、DEV-402/403/406 自动证据、人工清单和浏览器入口截图状态；数据库未启动时也会给出 BLOCKED 状态而不是 Prisma 堆栈。
 - DEV-406/W10：账单工作台新增调整列表、处置状态筛选、原周期/实际周期对照和调整详情；B12 操作随后在同日接通。初始只读切片验证：构建、Web 脚本语法、本地 HTTP 冒烟、diff 检查通过。
 - DEV-406/B05/W10：B05 对可精确映射的单笔负向改价暴露 B12 信用项 ID 和处置版本；账单页支持公司财务登记线下返还、收款方确认。净额无法映射到单张负向调整单时不显示登记动作。验证：36 项单测、31 项集成测试、构建、契约检查、Web 脚本语法与 diff 检查通过。
 - DEV-406/W10：B05 同时为单笔正向改价返回可用于抵扣的结算项 ID；工作台允许公司财务选择同结算侧的正向调整作抵扣目标，B12 继续校验余额及主体。验证：构建、单测、集成测试、契约检查、Web 语法及 diff 检查通过。

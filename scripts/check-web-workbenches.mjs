@@ -104,6 +104,7 @@ assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'billing:check-
 assertIncludes(packageJson.scripts['m4:check-browser-runtime'], 'check-browser-runtime.mjs', 'M4 browser runtime check script');
 assertIncludes(packageJson.scripts['m4:capture-browser-evidence'], 'capture-m4-browser-evidence.mjs', 'M4 browser evidence capture script');
 assertIncludes(packageJson.scripts['m4:prepare-manual-acceptance'], 'prepare-m4-manual-acceptance.mjs', 'M4 manual acceptance prep script');
+assertIncludes(packageJson.scripts['m4:status'], 'report-m4-status.mjs', 'M4 status report script');
 assertIncludes(packageJson.scripts['m4:start-manual-acceptance'], 'start-m4-manual-acceptance.mjs', 'M4 manual acceptance launcher script');
 assertIncludes(packageJson.scripts['m4:gate-status'], 'check-m4-gate-status.mjs', 'M4 gate status script');
 assertIncludes(packageJson.scripts['m4:write-manual-checklist'], 'write-m4-manual-checklist.mjs', 'M4 manual checklist script');

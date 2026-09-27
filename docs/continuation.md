@@ -48,6 +48,7 @@ dc2e5ea Add billing acceptance checker
 Run the strongest browserless M4 chain:
 
 ```bash
+npm run m4:status
 npm run db:check
 npm run acceptance:m4-browserless
 ```
@@ -126,6 +127,7 @@ For the M4 gate status summary, run:
 
 ```bash
 npm run m4:prepare-manual-acceptance
+npm run m4:status
 npm run m4:check-browser-runtime
 npm run m4:gate-status
 npm run m4:capture-browser-evidence
