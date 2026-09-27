@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProcureX · 账单及付款</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/billing.css">
+</head>
+<body>
+  <aside class="sidebar"><div class="brand"><span class="mark">P</span><span>ProcureX<small>采购协同平台</small></span></div><div class="nav-label">工作台</div><a class="nav-item" href="#">总览</a><a class="nav-item" href="#">订货与履约</a><a class="nav-item active" href="/billing.html">财务结算</a><a class="nav-item" href="/">报表与分析</a><div class="side-foot"><span class="pulse"></span>资金操作由服务端校验</div></aside>
+  <main class="main">
+    <header class="topbar"><div class="crumb">工作台 <span>/</span> 财务结算 <span>/</span> 账单及付款</div><div class="profile"><span id="identity">未登录</span><button id="logout" class="quiet hidden">退出</button><span class="avatar">P</span></div></header>
+    <section class="page-head"><div><div class="eyebrow">结算中心 · W09</div><h1>账单及付款</h1><p>账单按角色显示对应价格口径；供应商总单与分店单共用结算来源。</p></div><div class="updated"><span class="pulse"></span>金额以服务端账单为准</div></section>
+    <section id="login" class="login-card"><div><h2>登录管理后台</h2><p>使用有账单权限的 ProcureX 账号。</p></div><form id="login-form"><input name="username" placeholder="用户名" required><input name="password" type="password" placeholder="密码" required><button class="primary">登录</button></form><div id="login-error" class="error"></div></section>
+    <section id="workspace" class="hidden">
+      <div id="notice" class="notice hidden"></div>
+      <div class="tabs bill-tabs" id="bill-tabs"></div>
+      <div class="filter-card bill-filters"><div><label for="cycle">结算周期</label><select id="cycle"><option value="">全部周期</option><option value="WEEKLY">周结</option><option value="HALF_MONTHLY">半月结</option><option value="MONTHLY">月结</option><option value="IMMEDIATE">现结</option></select></div><div><label for="status">结算状态</label><select id="status"><option value="">全部状态</option><option value="OPEN">未结清</option><option value="SETTLED">已结清</option></select></div><div id="supplier-filter" class="hidden"><label for="supplierId">供应商 ID</label><input id="supplierId" placeholder="全部供应商"></div><div id="store-filter" class="hidden"><label for="storeId">门店 ID</label><input id="storeId" placeholder="全部门店"></div><button id="refresh" class="primary">查询账单</button></div>
+      <section class="data-card"><div class="data-head"><div><h3 id="list-title">账单列表</h3><p>选择账单查看明细和付款状态</p></div><span id="count" class="muted"></span></div><div class="table-wrap"><table><thead><tr><th>周期</th><th>结算对象</th><th>范围</th><th class="money">商品额</th><th class="money">运费</th><th class="money">调整额</th><th class="money">已付</th><th class="money">待确认</th><th class="money">待付</th><th>状态</th><th></th></tr></thead><tbody id="bills"></tbody></table><div id="empty" class="empty hidden"><span>◌</span><strong>暂无账单</strong><small>更改筛选条件后重试</small></div></div></section>
+      <section id="detail" class="data-card detail-card hidden"><div class="data-head"><div><h3>账单明细</h3><p id="detail-subtitle"></p></div><button id="close-detail" class="secondary">收起</button></div><div class="table-wrap"><table><thead><tr><th class="choose-col"></th><th>来源订单</th><th>首次发货</th><th class="money">商品额</th><th class="money">运费</th><th class="money">本期调整</th><th class="money">可登记</th></tr></thead><tbody id="lines"></tbody></table></div><div id="payment-actions" class="payment-actions hidden"><div class="action-total"><small>所选金额</small><strong id="selected-amount">¥0.00</strong></div><label class="proof-label">付款凭证 <input id="proof" type="file" accept="image/jpeg,image/png,application/pdf"></label><input id="business-date" type="date"><button id="preview" class="secondary">预览付款</button><button id="register" class="primary" disabled>登记付款</button></div><div id="preview-box" class="preview-box hidden"></div></section>
+      <section class="data-card payments-card"><div class="data-head"><div><h3>付款记录</h3><p>待确认付款由收款方确认后计入已付金额</p></div><button id="refresh-payments" class="secondary">刷新</button></div><div class="table-wrap"><table><thead><tr><th>付款单号</th><th>方向</th><th>业务日期</th><th class="money">金额</th><th>状态</th><th>凭证</th><th></th></tr></thead><tbody id="payments"></tbody></table><div id="payments-empty" class="empty hidden"><span>◌</span><strong>暂无付款记录</strong></div></div></section>
+      <footer>付款登记会重新校验账单版本与可付金额 · 收款确认仅对授权收款方开放</footer>
+    </section>
+  </main>
+  <script src="/billing.js"></script>
+</body>
+</html>

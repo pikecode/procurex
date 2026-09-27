@@ -39,7 +39,7 @@ export class FilesController {
   @Get(':id/download')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
   async download(@CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string, @Res() response: { setHeader(name: string, value: string): void; end(bytes: Buffer): void }) {
-    const result = await this.files.download(auth.user.id, id);
+    const result = await this.files.download(auth.user.id, id, auth.user.scope, auth.user.roles);
     response.setHeader('content-type', result.file.mimeType);
     response.setHeader('content-disposition', `attachment; filename="${encodeURIComponent(result.file.filename)}"`);
     response.end(result.bytes);

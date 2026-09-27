@@ -47,9 +47,11 @@ export class FilesService {
     return { id, status: 'READY' };
   }
 
-  async download(ownerId: string, id: string) {
-    const file = await this.database.client.fileObject.findFirst({ where: { id, ownerId, status: 'READY' } });
+  async download(ownerId: string, id: string, scope?: { type?: string; storeId?: string; supplierId?: string }, roles: string[] = []) {
+    const file = await this.database.client.fileObject.findFirst({ where: { id, status: 'READY' }, include: { payment: { select: { storeId: true, supplierId: true } } } });
     if (!file) throw new NotFoundException();
+    const allowed = file.ownerId === ownerId || roles.some((role) => role === 'ADMIN' || role === 'HQ_FINANCE') || (scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE') && file.payment?.storeId === scope.storeId || scope?.type === 'SUPPLIER' && file.payment?.supplierId === scope.supplierId;
+    if (!allowed) throw new NotFoundException();
     return { file, bytes: await readFile(join(root, file.objectKey)) };
   }
 }
