@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Added DEV-402 AT-17 HTTP regression: a credit limit below currently used credit is rejected and neither persisted limit nor used credit changes.
+- Verification: `npm run build`, `npm test` (35), `npm run test:integration` (29), `npm run contract:check`, and `git diff --check` passed.
+
 - Added direct supplier-term HTTP acceptance: B04 list/detail returns goods plus freight; B06 maps to STORE_TO_SUPPLIER/DIRECT; B07 idempotent registration and B08 supplier confirmation settle the statement; confirmed snapshot preserves goods/freight/total amounts.
 - Verification: `npm run build`, `npm test` (35), `npm run test:integration` (29), `npm run contract:check`, and `git diff --check` passed.
 

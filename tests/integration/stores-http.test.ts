@@ -253,6 +253,16 @@ test('stores endpoint creates, lists and disables stores with admin role', async
       where: { storeId: createdBody.data.id },
       data: { creditUsed: '200.00', version: { increment: 1 } },
     });
+    const lowerBelowUsedResponse = await fetch(`${baseUrl}/stores/${createdBody.data.id}/credit-limit`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json', 'idempotency-key': 'lower-credit-limit-below-used', 'x-trace-id': 'trace-credit-limit-below-used' },
+      body: JSON.stringify({ expectedVersion: 3, limit: '199.99', reason: 'AT-17 regression' }),
+    });
+    assert.equal(lowerBelowUsedResponse.status, 409);
+    assert.match(JSON.stringify(await lowerBelowUsedResponse.json()), /CREDIT_LIMIT_BELOW_USED/);
+    const unchangedAccount = await prisma.storeAccount.findUniqueOrThrow({ where: { storeId: createdBody.data.id } });
+    assert.equal(unchangedAccount.creditLimit.toFixed(2), '1000.00');
+    assert.equal(unchangedAccount.creditUsed.toFixed(2), '200.00');
     const fundingAllocation = await prisma.fundingAllocation.create({
       data: {
         storeId: createdBody.data.id,
