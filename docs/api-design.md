@@ -83,7 +83,7 @@ Blocker = { code, message, itemId? }
 | I08 | `GET /notifications`、`POST /notifications/{id}/read` | 分页消息及已读 | 只可操作本人消息 |
 | I09 | `GET /health/live`、`GET /health/ready` | 最小状态；不返回数据库凭据或内部拓扑 | 运维用途；readiness 检查必要依赖 |
 
-当前 I06/I07 私有目录实现限定 `PAYMENT` 用途，支持 JPEG、PNG、PDF，单文件最大 10 MiB；上传凭据 24 小时过期。内容签名与 SHA-256 在服务端校验，私有目录由 `PRIVATE_FILE_DIR` 指定。当前下载仅限上传者，付款相对方授权下载仍待补齐。
+当前 I06/I07 私有目录实现限定 `PAYMENT` 用途，支持 JPEG、PNG、PDF，单文件最大 10 MiB；上传会话 24 小时有效，创建新会话时最多清理 100 条过期未完成记录及文件。内容签名与 SHA-256 在服务端校验，私有目录由 `PRIVATE_FILE_DIR` 指定。B07 至少需要一个已完成凭证，且凭证必须由登记人上传；下载限上传者、付款关联门店/供应商及总部财务/管理员。内容类型不符时立即删除文件内容并保留 REJECTED 元数据。
 
 ### 3.2 主数据接口
 

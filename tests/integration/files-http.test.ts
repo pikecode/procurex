@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { AddressInfo } from 'node:net';
 import test from 'node:test';
-import { rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import type { INestApplication } from '@nestjs/common';
@@ -38,8 +39,16 @@ test('private payment evidence uploads, completes and downloads only for its own
     const token = ((await login.json()) as { data: { accessToken: string } }).data.accessToken;
     const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
     const bytes = Buffer.from([0xff, 0xd8, 0xff, 0x00, 0x01]);
+    const expiredKey = randomUUID();
+    const privateDir = resolve(process.env.PRIVATE_FILE_DIR ?? 'var/private-files');
+    const expiredPath = join(privateDir, expiredKey);
+    await mkdir(privateDir, { recursive: true });
+    await writeFile(expiredPath, Buffer.from('expired upload'));
+    const expiredFile = await prisma.fileObject.create({ data: { filename: 'expired.pdf', mimeType: 'application/pdf', sizeBytes: 14n, objectKey: expiredKey, uploadTokenHash: '0'.repeat(64), purpose: 'PAYMENT', ownerId: user.id, createdAt: new Date(Date.now() - 86_401_000) } });
     const sessionResponse = await fetch(`${url}/files/upload-sessions`, { method: 'POST', headers, body: JSON.stringify({ purpose: 'PAYMENT', filename: 'proof.jpg', mimeType: 'image/jpeg', sizeBytes: bytes.length }) });
     assert.equal(sessionResponse.status, 201);
+    assert.equal(await prisma.fileObject.findUnique({ where: { id: expiredFile.id } }), null);
+    await assert.rejects(readFile(expiredPath));
     const session = ((await sessionResponse.json()) as { data: { id: string; uploadToken: string } }).data;
     const uploaded = await fetch(`${url}/files/${session.id}/content`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/octet-stream', 'x-upload-token': session.uploadToken }, body: bytes });
     assert.equal(uploaded.status, 201);

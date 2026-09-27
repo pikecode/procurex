@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
@@ -16,6 +16,7 @@ export class FilesService {
     if (input.purpose !== 'PAYMENT' || !input.filename.trim() || !mimeTypes.has(input.mimeType) || !Number.isInteger(input.sizeBytes) || input.sizeBytes < 1 || input.sizeBytes > MAX_BYTES || input.filename.length > 255) {
       throw new ConflictException({ code: 'FILE_METADATA_INVALID', message: 'Payment evidence must be a JPEG, PNG, or PDF no larger than 10 MiB' });
     }
+    await this.removeExpiredUploads();
     const id = randomUUID();
     const token = randomBytes(32).toString('base64url');
     await this.database.client.fileObject.create({ data: { id, filename: input.filename, mimeType: input.mimeType, sizeBytes: BigInt(input.sizeBytes), objectKey: randomUUID(), uploadTokenHash: createHash('sha256').update(token).digest('hex'), purpose: input.purpose, ownerId } });
@@ -40,6 +41,7 @@ export class FilesService {
     const bytes = await readFile(join(root, file.objectKey)).catch(() => null);
     const valid = bytes && ((file.mimeType === 'image/jpeg' && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) || (file.mimeType === 'image/png' && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ) || (file.mimeType === 'application/pdf' && bytes.subarray(0, 5).toString() === '%PDF-'));
     if (!valid) {
+      await unlink(join(root, file.objectKey)).catch(() => undefined);
       await this.database.client.fileObject.update({ where: { id }, data: { status: 'REJECTED' } });
       throw new ConflictException({ code: 'FILE_CONTENT_INVALID', message: 'File content does not match its declared type' });
     }
@@ -53,5 +55,11 @@ export class FilesService {
     const allowed = file.ownerId === ownerId || roles.some((role) => role === 'ADMIN' || role === 'HQ_FINANCE') || (scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE') && file.payment?.storeId === scope.storeId || scope?.type === 'SUPPLIER' && file.payment?.supplierId === scope.supplierId;
     if (!allowed) throw new NotFoundException();
     return { file, bytes: await readFile(join(root, file.objectKey)) };
+  }
+
+  private async removeExpiredUploads() {
+    const expired = await this.database.client.fileObject.findMany({ where: { status: 'UPLOADING', createdAt: { lte: new Date(Date.now() - 86_400_000) }, paymentId: null }, take: 100 });
+    for (const file of expired) await unlink(join(root, file.objectKey)).catch(() => undefined);
+    if (expired.length) await this.database.client.fileObject.deleteMany({ where: { id: { in: expired.map(({ id }) => id) }, status: 'UPLOADING', paymentId: null } });
   }
 }
