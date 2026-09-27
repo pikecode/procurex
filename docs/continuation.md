@@ -8,11 +8,11 @@ Use this as the first document when continuing development in a new window.
 
 M4 is locally closed against the current acceptance gates. DEV-401 through DEV-406 are closed, `npm run acceptance:m4-close` passes, Chrome is ready, local PostgreSQL is reachable, automatic evidence is complete, and the manual browser evidence package is 6/6.
 
-The direction has not shifted: M4 settlement/billing/payment/adjustment acceptance is now closed locally, so the next planned work can move back to M5 reporting or the next approved milestone.
+M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R04 reporting/export and W11 visibility.
 
 ## Latest High-Signal Work
 
-Recent commits closed the visible and repeatable M4 acceptance evidence:
+Recent commits closed M4 and restarted M5 reporting/export acceptance:
 
 ```text
 77e7fb2 Close M4 local acceptance gates
@@ -48,6 +48,28 @@ dc2e5ea Add billing acceptance checker
 ```
 
 ## Commands To Rebuild Evidence
+
+Run the M5 reporting/export browserless chain:
+
+```bash
+npm run acceptance:m5-browserless
+```
+
+This performs:
+
+1. TypeScript build.
+2. `PXRPT` report acceptance seeding.
+3. R01/R02/R03/R04 HTTP acceptance checks.
+4. Store-scope and supplier profit-permission checks.
+5. W11 Web visibility check.
+
+Generated local file:
+
+```text
+apps/web/reports-acceptance-run.json
+```
+
+This file is intentionally ignored by git.
 
 Run the strongest browserless M4 chain:
 

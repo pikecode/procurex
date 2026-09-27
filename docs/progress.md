@@ -6,7 +6,7 @@ Last updated: 2026-09-27
 
 For new-window continuation, start with `docs/continuation.md`.
 
-M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export can resume as the next planned milestone.
+M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export has resumed with a repeatable browserless acceptance chain.
 
 Latest follow-up audit also closes two remaining store-scope reads: recharge detail accepts STORE_FINANCE and rejects another store, and store catalog reads reject unconfigured or mismatched STORE/STORE_FINANCE scopes.
 
@@ -53,6 +53,8 @@ Latest W09/S05/S08 verification: the local API health endpoint and `billing.html
 W10 workbench now provides adjustment filtering, original/actual period comparison, detail, B12 offline-return registration and receiver confirmation, plus offsets to a selected positive adjustment on the same settlement side. A real-database HTTP test now follows a negative price adjustment through B05 list/detail into B12 creation and receiver confirmation. B05 exposes actionable source/target IDs only when a price adjustment maps to one persisted document; ambiguous multi-run netting remains read-only. Browser E2E remains open. Verification: 36 unit tests, 31 integration tests, build, contract check, Web syntax, HTTP smoke, diff check, and the targeted W10 HTTP test pass.
 
 `npm run web:check` now provides a browserless visibility guard for W09/W10/W11. It verifies the billing page, adjustment section, payment/evidence controls, difference-disposal controls, report page, JavaScript syntax, and required web assets. It is not a replacement for browser E2E, but it prevents silent removal of the visible workbench entry points.
+
+`npm run acceptance:m5-browserless` now covers the M5 reporting/export slice. It builds the project, seeds isolated `PXRPT` data, verifies R01 scoped completed-order amount, R02 product quantity and three-month range rejection, R03 profit excluding direct supplier-term orders with freight separate, R04 export job READY plus CSV download, store-scope enforcement, supplier profit denial, and W11 Web visibility. The latest run passed and wrote `apps/web/reports-acceptance-run.json`.
 
 The main-flow acceptance runner now writes a browser-readable result to `apps/web/main-flow-run.json`, and `apps/web/main-flow.html` renders the latest order-to-payment handoff status. `npm run web:check` now guards this page as well, so the main flow is visible even before a full interactive order-entry workbench is built.
 
