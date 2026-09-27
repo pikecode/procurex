@@ -66,10 +66,12 @@ W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run bil
 
 Latest commits:
 
-Latest functional slice: `eaea023 Add continuation handoff document`.
-Latest commit before this progress update: `eaea023 Add continuation handoff document`.
+Latest functional slice: `4afe8a6 Add interactive main flow demo`.
+Latest commit before this progress update: `4afe8a6 Add interactive main flow demo`.
 
 ```text
+4afe8a6 Add interactive main flow demo
+7db7c4d Refresh progress ledger for handoff
 eaea023 Add continuation handoff document
 56672e9 Add M4 acceptance summary page
 4dde596 Refresh progress ledger after acceptance work
