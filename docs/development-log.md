@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Added immediate-cycle grouping regression coverage for store, supplier-total, and supplier-store statements, complementing existing direct-statement coverage; each keeps same-day execution orders separate.
+- Verification: `npm run build`, `npm test` (36), `npm run test:integration` (29), `npm run contract:check`, and `git diff --check` passed.
+
 - Made AC-21 explicit in the settlement integration: asserts the completed order is STORED_VALUE while its supplier statement/payment preview still exposes the COMPANY payable including freight.
 - Verification: build and all five purchase HTTP integration scenarios passed.
 

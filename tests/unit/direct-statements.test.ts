@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DirectStatementsService } from '../../apps/api/src/direct-statements/direct-statements.service.js';
+import { StoreStatementsService } from '../../apps/api/src/store-statements/store-statements.service.js';
 import { SupplierStatementsService } from '../../apps/api/src/supplier-statements/supplier-statements.service.js';
+import { SupplierStoreStatementsService } from '../../apps/api/src/supplier-store-statements/supplier-store-statements.service.js';
 
 test('direct statements group completed supplier-term orders and include freight', async () => {
   let query: any;
@@ -43,6 +45,28 @@ test('immediate direct statements remain one statement per execution order', asy
   assert.equal(statements.length, 2);
   assert.deepEqual(statements.map((statement) => statement.lineCount).sort(), [1, 1]);
   assert.notEqual(statements[0]?.id, statements[1]?.id);
+});
+
+test('immediate store, supplier, and supplier-store statements remain per execution order', async () => {
+  const orders = ['order-1', 'order-2'].map((id, index) => ({
+    id, supplierOrderNo: id, storeId: 'store-1', supplierId: 'supplier-1', version: 1,
+    salesGoodsAmount: `${10 + index}.00`, supplyGoodsAmount: `${8 + index}.00`,
+    firstShippedAt: new Date(`2026-09-10T0${index + 1}:00:00.000Z`), settlementCycleSnapshot: 'IMMEDIATE',
+    supplier: { defaultSettlementCycle: 'MONTHLY' }, shipments: [], priceChangeRuns: [],
+  }));
+  const serviceFor = (Service: new (...args: any[]) => any) => new Service({
+    client: { supplierOrder: { findMany: async () => orders } },
+  } as any);
+  for (const [Service, args] of [
+    [StoreStatementsService, { storeId: 'store-1' }],
+    [SupplierStatementsService, { supplierId: 'supplier-1' }],
+    [SupplierStoreStatementsService, { storeId: 'store-1', supplierId: 'supplier-1' }],
+  ] as const) {
+    const statements = await serviceFor(Service).list(args);
+    assert.equal(statements.length, 2);
+    assert.ok(statements.every((statement: { lineCount: number; cycle: string }) => statement.lineCount === 1 && statement.cycle === 'IMMEDIATE'));
+    assert.notEqual(statements[0]?.id, statements[1]?.id);
+  }
 });
 
 test('supplier statements use the order cycle snapshot after supplier settings change', async () => {

@@ -30,6 +30,8 @@ DEV-404 direct-payment role boundaries are covered in the same HTTP flow: SUPPLI
 
 DEV-402 AC-21 now has explicit integration evidence: a completed STORED_VALUE supplier order still appears as a COMPANY supplier payable with its goods and freight amount in the supplier statement/payment preview.
 
+DEV-403 immediate-cycle grouping now has unit evidence for all four statement views: store, direct, supplier total, and supplier-store each keep same-day execution orders in separate statements.
+
 Latest completed implementation: the four statement families, payment records, adjustments, difference disposals, and clearing details now enforce authenticated store scope for both STORE and STORE_FINANCE accounts; cross-scope IDs resolve as not found, while company roles retain broad access. B01–B04 expose persisted adjustment amounts and adjustment settlement item IDs in their actual settlement period; B06–B08 now preview, register, and confirm positive adjustment payments through the existing allocation path without turning them into order overpayments; statement payment summaries and settlement status include those positive adjustment allocations; company-term supplier adjustments also wait for the related store receivable and positive store adjustments to settle; negative adjustments remain B12 credits. Price adjustment documents use the same left-closed, right-open period key as statements; B05 reads persisted settled-side adjustment documents and their side-specific disposal status; P03 writes them transactionally.
 
 Latest commits:
@@ -122,7 +124,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 |---|---|---|
 | DEV-401 | **Closed**: P01-P03, AT-08, AT-09, and W06/S10 backend flow evidence are complete | None for the current backend scope |
 | DEV-402 | B01-B04, amount/period logic, AT-16 price guard, direct-term B04→B08 flow, AT-17 credit-limit guard, and AC-21 stored-value supplier payable verified | Finish remaining settlement-mode and W09/S05/S08 acceptance evidence |
-| DEV-403 | Statement read paths, total/store sum, immediate per-order grouping, replenishment period, and account scope are tested | Required W09/S05/S08 flow evidence remains before closure |
+| DEV-403 | Statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, and account scope are tested | Remaining W09/S05/S08 flow evidence before closure |
 | DEV-404 | B06-B11 lifecycle, AT-13 concurrency, receiver authorization, and direct-term B06-B08 HTTP flow with initiator/receiver role checks verified; B12 is being completed | Finish remaining payment workflow acceptance evidence |
 | DEV-405 | Clearing transaction logic and A04-A06 read/write paths exist | A06 now enforces store scope on clearing detail; verify AT-24 ledger/history recovery evidence and planned W08 workflow |
 | DEV-406 | Active; persisted adjustments, netting, payments, offsets and returns have partial coverage | Receiver confirmation scope and AT-14 offline return are verified; finish reconciliation consistency before closure |
@@ -147,7 +149,7 @@ npm run db:validate && npm run db:migrate && npm run build && npm test && npm ru
 
 Current integration coverage count: 28 integration tests passing; unit coverage is 35 tests.
 
-Latest run after direct-term HTTP and AT-17 additions: 29 integration tests and 35 unit tests passed, along with build, contract check, and diff check.
+Latest run: 29 integration tests and 36 unit tests passed, along with build, contract check, and diff check.
 
 DEV-404 acceptance slice: the payment integration now registers the same supplier payable concurrently with two different idempotency keys and verifies exactly one reservation succeeds while the other conflicts; replaying the winning key returns the original payment.
 
