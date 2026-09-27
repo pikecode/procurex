@@ -74,6 +74,7 @@ For local manual billing acceptance data:
 
 ```bash
 npm run billing:seed-acceptance
+npm run billing:check-acceptance
 ```
 
 Use `docs/billing-acceptance-seed.md` for the seeded accounts and expected W09/S05/S08 evidence.

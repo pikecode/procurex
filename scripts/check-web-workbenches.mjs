@@ -84,6 +84,7 @@ assertIncludes(reportHtml, '报表与分析', 'W11 report page');
 assertIncludes(appJs, '/reports/${active}', 'W11 report endpoints');
 assertIncludes(appJs, '/exports', 'R04 export workflow');
 assertIncludes(packageJson.scripts['billing:seed-acceptance'], 'seed-billing-acceptance.mjs', 'billing acceptance seed script');
+assertIncludes(packageJson.scripts['billing:check-acceptance'], 'check-billing-acceptance.mjs', 'billing acceptance check script');
 
 assertIncludes(mainFlowHtml, '主流程验收', 'main-flow acceptance page');
 assertIncludes(mainFlowHtml, '/main-flow.js', 'main-flow acceptance script');

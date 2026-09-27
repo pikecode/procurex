@@ -23,7 +23,8 @@
     "contract:check": "node scripts/check-contract.mjs",
     "web:check": "node scripts/check-web-workbenches.mjs",
     "acceptance:main-flow": "node --env-file-if-exists=.env scripts/run-main-flow-acceptance.mjs",
-    "billing:seed-acceptance": "node --env-file-if-exists=.env scripts/seed-billing-acceptance.mjs"
+    "billing:seed-acceptance": "node --env-file-if-exists=.env scripts/seed-billing-acceptance.mjs",
+    "billing:check-acceptance": "node --env-file-if-exists=.env scripts/check-billing-acceptance.mjs"
   },
   "dependencies": {
     "@nestjs/common": "12.1.0",

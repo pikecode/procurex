@@ -9,6 +9,7 @@ Run after database setup:
 ```bash
 npm run build
 npm run billing:seed-acceptance
+npm run billing:check-acceptance
 npm run start:api
 npm run start:web
 ```
@@ -36,3 +37,5 @@ All accounts use password `correct-password`.
 | `PXACC-SO-DIRECT` | Direct statement preview shows `STORE_TO_SUPPLIER` and channel `DIRECT`. |
 
 The script is repeatable. It deletes prior `PXACC` seed data before inserting the current acceptance dataset.
+
+`npm run billing:check-acceptance` starts a temporary local API and verifies the seeded W09/S05/S08 evidence through real HTTP requests.
