@@ -35,6 +35,47 @@ function authHeaders(token, extra = {}) {
   };
 }
 
+async function createSupplierOrder(baseUrl, token, seed, idempotencyPrefix) {
+  const created = await request(`${baseUrl}/purchase-requests`, {
+    method: 'POST',
+    headers: authHeaders(token, { 'idempotency-key': `${idempotencyPrefix}-create-${Date.now()}` }),
+    body: JSON.stringify({
+      storeId: seed.storeId,
+      items: [{ productId: seed.productId, quantity: seed.quantity }],
+    }),
+  });
+  assert.equal(created.status, 'PENDING_PROCUREMENT');
+  assert.equal(created.paymentStatus, 'PAID');
+  assert.equal(created.totals.salesGoodsAmount, seed.expectedSalesAmount);
+
+  const confirmed = await request(`${baseUrl}/purchase-requests/${created.id}/confirm`, {
+    method: 'POST',
+    headers: authHeaders(token, { 'idempotency-key': `${idempotencyPrefix}-confirm-${Date.now()}` }),
+    body: JSON.stringify({ expectedVersion: created.version }),
+  });
+  assert.equal(confirmed.status, 'CONFIRMED');
+  assert.equal(confirmed.supplierOrderIds.length, 1);
+
+  return request(`${baseUrl}/supplier-orders/${confirmed.supplierOrderIds[0]}`, {
+    headers: authHeaders(token),
+  });
+}
+
+async function createInitialShipment(baseUrl, token, supplierOrder, idempotencyPrefix) {
+  const orderItem = supplierOrder.items[0];
+  const shipment = await request(`${baseUrl}/supplier-orders/${supplierOrder.id}/shipments`, {
+    method: 'POST',
+    headers: authHeaders(token, { 'idempotency-key': `${idempotencyPrefix}-ship-${Date.now()}` }),
+    body: JSON.stringify({
+      expectedVersion: supplierOrder.version,
+      freight: '0.00',
+      items: [{ orderItemId: orderItem.id, shipQuantity: orderItem.quantity, permanentlyReduceQuantity: '0.000000' }],
+    }),
+  });
+  assert.equal(shipment.kind, 'INITIAL');
+  return shipment;
+}
+
 async function run() {
   const { app, baseUrl } = await createAcceptanceApp();
   try {
@@ -45,40 +86,8 @@ async function run() {
     });
     const token = login.accessToken;
 
-    const created = await request(`${baseUrl}/purchase-requests`, {
-      method: 'POST',
-      headers: authHeaders(token, { 'idempotency-key': `flow-demo-create-${Date.now()}` }),
-      body: JSON.stringify({
-        storeId: seed.storeId,
-        items: [{ productId: seed.productId, quantity: seed.quantity }],
-      }),
-    });
-    assert.equal(created.status, 'PENDING_PROCUREMENT');
-    assert.equal(created.paymentStatus, 'PAID');
-    assert.equal(created.totals.salesGoodsAmount, seed.expectedSalesAmount);
-
-    const confirmed = await request(`${baseUrl}/purchase-requests/${created.id}/confirm`, {
-      method: 'POST',
-      headers: authHeaders(token, { 'idempotency-key': `flow-demo-confirm-${Date.now()}` }),
-      body: JSON.stringify({ expectedVersion: created.version }),
-    });
-    assert.equal(confirmed.status, 'CONFIRMED');
-    assert.equal(confirmed.supplierOrderIds.length, 1);
-
-    const supplierOrder = await request(`${baseUrl}/supplier-orders/${confirmed.supplierOrderIds[0]}`, {
-      headers: authHeaders(token),
-    });
-    const orderItem = supplierOrder.items[0];
-    const shipment = await request(`${baseUrl}/supplier-orders/${supplierOrder.id}/shipments`, {
-      method: 'POST',
-      headers: authHeaders(token, { 'idempotency-key': `flow-demo-ship-${Date.now()}` }),
-      body: JSON.stringify({
-        expectedVersion: supplierOrder.version,
-        freight: '0.00',
-        items: [{ orderItemId: orderItem.id, shipQuantity: orderItem.quantity, permanentlyReduceQuantity: '0.000000' }],
-      }),
-    });
-    assert.equal(shipment.kind, 'INITIAL');
+    const supplierOrder = await createSupplierOrder(baseUrl, token, seed, 'flow-demo');
+    const shipment = await createInitialShipment(baseUrl, token, supplierOrder, 'flow-demo');
 
     const storeLogin = await request(`${baseUrl}/auth/login`, {
       method: 'POST',
@@ -128,9 +137,37 @@ async function run() {
     assert.equal(preview.direction, 'COMPANY_TO_SUPPLIER');
     assert.equal(preview.totalPayableAmount, seed.expectedSupplyAmount);
 
+    const discrepancyOrder = await createSupplierOrder(baseUrl, token, seed, 'flow-demo-discrepancy');
+    const discrepancyShipment = await createInitialShipment(baseUrl, token, discrepancyOrder, 'flow-demo-discrepancy');
+    const discrepancyOrderAfterShipment = await request(`${baseUrl}/supplier-orders/${discrepancyOrder.id}`, {
+      headers: authHeaders(token),
+    });
+    const discrepancyReceipt = await request(`${baseUrl}/shipments/${discrepancyShipment.id}/receipts`, {
+      method: 'POST',
+      headers: authHeaders(token, { 'idempotency-key': `flow-demo-discrepancy-receive-${Date.now()}` }),
+      body: JSON.stringify({
+        expectedOrderVersion: discrepancyOrderAfterShipment.version,
+        expectedReceiptRevision: 0,
+        items: discrepancyShipment.items.map((item) => ({ shipmentItemId: item.id, receivedQuantity: '8.000000' })),
+      }),
+    });
+    assert.equal(discrepancyReceipt.revision, 1);
+
+    const supplierLogin = await request(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: seed.supplierUsername, password: seed.password, client: 'web' }),
+    });
+    const supplierNotifications = await request(`${baseUrl}/notifications`, {
+      headers: authHeaders(supplierLogin.accessToken),
+    });
+    const discrepancyNotification = supplierNotifications.notifications.find((item) => item.payload?.receiptId === discrepancyReceipt.id);
+    assert.equal(discrepancyNotification?.title, '收货差异待处理');
+
     console.log('Main flow demo check passed.');
     console.log(`  Order: ${completedOrder.status} / ${completedOrder.fulfillmentStatus}`);
     console.log(`  Store notification: ${shipmentNotification.title}`);
+    console.log(`  Supplier notification: ${discrepancyNotification.title}`);
     console.log(`  Payment preview: ${preview.direction} ${preview.totalPayableAmount}`);
   } finally {
     await app.close();

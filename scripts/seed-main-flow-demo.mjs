@@ -11,6 +11,7 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
 const prefix = 'PXFLOW';
 const username = 'pxflow_user';
 const storeUsername = 'pxflow_store';
+const supplierUsername = 'pxflow_supplier';
 const password = 'correct-password';
 
 async function roles() {
@@ -42,6 +43,11 @@ async function cleanup() {
   await prisma.adjustmentDocumentItem.deleteMany({ where: { adjustment: { supplierOrderId: { in: orderIds } } } });
   await prisma.adjustmentDocument.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
   await prisma.settlementItemSnapshot.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
+  await prisma.shipmentGapAllocation.deleteMany({ where: { shipmentItem: { shipment: { supplierOrderId: { in: orderIds } } } } });
+  await prisma.replenishmentGap.deleteMany({ where: { orderItem: { supplierOrderId: { in: orderIds } } } });
+  await prisma.discrepancyReturn.deleteMany({ where: { orderItem: { supplierOrderId: { in: orderIds } } } });
+  await prisma.discrepancyAction.deleteMany({ where: { discrepancy: { orderItem: { supplierOrderId: { in: orderIds } } } } });
+  await prisma.discrepancy.deleteMany({ where: { orderItem: { supplierOrderId: { in: orderIds } } } });
   await prisma.receiptItem.deleteMany({ where: { receipt: { shipment: { supplierOrderId: { in: orderIds } } } } });
   await prisma.receipt.deleteMany({ where: { shipment: { supplierOrderId: { in: orderIds } } } });
   await prisma.shipmentItem.deleteMany({ where: { shipment: { supplierOrderId: { in: orderIds } } } });
@@ -98,6 +104,15 @@ async function run() {
       scopes: { create: { scopeType: 'STORE', storeId: store.id } },
     },
   });
+  await prisma.user.create({
+    data: {
+      username: supplierUsername,
+      displayName: 'PX Flow Supplier User',
+      passwordHash: await hashPassword(password),
+      roles: { create: [{ roleId: roleByCode.SUPPLIER.id }] },
+      scopes: { create: { scopeType: 'SUPPLIER', supplierId: supplier.id } },
+    },
+  });
   await prisma.storeAccount.create({ data: { storeId: store.id, balance: '1000.00' } });
   const templateItem = await prisma.templateItem.create({ data: { templateId: template.id, productId: product.id } });
   await prisma.templateItemSupplier.create({ data: { templateItemId: templateItem.id, supplierId: supplier.id, priority: 1 } });
@@ -118,6 +133,7 @@ async function run() {
     generatedAt: new Date().toISOString(),
     username,
     storeUsername,
+    supplierUsername,
     password,
     storeId: store.id,
     supplierId: supplier.id,

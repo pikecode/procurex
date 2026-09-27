@@ -8,13 +8,14 @@ Use this as the first document when continuing development in a new window.
 
 M4 is locally closed against the current acceptance gates. DEV-401 through DEV-406 are closed, `npm run acceptance:m4-close` passes, Chrome is ready, local PostgreSQL is reachable, automatic evidence is complete, and the manual browser evidence package is 6/6.
 
-M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, I08 in-app notification list/read, the first real DEV-503 supplier-shipment notification trigger, W11 visibility, R04 export task listing and failed retry, DEV-505 stale export recovery and export health monitoring, W13 reconciliation/operations/notification visibility, and Chrome-captured W11/W13 screenshots.
+M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, I08 in-app notification list/read, real DEV-503 supplier-shipment and receipt-discrepancy notification triggers, W11 visibility, R04 export task listing and failed retry, DEV-505 stale export recovery and export health monitoring, W13 reconciliation/operations/notification visibility, and Chrome-captured W11/W13 screenshots.
 
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
 
 ```text
+bf3c999 Notify stores after supplier shipment
 8923fde Add in-app notifications foundation
 48a9cdc Add failed report export retry
 16d0edd Add report export health monitoring
@@ -172,6 +173,7 @@ All seeded accounts use password `correct-password`.
 |---|---|
 | `pxflow_user` | Interactive main-flow demo from order creation to payment preview. |
 | `pxflow_store` | Store-scoped main-flow notification check after supplier shipment. |
+| `pxflow_supplier` | Supplier-scoped main-flow notification check after receipt discrepancy. |
 | `pxacc_admin` | ADMIN/HQ finance view for all billing tabs and checks. |
 | `pxacc_store` | Store-scoped billing and direct statement view. |
 | `pxacc_supplier_company` | Supplier-scoped company-term view. |

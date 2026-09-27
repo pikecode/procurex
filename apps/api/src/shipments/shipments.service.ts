@@ -1,7 +1,13 @@
 import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { DiscrepancyStatus, FulfillmentStatus, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import {
+  DiscrepancyStatus,
+  FulfillmentStatus,
+  SupplierOrderStatus,
+  UserScopeType,
+  UserStatus,
+} from '../../../../packages/backend/generated/prisma/enums.js';
 import type { Receipt, ReceiptItem } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import { resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
@@ -154,6 +160,7 @@ export class ShipmentsService {
         },
       });
 
+      const discrepancyIds: string[] = [];
       for (const item of receiptItems) {
         const createdReceiptItem = await tx.receiptItem.create({
           data: {
@@ -164,13 +171,14 @@ export class ShipmentsService {
         });
         const missingQuantity = new Decimal(item.shipmentItem.quantity).minus(item.receivedQuantity);
         if (missingQuantity.gt(0)) {
-          await tx.discrepancy.create({
+          const discrepancy = await tx.discrepancy.create({
             data: {
               receiptItemId: createdReceiptItem.id,
               orderItemId: item.shipmentItem.orderItemId,
               missingQuantity: missingQuantity.toDecimalPlaces(6).toString(),
             },
           });
+          discrepancyIds.push(discrepancy.id);
         }
         const oldReceivedQuantity = oldReceiptItemsByShipmentItemId.get(item.shipmentItem.id)?.receivedQuantity ?? new Decimal(0);
         const receivedDelta = item.receivedQuantity.minus(oldReceivedQuantity);
@@ -199,6 +207,37 @@ export class ShipmentsService {
           version: { increment: 1 },
         },
       });
+
+      if (discrepancyIds.length) {
+        const recipients = await tx.user.findMany({
+          where: {
+            status: UserStatus.ACTIVE,
+            scopes: { some: { scopeType: UserScopeType.SUPPLIER, supplierId: shipment.supplierOrder.supplierId } },
+            roles: { some: { role: { code: 'SUPPLIER' } } },
+          },
+          select: { id: true },
+        });
+        if (recipients.length) {
+          await tx.notification.createMany({
+            data: recipients.map((recipient) => ({
+              recipientId: recipient.id,
+              eventKey: `RECEIPT_DISCREPANCY:${created.id}`,
+              channel: 'IN_APP',
+              title: '收货差异待处理',
+              body: `供应商订单 ${shipment.supplierOrder.supplierOrderNo} 收货存在差异，请处理。`,
+              payload: {
+                type: 'RECEIPT_DISCREPANCY',
+                route: '/main-flow-demo.html',
+                supplierOrderId: shipment.supplierOrderId,
+                shipmentId: shipment.id,
+                receiptId: created.id,
+                discrepancyIds,
+              },
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
 
       return tx.receipt.findUniqueOrThrow({
         where: { id: created.id },

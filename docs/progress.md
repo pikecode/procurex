@@ -6,7 +6,7 @@ Last updated: 2026-09-27
 
 For new-window continuation, start with `docs/continuation.md`.
 
-M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export has resumed with a repeatable browserless acceptance chain, browser-visible W11 acceptance summary, W13 operations view, DEV-505 export recovery/health/retry coverage, and DEV-503 in-app notifications now connected to the supplier-shipment business event.
+M4 is locally closed against the current acceptance gates: DEV-401 through DEV-406 are closed, `acceptance:m4-close` passes, and the W09 billing plus W10 adjustment workbenches have browser evidence. M5 reporting/export has resumed with a repeatable browserless acceptance chain, browser-visible W11 acceptance summary, W13 operations view, DEV-505 export recovery/health/retry coverage, and DEV-503 in-app notifications now connected to supplier shipment plus receipt-discrepancy business events.
 
 Latest follow-up audit also closes two remaining store-scope reads: recharge detail accepts STORE_FINANCE and rejects another store, and store catalog reads reject unconfigured or mismatched STORE/STORE_FINANCE scopes.
 
@@ -62,7 +62,7 @@ R04 export reliability now has the first DEV-505 slices: the worker scans both f
 
 `apps/web/ops.html` now provides the W13 operations/reconciliation view. It logs in with an authorized company account, renders `GET /exports/health` as a DEV-505导出任务健康卡片, and renders `GET /reconciliation-issues` as a read-only exception list. `npm run m5:capture-ops-evidence` captures Chrome evidence under `var/m5-browser-evidence/ops-reconciliation.png`; the latest local screenshot showed 5 current local reconciliation issues and 0 export health exception rows after the clean acceptance seed.
 
-DEV-503 now has I08 in-app notification list/read plus the first real business trigger. `Notification` persists recipient, channel, status, title/body, payload, read timestamp, and a per-recipient event key; `GET /notifications` returns the current user's latest 50 messages with unread count, and `POST /notifications/{id}/read` marks only the current user's message as read. `notifications:seed-acceptance` seeds admin/store messages, `notifications:check-acceptance` verifies list/read/isolation over HTTP, and W13 renders a "站内消息" card. Supplier shipment creation now writes a "待收货提醒" notification to active users scoped to the destination store, and `main-flow:check-demo` verifies the message after the real `PXFLOW` shipment step.
+DEV-503 now has I08 in-app notification list/read plus two real business triggers. `Notification` persists recipient, channel, status, title/body, payload, read timestamp, and a per-recipient event key; `GET /notifications` returns the current user's latest 50 messages with unread count, and `POST /notifications/{id}/read` marks only the current user's message as read. `notifications:seed-acceptance` seeds admin/store messages, `notifications:check-acceptance` verifies list/read/isolation over HTTP, and W13 renders a "站内消息" card. Supplier shipment creation writes a "待收货提醒" notification to active users scoped to the destination store; receipt with missing quantity writes a "收货差异待处理" notification to active users scoped to the supplier. `main-flow:check-demo` verifies both messages through real `PXFLOW` order, shipment, and receipt steps.
 
 The main-flow acceptance runner now writes a browser-readable result to `apps/web/main-flow-run.json`, and `apps/web/main-flow.html` renders the latest order-to-payment handoff status. `npm run web:check` now guards this page as well, so the main flow is visible even before a full interactive order-entry workbench is built.
 
@@ -110,10 +110,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice in this update: DEV-503 supplier shipment creates store in-app notification.
-Latest commit before this progress update: `8923fde Add in-app notifications foundation`.
+Latest functional slice in this update: DEV-503 receipt discrepancy creates supplier in-app notification.
+Latest commit before this progress update: `bf3c999 Notify stores after supplier shipment`.
 
 ```text
+bf3c999 Notify stores after supplier shipment
 8923fde Add in-app notifications foundation
 48a9cdc Add failed report export retry
 16d0edd Add report export health monitoring
