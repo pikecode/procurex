@@ -48,7 +48,7 @@ Latest recovery evidence: an independent PostgreSQL backup/restore drill complet
 
 Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Browser E2E remains open: no browser binary is installed; a temporary Playwright Chromium download transferred only 9 MB of 182 MB in about two minutes and was stopped.
 
-W10 workbench now provides adjustment filtering, original/actual period comparison, detail, B12 offline-return registration and receiver confirmation, plus offsets to a selected positive adjustment on the same settlement side. B05 exposes actionable source/target item IDs only when a price adjustment maps to one persisted document; ambiguous multi-run netting remains read-only. Browser E2E remains open. Verification baseline: 36 unit tests, 31 integration tests, build, contract check, Web syntax, HTTP smoke, and diff check pass.
+W10 workbench now provides adjustment filtering, original/actual period comparison, detail, B12 offline-return registration and receiver confirmation, plus offsets to a selected positive adjustment on the same settlement side. A real-database HTTP test now follows a negative price adjustment through B05 list/detail into B12 creation and receiver confirmation. B05 exposes actionable source/target IDs only when a price adjustment maps to one persisted document; ambiguous multi-run netting remains read-only. Browser E2E remains open. Verification: 36 unit tests, 31 integration tests, build, contract check, Web syntax, HTTP smoke, diff check, and the targeted W10 HTTP test pass.
 
 Latest commits:
 

@@ -7,7 +7,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { AppModule } from '../../apps/api/src/app.module.js';
 import { ApiExceptionFilter } from '../../apps/api/src/common/api-exception.filter.js';
 import { ResponseEnvelopeInterceptor } from '../../apps/api/src/common/response-envelope.interceptor.js';
-import { DeliveryMode, SettlementMode } from '../../packages/backend/generated/prisma/enums.js';
+import { DeliveryMode, PriceChangeRunOrderStatus, PriceChangeRunStatus, SettlementMode } from '../../packages/backend/generated/prisma/enums.js';
 import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
 import { hashPassword } from '../../packages/domain/src/password.js';
 
@@ -732,6 +732,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
   const skuB = `CONFSKUB${runId}`;
   const supplierCodeA = `CONFSUPA${runId}`;
   const supplierCodeB = `CONFSUPB${runId}`;
+  let workbenchRunId: string | undefined;
   const { app, baseUrl } = await createTestApp();
 
   try {
@@ -1890,13 +1891,43 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(adjustmentOffset.data.amount, '5.00');
     assert.equal(adjustmentOffset.data.items[0]?.adjustmentDocumentId, adjustmentCredit.id);
     assert.equal(adjustmentOffset.data.items[0]?.targetDebitItemId, adjustmentTargetId);
+    const workbenchRun = await prisma.priceChangeRun.create({ data: { status: PriceChangeRunStatus.SUCCEEDED } });
+    workbenchRunId = workbenchRun.id;
+    await prisma.priceChangeRunOrder.create({
+      data: { runId: workbenchRun.id, supplierOrderId: supplierBOrderAfterReallocate.id, status: PriceChangeRunOrderStatus.SUCCEEDED, salesDelta: '0.00', supplyDelta: '-4.00' },
+    });
+    const priceChange = await prisma.priceChangeAdjustment.create({
+      data: {
+        runId: workbenchRun.id, supplierOrderId: supplierBOrderAfterReallocate.id, orderItemId: productAOrderItem.id,
+        previousSalesPrice: productAOrderItem.salesUnitPrice, newSalesPrice: productAOrderItem.salesUnitPrice,
+        previousSupplyPrice: '8.00', newSupplyPrice: '4.00', salesDelta: '0.00', supplyDelta: '-4.00',
+      },
+    });
     const offlineCredit = await prisma.adjustmentDocument.create({
       data: {
-        sourcePriceChangeId: crypto.randomUUID(), supplierOrderId: supplierBOrderAfterReallocate.id,
+        sourcePriceChangeId: priceChange.id, supplierOrderId: supplierBOrderAfterReallocate.id,
         storeId: store.id, supplierId: supplierB.id, side: 'SUPPLIER', amount: '-4.00',
         originalPeriodKey: 'test:original', settlementPeriodKey: 'test:current', sourceRevision: 3,
       },
     });
+    const workbenchAdjustmentsResponse = await fetch(`${baseUrl}/adjustments?storeId=${store.id}&supplierId=${supplierB.id}`, {
+      headers: { authorization: `Bearer ${financeToken}` },
+    });
+    assert.equal(workbenchAdjustmentsResponse.status, 200);
+    const workbenchAdjustments = (await workbenchAdjustmentsResponse.json()) as {
+      data: Array<{ id: string; sourcePriceChangeId?: string; disposalCreditItemId?: string; adjustmentAmount: string }>;
+    };
+    const workbenchCredit = workbenchAdjustments.data.find((item) => item.sourcePriceChangeId === priceChange.id);
+    assert.equal(workbenchCredit?.adjustmentAmount, '-4.00');
+    assert.equal(workbenchCredit?.disposalCreditItemId, offlineCredit.id);
+    const workbenchCreditDetailResponse = await fetch(`${baseUrl}/adjustments/${encodeURIComponent(workbenchCredit!.id)}`, {
+      headers: { authorization: `Bearer ${financeToken}` },
+    });
+    assert.equal(workbenchCreditDetailResponse.status, 200);
+    const workbenchCreditDetail = (await workbenchCreditDetailResponse.json()) as {
+      data: { disposalCreditItemId?: string };
+    };
+    assert.equal(workbenchCreditDetail.data.disposalCreditItemId, offlineCredit.id);
     const offlineReturnResponse = await fetch(`${baseUrl}/difference-disposals`, {
       method: 'POST',
       headers: {
@@ -1904,7 +1935,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         'idempotency-key': 'offline-return-adjustment-once', 'x-trace-id': 'trace-offline-return-adjustment',
       },
       body: JSON.stringify({
-        method: 'OFFLINE_RETURN', creditItemIds: [offlineCredit.id], amount: '4.00',
+        method: 'OFFLINE_RETURN', creditItemIds: [workbenchCredit!.disposalCreditItemId], amount: '4.00',
         businessDate: '2026-09-24', reason: 'Return negative adjustment without a follow-up order',
       }),
     });
@@ -2649,6 +2680,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     await prisma.differenceDisposal.deleteMany({
       where: { storeId: { in: (await prisma.store.findMany({ where: { code: storeCode }, select: { id: true } })).map((store) => store.id) } },
     });
+    if (workbenchRunId) await prisma.priceChangeRun.delete({ where: { id: workbenchRunId } });
     await prisma.freightConfirmation.deleteMany({
       where: { supplierOrder: { request: { store: { code: storeCode } } } },
     });
