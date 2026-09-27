@@ -29,6 +29,18 @@ async function token(url: string, username: string): Promise<string> {
   return ((await response.json()) as { data: { accessToken: string } }).data.accessToken;
 }
 
+async function paymentEvidence(url: string, accessToken: string): Promise<string> {
+  const bytes = Buffer.from('%PDF-1.4\nIT payment evidence\n%%EOF\n');
+  const sessionResponse = await fetch(`${url}/files/upload-sessions`, { method: 'POST', headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ purpose: 'PAYMENT', filename: 'payment.pdf', mimeType: 'application/pdf', sizeBytes: bytes.length }) });
+  assert.equal(sessionResponse.status, 201);
+  const session = (await sessionResponse.json() as { data: { id: string; uploadToken: string } }).data;
+  const upload = await fetch(`${url}/files/${session.id}/content`, { method: 'POST', headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/octet-stream', 'x-upload-token': session.uploadToken }, body: bytes });
+  assert.equal(upload.status, 201);
+  const complete = await fetch(`${url}/files/${session.id}/complete`, { method: 'POST', headers: { authorization: `Bearer ${accessToken}` } });
+  assert.equal(complete.status, 201);
+  return session.id;
+}
+
 test('direct supplier-term statement pays and confirms goods plus freight over HTTP', async () => {
   const suffix = Date.now();
   const storeCode = `DIRSTORE${suffix}`, supplierCode = `DIRSUP${suffix}`, templateCode = `DIRTPL${suffix}`;
@@ -72,7 +84,11 @@ test('direct supplier-term statement pays and confirms goods plus freight over H
     assert.equal(previewResponse.status, 201);
     const preview = (await previewResponse.json()) as { data: { direction: string; channel: string; supplierId: string; totalPayableAmount: string; items: Array<{ sourceVersion: number; payableAmount: string }> } };
     assert.deepEqual([preview.data.direction, preview.data.channel, preview.data.supplierId, preview.data.totalPayableAmount], ['STORE_TO_SUPPLIER', 'DIRECT', supplier.id, '138.50']);
-    const create = async () => fetch(`${url}/payment-records`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json', 'idempotency-key': `direct-payment-${suffix}` }, body: JSON.stringify({ direction: 'STORE_TO_SUPPLIER', businessDate: '2026-09-27', items: [{ settlementItemId: line.settlementItemId, expectedVersion: preview.data.items[0]!.sourceVersion, expectedAmount: preview.data.items[0]!.payableAmount }] }) });
+    const missingEvidence = await fetch(`${url}/payment-records`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json', 'idempotency-key': `direct-payment-no-evidence-${suffix}` }, body: JSON.stringify({ direction: 'STORE_TO_SUPPLIER', businessDate: '2026-09-27', items: [{ settlementItemId: line.settlementItemId, expectedVersion: preview.data.items[0]!.sourceVersion, expectedAmount: preview.data.items[0]!.payableAmount }] }) });
+    assert.equal(missingEvidence.status, 400);
+    assert.match(JSON.stringify(await missingEvidence.json()), /evidenceFileIds/);
+    const evidenceFileId = await paymentEvidence(url, storeToken);
+    const create = async () => fetch(`${url}/payment-records`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json', 'idempotency-key': `direct-payment-${suffix}` }, body: JSON.stringify({ direction: 'STORE_TO_SUPPLIER', businessDate: '2026-09-27', evidenceFileIds: [evidenceFileId], items: [{ settlementItemId: line.settlementItemId, expectedVersion: preview.data.items[0]!.sourceVersion, expectedAmount: preview.data.items[0]!.payableAmount }] }) });
     const paymentResponse = await create();
     assert.equal(paymentResponse.status, 201);
     const payment = (await paymentResponse.json()) as { data: { id: string; amount: string; status: string; version: number } };
@@ -106,7 +122,8 @@ test('direct supplier-term statement pays and confirms goods plus freight over H
     const adjustmentPreview = (await adjustmentPreviewResponse.json()) as { data: { direction: string; channel: string; totalPayableAmount: string; items: Array<{ sourceVersion: number; payableAmount: string; kind: string }> } };
     assert.deepEqual([adjustmentPreview.data.direction, adjustmentPreview.data.channel, adjustmentPreview.data.totalPayableAmount], ['STORE_TO_SUPPLIER', 'DIRECT', '20.00']);
     assert.equal(adjustmentPreview.data.items[0]?.kind, 'ADJUSTMENT');
-    const adjustmentPaymentResponse = await fetch(`${url}/payment-records`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json', 'idempotency-key': `direct-adjustment-payment-${suffix}` }, body: JSON.stringify({ direction: 'STORE_TO_SUPPLIER', businessDate: '2026-09-27', items: [{ settlementItemId: adjustmentItemId, expectedVersion: adjustmentPreview.data.items[0]!.sourceVersion, expectedAmount: adjustmentPreview.data.items[0]!.payableAmount }] }) });
+    const adjustmentEvidenceId = await paymentEvidence(url, storeToken);
+    const adjustmentPaymentResponse = await fetch(`${url}/payment-records`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json', 'idempotency-key': `direct-adjustment-payment-${suffix}` }, body: JSON.stringify({ direction: 'STORE_TO_SUPPLIER', businessDate: '2026-09-27', evidenceFileIds: [adjustmentEvidenceId], items: [{ settlementItemId: adjustmentItemId, expectedVersion: adjustmentPreview.data.items[0]!.sourceVersion, expectedAmount: adjustmentPreview.data.items[0]!.payableAmount }] }) });
     assert.equal(adjustmentPaymentResponse.status, 201);
     const adjustmentPayment = (await adjustmentPaymentResponse.json()) as { data: { id: string; amount: string; version: number } };
     assert.deepEqual([adjustmentPayment.data.amount, adjustmentPayment.data.version], ['20.00', 1]);
@@ -176,7 +193,8 @@ test('company-term supplier payment stays blocked until store receivable is conf
     assert.equal(storePreviewResponse.status, 201);
     const storePreview = (await storePreviewResponse.json()) as { data: { direction: string; items: Array<{ sourceVersion: number; payableAmount: string }> } };
     assert.equal(storePreview.data.direction, 'STORE_TO_COMPANY');
-    const storePaymentResponse = await fetch(`${url}/payment-records`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json', 'idempotency-key': `term-store-payment-${suffix}` }, body: JSON.stringify({ direction: 'STORE_TO_COMPANY', businessDate: '2026-09-27', items: [{ settlementItemId: storeReceivableId, expectedVersion: storePreview.data.items[0]!.sourceVersion, expectedAmount: storePreview.data.items[0]!.payableAmount }] }) });
+    const storeEvidenceId = await paymentEvidence(url, storeToken);
+    const storePaymentResponse = await fetch(`${url}/payment-records`, { method: 'POST', headers: { authorization: `Bearer ${storeToken}`, 'content-type': 'application/json', 'idempotency-key': `term-store-payment-${suffix}` }, body: JSON.stringify({ direction: 'STORE_TO_COMPANY', businessDate: '2026-09-27', evidenceFileIds: [storeEvidenceId], items: [{ settlementItemId: storeReceivableId, expectedVersion: storePreview.data.items[0]!.sourceVersion, expectedAmount: storePreview.data.items[0]!.payableAmount }] }) });
     assert.equal(storePaymentResponse.status, 201);
     const storePayment = (await storePaymentResponse.json()) as { data: { id: string; version: number } };
     const storeConfirm = await fetch(`${url}/payment-records/${storePayment.data.id}/confirm`, { method: 'POST', headers: { authorization: `Bearer ${financeToken}`, 'content-type': 'application/json', 'idempotency-key': `term-store-confirm-${suffix}` }, body: JSON.stringify({ expectedVersion: storePayment.data.version }) });

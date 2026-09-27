@@ -43,6 +43,18 @@ async function login(baseUrl: string, username: string): Promise<string> {
   return body.data.accessToken;
 }
 
+async function paymentEvidence(baseUrl: string, accessToken: string): Promise<string> {
+  const bytes = Buffer.from('%PDF-1.4\nIT payment evidence\n%%EOF\n');
+  const response = await fetch(`${baseUrl}/files/upload-sessions`, { method: 'POST', headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ purpose: 'PAYMENT', filename: 'payment.pdf', mimeType: 'application/pdf', sizeBytes: bytes.length }) });
+  assert.equal(response.status, 201);
+  const session = (await response.json() as { data: { id: string; uploadToken: string } }).data;
+  const upload = await fetch(`${baseUrl}/files/${session.id}/content`, { method: 'POST', headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/octet-stream', 'x-upload-token': session.uploadToken }, body: bytes });
+  assert.equal(upload.status, 201);
+  const complete = await fetch(`${baseUrl}/files/${session.id}/complete`, { method: 'POST', headers: { authorization: `Bearer ${accessToken}` } });
+  assert.equal(complete.status, 201);
+  return session.id;
+}
+
 test('purchase request preview prices catalog items and reports stored-value shortfall', async () => {
   const prisma = createClient();
   const runId = Date.now();
@@ -2006,6 +2018,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(storePaymentPreview.data.items[0]?.sourceVersion, completedOrderAfterReturn.version);
     assert.equal(storePaymentPreview.data.items[0]?.payableAmount, '138.50');
     assert.equal(storePaymentPreview.data.blockedItems.length, 0);
+    const storePaymentEvidenceId = await paymentEvidence(baseUrl, token);
     const createStorePayment = async () => {
       const response = await fetch(`${baseUrl}/payment-records`, {
         method: 'POST',
@@ -2018,6 +2031,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         body: JSON.stringify({
           direction: 'STORE_TO_COMPANY',
           businessDate: '2026-09-24',
+          evidenceFileIds: [storePaymentEvidenceId],
           remark: 'Store pays company for completed order',
           items: [
             {
@@ -2272,7 +2286,10 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierPaymentPreview.data.items[0]?.sourceVersion, completedOrderAfterReturn.version);
     assert.equal(supplierPaymentPreview.data.items[0]?.payableAmount, '98.50');
     assert.equal(supplierPaymentPreview.data.blockedItems.length, 0);
+    const supplierPaymentEvidenceByKey = new Map<string, string>();
     const createSupplierPayment = async (idempotencyKey: string, traceId: string) => {
+      const evidenceFileId = supplierPaymentEvidenceByKey.get(idempotencyKey) ?? await paymentEvidence(baseUrl, token);
+      supplierPaymentEvidenceByKey.set(idempotencyKey, evidenceFileId);
       const response = await fetch(`${baseUrl}/payment-records`, {
         method: 'POST',
         headers: {
@@ -2284,6 +2301,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         body: JSON.stringify({
           direction: 'COMPANY_TO_SUPPLIER',
           businessDate: '2026-09-24',
+          evidenceFileIds: [evidenceFileId],
           remark: 'Company pays supplier for completed order',
           items: [
             {
@@ -2385,6 +2403,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.payableAmount, '98.50');
     assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.pendingPaymentAmount, '0.00');
     assert.equal(supplierPaymentPreviewAfterReject.data.items[0]?.confirmedPaidAmount, '0.00');
+    const cancelPaymentEvidenceId = await paymentEvidence(baseUrl, token);
     const createSupplierPaymentForCancel = async () => {
       const response = await fetch(`${baseUrl}/payment-records`, {
         method: 'POST',
@@ -2397,6 +2416,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         body: JSON.stringify({
           direction: 'COMPANY_TO_SUPPLIER',
           businessDate: '2026-09-24',
+          evidenceFileIds: [cancelPaymentEvidenceId],
           remark: 'Company payment to cancel',
           items: [
             {
@@ -2567,11 +2587,13 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       data: { direction: string; items: Array<{ settlementItemId: string; sourceVersion: number; payableAmount: string }> };
     };
     assert.equal(childViewPaymentPreview.data.direction, 'COMPANY_TO_SUPPLIER');
+    const sharedPaymentEvidenceId = await paymentEvidence(baseUrl, financeToken);
     const sharedItemPaymentResponse = await fetch(`${baseUrl}/payment-records`, {
       method: 'POST',
       headers: { authorization: `Bearer ${financeToken}`, 'content-type': 'application/json', 'idempotency-key': 'pay-from-supplier-store-statement-once' },
       body: JSON.stringify({
         direction: 'COMPANY_TO_SUPPLIER', businessDate: '2026-09-24',
+        evidenceFileIds: [sharedPaymentEvidenceId],
         items: [{ settlementItemId: childViewPaymentPreview.data.items[0]!.settlementItemId, expectedVersion: childViewPaymentPreview.data.items[0]!.sourceVersion, expectedAmount: childViewPaymentPreview.data.items[0]!.payableAmount }],
       }),
     });

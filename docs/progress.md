@@ -147,7 +147,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | DEV-401 | **Closed**: P01-P03, AT-08, AT-09, and W06/S10 backend flow evidence are complete | None for the current backend scope |
 | DEV-402 | B01-B04, amount/period logic, AT-16 price guard, direct-term B04→B08 flow, AT-17 credit-limit guard, and AC-21 stored-value supplier payable verified | Finish remaining settlement-mode and W09/S05/S08 acceptance evidence |
 | DEV-403 | Statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, account scope, and cross-view shared-item reservation are tested | Remaining W09/S05/S08 flow evidence before closure |
-| DEV-404 | B06-B11 payment lifecycle, AT-13 concurrency, receiver authorization, direct-term adjustment payment, and company-term store-first HTTP gate verified; initial I06/I07 private-directory upload and PAYMENT evidence linking implemented | Make evidence required after migrating existing payment callers; authorize counterparty downloads; finish file-link acceptance and recovery/cleanup policy |
+| DEV-404 | B06-B11 payment lifecycle, AT-13 concurrency, receiver authorization, direct-term adjustment payment, company-term store-first HTTP gate, and mandatory I06/I07 PAYMENT evidence verified | Finish file-link acceptance and recovery/cleanup policy |
 | DEV-405 | **Closed**: A04-A06, store scope, and W08 selected-only clearing/accounting flow verified | None for the current M4 package; production backup policy remains DEV-603/M6 |
 | DEV-406 | Persisted adjustments, netting, positive adjustment payment, offsets/returns, receiver scopes, and snapshot-versus-adjustment database reconciliation are covered | Finish remaining reconciliation consistency and settlement-side acceptance gates |
 
@@ -180,7 +180,7 @@ Current integration coverage count: 28 integration tests passing; unit coverage 
 
 Latest run: 30 integration tests and 36 unit tests passed, along with build, contract check, and diff check.
 
-DEV-404 acceptance slice: the payment integration now registers the same supplier payable concurrently with two different idempotency keys and verifies exactly one reservation succeeds while the other conflicts; replaying the winning key returns the original payment.
+DEV-404 acceptance slice: payment integration now registers the same supplier payable concurrently with two different idempotency keys and verifies exactly one reservation succeeds while the other conflicts; replaying the winning key returns the original payment. B07 requires at least one completed PAYMENT evidence file belonging to the registering actor, and missing evidence is rejected before command creation. Existing payment HTTP flows upload and link real test PDFs. Latest verification: 36 unit tests, 31 integration tests, build, contract check, and diff check passed.
 
 DEV-405 acceptance slice: clearing preview/create/detail integration covers the selected credit allocation, independent clearing document, account ledger, released credit, and idempotent replay; clearing detail, account, and ledger reads now reject a mismatched store scope for both STORE and STORE_FINANCE.
 
@@ -543,4 +543,4 @@ Follow the M4 plan order: DEV-402 and DEV-403 are next, followed by DEV-404–40
 - Static contract checks: `scripts/check-contract.mjs`
 - Current order-flow integration coverage: `tests/integration/purchase-preview-http.test.ts`
 
-Private evidence storage slice: I06 creates a payment-evidence upload session; I07 accepts JPEG/PNG/PDF files up to 10 MiB, checks file signatures and SHA-256, stores bytes under mode-0700 `PRIVATE_FILE_DIR`, and permits owner-only downloads. B07 validates READY PAYMENT file IDs owned by the registering actor and links them to the payment. A real HTTP upload/complete/download round trip passes. Evidence IDs remain optional during migration of existing callers; counterparty download authorization and mandatory evidence remain open DEV-404 gates.
+Private evidence storage slice: I06 creates a payment-evidence upload session; I07 accepts JPEG/PNG/PDF files up to 10 MiB, checks file signatures and SHA-256, stores bytes under mode-0700 `PRIVATE_FILE_DIR`, and permits authorized participant/finance downloads. B07 now requires at least one READY PAYMENT file ID owned by the registering actor and links it to the payment. HTTP upload/complete/download and missing-evidence rejection are covered. Production restore/cleanup policy remains an operational follow-up.

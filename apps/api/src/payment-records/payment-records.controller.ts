@@ -305,12 +305,10 @@ function parseCreateBody(body: CreateBody): CreatePaymentRecordInput {
   }
 
   const businessDate = requiredDate('businessDate', body.businessDate, issues);
-  let evidenceFileIds: string[] | undefined;
-  if (body.evidenceFileIds !== undefined) {
-    if (!Array.isArray(body.evidenceFileIds) || body.evidenceFileIds.length === 0 || body.evidenceFileIds.some((id) => typeof id !== 'string' || validateUuid('evidenceFileIds', id).length > 0)) {
-      issues.push({ field: 'evidenceFileIds', code: 'INVALID_FILE_IDS', message: 'must be a non-empty array of UUIDs' });
-    } else evidenceFileIds = body.evidenceFileIds as string[];
-  }
+  let evidenceFileIds: string[] = [];
+  if (!Array.isArray(body.evidenceFileIds) || body.evidenceFileIds.length === 0 || body.evidenceFileIds.some((id) => typeof id !== 'string' || validateUuid('evidenceFileIds', id).length > 0)) {
+    issues.push({ field: 'evidenceFileIds', code: 'INVALID_FILE_IDS', message: 'at least one evidence file UUID is required' });
+  } else evidenceFileIds = body.evidenceFileIds as string[];
   const remark = optionalString('remark', body.remark, issues);
 
   throwIfInvalid(issues);

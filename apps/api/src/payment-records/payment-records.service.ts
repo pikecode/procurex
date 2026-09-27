@@ -31,7 +31,7 @@ export type CreatePaymentRecordInput = {
   items: CreatePaymentRecordItemInput[];
   businessDate: Date;
   remark?: string;
-  evidenceFileIds?: string[];
+  evidenceFileIds: string[];
 };
 
 export type ListPaymentRecordsInput = {
@@ -331,11 +331,12 @@ export class PaymentRecordsService {
       await waitForSettlementLock(tx, id);
     }
     const preview = await this.preview(settlementItemIds, tx, scope);
-    if (input.evidenceFileIds?.length) {
-      const files = await tx.fileObject.findMany({ where: { id: { in: input.evidenceFileIds }, ownerId: scope?.userId, purpose: 'PAYMENT', status: 'READY', paymentId: null } });
-      if (files.length !== input.evidenceFileIds.length || new Set(input.evidenceFileIds).size !== files.length) {
-        throw new ConflictException({ code: 'PAYMENT_EVIDENCE_INVALID', message: 'Payment evidence must be completed files owned by the current user' });
-      }
+    if (!input.evidenceFileIds.length) {
+      throw new ConflictException({ code: 'PAYMENT_EVIDENCE_REQUIRED', message: 'At least one payment evidence file is required' });
+    }
+    const files = await tx.fileObject.findMany({ where: { id: { in: input.evidenceFileIds }, ownerId: scope?.userId, purpose: 'PAYMENT', status: 'READY', paymentId: null } });
+    if (files.length !== input.evidenceFileIds.length || new Set(input.evidenceFileIds).size !== files.length) {
+      throw new ConflictException({ code: 'PAYMENT_EVIDENCE_INVALID', message: 'Payment evidence must be completed files owned by the current user' });
     }
     if (preview.blockedItems.length > 0) {
       throw new ConflictException({
@@ -392,7 +393,7 @@ export class PaymentRecordsService {
         amount: amount.toFixed(2),
         businessDate: input.businessDate,
         remark: input.remark,
-        evidenceFiles: input.evidenceFileIds?.length ? { connect: input.evidenceFileIds.map((id) => ({ id })) } : undefined,
+        evidenceFiles: { connect: input.evidenceFileIds.map((id) => ({ id })) },
         allocations: {
           create: input.items.map((item) => {
             const previewItem = previewItemsById.get(item.settlementItemId)!;
