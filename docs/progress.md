@@ -47,7 +47,7 @@ Latest completed implementation: the four statement families, payment records, a
 Latest commits:
 
 ```text
-Pending this commit: direct adjustment B06-B08 HTTP acceptance
+9b24dce Verify direct adjustment payment lifecycle
 5cbc373 Verify B05 reads persisted price adjustment
 146a13b Verify settled price adjustments persist separately
 c0ad0de Refresh progress after clearing acceptance
