@@ -78,6 +78,8 @@ The same gate definition file now includes manual execution steps for each gate.
 
 `npm run m4:capture-browser-evidence` captures Chrome-rendered entry screenshots for `m4-acceptance.html`, `billing.html`, and `main-flow-demo.html` into `var/m4-browser-evidence/`. These entry screenshots support review, but DEV-402/403/406 still need manual workflow screenshots or recordings before closure.
 
+`npm run db:check` verifies the local PostgreSQL endpoint before DB-backed M4 acceptance commands run. In the current shell it reports `127.0.0.1:55438` unreachable until Docker Desktop or another PostgreSQL instance is started.
+
 `apps/web/m4-acceptance.html` now renders the generated `billing-acceptance-run.json` and `main-flow-run.json` together, so a reviewer can see the latest M4 browserless acceptance result from the Web workbench rather than reading terminal logs only.
 
 The same M4 acceptance page now includes a gate walkthrough for DEV-402, DEV-403, and DEV-406, plus the seeded account matrix for W09/S05/S08 and W10. `billing:check-acceptance` writes structured `gateId/evidenceId` entries, so the page can show which automatic evidence is already covered per gate and which manual browser evidence remains. This keeps the remaining work visible as browser acceptance and manual evidence collection, not new M5 scope.

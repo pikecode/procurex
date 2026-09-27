@@ -47,6 +47,7 @@ dc2e5ea Add billing acceptance checker
 Run the strongest browserless M4 chain:
 
 ```bash
+npm run db:check
 npm run acceptance:m4-browserless
 ```
 

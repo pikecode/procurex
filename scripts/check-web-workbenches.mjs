@@ -99,6 +99,7 @@ assertIncludes(appJs, '/reports/${active}', 'W11 report endpoints');
 assertIncludes(appJs, '/exports', 'R04 export workflow');
 assertIncludes(packageJson.scripts['billing:seed-acceptance'], 'seed-billing-acceptance.mjs', 'billing acceptance seed script');
 assertIncludes(packageJson.scripts['billing:check-acceptance'], 'check-billing-acceptance.mjs', 'billing acceptance check script');
+assertIncludes(packageJson.scripts['db:check'], 'check-local-db.mjs', 'local database check script');
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'billing:check-acceptance', 'M4 browserless acceptance script');
 assertIncludes(packageJson.scripts['m4:check-browser-runtime'], 'check-browser-runtime.mjs', 'M4 browser runtime check script');
 assertIncludes(packageJson.scripts['m4:capture-browser-evidence'], 'capture-m4-browser-evidence.mjs', 'M4 browser evidence capture script');
