@@ -22,6 +22,19 @@ async function call(path, options = {}) {
   return body.data ?? body;
 }
 async function loadMe() { if (!token) return; try { const me = await call('/me'); showSession(me.user || me); } catch { token = null; sessionStorage.removeItem('procurex-token'); showSession(); } }
+async function loadAcceptance() {
+  try {
+    const response = await fetch(`/reports-acceptance-run.json?ts=${Date.now()}`);
+    if (!response.ok) throw new Error('missing acceptance output');
+    const data = await response.json();
+    $('m5-acceptance-status').textContent = data.status === 'PASSED' ? 'PASSED' : data.status || 'UNKNOWN';
+    $('m5-acceptance-status').classList.toggle('tag-ok', data.status === 'PASSED');
+    $('m5-acceptance').innerHTML = (data.steps || []).map((step) => `<article><strong>${esc(step.title)}</strong><small>${esc(Object.entries(step.data || {}).map(([key, value]) => `${key}: ${value}`).join(' · '))}</small></article>`).join('');
+  } catch {
+    $('m5-acceptance-status').textContent = '未生成';
+    $('m5-acceptance').innerHTML = '<article><strong>尚未生成 M5 验收结果</strong><small>运行 npm run acceptance:m5-browserless 后刷新页面</small></article>';
+  }
+}
 document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => { active = tab.dataset.report; document.querySelectorAll('.tab').forEach((item) => item.classList.toggle('active', item === tab)); updateMeta(); if (latest) runReport(); }));
 function updateMeta() { const meta = reportMeta[active]; $('report-title').textContent = meta.title; $('report-desc').textContent = meta.desc; $('table-title').textContent = meta.table; }
 $('login-form').addEventListener('submit', async (event) => { event.preventDefault(); $('login-error').textContent = ''; const form = new FormData(event.currentTarget); try { const result = await call('/auth/login', { method: 'POST', body: JSON.stringify({ username: form.get('username'), password: form.get('password'), client: 'WEB' }) }); token = result.accessToken; sessionStorage.setItem('procurex-token', token); showSession(result.user); } catch (error) { $('login-error').textContent = error.message; } });
@@ -59,4 +72,4 @@ function render(data) {
   $('summary').innerHTML = cards; $('thead').innerHTML = head; $('tbody').innerHTML = rows; $('empty').classList.toggle('hidden', !!rows);
 }
 $('download').addEventListener('click', async () => { if (!latest) return; const button = $('download'); button.disabled = true; button.querySelector('span').textContent = '生成中…'; try { const job = await call('/exports', { method: 'POST', body: JSON.stringify({ reportType: active, filters: { from: $('from').value || undefined, to: $('to').value || undefined, storeId: $('storeId').value || undefined, supplierId: $('supplierId').value || undefined } }) }); let status; for (let i = 0; i < 30; i++) { status = await call(`/exports/${job.jobId}`); if (status.status === 'READY' || status.status === 'FAILED') break; await new Promise((resolve) => setTimeout(resolve, 1000)); } if (status.status !== 'READY') throw new Error(status.error || '导出仍在处理中，请稍后重试'); const response = await fetch(`${api}/exports/${job.jobId}/download`, { headers: { Authorization: `Bearer ${token}` } }); if (!response.ok) throw new Error('下载失败，请重新生成'); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = `procurex-${active}.csv`; link.click(); URL.revokeObjectURL(url); } catch (error) { $('notice').textContent = error.message; $('notice').classList.remove('hidden'); } finally { button.disabled = false; button.querySelector('span').textContent = '导出 CSV'; } });
-showSession(); loadMe(); updateMeta();
+showSession(); loadMe(); updateMeta(); loadAcceptance();

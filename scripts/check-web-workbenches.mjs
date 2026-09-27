@@ -31,11 +31,12 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
   readProjectFile('apps/web/app.js'),
+  readProjectFile('apps/web/style.css'),
   readProjectFile('apps/web/index.html'),
   readProjectFile('apps/web/main-flow.html'),
   readProjectFile('apps/web/main-flow.js'),
@@ -95,13 +96,19 @@ assertIncludes(billingCss, '.adjustment-detail', 'adjustment styles');
 assertIncludes(billingCss, '@media', 'responsive billing styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');
+assertIncludes(reportHtml, 'M5 验收状态', 'M5 acceptance summary');
+assertIncludes(reportHtml, 'id="m5-acceptance"', 'M5 acceptance summary');
 assertIncludes(appJs, '/reports/${active}', 'W11 report endpoints');
 assertIncludes(appJs, '/exports', 'R04 export workflow');
+assertIncludes(appJs, 'reports-acceptance-run.json', 'M5 acceptance summary output');
+assertIncludes(appJs, 'loadAcceptance', 'M5 acceptance summary loader');
+assertIncludes(appCss, '.acceptance-list', 'M5 acceptance summary styles');
 assertIncludes(packageJson.scripts['billing:seed-acceptance'], 'seed-billing-acceptance.mjs', 'billing acceptance seed script');
 assertIncludes(packageJson.scripts['billing:check-acceptance'], 'check-billing-acceptance.mjs', 'billing acceptance check script');
 assertIncludes(packageJson.scripts['reports:seed-acceptance'], 'seed-reports-acceptance.mjs', 'reports acceptance seed script');
 assertIncludes(packageJson.scripts['reports:check-acceptance'], 'check-reports-acceptance.mjs', 'reports acceptance check script');
 assertIncludes(packageJson.scripts['acceptance:m5-browserless'], 'reports:check-acceptance', 'M5 browserless acceptance script');
+assertIncludes(packageJson.scripts['m5:capture-browser-evidence'], 'capture-m5-browser-evidence.mjs', 'M5 browser evidence capture script');
 assertIncludes(packageJson.scripts['db:check'], 'check-local-db.mjs', 'local database check script');
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'billing:check-acceptance', 'M4 browserless acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m4-close'], 'm4:check-manual-evidence', 'M4 close acceptance script');
