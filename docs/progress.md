@@ -60,10 +60,20 @@ W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run bil
 
 Latest commits:
 
-Latest functional slice: `68e4814 Verify W10 B05 to B12 HTTP flow`.
-Latest commit before this progress update: `607a164 Point progress ledger at W10 HTTP acceptance`.
+Latest functional slice: `1593023 Add M4 browserless acceptance command`.
+Latest commit before this progress update: `1593023 Add M4 browserless acceptance command`.
 
 ```text
+1593023 Add M4 browserless acceptance command
+91bd150 Extend billing acceptance to W10 offsets
+dc2e5ea Add billing acceptance checker
+640a2c4 Add billing acceptance seed data
+8bf55d3 Add visible main flow acceptance page
+2aaf72c Add main flow acceptance runner
+62a3df0 Add main flow acceptance map
+ce1860e Add M4 exit checklist
+5e9ecfd Add web workbench visibility check
+1117d3b Add acceptance dashboard for visible progress
 25288bb Record W10 workbench review
 9023643 Clarify adjustment disposal states
 dd39150 Record W10 commits in progress ledger
