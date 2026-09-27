@@ -64,6 +64,8 @@ W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run bil
 
 The same M4 acceptance page now includes a gate walkthrough for DEV-402, DEV-403, and DEV-406, plus the seeded account matrix for W09/S05/S08 and W10. `billing:check-acceptance` writes structured `gateId/evidenceId` entries, so the page can show which automatic evidence is already covered per gate and which manual browser evidence remains. This keeps the remaining work visible as browser acceptance and manual evidence collection, not new M5 scope.
 
+The gate cards also provide a local manual-evidence checklist. Reviewers can mark browser screenshots or recordings as collected for DEV-402/403/406 in the page, while the authoritative automatic evidence still comes from `acceptance:m4-browserless`.
+
 `apps/web/main-flow-demo.html` now provides a narrow interactive operator demo. `npm run main-flow:seed-demo` creates `PXFLOW` master data and a browser-readable seed file, then the page can call the real APIs through login, order creation, procurement confirmation, supplier shipment, store receipt, supplier statement, and payment preview. `npm run main-flow:check-demo` runs the same sequence through a temporary API and reaches `COMPANY_TO_SUPPLIER` payable preview for `90.00`.
 
 Latest commits:

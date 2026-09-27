@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const amountKey = (key) => key.includes('Amount') || key === 'amount' || key === 'totalPayableAmount' || key === 'payableAmount';
 const statusKey = (key) => key.includes('status') || key.includes('Status') || key === 'direction' || key === 'channel' || key === 'cycle' || key === 'method';
+const manualStorageKey = 'procurex:m4-manual-evidence';
 
 const gateDefinitions = [
   {
@@ -14,7 +15,10 @@ const gateDefinitions = [
       ['direct-term-preview', '直营账期预览为 DIRECT'],
       ['company-term-block', '公司账期先收后付阻断'],
     ],
-    manualEvidence: ['W09/S05/S08 四种结算模式截图', '周期标签与付款状态复核'],
+    manualEvidence: [
+      ['settlement-mode-screens', 'W09/S05/S08 四种结算模式截图'],
+      ['period-payment-review', '周期标签与付款状态复核'],
+    ],
   },
   {
     id: 'DEV-403',
@@ -28,7 +32,10 @@ const gateDefinitions = [
       ['shared-pending-reservation', '共享结算项显示待确认金额'],
       ['shared-payment-visible', '共享付款记录可见'],
     ],
-    manualEvidence: ['四类账单视图切换录屏', '共享结算项不可重复付款复核'],
+    manualEvidence: [
+      ['statement-family-recording', '四类账单视图切换录屏'],
+      ['shared-item-repeat-payment-review', '共享结算项不可重复付款复核'],
+    ],
   },
   {
     id: 'DEV-406',
@@ -42,7 +49,10 @@ const gateDefinitions = [
       ['receiver-confirmed', '收款方确认通过'],
       ['disposed-state', '处置状态已确认'],
     ],
-    manualEvidence: ['W10 列表/详情截图', '离线返还、抵扣、收款确认录屏'],
+    manualEvidence: [
+      ['adjustment-list-detail-screens', 'W10 列表/详情截图'],
+      ['return-offset-confirm-recording', '离线返还、抵扣、收款确认录屏'],
+    ],
   },
 ];
 
@@ -98,6 +108,7 @@ function render(billing, mainFlow) {
     metric('主流程验收', mainFlow.status || 'UNKNOWN', `${mainSteps.length} 个步骤`) +
     metric('直接账期预览', findValue(billingSteps, 'channel') || '—', findValue(billingSteps, 'direction') || '付款方向') +
     metric('W10 Offset', findValue(billingSteps, 'status') || '—', findValue(billingSteps, 'amount') || '处置金额');
+  window.currentBillingSteps = billingSteps;
   renderGates(billingSteps);
   renderAccounts();
   $('empty').classList.toggle('hidden', allSteps.length > 0);
@@ -129,12 +140,15 @@ function findValue(steps, key) {
 
 function renderGates(billingSteps = []) {
   const evidenceByGate = collectEvidence(billingSteps);
+  const manualEvidence = loadManualEvidence();
   $('gates').innerHTML = gateDefinitions.map((gate) => {
     const passed = evidenceByGate.get(gate.id) || new Set();
-    const count = gate.autoEvidence.filter(([id]) => passed.has(id)).length;
-    const evidence = count ? `自动证据 ${count}/${gate.autoEvidence.length}` : '等待自动证据';
-    return `<article class="gate-card"><div class="gate-top"><span class="gate-id">${esc(gate.id)}</span><span class="gate-state">${esc(gate.state)}</span></div><h3>${esc(gate.title)}</h3><div class="gate-evidence">${esc(evidence)}</div><ul>${gate.autoEvidence.map(([id, label]) => `<li class="${passed.has(id) ? 'passed' : ''}">${esc(label)}</li>`).join('')}</ul><div class="manual-title">最终关闭还需要</div><ol>${gate.manualEvidence.map((item) => `<li>${esc(item)}</li>`).join('')}</ol></article>`;
+    const autoCount = gate.autoEvidence.filter(([id]) => passed.has(id)).length;
+    const manualCount = gate.manualEvidence.filter(([id]) => manualEvidence.has(`${gate.id}:${id}`)).length;
+    const evidence = autoCount ? `自动证据 ${autoCount}/${gate.autoEvidence.length}` : '等待自动证据';
+    return `<article class="gate-card"><div class="gate-top"><span class="gate-id">${esc(gate.id)}</span><span class="gate-state">${esc(gate.state)}</span></div><h3>${esc(gate.title)}</h3><div class="gate-evidence">${esc(evidence)} · 人工证据 ${manualCount}/${gate.manualEvidence.length}</div><ul>${gate.autoEvidence.map(([id, label]) => `<li class="${passed.has(id) ? 'passed' : ''}">${esc(label)}</li>`).join('')}</ul><div class="manual-title">最终关闭还需要</div><div class="manual-checks">${gate.manualEvidence.map(([id, label]) => manualCheck(gate.id, id, label, manualEvidence)).join('')}</div></article>`;
   }).join('');
+  bindManualChecks();
 }
 
 function collectEvidence(steps) {
@@ -150,6 +164,35 @@ function collectEvidence(steps) {
 
 function renderAccounts() {
   $('accounts').innerHTML = accounts.map(([username, role, scope]) => `<div class="account-item"><strong>${esc(username)}</strong><span>${esc(role)}</span><small>${esc(scope)}</small></div>`).join('');
+}
+
+function manualCheck(gateId, evidenceId, label, manualEvidence) {
+  const key = `${gateId}:${evidenceId}`;
+  return `<label class="manual-check"><input type="checkbox" data-manual-evidence="${esc(key)}" ${manualEvidence.has(key) ? 'checked' : ''}><span>${esc(label)}</span></label>`;
+}
+
+function loadManualEvidence() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(manualStorageKey) || '[]'));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveManualEvidence(manualEvidence) {
+  localStorage.setItem(manualStorageKey, JSON.stringify([...manualEvidence].sort()));
+}
+
+function bindManualChecks() {
+  for (const input of document.querySelectorAll('[data-manual-evidence]')) {
+    input.addEventListener('change', () => {
+      const manualEvidence = loadManualEvidence();
+      if (input.checked) manualEvidence.add(input.dataset.manualEvidence);
+      else manualEvidence.delete(input.dataset.manualEvidence);
+      saveManualEvidence(manualEvidence);
+      renderGates(window.currentBillingSteps || []);
+    });
+  }
 }
 
 $('refresh').addEventListener('click', loadResult);
