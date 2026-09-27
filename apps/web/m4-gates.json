@@ -12,6 +12,20 @@
     "manualEvidence": [
       ["settlement-mode-screens", "W09/S05/S08 四种结算模式截图"],
       ["period-payment-review", "周期标签与付款状态复核"]
+    ],
+    "manualSteps": [
+      {
+        "account": "pxacc_admin",
+        "entry": "billing.html",
+        "action": "切换门店、供应商总单、供应商分店和直营账单视图，打开 PXACC 公司账期、储值、信用和直营数据",
+        "expected": "四种结算模式均显示正确金额，信用账期为 2026-09-16 半月周期，直营预览通道为 DIRECT"
+      },
+      {
+        "account": "pxacc_admin",
+        "entry": "billing.html",
+        "action": "选择公司账期供应商应付明细并预览付款",
+        "expected": "门店应收未结清前，供应商付款预览被阻断"
+      }
     ]
   },
   {
@@ -29,6 +43,20 @@
     "manualEvidence": [
       ["statement-family-recording", "四类账单视图切换录屏"],
       ["shared-item-repeat-payment-review", "共享结算项不可重复付款复核"]
+    ],
+    "manualSteps": [
+      {
+        "account": "pxacc_admin",
+        "entry": "billing.html",
+        "action": "依次打开门店账单、供应商总单、供应商分店账单和直营账单，并展开各自明细",
+        "expected": "四类账单都能显示明细，储值供应商总单与分店单金额一致"
+      },
+      {
+        "account": "pxacc_admin",
+        "entry": "billing.html",
+        "action": "查看 PXACC-PAY-SHARED 对应共享付款记录，再回到供应商总单和分店单",
+        "expected": "共享结算项显示 69.00 待确认/占用金额，不允许重复登记同一可用金额"
+      }
     ]
   },
   {
@@ -46,6 +74,20 @@
     "manualEvidence": [
       ["adjustment-list-detail-screens", "W10 列表/详情截图"],
       ["return-offset-confirm-recording", "离线返还、抵扣、收款确认录屏"]
+    ],
+    "manualSteps": [
+      {
+        "account": "pxacc_admin",
+        "entry": "billing.html",
+        "action": "打开 W10 账单调整与差额区，筛选待抵扣/返还，进入 PXACC-SO-STORED-ADJ-CREDIT 详情",
+        "expected": "负调整显示 -4.00，待处置金额 4.00，并能看到正调整抵扣目标"
+      },
+      {
+        "account": "pxacc_admin",
+        "entry": "billing.html",
+        "action": "执行抵扣处置并完成收款方确认",
+        "expected": "处置方式为 OFFSET，状态到 CONFIRMED，调整项进入已处理状态"
+      }
     ]
   }
 ]

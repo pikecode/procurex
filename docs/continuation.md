@@ -81,7 +81,7 @@ http://127.0.0.1:4173/main-flow.html
 
 `m4-acceptance.html` is the best first screen for review: it shows the latest browserless result, the DEV-402/403/406 gate status, structured automatic evidence coverage, the seeded account matrix, a copyable acceptance summary, and the manual evidence still needed for M4 closure. The manual evidence checkboxes are saved locally in the browser and are review aids, not backend acceptance data.
 
-The gate definitions live in `apps/web/m4-gates.json`; update that file first if DEV-402/403/406 acceptance evidence changes, because both the page and `m4:gate-status` read from it.
+The gate definitions live in `apps/web/m4-gates.json`; update that file first if DEV-402/403/406 acceptance evidence changes, because both the page and `m4:gate-status` read from it. The same file also drives the manual acceptance path shown on `m4-acceptance.html`.
 
 If port `4173` is occupied, run a one-off static server on another port:
 

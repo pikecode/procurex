@@ -125,14 +125,17 @@ assertIncludes(m4Js, 'localStorage', 'M4 manual evidence checklist');
 assertIncludes(m4Js, 'data-manual-evidence', 'M4 manual evidence checklist');
 assertIncludes(m4Js, 'renderEvidenceSummary', 'M4 evidence summary');
 assertIncludes(m4Js, 'navigator.clipboard', 'M4 evidence summary copy');
+assertIncludes(m4Js, 'renderManualPlan', 'M4 manual acceptance plan');
 assertIncludes(m4Gates, 'DEV-402', 'M4 gate definitions');
 assertIncludes(m4Gates, 'DEV-403', 'M4 gate definitions');
 assertIncludes(m4Gates, 'DEV-406', 'M4 gate definitions');
 assertIncludes(m4Gates, 'stored-value-payable', 'M4 structured gate evidence');
+assertIncludes(m4Gates, 'manualSteps', 'M4 manual acceptance plan');
 assertIncludes(m4Css, '.gate-card', 'M4 gate styles');
 assertIncludes(m4Css, '.passed', 'M4 gate evidence styles');
 assertIncludes(m4Css, '.manual-check', 'M4 manual evidence styles');
 assertIncludes(m4Css, '.evidence-card', 'M4 evidence summary styles');
+assertIncludes(m4Css, '.manual-plan', 'M4 manual acceptance plan styles');
 
 assertIncludes(mainFlowDemoHtml, '主流程操作台', 'main-flow demo page');
 assertIncludes(mainFlowDemoHtml, '/main-flow-demo.js', 'main-flow demo script');

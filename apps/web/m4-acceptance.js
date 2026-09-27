@@ -43,6 +43,7 @@ async function loadResult() {
     $('summary').innerHTML = metric('运行命令', 'acceptance:m4-browserless', '会生成 M4 和主流程结果', true);
     window.currentBillingSteps = [];
     renderGates();
+    renderManualPlan();
     renderAccounts();
     renderEvidenceSummary([], null);
     $('steps').innerHTML = '';
@@ -68,6 +69,7 @@ function render(billing, mainFlow) {
     metric('W10 Offset', findValue(billingSteps, 'status') || '—', findValue(billingSteps, 'amount') || '处置金额');
   window.currentBillingSteps = billingSteps;
   renderGates(billingSteps);
+  renderManualPlan();
   renderAccounts();
   renderEvidenceSummary(billingSteps, billing);
   $('empty').classList.toggle('hidden', allSteps.length > 0);
@@ -125,6 +127,10 @@ function renderAccounts() {
   $('accounts').innerHTML = accounts.map(([username, role, scope]) => `<div class="account-item"><strong>${esc(username)}</strong><span>${esc(role)}</span><small>${esc(scope)}</small></div>`).join('');
 }
 
+function renderManualPlan() {
+  $('manual-plan').innerHTML = gateDefinitions.map((gate) => `<article class="manual-plan-group"><h4>${esc(gate.id)} ${esc(gate.title)}</h4>${(gate.manualSteps || []).map((step, index) => `<div class="manual-step"><strong>${index + 1}</strong><div><span>${esc(step.account)} · ${esc(step.entry)}</span><p>${esc(step.action)}</p><small>${esc(step.expected)}</small></div></div>`).join('')}</article>`).join('');
+}
+
 function manualCheck(gateId, evidenceId, label, manualEvidence) {
   const key = `${gateId}:${evidenceId}`;
   return `<label class="manual-check"><input type="checkbox" data-manual-evidence="${esc(key)}" ${manualEvidence.has(key) ? 'checked' : ''}><span>${esc(label)}</span></label>`;
@@ -176,6 +182,7 @@ function renderEvidenceSummary(billingSteps = [], billing = null) {
     lines.push(`  Manual evidence: ${manualDone.length}/${gate.manualEvidence.length}`);
     for (const label of manualDone) lines.push(`    - done: ${label}`);
     for (const label of manualTodo) lines.push(`    - todo: ${label}`);
+    for (const step of gate.manualSteps || []) lines.push(`    - step: ${step.account} / ${step.entry} / ${step.expected}`);
     lines.push('');
   }
   $('evidence-summary').value = lines.join('\n').trim();
