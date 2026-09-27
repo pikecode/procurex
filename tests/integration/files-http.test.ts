@@ -11,14 +11,21 @@ import { ApiExceptionFilter } from '../../apps/api/src/common/api-exception.filt
 import { ResponseEnvelopeInterceptor } from '../../apps/api/src/common/response-envelope.interceptor.js';
 import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
 import { hashPassword } from '../../packages/domain/src/password.js';
+import { DeliveryMode, SettlementMode } from '../../packages/backend/generated/prisma/enums.js';
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public' }) });
 
 test('private payment evidence uploads, completes and downloads only for its owner', async () => {
   const suffix = Date.now();
   const username = `it_file_${suffix}`;
-  const role = await prisma.role.upsert({ where: { code: 'STORE' }, update: {}, create: { code: 'STORE', name: 'Store' } });
+  const [role, supplierRole] = await Promise.all([
+    prisma.role.upsert({ where: { code: 'STORE' }, update: {}, create: { code: 'STORE', name: 'Store' } }),
+    prisma.role.upsert({ where: { code: 'SUPPLIER' }, update: {}, create: { code: 'SUPPLIER', name: 'Supplier' } }),
+  ]);
+  const supplier = await prisma.supplier.create({ data: { code: `ITFILE${suffix}`, name: 'Evidence supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } });
   const user = await prisma.user.create({ data: { username, displayName: username, passwordHash: await hashPassword('correct-password'), roles: { create: [{ roleId: role.id }] } } });
+  const supplierUsername = `it_file_supplier_${suffix}`;
+  const supplierUser = await prisma.user.create({ data: { username: supplierUsername, displayName: supplierUsername, passwordHash: await hashPassword('correct-password'), roles: { create: [{ roleId: supplierRole.id }] }, scopes: { create: { scopeType: 'SUPPLIER', supplierId: supplier.id } } } });
   const app: INestApplication = await NestFactory.create(AppModule, { logger: false });
   app.setGlobalPrefix('api/v1');
   app.useGlobalFilters(new ApiExceptionFilter());
@@ -44,12 +51,22 @@ test('private payment evidence uploads, completes and downloads only for its own
     const stored = await prisma.fileObject.findUniqueOrThrow({ where: { id: session.id } });
     assert.equal(stored.status, 'READY');
     assert.equal(stored.checksum?.length, 64);
+    const payment = await prisma.paymentRecord.create({ data: { paymentNo: `ITFILEPAY${suffix}`, direction: 'COMPANY_TO_SUPPLIER', supplierId: supplier.id, amount: '5.00', businessDate: new Date('2026-09-27') } });
+    await prisma.fileObject.update({ where: { id: session.id }, data: { paymentId: payment.id } });
+    const supplierLogin = await fetch(`${url}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: supplierUsername, password: 'correct-password', client: 'web' }) });
+    const supplierToken = ((await supplierLogin.json()) as { data: { accessToken: string } }).data.accessToken;
+    const supplierDownload = await fetch(`${url}/files/${session.id}/download`, { headers: { authorization: `Bearer ${supplierToken}` } });
+    assert.equal(supplierDownload.status, 200);
+    assert.deepEqual(Buffer.from(await supplierDownload.arrayBuffer()), bytes);
+    await prisma.paymentRecord.delete({ where: { id: payment.id } });
   } finally {
     await app.close();
     const file = await prisma.fileObject.findFirst({ where: { ownerId: user.id } });
     if (file) await rm(join(resolve(process.env.PRIVATE_FILE_DIR ?? 'var/private-files'), file.objectKey), { force: true });
     await prisma.fileObject.deleteMany({ where: { ownerId: user.id } });
     await prisma.user.delete({ where: { id: user.id } });
+    await prisma.user.delete({ where: { id: supplierUser.id } });
+    await prisma.supplier.delete({ where: { id: supplier.id } });
     await prisma.$disconnect();
   }
 });

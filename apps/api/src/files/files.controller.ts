@@ -37,7 +37,7 @@ export class FilesController {
   complete(@CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string) { return this.files.complete(auth.user.id, id); }
 
   @Get(':id/download')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
   async download(@CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string, @Res() response: { setHeader(name: string, value: string): void; end(bytes: Buffer): void }) {
     const result = await this.files.download(auth.user.id, id, auth.user.scope, auth.user.roles);
     response.setHeader('content-type', result.file.mimeType);
