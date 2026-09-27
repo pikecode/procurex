@@ -88,10 +88,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `5b3db41 Add M4 manual acceptance preflight`.
-Latest commit before this progress update: `5b3db41 Add M4 manual acceptance preflight`.
+Latest functional slice: `913d4e5 Add M4 manual acceptance launcher`.
+Latest commit before this progress update: `913d4e5 Add M4 manual acceptance launcher`.
 
 ```text
+913d4e5 Add M4 manual acceptance launcher
 5b3db41 Add M4 manual acceptance preflight
 dfc3512 Add M4 browser runtime check
 d21b77a Run manual checklist check in M4 acceptance
