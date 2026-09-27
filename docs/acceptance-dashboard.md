@@ -4,6 +4,8 @@ Last updated: 2026-09-27
 
 This file is the visible checkpoint for product direction. It maps implemented work back to the plan, shows what can be tried locally, and lists the remaining acceptance gaps. Use it with `docs/progress.md` before starting new work.
 
+For the exact M4 closure checklist, use `docs/m4-exit-checklist.md`.
+
 ## Direction Check
 
 The current direction is aligned with the confirmed plan: close M4 settlement, billing, payment, clearing, and adjustment acceptance before reopening M5 reporting/operations.

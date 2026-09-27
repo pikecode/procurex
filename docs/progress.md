@@ -549,9 +549,12 @@ W10 implementation and its real-database B05→B12 HTTP flow are complete. Next 
 
 For a user-visible status map, use `docs/acceptance-dashboard.md`. It maps each implemented slice back to the original plan, shows the available workbenches, and separates passed API evidence from still-open browser E2E.
 
+For the exact remaining M4 exit gates, use `docs/m4-exit-checklist.md`. M4 remains open until DEV-402, DEV-403, and DEV-406 meet that checklist's close conditions.
+
 ## Where To Look
 
 - Visible acceptance map: `docs/acceptance-dashboard.md`
+- M4 exit checklist: `docs/m4-exit-checklist.md`
 - Completed chronological notes: `docs/development-log.md`
 - Planned milestones: `docs/development-plan.md`
 - API contract: `docs/api-design.md`
