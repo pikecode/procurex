@@ -6,7 +6,7 @@ Use this as the first document when continuing development in a new window.
 
 ## Current State
 
-The project is still in M4. DEV-401, DEV-404, and DEV-405 are closed against current backend gates. DEV-402, DEV-403, and DEV-406 remain partial because final browser-level acceptance is blocked by the missing browser runtime.
+The project is still in M4. DEV-401, DEV-404, and DEV-405 are closed against current backend gates. DEV-402, DEV-403, and DEV-406 remain partial because their final browser-level screenshots or recordings have not been collected yet. `npm run m4:check-browser-runtime` currently finds Google Chrome on this machine.
 
 The direction has not shifted: finish M4 settlement/billing/payment/adjustment acceptance before reopening M5 reporting or operations scope.
 
@@ -118,6 +118,7 @@ npm run main-flow:check-demo
 For the M4 gate status summary, run:
 
 ```bash
+npm run m4:check-browser-runtime
 npm run m4:gate-status
 ```
 

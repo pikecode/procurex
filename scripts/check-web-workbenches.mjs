@@ -100,6 +100,7 @@ assertIncludes(appJs, '/exports', 'R04 export workflow');
 assertIncludes(packageJson.scripts['billing:seed-acceptance'], 'seed-billing-acceptance.mjs', 'billing acceptance seed script');
 assertIncludes(packageJson.scripts['billing:check-acceptance'], 'check-billing-acceptance.mjs', 'billing acceptance check script');
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'billing:check-acceptance', 'M4 browserless acceptance script');
+assertIncludes(packageJson.scripts['m4:check-browser-runtime'], 'check-browser-runtime.mjs', 'M4 browser runtime check script');
 assertIncludes(packageJson.scripts['m4:gate-status'], 'check-m4-gate-status.mjs', 'M4 gate status script');
 assertIncludes(packageJson.scripts['m4:write-manual-checklist'], 'write-m4-manual-checklist.mjs', 'M4 manual checklist script');
 assertIncludes(packageJson.scripts['m4:check-manual-checklist'], '--check', 'M4 manual checklist check script');

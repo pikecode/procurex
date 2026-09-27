@@ -112,6 +112,8 @@ npm run acceptance:m4-browserless
 
 It builds the project, reseeds W09/W10 `PXACC` evidence, verifies W09/S05/S08 and W10 through temporary API calls, runs the main-flow acceptance runner, and checks the Web workbench entry points.
 
-## Current Blocker
+## Current Browser Status
 
-No Chromium, Chrome, or Firefox executable is currently available in this environment. A previous temporary Playwright Chromium download was stopped after about 9 MB of 182 MB. Browser E2E can resume when a browser runtime is installed or made available.
+`npm run m4:check-browser-runtime` currently finds Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`.
+
+M4 remains open because DEV-402, DEV-403, and DEV-406 still require manual browser screenshots or recordings. The browserless evidence is complete, but it does not replace visible acceptance of the W09/S05/S08 and W10 workflows.
