@@ -38,6 +38,7 @@ type CreateBody = {
   items?: unknown;
   businessDate?: unknown;
   remark?: unknown;
+  evidenceFileIds?: unknown;
 };
 
 type ConfirmBody = {
@@ -101,7 +102,7 @@ export class PaymentRecordsController {
       return command.command.responseBody as PaymentRecordView;
     }
 
-    const result = await this.paymentRecordsService.create(input, auth.user.scope);
+    const result = await this.paymentRecordsService.create(input, { ...auth.user.scope, userId: auth.user.id });
     await this.commandsService.succeed({
       commandId: command.command.id,
       resourceType: 'PaymentRecord',
@@ -304,6 +305,12 @@ function parseCreateBody(body: CreateBody): CreatePaymentRecordInput {
   }
 
   const businessDate = requiredDate('businessDate', body.businessDate, issues);
+  let evidenceFileIds: string[] | undefined;
+  if (body.evidenceFileIds !== undefined) {
+    if (!Array.isArray(body.evidenceFileIds) || body.evidenceFileIds.length === 0 || body.evidenceFileIds.some((id) => typeof id !== 'string' || validateUuid('evidenceFileIds', id).length > 0)) {
+      issues.push({ field: 'evidenceFileIds', code: 'INVALID_FILE_IDS', message: 'must be a non-empty array of UUIDs' });
+    } else evidenceFileIds = body.evidenceFileIds as string[];
+  }
   const remark = optionalString('remark', body.remark, issues);
 
   throwIfInvalid(issues);
@@ -311,6 +318,7 @@ function parseCreateBody(body: CreateBody): CreatePaymentRecordInput {
     direction: direction!,
     items,
     businessDate: businessDate!,
+    evidenceFileIds,
     remark,
   };
 }

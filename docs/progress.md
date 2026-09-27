@@ -143,7 +143,7 @@ Recent work has advanced B12 materially (credit sources, target balance, locking
 | DEV-401 | **Closed**: P01-P03, AT-08, AT-09, and W06/S10 backend flow evidence are complete | None for the current backend scope |
 | DEV-402 | B01-B04, amount/period logic, AT-16 price guard, direct-term B04→B08 flow, AT-17 credit-limit guard, and AC-21 stored-value supplier payable verified | Finish remaining settlement-mode and W09/S05/S08 acceptance evidence |
 | DEV-403 | Statement read paths, total/store sum, immediate per-order grouping across all four views, replenishment period, account scope, and cross-view shared-item reservation are tested | Remaining W09/S05/S08 flow evidence before closure |
-| DEV-404 | B06-B11 payment lifecycle, AT-13 concurrency, receiver authorization, direct-term adjustment payment, and company-term store-first HTTP gate verified | Payment proof files require the I06/I07 upload flow; the repository has no file API/model or storage configuration yet |
+| DEV-404 | B06-B11 payment lifecycle, AT-13 concurrency, receiver authorization, direct-term adjustment payment, and company-term store-first HTTP gate verified; initial I06/I07 private-directory upload and PAYMENT evidence linking implemented | Make evidence required after migrating existing payment callers; authorize counterparty downloads; finish file-link acceptance and recovery/cleanup policy |
 | DEV-405 | A04-A06, store scope, and W08 selected-only clearing/accounting flow verified | AT-24 requires a real backup and credential/file recovery drill with measured RPO/RTO |
 | DEV-406 | Persisted adjustments, netting, positive adjustment payment, offsets/returns, receiver scopes, and snapshot-versus-adjustment database reconciliation are covered | Finish remaining reconciliation consistency and settlement-side acceptance gates |
 
@@ -531,3 +531,5 @@ Follow the M4 plan order: DEV-402 and DEV-403 are next, followed by DEV-404–40
 - API contract: `docs/api-design.md`
 - Static contract checks: `scripts/check-contract.mjs`
 - Current order-flow integration coverage: `tests/integration/purchase-preview-http.test.ts`
+
+Private evidence storage slice: I06 creates a payment-evidence upload session; I07 accepts JPEG/PNG/PDF files up to 10 MiB, checks file signatures and SHA-256, stores bytes under mode-0700 `PRIVATE_FILE_DIR`, and permits owner-only downloads. B07 validates READY PAYMENT file IDs owned by the registering actor and links them to the payment. A real HTTP upload/complete/download round trip passes. Evidence IDs remain optional during migration of existing callers; counterparty download authorization and mandatory evidence remain open DEV-404 gates.

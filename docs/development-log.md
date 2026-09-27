@@ -2,6 +2,8 @@
 
 ## 2026-09-27
 
+- DEV-404 I06/I07 私有目录首段：增加上传会话、受限二进制上传、文件头与 SHA-256 校验、上传者下载、B07 PAYMENT 凭证关联、数据库迁移及 HTTP 往返验收。构建及专用集成测试通过。凭证字段暂时可选；付款相对方下载授权仍待补齐。
+
 - Continued M4 scope audit: `STORE_FINANCE` now has the documented store-side B12 read/confirm permission, and its bound store is enforced across payment, adjustment, difference-disposal, and clearing reads/mutations. Verification: build, 35 unit tests, 28 integration tests, contract check, and diff check passed.
 - Hardened W08 account reads: `GET /stores/{id}/account` and `GET /stores/{id}/ledgers` now include STORE_FINANCE and enforce the authenticated bound store. Added controller regression coverage. Verification: build, 35 unit tests, 28 integration tests, contract check, and diff check passed.
 - DEV-401/AT-09：修复价格 run 乱序处理覆盖新有效价格的问题。每单处理前重新按首次发货/提交基准时间查询当前有效 revision；旧 revision 已被更新版本取代时，将 run 明细置为成功零差额，不改订单和资金，不重复生成调整。新增 PostgreSQL 集成场景覆盖新 run 先执行、旧 run 后执行。验证：构建、27 项单测、27 项集成测试通过。

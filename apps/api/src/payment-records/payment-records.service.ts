@@ -31,6 +31,7 @@ export type CreatePaymentRecordInput = {
   items: CreatePaymentRecordItemInput[];
   businessDate: Date;
   remark?: string;
+  evidenceFileIds?: string[];
 };
 
 export type ListPaymentRecordsInput = {
@@ -40,7 +41,7 @@ export type ListPaymentRecordsInput = {
   supplierId?: string;
 };
 
-export type PaymentScope = { type?: string; storeId?: string; supplierId?: string };
+export type PaymentScope = { type?: string; storeId?: string; supplierId?: string; userId?: string };
 
 export type CreatePaymentRecordItemInput = {
   settlementItemId: string;
@@ -66,6 +67,7 @@ export type PaymentRecordView = {
   allocations: PaymentAllocationView[];
   overpaymentAmount: string;
   overpayments: OverpaymentView[];
+  evidenceFileIds: string[];
 };
 
 export type OverpaymentView = {
@@ -134,7 +136,7 @@ export class PaymentRecordsService {
         storeId: isStoreScope(scope?.type) ? scope?.storeId : input.storeId,
         supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : input.supplierId,
       },
-      include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } } },
+      include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
 
@@ -144,7 +146,7 @@ export class PaymentRecordsService {
   async get(id: string, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
-      include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } } },
+      include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
     });
     if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
@@ -329,6 +331,12 @@ export class PaymentRecordsService {
       await waitForSettlementLock(tx, id);
     }
     const preview = await this.preview(settlementItemIds, tx, scope);
+    if (input.evidenceFileIds?.length) {
+      const files = await tx.fileObject.findMany({ where: { id: { in: input.evidenceFileIds }, ownerId: scope?.userId, purpose: 'PAYMENT', status: 'READY', paymentId: null } });
+      if (files.length !== input.evidenceFileIds.length || new Set(input.evidenceFileIds).size !== files.length) {
+        throw new ConflictException({ code: 'PAYMENT_EVIDENCE_INVALID', message: 'Payment evidence must be completed files owned by the current user' });
+      }
+    }
     if (preview.blockedItems.length > 0) {
       throw new ConflictException({
         code: 'PAYMENT_PREVIEW_BLOCKED',
@@ -384,6 +392,7 @@ export class PaymentRecordsService {
         amount: amount.toFixed(2),
         businessDate: input.businessDate,
         remark: input.remark,
+        evidenceFiles: input.evidenceFileIds?.length ? { connect: input.evidenceFileIds.map((id) => ({ id })) } : undefined,
         allocations: {
           create: input.items.map((item) => {
             const previewItem = previewItemsById.get(item.settlementItemId)!;
@@ -396,7 +405,7 @@ export class PaymentRecordsService {
           }),
         },
       },
-      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+      include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
     });
 
     return toPaymentRecordView(payment);
@@ -406,7 +415,7 @@ export class PaymentRecordsService {
   async confirm(id: string, expectedVersion: number, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
-      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+      include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
     });
     if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
@@ -440,7 +449,7 @@ export class PaymentRecordsService {
       });
       if (changed.count !== 1) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Payment record has already changed' });
       await tx.paymentAllocation.updateMany({ where: { paymentId: id, state: PaymentAllocationState.RESERVED }, data: { state: PaymentAllocationState.CONFIRMED } });
-      const result = await tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } } } });
+      const result = await tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
       const orderIds = [...new Set(result.allocations.map((allocation) => allocation.supplierOrderId))];
       const orders = await tx.supplierOrder.findMany({ where: { id: { in: orderIds } }, include: { shipments: true } });
       const ordersById = new Map(orders.map((order) => [order.id, order]));
@@ -486,7 +495,7 @@ export class PaymentRecordsService {
         }),
         skipDuplicates: true,
       });
-      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } } } });
+      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
     });
 
     return toPaymentRecordView(confirmed);
@@ -495,7 +504,7 @@ export class PaymentRecordsService {
   async reject(id: string, expectedVersion: number, reason: string, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
-      include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } } },
+      include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
     });
     if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
@@ -530,7 +539,7 @@ export class PaymentRecordsService {
       });
       if (changed.count !== 1) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Payment record has already changed' });
       await tx.paymentAllocation.updateMany({ where: { paymentId: id, state: PaymentAllocationState.RESERVED }, data: { state: PaymentAllocationState.RELEASED } });
-      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } } } });
+      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
     });
 
     return toPaymentRecordView(rejected);
@@ -539,7 +548,7 @@ export class PaymentRecordsService {
   async cancel(id: string, expectedVersion: number, reason: string, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
-      include: { allocations: { orderBy: { createdAt: 'asc' } } },
+      include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
     });
     if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
@@ -574,7 +583,7 @@ export class PaymentRecordsService {
       });
       if (changed.count !== 1) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Payment record has already changed' });
       await tx.paymentAllocation.updateMany({ where: { paymentId: id, state: PaymentAllocationState.RESERVED }, data: { state: PaymentAllocationState.RELEASED } });
-      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } } } });
+      return tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
     });
 
     return toPaymentRecordView(cancelled);
@@ -711,7 +720,7 @@ function encodeAdjustmentSettlementItemId(adjustmentDocumentId: string, supplier
   return Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', adjustmentDocumentId, supplierOrderId, adjustmentSide })).toString('base64url');
 }
 
-function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllocation[]; overpayments?: Overpayment[] }): PaymentRecordView {
+function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllocation[]; overpayments?: Overpayment[]; evidenceFiles?: { id: string }[] }): PaymentRecordView {
   const overpayments = payment.overpayments ?? [];
   return {
     id: payment.id,
@@ -738,6 +747,7 @@ function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllo
       sourceRevision: item.sourceRevision,
       createdAt: item.createdAt.toISOString(),
     })),
+    evidenceFileIds: payment.evidenceFiles?.map((file) => file.id) ?? [],
   };
 }
 

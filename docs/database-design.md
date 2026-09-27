@@ -220,7 +220,7 @@ erDiagram
 
 | 表 | 字段 | 规则 |
 |---|---|---|
-| `file_objects` | `object_key text`、`purpose enum`、`mime_type S`、`size_bytes bigint`、`checksum S`、`owner_id ID`、`status UPLOADING/READY/REJECTED` | key 唯一；READY 才能绑定单据；图片真实类型和大小服务端验证 |
+| `file_objects` | `object_key text`、`purpose enum`、`mime_type S`、`size_bytes bigint`、`checksum S`、`owner_id ID`、`status UPLOADING/READY/REJECTED` | key 唯一；READY 才能绑定单据；图片真实类型和大小服务端验证；本地私有目录由 `PRIVATE_FILE_DIR` 指定 |
 | `document_files` | `document_id ID`、`file_id ID`、`usage RECEIPT/RECHARGE/CLEARING/PAYMENT/RETURN` | document+file+usage 唯一；访问按单据归属授权 |
 | `idempotent_commands` | `actor_id ID`、`action varchar(100)`、`key varchar(128)`、`request_hash S`、`status RUNNING/SUCCEEDED/REJECTED`、`result_document_id ID?`、`safe_result jsonb?`、`lease_until T?` | actor+action+key 唯一；同键异参拒绝；敏感完整响应不作为跨角色通用缓存 |
 | `audit_logs` | `actor_id ID`、`active_scope jsonb`、`action`、`document_id ID?`、`entity_type S`、`entity_id ID`、`before jsonb?`、`after jsonb?`、`trace_id ID`、`job_id ID?` | 仅追加；资料变更可无单据，但必须有实体引用 |

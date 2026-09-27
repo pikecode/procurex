@@ -6,7 +6,7 @@ coverage/
 !.env.example
 .DS_Store
 .omc/
+var/private-files/
 docs/.omc/
 packages/backend/generated/
 *.tsbuildinfo
-

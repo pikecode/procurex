@@ -197,6 +197,7 @@ model User {
   sessions     UserSession[]
   scopes       UserScope[]
   exportJobs   ExportJob[]
+  files        FileObject[]
 }
 
 model UserScope {
@@ -969,10 +970,31 @@ model PaymentRecord {
   updatedAt       DateTime               @updatedAt @db.Timestamptz(6)
   allocations     PaymentAllocation[]
   overpayments    Overpayment[]
+  evidenceFiles   FileObject[]
 
   @@index([direction, status, businessDate])
   @@index([storeId, status])
   @@index([supplierId, status])
+}
+
+model FileObject {
+  id        String         @id @default(uuid()) @db.Uuid
+  filename  String         @db.VarChar(255)
+  mimeType  String         @db.VarChar(100)
+  sizeBytes BigInt
+  objectKey String         @unique @db.VarChar(100)
+  checksum  String?        @db.VarChar(64)
+  uploadTokenHash String   @db.VarChar(64)
+  purpose   String         @db.VarChar(40)
+  status    String         @default("UPLOADING") @db.VarChar(20)
+  ownerId   String         @db.Uuid
+  paymentId String?        @db.Uuid
+  createdAt DateTime       @default(now()) @db.Timestamptz(6)
+  owner     User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  payment   PaymentRecord? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, status])
+  @@index([paymentId])
 }
 
 model Overpayment {
