@@ -64,10 +64,11 @@ W09/S05/S08 now has a repeatable local acceptance seed and checker: `npm run bil
 
 Latest commits:
 
-Latest functional slice: `56672e9 Add M4 acceptance summary page`.
-Latest commit before this progress update: `56672e9 Add M4 acceptance summary page`.
+Latest functional slice: `eaea023 Add continuation handoff document`.
+Latest commit before this progress update: `eaea023 Add continuation handoff document`.
 
 ```text
+eaea023 Add continuation handoff document
 56672e9 Add M4 acceptance summary page
 4dde596 Refresh progress ledger after acceptance work
 1593023 Add M4 browserless acceptance command
