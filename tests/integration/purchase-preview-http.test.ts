@@ -1678,6 +1678,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     });
     assert.equal(completedOrderAfterReturn.status, 'COMPLETED');
     assert.equal(completedOrderAfterReturn.fulfillmentStatus, 'COMPLETED');
+    assert.equal(completedOrderAfterReturn.settlementMode, 'STORED_VALUE');
     const supplierPayableSettlementItemId = Buffer.from(
       JSON.stringify({ kind: 'SUPPLIER_PAYABLE', supplierOrderId: supplierBOrderAfterReallocate.id }),
     ).toString('base64url');

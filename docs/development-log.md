@@ -186,6 +186,9 @@
 
 # 2026-09-27
 
+- Made AC-21 explicit in the settlement integration: asserts the completed order is STORED_VALUE while its supplier statement/payment preview still exposes the COMPANY payable including freight.
+- Verification: build and all five purchase HTTP integration scenarios passed.
+
 - Extended direct-term payment HTTP acceptance with role boundaries: supplier cannot initiate preview and store cannot confirm its own payment; authorized supplier confirmation still succeeds.
 - Verification: `npm run build`, `npm test` (35), `npm run test:integration` (29), `npm run contract:check`, and `git diff --check` passed.
 
