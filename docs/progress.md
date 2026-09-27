@@ -96,10 +96,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice: `5d21c5d Add M4 status report`.
-Latest commit before this progress update: `5d21c5d Add M4 status report`.
+Latest functional slice: `560600d Add M4 manual evidence package check`.
+Latest commit before this progress update: `560600d Add M4 manual evidence package check`.
 
 ```text
+560600d Add M4 manual evidence package check
 5d21c5d Add M4 status report
 cfb5762 Add local database preflight check
 c5f925f Add M4 browser evidence capture
