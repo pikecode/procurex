@@ -48,9 +48,12 @@ Latest recovery evidence: an independent PostgreSQL backup/restore drill complet
 
 Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Full browser E2E remains open because this environment has no browser automation surface.
 
+W10 workbench is now in progress: `billing.html`/`billing.js`/`billing.css` provide adjustment filtering, original and actual period comparison, pending disposal amount/status, and detail lookup through B05. This is read-only; disposal creation/confirmation and browser E2E are not yet implemented. Build, JS syntax, local HTTP smoke, and diff checks pass. The next DEV-406 slice is to expose the persisted negative adjustment credit ID through B05, then connect the existing B12 create/confirm flow with authorized company finance and receiver roles.
+
 Latest commits:
 
 ```text
+W10 read-only adjustment workbench (uncommitted)
 427953d Refresh progress after adjustment payment acceptance
 9b24dce Verify direct adjustment payment lifecycle
 5cbc373 Verify B05 reads persisted price adjustment
@@ -533,7 +536,7 @@ Current price history behavior:
 
 ## Recommended Next Step
 
-Follow the M4 plan order: DEV-402 and DEV-403 are next, followed by DEV-404–406. DEV-401's backend gates are closed with AT-08/AT-09 and W06/S10 HTTP evidence. AT-16 now has database-backed price consistency evidence. M5 remains frozen until M4 packages are closed.
+Continue the already-started DEV-406 W10 workbench: expose the persistent B12 credit item ID for negative price adjustments, connect disposal creation/receiver confirmation, and add HTTP acceptance. DEV-402 and DEV-403 still require their remaining browser acceptance packages; verify and close them before M5. M5 remains frozen until M4 packages are closed.
 
 ## Where To Look
 
