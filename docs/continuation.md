@@ -15,6 +15,7 @@ The direction has not shifted: finish M4 settlement/billing/payment/adjustment a
 Recent commits added visible and repeatable acceptance evidence:
 
 ```text
+3bb78bc Check generated M4 manual checklist
 85ebf3e Generate M4 manual acceptance checklist
 e2a0fe4 Add M4 manual acceptance path
 babc65a Share M4 gate definitions
