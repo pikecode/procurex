@@ -133,6 +133,8 @@ add(
 const localRestoreEvidence =
   (await readFile('docs/progress.md', 'utf8')).includes('independent PostgreSQL backup/restore drill completed') &&
   (await readFile('docs/progress.md', 'utf8')).includes('private evidence file matched its source SHA-256');
+const rollbackDrill = await readJson('var/m6-rollback-drill.json');
+const rollbackReady = rollbackDrill?.status === 'LOCAL_READY';
 add(
   'DEV-603-RECOVERY',
   '备份恢复与 RPO/RTO',
@@ -145,11 +147,13 @@ add(
 add(
   'DEV-603-ROLLBACK',
   '发布、迁移与回滚手册',
-  storagePolicyReady ? 'PLANNED' : 'BLOCKED',
-  storagePolicyReady
-    ? 'Production readiness document exists; it still needs environment-specific runbook values and drill evidence.'
-    : 'Create a production readiness runbook before release review.',
-  ['docs/m6-production-readiness.md'],
+  rollbackReady ? 'LOCAL_READY' : storagePolicyReady ? 'PLANNED' : 'BLOCKED',
+  rollbackReady
+    ? 'Local migration status, required release scripts, rollback runbook text, and rollback checklist evidence exist; production rehearsal is still required.'
+    : storagePolicyReady
+      ? 'Production readiness document exists; run npm run m6:rollback-check to create local rollback evidence.'
+      : 'Create a production readiness runbook before release review.',
+  ['docs/m6-production-readiness.md', 'scripts/check-m6-rollback.mjs', 'var/m6-rollback-drill.json'],
 );
 
 add(

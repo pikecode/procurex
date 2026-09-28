@@ -13,6 +13,7 @@ Use:
 ```bash
 npm run m6:readiness
 npm run m6:performance
+npm run m6:rollback-check
 ```
 
 The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/m6-readiness.html`.
@@ -44,7 +45,7 @@ npm run m6:readiness:strict
 | DEV-602 WeChat | Real AppID, test account, binding mode, upload behavior, subscription-message behavior, real-device screenshots or recording | BLOCKED until external materials exist |
 | DEV-603 deployment | Production `DATABASE_URL`, private file/object storage target, public API base URL, TLS/domain routing, worker process plan | BLOCKED until production environment exists |
 | DEV-603 backup/recovery | Production backup schedule, private evidence-file backup, measured RPO <= 15 minutes, measured RTO <= 4 hours | LOCAL_READY for local drill only |
-| DEV-603 rollback | Migration command owner, one-instance migration rule, rollback package, failed-release decision point | PLANNED |
+| DEV-603 rollback | Migration command owner, one-instance migration rule, rollback package, failed-release decision point, and `m6:rollback-check` evidence | LOCAL_READY when local rollback check passes; production rehearsal still required |
 | DEV-604 initialization | Cutoff date, master data, opening balances, uncleared receivables/payables, role bindings, finance sign-off | PLANNED |
 | DEV-605 pilot | Selected stores/suppliers, recharge/clearing, cross-period replenishment, full statement cycle, issue closure, handover | PLANNED |
 
@@ -58,6 +59,24 @@ npm run m6:readiness:strict
 | Reminder thresholds and channel authorization | Notification operations | Before pilot |
 | Cutoff date, balances, uncleared payables/receivables, migration source files | Initialization and finance reconciliation | Before data switch |
 | Monitoring receiver and escalation owner | Operations handover | Before pilot |
+
+## Release And Rollback Runbook
+
+Release owner: one named operator owns the production release window and is the only person allowed to run `npm run db:migrate`.
+
+one-instance migration rule: migrations are applied once, from one controlled shell, after the target commit and release package are tagged. No API/worker instance should auto-run migrations on boot.
+
+rollback package: every release candidate must preserve the previous application build identifier, the target build identifier, the migration status output, the pre-release database backup reference, the private-file backup reference, and the generated `apps/web/m6-readiness.json`.
+
+failed-release decision point: if API health, migration status, login, order creation, receipt creation, or payment confirmation fails during smoke validation, freeze traffic, stop the worker, keep the current database intact, redeploy the previous application build, and only restore database/private files after release owner and finance owner approve the data rewind impact.
+
+Local check:
+
+```bash
+npm run m6:rollback-check
+```
+
+The local check is non-destructive. It validates Prisma schema/migration status, required package scripts, migration artifacts, and this runbook text, then writes `var/m6-rollback-drill.json`.
 
 ## Next Work
 

@@ -1,0 +1,131 @@
+{
+  "generatedAt": "2026-09-28T14:47:23.334Z",
+  "title": "M6 Local Rollback Check",
+  "status": "LOCAL_READY",
+  "summary": "Local migration, release, and rollback readiness checks passed; production-specific rollback rehearsal remains required.",
+  "migration": {
+    "provider": "postgresql",
+    "migrationCount": 41,
+    "latestMigration": "20260927223000_add_audit_logs",
+    "commandOwner": "Release owner runs npm run db:migrate once per release window."
+  },
+  "commands": [
+    {
+      "command": "npx prisma validate",
+      "status": "PASS",
+      "durationMs": 1009,
+      "stdout": [
+        "The schema at database/schema.prisma is valid 🚀"
+      ],
+      "stderr": [
+        "│                                                         │",
+        "│  This is a major update - please follow the guide at    │",
+        "│  https://pris.ly/d/major-version-upgrade                │",
+        "│                                                         │",
+        "│  Run the following to update                            │",
+        "│    npm i --save-dev prisma@latest                       │",
+        "│    npm i @prisma/client@latest                          │",
+        "└─────────────────────────────────────────────────────────┘"
+      ]
+    },
+    {
+      "command": "npx prisma migrate status",
+      "status": "PASS",
+      "durationMs": 745,
+      "stdout": [
+        "Datasource \"db\": PostgreSQL database \"procurex\", schema \"public\" at \"127.0.0.1:55438\"",
+        "",
+        "41 migrations found in prisma/migrations",
+        "",
+        "Database schema is up to date!"
+      ],
+      "stderr": [
+        "◇ injected env (0) from .env",
+        "Loaded Prisma config from prisma.config.ts.",
+        "Prisma schema loaded from database/schema.prisma."
+      ]
+    }
+  ],
+  "scripts": [
+    {
+      "name": "db:migrate",
+      "expectedFragment": "prisma migrate deploy",
+      "status": "PASS",
+      "value": "prisma migrate deploy"
+    },
+    {
+      "name": "start:api",
+      "expectedFragment": "dist/apps/api/main.js",
+      "status": "PASS",
+      "value": "node --env-file-if-exists=.env dist/apps/api/main.js"
+    },
+    {
+      "name": "start:worker",
+      "expectedFragment": "dist/apps/worker/main.js",
+      "status": "PASS",
+      "value": "node --env-file-if-exists=.env dist/apps/worker/main.js"
+    },
+    {
+      "name": "m6:readiness",
+      "expectedFragment": "report-m6-readiness.mjs",
+      "status": "PASS",
+      "value": "node --env-file-if-exists=.env scripts/report-m6-readiness.mjs"
+    },
+    {
+      "name": "m6:performance",
+      "expectedFragment": "check-m6-performance.mjs",
+      "status": "PASS",
+      "value": "npm run build && npm run reports:seed-acceptance && node --env-file-if-exists=.env scripts/check-m6-performance.mjs"
+    },
+    {
+      "name": "mini:flow-check",
+      "expectedFragment": "check-miniprogram-flow.mjs",
+      "status": "PASS",
+      "value": "npm run build && npm run main-flow:seed-demo && node --env-file-if-exists=.env scripts/check-miniprogram-flow.mjs"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "database/schema.prisma",
+      "status": "PASS"
+    },
+    {
+      "path": "database/migrations/migration_lock.toml",
+      "status": "PASS"
+    },
+    {
+      "path": "infra/compose/compose.yaml",
+      "status": "PASS"
+    },
+    {
+      "path": "docs/m6-production-readiness.md",
+      "status": "PASS"
+    },
+    {
+      "path": "apps/web/m6-readiness.json",
+      "status": "PASS"
+    }
+  ],
+  "policy": [
+    {
+      "name": "one-instance migration rule",
+      "status": "PASS"
+    },
+    {
+      "name": "failed-release decision point",
+      "status": "PASS"
+    },
+    {
+      "name": "rollback package",
+      "status": "PASS"
+    }
+  ],
+  "rollbackPlan": [
+    "Freeze traffic and stop worker before a failed release is rolled back.",
+    "Preserve database backup and private-file snapshot taken immediately before migration.",
+    "Redeploy the previous application build; do not run destructive down migrations in production.",
+    "Restore database/private files only when release owner and finance owner approve data rewind impact.",
+    "Run npm run m6:readiness after rollback and record production incident notes."
+  ],
+  "blockers": []
+}

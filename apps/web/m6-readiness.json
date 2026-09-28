@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-28T14:13:05.052Z",
+  "generatedAt": "2026-09-28T14:47:38.177Z",
   "status": "NOT_READY",
   "summary": "M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, initialization, and pilot evidence remain open.",
   "counts": {
     "ready": 1,
-    "localReady": 4,
+    "localReady": 5,
     "blocked": 3,
-    "planned": 3
+    "planned": 2
   },
   "checks": [
     {
@@ -92,10 +92,12 @@
     {
       "id": "DEV-603-ROLLBACK",
       "title": "发布、迁移与回滚手册",
-      "status": "PLANNED",
-      "detail": "Production readiness document exists; it still needs environment-specific runbook values and drill evidence.",
+      "status": "LOCAL_READY",
+      "detail": "Local migration status, required release scripts, rollback runbook text, and rollback checklist evidence exist; production rehearsal is still required.",
       "evidence": [
-        "docs/m6-production-readiness.md"
+        "docs/m6-production-readiness.md",
+        "scripts/check-m6-rollback.mjs",
+        "var/m6-rollback-drill.json"
       ]
     },
     {
