@@ -2,6 +2,7 @@
 
 ## 2026-09-27
 
+- M5/DEV-505 W13 导出健康导出：运营页导出任务健康区新增“导出 CSV”，导出当前超时处理中和近 24 小时失败任务的类型、任务 ID、报表、状态、创建时间、任务年龄和说明；`web:check` 增加按钮与文件名前缀保护。验证：构建、`web:check`、`git diff --check` 通过。
 - M5/R05 W13 对账导出：运营页对账异常区新增“导出 CSV”，导出当前 R05 异常结果的门店、异常类型、严重级别、系统记录、核算值、差额和核查依据，便于财务线下复核；`web:check` 增加按钮与文件名前缀保护。验证：构建、`web:check`、`git diff --check` 通过。
 - M5/DEV-504 W13 审计导出：运营页审计日志区新增“导出 CSV”，导出当前筛选结果的 action/entity/actor/traceId/reason/createdAt，方便财务或运营把排查证据带出页面复核；`web:check` 增加按钮与文件名前缀保护。验证：构建、`web:check`、`git diff --check` 通过。
 - M5/DEV-503 W13 消息处理：新增 `POST /notifications/read-all`，仅批量标记当前用户自己的未读站内消息；W13 站内消息卡片显示未读数并提供“全部已读”，仍保留单条已读。`web:check` 增加批量已读入口和接口调用保护。验证：构建、47 项单测、契约检查、`web:check`、`git diff --check` 通过。

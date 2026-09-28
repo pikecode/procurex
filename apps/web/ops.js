@@ -15,6 +15,7 @@ const exportStatusLabels = {
 };
 let currentAuditLogs = [];
 let currentIssues = [];
+let currentExportHealthJobs = [];
 
 function metric(label, value, foot, emphasis = false) {
   return `<div class="metric ${emphasis ? 'emphasis' : ''}"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div><div class="metric-foot">${esc(foot)}</div></div>`;
@@ -78,6 +79,8 @@ async function loadExportHealth() {
       ...health.staleProcessing.map((job) => ({ kind: '超时处理中', tag: 'tag-fail', ...job, note: `超过 ${health.leaseMinutes} 分钟未完成，当前 ${job.ageMinutes} 分钟` })),
       ...health.recentFailures.map((job) => ({ kind: '近24小时失败', tag: 'tag-pending', ...job, note: job.error || '导出生成失败' })),
     ];
+    currentExportHealthJobs = watchedJobs;
+    $('export-health-csv').disabled = watchedJobs.length === 0;
     $('export-health-summary').innerHTML =
       metric('导出任务', health.totalJobsSampled, statusText || '最近任务样本') +
       metric('超时处理中', health.staleProcessing.length, `租约 ${health.leaseMinutes} 分钟`, health.staleProcessing.length > 0) +
@@ -179,6 +182,21 @@ function exportIssues() {
   downloadCsv(`procurex-reconciliation-issues-${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
 }
 
+function exportHealthJobs() {
+  if (!currentExportHealthJobs.length) return;
+  const header = ['kind', 'jobId', 'reportType', 'status', 'createdAt', 'ageMinutes', 'note'];
+  const rows = currentExportHealthJobs.map((job) => [
+    job.kind,
+    job.jobId,
+    job.reportType,
+    job.status || '',
+    job.createdAt,
+    job.ageMinutes ?? '',
+    job.note,
+  ]);
+  downloadCsv(`procurex-export-health-${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
+}
+
 $('login-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   $('login-error').textContent = '';
@@ -195,6 +213,7 @@ $('login-form').addEventListener('submit', async (event) => {
 });
 $('logout').addEventListener('click', async () => { try { await call('/auth/logout', { method: 'POST' }); } catch {} token = null; sessionStorage.removeItem('procurex-token'); showSession(); });
 $('refresh').addEventListener('click', loadOperations);
+$('export-health-csv').addEventListener('click', exportHealthJobs);
 $('refresh-issues').addEventListener('click', loadOperations);
 $('export-issues').addEventListener('click', exportIssues);
 $('refresh-notifications').addEventListener('click', loadOperations);

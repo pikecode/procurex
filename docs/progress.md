@@ -58,7 +58,7 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 
 `apps/web/index.html` now renders the latest M5 browserless result from `reports-acceptance-run.json` inside the W11 report page. It also shows the latest export tasks with READY/FAILED/processing status, retry for failed jobs, and download actions backed by `GET /exports`. `npm run m5:capture-browser-evidence` logs in as the store-scoped report account, loads the M5 acceptance summary, runs the R01 September 2026 query, creates an export job, and captures Chrome evidence under `var/m5-browser-evidence/`. The latest capture showed `PASSED`, 10 acceptance steps, 2 scoped orders, goods `156.00`, freight `8.00`, total `164.00`, one visible READY export row, DEV-505 stale export recovery plus failed export retry, and R05 mismatch evidence for balance-ledger plus credit-used checks.
 
-R04 export reliability now has the first DEV-505 slices: the worker scans both fresh `QUEUED` jobs and `PROCESSING` jobs older than a 10-minute lease, reclaims them with an atomic status/age condition, clears stale error text on retry, and marks expired `PROCESSING` jobs as `FAILED`. `GET /exports/health` exposes admin/HQ-only status counts, stale processing jobs, and recent failures for W13. `POST /exports/{id}/retry` lets the owner retry an unexpired FAILED export in its saved permission scope and rejects non-failed jobs with 409. This avoids a service crash or interrupted worker leaving an export permanently stuck while keeping the existing no-migration schema.
+R04 export reliability now has the first DEV-505 slices: the worker scans both fresh `QUEUED` jobs and `PROCESSING` jobs older than a 10-minute lease, reclaims them with an atomic status/age condition, clears stale error text on retry, and marks expired `PROCESSING` jobs as `FAILED`. `GET /exports/health` exposes admin/HQ-only status counts, stale processing jobs, and recent failures for W13; the W13 card can export the current stale/failed task result to CSV. `POST /exports/{id}/retry` lets the owner retry an unexpired FAILED export in its saved permission scope and rejects non-failed jobs with 409. This avoids a service crash or interrupted worker leaving an export permanently stuck while keeping the existing no-migration schema.
 
 `apps/web/ops.html` now provides the W13 operations/reconciliation view. It logs in with an authorized company account, renders `GET /exports/health` as a DEV-505导出任务健康卡片, renders `GET /reconciliation-issues` as a read-only exception list, and can export the current R05 exception result to CSV for offline finance review. `npm run m5:capture-ops-evidence` captures Chrome evidence under `var/m5-browser-evidence/ops-reconciliation.png`; the latest local screenshot showed 5 current local reconciliation issues and 0 export health exception rows after the clean acceptance seed.
 
@@ -112,10 +112,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice in this update: R05 W13 reconciliation CSV export.
-Latest commit before this progress update: `0ca1e7a Export W13 audit logs to CSV`.
+Latest functional slice in this update: DEV-505 W13 export health CSV export.
+Latest commit before this progress update: `d218a12 Export W13 reconciliation issues to CSV`.
 
 ```text
+d218a12 Export W13 reconciliation issues to CSV
 0ca1e7a Export W13 audit logs to CSV
 d3bb9cf Add bulk read for in-app notifications
 0649036 Notify purchasers about supplier rejections

@@ -182,6 +182,7 @@ assertIncludes(opsHtml, '/ops.js', 'W13 ops script');
 assertIncludes(opsHtml, 'id="issues"', 'R05 issue table');
 assertIncludes(opsHtml, 'id="export-issues"', 'R05 issue CSV export action');
 assertIncludes(opsHtml, 'id="export-health-summary"', 'DEV-505 export health summary');
+assertIncludes(opsHtml, 'id="export-health-csv"', 'DEV-505 export health CSV action');
 assertIncludes(opsHtml, 'id="notifications"', 'I08 notifications table');
 assertIncludes(opsHtml, 'id="read-all-notifications"', 'I08 notification bulk read action');
 assertIncludes(opsHtml, 'id="audit-logs"', 'DEV-504 audit log table');
@@ -190,6 +191,7 @@ assertIncludes(opsHtml, 'id="export-audit-logs"', 'DEV-504 audit CSV export acti
 assertIncludes(opsJs, '/reconciliation-issues', 'R05 reconciliation endpoint');
 assertIncludes(opsJs, 'procurex-reconciliation-issues-', 'R05 issue CSV export filename');
 assertIncludes(opsJs, '/exports/health', 'DEV-505 export health endpoint');
+assertIncludes(opsJs, 'procurex-export-health-', 'DEV-505 export health CSV filename');
 assertIncludes(opsJs, '/notifications', 'I08 notifications endpoint');
 assertIncludes(opsJs, '/notifications/read-all', 'I08 notification bulk read endpoint');
 assertIncludes(opsJs, '/audit-logs', 'DEV-504 audit endpoint');
