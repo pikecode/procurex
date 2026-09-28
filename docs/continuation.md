@@ -15,6 +15,13 @@ M5 has resumed. The current M5 slice has a repeatable browserless acceptance cha
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
 
 ```text
+9b9e99e Add interactive main flow browser run
+fd295f9 Refresh M5 browser evidence in close gate
+52a46ca Include main flow UI evidence in M5 close gate
+45e14b7 Show main flow demo evidence
+e539f86 Show M5 close gate on W11
+690bf16 Add M5 close readiness gate
+e773875 Record full M5 regression baseline
 2623e51 Refresh M5 acceptance evidence
 559916f Show M5 status on W11
 8bb8cd9 Add M5 status report
@@ -97,7 +104,7 @@ npm run m5:gate-status
 
 The latest local run on 2026-09-28 has Docker, PostgreSQL, Chrome, M5 browserless output, and W11/W13 evidence READY. The browserless chain passed 10/10 steps, W11 capture recorded `PASSED`, M5 status `READY`, M5 gate `READY` with 9 gate rows, 1 report row, and 1 export row; W13 capture recorded 5 reconciliation issues, 0 export-health exception rows, 2 notification rows, and 16 audit rows. The follow-up full baseline also passed: build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.
 
-`npm run acceptance:m5-close` is now the strongest single M5 close-readiness command. It reruns the M5 browserless reporting/export/reconciliation/notification chain, reseeds/checks the main-flow demo, writes `apps/web/main-flow-demo-run.json`, writes the M5 status snapshot, refreshes W11/W13 browser evidence through `m5:capture-all-evidence`, captures the main-flow demo evidence in Chrome, runs `m5:gate-status`, and writes a final M5 status snapshot. The latest run marks DEV-501/502, R04/W11, DEV-505, R05/W13, DEV-503, DEV-504, MainFlowUI, and Chrome evidence as READY.
+`npm run acceptance:m5-close` is now the strongest single M5 close-readiness command. It reruns the M5 browserless reporting/export/reconciliation/notification chain, reseeds/checks the main-flow demo, writes `apps/web/main-flow-demo-run.json`, writes the M5 status snapshot, refreshes W11/W13 browser evidence through `m5:capture-all-evidence`, captures the main-flow demo evidence in Chrome, clicks the main-flow page's one-click browser run through `main-flow:capture-interactive-demo`, runs `m5:gate-status`, and writes a final M5 status snapshot. The latest run marks DEV-501/502, R04/W11, DEV-505, R05/W13, DEV-503, DEV-504, MainFlowUI, MainFlowRun, and Chrome evidence as READY.
 
 This performs:
 
@@ -225,7 +232,7 @@ npm run main-flow:capture-demo-evidence
 npm run main-flow:capture-interactive-demo
 ```
 
-The demo page renders `apps/web/main-flow-demo-run.json` as a visible evidence section, and the latest Chrome capture under `var/main-flow-demo-evidence/` records `PASSED`, 7 evidence rows, 6 step rows, and true notification/audit evidence flags. `main-flow:capture-interactive-demo` also proves the page's one-click run control can execute the browser flow against real APIs.
+The demo page renders `apps/web/main-flow-demo-run.json` as a visible evidence section, and the latest Chrome capture under `var/main-flow-demo-evidence/` records `PASSED`, 7 evidence rows, 6 step rows, and true notification/audit evidence flags. `main-flow:capture-interactive-demo` also proves the page's one-click run control can execute the browser flow against real APIs; it is now part of `acceptance:m5-close` and the `MainFlowRun` gate.
 
 For the M4 gate status summary, run:
 

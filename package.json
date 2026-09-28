@@ -35,7 +35,7 @@
     "m5:capture-all-evidence": "node scripts/capture-m5-all-evidence.mjs",
     "m5:status": "node --env-file-if-exists=.env scripts/report-m5-status.mjs",
     "m5:gate-status": "node scripts/check-m5-gate-status.mjs",
-    "acceptance:m5-close": "npm run acceptance:m5-browserless && npm run main-flow:seed-demo && npm run main-flow:check-demo && npm run m5:status && npm run m5:capture-all-evidence && npm run main-flow:capture-demo-evidence && npm run m5:gate-status && npm run m5:status",
+    "acceptance:m5-close": "npm run acceptance:m5-browserless && npm run main-flow:seed-demo && npm run main-flow:check-demo && npm run m5:status && npm run m5:capture-all-evidence && npm run main-flow:capture-demo-evidence && npm run main-flow:capture-interactive-demo && npm run m5:gate-status && npm run m5:status",
     "billing:seed-acceptance": "node --env-file-if-exists=.env scripts/seed-billing-acceptance.mjs",
     "billing:check-acceptance": "node --env-file-if-exists=.env scripts/check-billing-acceptance.mjs",
     "acceptance:m4-browserless": "npm run build && npm run billing:seed-acceptance && npm run billing:check-acceptance && npm run m4:gate-status && npm run m4:check-manual-checklist && npm run main-flow:seed-demo && npm run main-flow:check-demo && npm run acceptance:main-flow && npm run web:check",

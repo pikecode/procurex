@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- M5 收口 gate 接入交互式主流程：`acceptance:m5-close` 现在会运行 `main-flow:capture-interactive-demo`，`m5:gate-status` 校验 `interactive-manifest.json` 中 6/6 浏览器操作行、按钮完成态、`COMPANY_TO_SUPPLIER / ¥90.00` 付款预览和截图文件，并新增 `MainFlowRun` READY gate。验证：`web:check`、`acceptance:m5-close` 通过。
 - 主流程操作台一键执行：`main-flow-demo.html` 新增“一键执行”，可从浏览器页面按顺序调用登录、下单、采购确认、供应商发货、门店收货、账单读取和付款预览真实 API；新增 `main-flow:capture-interactive-demo`，自动准备 PXFLOW 种子、启动 API/Web、用 Chrome 点击“一键执行”，等待 6/6 步完成并捕获 `COMPANY_TO_SUPPLIER` 付款预览截图。最新交互式截图 manifest 记录 6/6 步完成、当前阶段“读取账单并预览付款”、付款预览 `COMPANY_TO_SUPPLIER / ¥90.00`。
 - M5 浏览器证据自动刷新：新增 `m5:capture-all-evidence`，临时启动 API/Web 后顺序刷新 W11 报表页和 W13 运营页 Chrome 证据，并在完成后停止服务；`acceptance:m5-close` 现在会在主流程检查后写入 `m5:status`，自动运行该命令，再刷新主流程操作台截图并执行 `m5:gate-status` 和最终 `m5:status`，避免收口 gate 混用旧 W11/W13 manifest。
 - 主流程操作台证据可视化：`main-flow-demo.html` 新增“主流程证据”卡片，读取 `main-flow-demo-run.json` 展示待收货通知、收货差异通知、差异处理结果通知、供应商拒单通知、审计动作和付款预览结果；新增 `main-flow:capture-demo-evidence` 用 Chrome 抓取主流程操作台截图并写出 manifest。最新截图记录 `PASSED`、7 条证据行、6 个操作步骤，且发货通知、供应商差异通知、拒单通知和审计证据均为 true。验证：`web:check`、`main-flow:capture-demo-evidence` 通过。
