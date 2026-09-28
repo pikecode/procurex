@@ -6,10 +6,12 @@ Page({
     roleText: '未登录',
     requests: [],
     rejectionTodos: [],
+    selectedRequest: null,
     requestId: '',
     rejectedOrderId: '',
     targetSupplierId: '',
     loading: false,
+    detailing: false,
     confirming: false,
     reallocating: false,
     result: null,
@@ -30,8 +32,10 @@ Page({
     this.setData({ [event.currentTarget.dataset.field]: event.detail.value });
   },
 
-  selectRequest(event) {
-    this.setData({ requestId: event.currentTarget.dataset.id });
+  async selectRequest(event) {
+    const requestId = event.currentTarget.dataset.id;
+    this.setData({ requestId });
+    await this.loadRequestDetail(requestId);
   },
 
   selectRejection(event) {
@@ -87,10 +91,28 @@ Page({
     }
   },
 
+  async loadRequestDetail(id = this.data.requestId) {
+    if (!id) {
+      this.setData({ error: '请先选择或输入采购申请 ID' });
+      return;
+    }
+
+    this.setData({ detailing: true, error: '' });
+    try {
+      const selectedRequest = await api.request(`/purchase-requests/${id}`);
+      this.setData({ selectedRequest });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      this.setData({ detailing: false });
+    }
+  },
+
   async confirmRequest() {
     this.setData({ confirming: true, error: '', result: null });
     try {
       const detail = await api.request(`/purchase-requests/${this.data.requestId}`);
+      this.setData({ selectedRequest: detail });
       const confirmed = await api.request(`/purchase-requests/${this.data.requestId}/confirm`, {
         method: 'POST',
         data: { expectedVersion: detail.version },
@@ -115,6 +137,7 @@ Page({
     this.setData({ reallocating: true, error: '', result: null });
     try {
       const detail = await api.request(`/purchase-requests/${this.data.requestId}`);
+      this.setData({ selectedRequest: detail });
       const reallocated = await api.request(`/purchase-requests/${this.data.requestId}/reallocate`, {
         method: 'POST',
         data: {

@@ -34,8 +34,31 @@
     <view class="field"><text class="field-label">被拒供应商单 ID</text><input value="{{rejectedOrderId}}" data-field="rejectedOrderId" bindinput="onInput" placeholder="supplierOrderId" /></view>
     <view class="field"><text class="field-label">改派供应商 ID</text><input value="{{targetSupplierId}}" data-field="targetSupplierId" bindinput="onInput" placeholder="supplierId" /></view>
     <view class="button-row">
+      <button class="secondary" loading="{{detailing}}" bindtap="loadRequestDetail">读取详情</button>
       <button class="primary" loading="{{confirming}}" bindtap="confirmRequest">确认并推送</button>
+    </view>
+    <view class="button-row">
       <button class="secondary" loading="{{reallocating}}" bindtap="reallocateRequest">改派供应商</button>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{selectedRequest}}">
+    <text class="card-title">申请详情</text>
+    <view class="metric-grid">
+      <view class="metric"><text class="metric-label">资金状态</text><text class="metric-value">{{selectedRequest.paymentStatus}}</text></view>
+      <view class="metric"><text class="metric-label">缺口金额</text><text class="metric-value">{{selectedRequest.shortfallAmount}}</text></view>
+      <view class="metric"><text class="metric-label">销售额</text><text class="metric-value">{{selectedRequest.salesGoodsAmount}}</text></view>
+      <view class="metric"><text class="metric-label">供货额</text><text class="metric-value">{{selectedRequest.supplyGoodsAmount}}</text></view>
+    </view>
+    <view class="list">
+      <view wx:for="{{selectedRequest.items}}" wx:key="id" class="row">
+        <view class="row-title"><text>{{item.productId}}</text><text class="tag">{{item.quantity}}</text></view>
+        <view class="muted">供应商 {{item.supplierId}}，销售 {{item.salesLineAmount}}，供货 {{item.supplyLineAmount}}</view>
+      </view>
+      <view wx:for="{{selectedRequest.supplierOrders}}" wx:key="id" class="row">
+        <view class="row-title"><text>{{item.supplierOrderNo}}</text><text class="tag">{{item.status}}</text></view>
+        <view class="muted">履约 {{item.fulfillmentStatus}}，供应商 {{item.supplierId}}</view>
+      </view>
     </view>
   </view>
 
@@ -44,7 +67,7 @@
     <view class="list">
       <view wx:for="{{requests}}" wx:key="id" class="row" bindtap="selectRequest" data-id="{{item.id}}">
         <view class="row-title"><text>{{item.requestNo || item.id}}</text><text class="tag {{item.paymentStatus === 'SHORTFALL' ? 'tag-warn' : ''}}">{{item.status}}</text></view>
-        <view class="muted">资金 {{item.paymentStatus || 'UNKNOWN'}}，点击填入申请 ID。</view>
+        <view class="muted">资金 {{item.paymentStatus || 'UNKNOWN'}}，缺口 {{item.shortfallAmount || '0.00'}}，点击读取详情。</view>
       </view>
       <view wx:if="{{!requests.length}}" class="row"><view class="muted">暂无待办或尚未刷新。</view></view>
     </view>

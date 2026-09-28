@@ -124,12 +124,16 @@ assertIncludes(supplierWxml, '驳回付款', 'supplier payment reject action');
 
 assertIncludes(purchaserJs, '/purchase-requests', 'purchaser request list');
 assertIncludes(purchaserJs, '/notifications', 'purchaser rejection notification list');
+assertIncludes(purchaserJs, '/purchase-requests/${id}', 'purchaser request detail');
 assertIncludes(purchaserJs, '/confirm', 'purchaser confirmation');
 assertIncludes(purchaserJs, '/reallocate', 'purchaser reallocation');
 assertIncludes(purchaserJs, 'expectedVersion', 'purchaser version guard');
 assertIncludes(purchaserJs, 'rejectedOrderId', 'purchaser rejection reallocation guard');
 assertIncludes(purchaserJs, 'SUPPLIER_ORDER_REJECTED', 'purchaser supplier rejection notification filter');
 assertIncludes(purchaserWxml, '确认并推送', 'purchaser confirmation screen');
+assertIncludes(purchaserWxml, '读取详情', 'purchaser request detail action');
+assertIncludes(purchaserWxml, '申请详情', 'purchaser request detail screen');
+assertIncludes(purchaserWxml, '缺口金额', 'purchaser shortfall signal');
 assertIncludes(purchaserWxml, '拒单通知', 'purchaser rejection notification screen');
 assertIncludes(purchaserWxml, '改派供应商', 'purchaser reallocation screen');
 
