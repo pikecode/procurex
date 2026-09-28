@@ -10,6 +10,8 @@ M4 is locally closed against the current acceptance gates. DEV-401 through DEV-4
 
 M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, I08 in-app notification list/read/bulk-read, real DEV-503 supplier-shipment, receipt-discrepancy, discrepancy-resolution, supplier-rejection, and overdue-receipt reminder triggers, DEV-504 audit logs for purchase requests, supplier operations, shipment/receipt/discrepancy resolution, payment create/confirm/reject/cancel, W10 difference-disposal create/confirm, and store recharge/credit-limit/clearing operations, W11 visibility, R04 export task listing and failed retry, DEV-505 stale export recovery and export health monitoring/export, W13 reconciliation export/operations/notification/filterable-exportable-audit visibility, and Chrome-captured W11/W13 screenshots.
 
+M6 readiness tracking has started without claiming production launch readiness. `npm run m6:readiness` writes `apps/web/m6-readiness.json` and `apps/web/m6-readiness.html` renders DEV-601 through DEV-605. Current expected status is `NOT_READY`: DEV-601 is READY from M5 close evidence, browser/mobile Web and local restore evidence are LOCAL_READY, while WeChat real-device evidence, production environment config, object-storage policy, production recovery drill, initialization sign-off, and pilot evidence remain open.
+
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
@@ -105,6 +107,7 @@ npm run m5:capture-all-evidence
 npm run m5:capture-browser-evidence
 npm run m5:capture-ops-evidence
 npm run m5:gate-status
+npm run m6:readiness
 ```
 
 The latest local run on 2026-09-28 has Docker, PostgreSQL, Chrome, M5 browserless output, and W11/W13 evidence READY. The browserless chain passed 10/10 steps, W11 capture recorded `PASSED`, M5 status `READY`, M5 gate `READY` with 9 gate rows, 1 report row, and 1 export row; W13 capture recorded 5 reconciliation issues, 0 export-health exception rows, 2 notification rows, and 16 audit rows. The follow-up full baseline also passed: build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.

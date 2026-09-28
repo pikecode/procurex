@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, mainFlowInteractiveCapture, opsHtml, opsJs] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -51,6 +51,9 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHt
   readProjectFile('scripts/capture-main-flow-interactive-demo.mjs'),
   readProjectFile('apps/web/ops.html'),
   readProjectFile('apps/web/ops.js'),
+  readProjectFile('apps/web/m6-readiness.html'),
+  readProjectFile('apps/web/m6-readiness.js'),
+  readProjectFile('scripts/report-m6-readiness.mjs'),
 ]);
 
 for (const path of [
@@ -70,6 +73,8 @@ for (const path of [
   'apps/web/role-workbenches.js',
   'apps/web/ops.html',
   'apps/web/ops.js',
+  'apps/web/m6-readiness.html',
+  'apps/web/m6-readiness.js',
 ]) {
   assertExists(path, 'web asset');
 }
@@ -81,6 +86,8 @@ checkSyntax('apps/web/m4-acceptance.js');
 checkSyntax('apps/web/main-flow-demo.js');
 checkSyntax('apps/web/role-workbenches.js');
 checkSyntax('apps/web/ops.js');
+checkSyntax('apps/web/m6-readiness.js');
+checkSyntax('scripts/report-m6-readiness.mjs');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
 assertIncludes(billingHtml, '账单调整与差额', 'W10 adjustment page');
@@ -108,6 +115,7 @@ assertIncludes(billingCss, '@media', 'responsive billing styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');
 assertIncludes(reportHtml, '/ops.html', 'W13 navigation entry');
+assertIncludes(reportHtml, '/m6-readiness.html', 'M6 readiness navigation entry');
 assertIncludes(reportHtml, 'M5 验收状态', 'M5 acceptance summary');
 assertIncludes(reportHtml, 'id="m5-acceptance"', 'M5 acceptance summary');
 assertIncludes(reportHtml, 'M5 环境状态', 'M5 status summary');
@@ -139,6 +147,8 @@ assertIncludes(packageJson.scripts['m5:capture-browser-evidence'], 'capture-m5-b
 assertIncludes(packageJson.scripts['m5:capture-all-evidence'], 'capture-m5-all-evidence.mjs', 'M5 browser evidence refresh script');
 assertIncludes(packageJson.scripts['m5:status'], 'report-m5-status.mjs', 'M5 status report script');
 assertIncludes(packageJson.scripts['m5:gate-status'], 'check-m5-gate-status.mjs', 'M5 gate status script');
+assertIncludes(packageJson.scripts['m6:readiness'], 'report-m6-readiness.mjs', 'M6 readiness script');
+assertIncludes(packageJson.scripts['m6:readiness:strict'], '--strict', 'M6 strict readiness script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:gate-status', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'main-flow:check-demo', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:capture-all-evidence', 'M5 close acceptance script');
@@ -253,6 +263,7 @@ assertIncludes(roleWorkbenchesJs, 'roleEvidence', 'role workbenches role evidenc
 
 assertIncludes(opsHtml, '运营与对账', 'W13 ops page');
 assertIncludes(opsHtml, '/ops.js', 'W13 ops script');
+assertIncludes(opsHtml, '/m6-readiness.html', 'M6 readiness navigation entry');
 assertIncludes(opsHtml, 'id="issues"', 'R05 issue table');
 assertIncludes(opsHtml, 'id="export-issues"', 'R05 issue CSV export action');
 assertIncludes(opsHtml, 'id="export-health-summary"', 'DEV-505 export health summary');
@@ -274,5 +285,16 @@ assertIncludes(opsJs, 'procurex-audit-logs-', 'DEV-504 audit CSV export filename
 assertIncludes(opsJs, 'data-notification-read', 'I08 notification read action');
 assertIncludes(opsJs, '超时处理中', 'DEV-505 stale export health label');
 assertIncludes(opsJs, 'STORE_BALANCE_LEDGER_MISMATCH', 'R05 issue labels');
+
+assertIncludes(m6Html, 'M6 上线准备', 'M6 readiness page');
+assertIncludes(m6Html, '/m6-readiness.js', 'M6 readiness script');
+assertIncludes(m6Html, 'id="readiness-status"', 'M6 readiness status label');
+assertIncludes(m6Html, 'id="checks"', 'M6 readiness check list');
+assertIncludes(m6Js, 'm6-readiness.json', 'M6 readiness output loader');
+assertIncludes(m6Js, 'LOCAL_READY', 'M6 local-ready status rendering');
+assertIncludes(m6Js, 'BLOCKED', 'M6 blocked status rendering');
+assertIncludes(m6ReadinessScript, 'WECHAT_APP_ID', 'M6 WeChat external dependency check');
+assertIncludes(m6ReadinessScript, 'RPO<=15 minutes', 'M6 recovery target check');
+assertIncludes(m6ReadinessScript, 'm6-readiness.json', 'M6 readiness output writer');
 
 console.log('Web workbench check passed.');

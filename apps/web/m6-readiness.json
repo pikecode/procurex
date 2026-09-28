@@ -1,0 +1,107 @@
+{
+  "generatedAt": "2026-09-28T07:56:29.718Z",
+  "status": "NOT_READY",
+  "summary": "M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, initialization, and pilot evidence remain open.",
+  "counts": {
+    "ready": 1,
+    "localReady": 2,
+    "blocked": 3,
+    "planned": 4
+  },
+  "checks": [
+    {
+      "id": "DEV-601",
+      "title": "全场景回归证据",
+      "status": "READY",
+      "detail": "M5 close gate and desktop/mobile main-flow plus role-workbench evidence are present.",
+      "evidence": [
+        "apps/web/m5-gate-status.json",
+        "var/main-flow-demo-evidence/interactive-manifest.json"
+      ]
+    },
+    {
+      "id": "DEV-602-PERF",
+      "title": "性能与兼容压测",
+      "status": "PLANNED",
+      "detail": "Need reproducible data scale, p50/p95/error-rate report, and export generation timing before production launch.",
+      "evidence": [
+        "var/m6-performance-report.json"
+      ]
+    },
+    {
+      "id": "DEV-602-BROWSER",
+      "title": "浏览器与移动视口证据",
+      "status": "LOCAL_READY",
+      "detail": "Local Chrome desktop and 390px mobile viewport evidence is available; production device breadth remains open.",
+      "evidence": [
+        "var/main-flow-demo-evidence/main-flow-demo-interactive-mobile.png",
+        "var/main-flow-demo-evidence/role-workbenches-interactive-mobile.png"
+      ]
+    },
+    {
+      "id": "DEV-602-WECHAT",
+      "title": "微信小程序真机与订阅消息",
+      "status": "BLOCKED",
+      "detail": "Missing WECHAT_APP_ID/WECHAT_TEST_ACCOUNT and real-device evidence; do not claim mini-program readiness from Web evidence.",
+      "evidence": [
+        "var/m6-wechat-device-evidence/manifest.json"
+      ]
+    },
+    {
+      "id": "DEV-603-DEPLOY",
+      "title": "部署配置与生产环境",
+      "status": "BLOCKED",
+      "detail": "DATABASE_URL, PRIVATE_FILE_DIR, and PUBLIC_API_BASE_URL must point at production-grade services before launch.",
+      "evidence": [
+        ".env.example",
+        "infra/compose/compose.yaml"
+      ]
+    },
+    {
+      "id": "DEV-603-STORAGE",
+      "title": "对象存储与私有凭证策略",
+      "status": "BLOCKED",
+      "detail": "PRIVATE_FILE_DIR/object storage policy is not configured for production.",
+      "evidence": [
+        "docs/m6-production-readiness.md"
+      ]
+    },
+    {
+      "id": "DEV-603-RECOVERY",
+      "title": "备份恢复与 RPO/RTO",
+      "status": "LOCAL_READY",
+      "detail": "Local database/private-file restore evidence exists; production drill must still prove RPO<=15 minutes and RTO<=4 hours.",
+      "evidence": [
+        "docs/progress.md",
+        "docs/m6-production-readiness.md"
+      ]
+    },
+    {
+      "id": "DEV-603-ROLLBACK",
+      "title": "发布、迁移与回滚手册",
+      "status": "PLANNED",
+      "detail": "Production readiness document exists; it still needs environment-specific runbook values and drill evidence.",
+      "evidence": [
+        "docs/m6-production-readiness.md"
+      ]
+    },
+    {
+      "id": "DEV-604",
+      "title": "数据初始化与财务对平",
+      "status": "PLANNED",
+      "detail": "Need cutoff date, source files, opening balances, uncleared payables/receivables, role bindings, and finance sign-off.",
+      "evidence": [
+        "var/m6-initialization-signoff.json"
+      ]
+    },
+    {
+      "id": "DEV-605",
+      "title": "试运行与交接",
+      "status": "PLANNED",
+      "detail": "Need selected stores/suppliers, one recharge/clearing, one cross-period replenishment, one full statement cycle, issue closure, and handover.",
+      "evidence": [
+        "var/m6-pilot-run.json"
+      ]
+    }
+  ]
+}
