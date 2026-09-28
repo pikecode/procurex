@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-09-28T15:50:31.100Z",
+  "generatedAt": "2026-09-28T23:16:58.123Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "85648360bc2feba0e2d75c34708ebcbf5d25bcd4",
+    "commit": "beb9aec63e31701f5d186f42237d47a0f06fdbb1",
     "remote": "git@github.com:pikecode/procurex.git",
     "dirty": false,
     "dirtyStatus": []
@@ -136,8 +136,8 @@
     {
       "path": "docs/m6-production-readiness.md",
       "exists": true,
-      "sizeBytes": 9345,
-      "sha256": "18dbc2f43ca6cfb808c397afacbdf7b41408220f147ffe82a16af3a063f8b48f"
+      "sizeBytes": 9456,
+      "sha256": "5320766b17e60687845820d930ede684770f3323c7fcb87a046a505ae9e10f68"
     },
     {
       "path": "docs/m6-external-evidence-templates.md",

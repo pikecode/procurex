@@ -13,7 +13,7 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | External evidence status | BLOCKED |
 | Git branch | main |
-| Packaged commit | 85648360bc2feba0e2d75c34708ebcbf5d25bcd4 |
+| Packaged commit | beb9aec63e31701f5d186f42237d47a0f06fdbb1 |
 | Remote | git@github.com:pikecode/procurex.git |
 | Dirty at packaging | no |
 
@@ -56,7 +56,7 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | apps/miniprogram/mini-flow-check.json | present | 2097 | 03357d581baa087de537c1c844fb55c460da619a738b1acef7a9387f942682d1 |
 | apps/web/m5-gate-status.json | present | 2122 | 52708240ad461741a37aa4f9bc0865bfa2f1660288d7b1b3d1ebaf66f156631e |
 | var/main-flow-demo-evidence/interactive-manifest.json | present | 8880 | b6639f0e33ec4e1a1350f8d8bd11d526e28d108c206b8d440f9d61623cb4d42c |
-| docs/m6-production-readiness.md | present | 9345 | 18dbc2f43ca6cfb808c397afacbdf7b41408220f147ffe82a16af3a063f8b48f |
+| docs/m6-production-readiness.md | present | 9456 | 5320766b17e60687845820d930ede684770f3323c7fcb87a046a505ae9e10f68 |
 | docs/m6-external-evidence-templates.md | present | 1031 | 54b07a540d31876d8996f9fbd24549c2791035d14198d4ab7ad27cc820d9ec1b |
 
 ## Refresh Commands
