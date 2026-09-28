@@ -30,6 +30,8 @@ There was one recorded deviation: R01-R04 and W11 reporting/export work started 
 
 Latest M5 local evidence on 2026-09-28: `npm run acceptance:m5-browserless` passed 10/10 steps, `npm run m5:status` reports Docker/PostgreSQL/Chrome/W11/W13 evidence READY, `m5:capture-browser-evidence` refreshed W11 with `PASSED` and M5 status `READY`, and `m5:capture-ops-evidence` refreshed W13 with 5 reconciliation issues, 0 export-health exception rows, 1 notification row, and 13 audit rows. The follow-up regression baseline passed build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.
 
+Latest M5 close-readiness gate: `npm run acceptance:m5-close` passed and `m5:gate-status` marks DEV-501/502, R04/W11, DEV-505, R05/W13, DEV-503, DEV-504, and Chrome evidence READY. This does not claim production launch readiness; broader browser/mobile acceptance, WeChat adaptation, and M6 production operations policy remain open.
+
 ## Visible Workbenches
 
 Run the API and web static server after building:
@@ -84,6 +86,12 @@ The fastest M5 orientation check is:
 npm run m5:status
 ```
 
+The strongest M5 close-readiness check is:
+
+```bash
+npm run acceptance:m5-close
+```
+
 The current browserless M4 acceptance chain is:
 
 ```bash
@@ -123,8 +131,8 @@ Use these checks for visible workbench confidence:
 
 ## Next Work Order
 
-1. Keep the M5 reporting/export/reconciliation chain green after changes: `npm run acceptance:m5-browserless`.
-2. Continue DEV-503 by adding the next real notification trigger, or continue DEV-504 audit expansion depending on which operations evidence is needed next.
+1. Keep the M5 close-readiness chain green after changes: `npm run acceptance:m5-close`.
+2. Move remaining product risk to broader browser/mobile acceptance and WeChat adaptation rather than adding more low-value M5 backend details.
 3. Extend recovery monitoring only when another implemented asynchronous flow needs it.
 4. Run `npm run acceptance:m4-close` after any M4-domain code change.
 

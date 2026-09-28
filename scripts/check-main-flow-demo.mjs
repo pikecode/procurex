@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../dist/apps/api/src/app.module.js';
 import { ApiExceptionFilter } from '../dist/apps/api/src/common/api-exception.filter.js';
@@ -213,14 +213,53 @@ async function run() {
     assert.ok(createdAuditLogs.length > 0);
     assert.ok(createdAuditLogs.every((entry) => entry.action === 'purchase-request.create'));
 
+    const relevantAuditActions = Array.from(actions)
+      .filter((action) => action.includes('purchase-request') || action.includes('supplier-order') || action.includes('shipment') || action.includes('discrepancy'))
+      .sort();
+    const runResult = {
+      generatedAt: new Date().toISOString(),
+      title: 'Main Flow Demo Check',
+      summary: 'Operator demo plus M5 notification and audit evidence',
+      status: 'PASSED',
+      steps: [
+        {
+          title: '1. Store shipment notification is created',
+          data: { title: shipmentNotification.title, shipmentId: shipment.id },
+        },
+        {
+          title: '2. Supplier receipt-discrepancy notification is created',
+          data: { title: discrepancyNotification.title, receiptId: discrepancyReceipt.id, discrepancyId },
+        },
+        {
+          title: '3. Store discrepancy-resolution notification is created',
+          data: { title: resolutionNotification.title, discrepancyId },
+        },
+        {
+          title: '4. Purchaser supplier-rejection notification is created',
+          data: { title: rejectionNotification.title, supplierOrderId: rejectedOrder.id },
+        },
+        {
+          title: '5. Order and fulfillment audit actions are queryable',
+          data: { actions: relevantAuditActions, filteredPurchaseRequestCreateRows: createdAuditLogs.length },
+        },
+        {
+          title: '6. Main flow still reaches supplier payment preview',
+          data: { direction: preview.direction, totalPayableAmount: preview.totalPayableAmount },
+        },
+      ],
+    };
+    await mkdir('apps/web', { recursive: true });
+    await writeFile('apps/web/main-flow-demo-run.json', `${JSON.stringify(runResult, null, 2)}\n`);
+
     console.log('Main flow demo check passed.');
     console.log(`  Order: ${completedOrder.status} / ${completedOrder.fulfillmentStatus}`);
     console.log(`  Store notification: ${shipmentNotification.title}`);
     console.log(`  Supplier notification: ${discrepancyNotification.title}`);
     console.log(`  Resolution notification: ${resolutionNotification.title}`);
     console.log(`  Rejection notification: ${rejectionNotification.title}`);
-    console.log(`  Audit actions: ${Array.from(actions).filter((action) => action.includes('purchase-request') || action.includes('supplier-order') || action.includes('shipment') || action.includes('discrepancy')).sort().join(', ')}`);
+    console.log(`  Audit actions: ${relevantAuditActions.join(', ')}`);
     console.log(`  Payment preview: ${preview.direction} ${preview.totalPayableAmount}`);
+    console.log('  Wrote: apps/web/main-flow-demo-run.json');
   } finally {
     await app.close();
   }

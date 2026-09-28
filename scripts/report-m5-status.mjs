@@ -114,10 +114,11 @@ record(
 
 const opsManifest = await readJson('var/m5-browser-evidence/ops-manifest.json');
 const opsScreenshot = opsManifest?.screenshot || 'var/m5-browser-evidence/ops-reconciliation.png';
+const opsState = opsManifest?.state || {};
 record(
   'W13 browser evidence',
   opsManifest && await fileReady(opsScreenshot) ? 'READY' : 'MISSING',
-  opsManifest ? `${opsScreenshot}; auditRows=${opsManifest.auditRows ?? 'n/a'}, notificationRows=${opsManifest.notificationRows ?? 'n/a'}, issueRows=${opsManifest.issueRows ?? 'n/a'}` : 'run npm run m5:capture-ops-evidence after acceptance data exists',
+  opsManifest ? `${opsScreenshot}; auditRows=${opsState.auditRows ?? 'n/a'}, notificationRows=${opsState.notificationRows ?? 'n/a'}, issueRows=${opsState.issueRows ?? 'n/a'}` : 'run npm run m5:capture-ops-evidence after acceptance data exists',
 );
 
 const packageJson = JSON.parse(await readFile('package.json', 'utf8'));

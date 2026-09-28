@@ -58,6 +58,8 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 
 `npm run m5:status` now gives the fastest current M5 snapshot. It checks Docker daemon reachability, local PostgreSQL reachability, browser runtime availability, latest `reports-acceptance-run.json`, W11/W13 browser evidence manifests, and the key M5 package scripts. It writes `apps/web/m5-status.json`, which W11 renders as a "M5 环境状态" card. The latest local run reports Docker 29.7.2, PostgreSQL `127.0.0.1:55438`, Chrome, the 10-step M5 browserless result, and W11/W13 evidence as READY.
 
+`npm run m5:gate-status` now gives the M5 close-readiness view. It reads the M5 report acceptance output, W11/W13 browser evidence manifests, and the persisted `main-flow-demo-run.json` notification/audit evidence. `npm run acceptance:m5-close` runs the M5 browserless chain, reseeds/checks the main-flow demo, and then executes the gate-status check. The latest run marks DEV-501/502, R04/W11, DEV-505, R05/W13, DEV-503, DEV-504, and Chrome evidence as READY; the remaining gaps are broader browser/mobile acceptance, WeChat adaptation, and production operations policy in M6.
+
 `npm run acceptance:m5-browserless` now covers the M5 reporting/export/reconciliation/notification slice. It builds the project, seeds isolated `PXRPT` data, verifies R01 scoped completed-order amount, R02 product quantity and three-month range rejection, R03 profit excluding direct supplier-term orders with freight separate, R04 export job READY plus CSV download and task listing, DEV-505 export health detection plus recovery of a stale `PROCESSING` export job, failed export retry through `POST /exports/{id}/retry`, I08 notification list/read and owner isolation, R05 account reconciliation mismatches, store-scope enforcement, supplier profit denial, and W11/W13 Web visibility. The latest run passed on 2026-09-28 with 10/10 steps and wrote `apps/web/reports-acceptance-run.json`.
 
 `apps/web/index.html` now renders the latest M5 browserless result from `reports-acceptance-run.json` and the latest local M5 environment snapshot from `m5-status.json` inside the W11 report page. It also shows the latest export tasks with READY/FAILED/processing status, retry for failed jobs, and download actions backed by `GET /exports`. `npm run m5:capture-browser-evidence` logs in as the store-scoped report account, loads the M5 acceptance and environment summaries, runs the R01 September 2026 query, creates an export job, and captures Chrome evidence under `var/m5-browser-evidence/`. The latest capture showed `PASSED`, 10 acceptance steps, M5 status `READY`, 1 report row, and 2 export rows.
@@ -116,10 +118,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice in this update: refreshed M5 evidence and full regression baseline.
-Latest commit before this progress update: `2623e51 Refresh M5 acceptance evidence`.
+Latest functional slice in this update: M5 close-readiness gate.
+Latest commit before this progress update: `e773875 Record full M5 regression baseline`.
 
 ```text
+e773875 Record full M5 regression baseline
 2623e51 Refresh M5 acceptance evidence
 559916f Show M5 status on W11
 8bb8cd9 Add M5 status report

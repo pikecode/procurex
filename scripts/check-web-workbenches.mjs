@@ -125,6 +125,9 @@ assertIncludes(packageJson.scripts['reports:check-acceptance'], 'check-reports-a
 assertIncludes(packageJson.scripts['acceptance:m5-browserless'], 'reports:check-acceptance', 'M5 browserless acceptance script');
 assertIncludes(packageJson.scripts['m5:capture-browser-evidence'], 'capture-m5-browser-evidence.mjs', 'M5 browser evidence capture script');
 assertIncludes(packageJson.scripts['m5:status'], 'report-m5-status.mjs', 'M5 status report script');
+assertIncludes(packageJson.scripts['m5:gate-status'], 'check-m5-gate-status.mjs', 'M5 gate status script');
+assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:gate-status', 'M5 close acceptance script');
+assertIncludes(packageJson.scripts['acceptance:m5-close'], 'main-flow:check-demo', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['db:check'], 'check-local-db.mjs', 'local database check script');
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'billing:check-acceptance', 'M4 browserless acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m4-close'], 'm4:check-manual-evidence', 'M4 close acceptance script');

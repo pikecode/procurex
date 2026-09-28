@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- M5 收口 gate：新增 `npm run m5:gate-status`，读取 `reports-acceptance-run.json`、W11/W13 browser manifest 和 `main-flow-demo-run.json`，把 DEV-501/502、R04/W11、DEV-505、R05/W13、DEV-503、DEV-504、Chrome 证据汇总为 READY/缺口状态；新增 `acceptance:m5-close` 串联 M5 browserless、主流程 demo 通知/审计检查和 gate-status。`main-flow:check-demo` 现在写出 `apps/web/main-flow-demo-run.json`，用于持久记录待收货、收货差异、差异处理结果、拒单通知和 6 类审计动作。验证：`acceptance:m5-close` 通过。
 - M5 完整回归基线：在刷新 W11/W13 Chrome 证据后继续运行全链基线，`npm run build`、47 项单测、31 项集成测试、`contract:check`、`web:check`、`m5:status` 和 `git diff --check` 全部通过；`m5:status` 继续显示 Docker 29.7.2、PostgreSQL `127.0.0.1:55438`、Chrome、10/10 M5 browserless、W11/W13 证据 READY。集成测试仍有 `pg` v9 相关 deprecation warning，但不影响当前通过结果。
 
 ## 2026-09-27
