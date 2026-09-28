@@ -228,7 +228,9 @@ assertIncludes(roleWorkbenchesJs, 'main-flow-demo-seed.json', 'role workbenches 
 assertIncludes(roleWorkbenchesJs, 'main-flow-demo-run.json', 'role workbenches evidence loader');
 assertIncludes(roleWorkbenchesJs, '/purchase-requests/preview', 'role workbenches store order preview');
 assertIncludes(roleWorkbenchesJs, '/purchase-requests', 'role workbenches store order creation');
+assertIncludes(roleWorkbenchesJs, '/confirm', 'role workbenches purchaser confirmation');
 assertIncludes(roleWorkbenchesJs, 'store-order-action', 'role workbenches store action button');
+assertIncludes(roleWorkbenchesJs, 'purchaser-confirm-action', 'role workbenches purchaser action button');
 assertIncludes(roleWorkbenchesJs, '门店工作台', 'role workbenches store lane');
 assertIncludes(roleWorkbenchesJs, '采购工作台', 'role workbenches purchaser lane');
 assertIncludes(roleWorkbenchesJs, '供应商工作台', 'role workbenches supplier lane');

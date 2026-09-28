@@ -6,7 +6,9 @@ let seed = null;
 let run = null;
 let activeRole = 'Store';
 let storeToken = null;
+let purchaserToken = null;
 let storeAction = null;
+let purchaserAction = null;
 let actionRunning = false;
 
 const roleDefinitions = {
@@ -24,7 +26,7 @@ const roleDefinitions = {
     scope: '采购账号处理确认、分派、拒单和异常队列',
     todos: ['确认采购申请', '查看供应商拒单通知', '追踪订单审计动作'],
     actions: ['采购确认', '供应商改派', '异常队列'],
-    next: '把采购确认、拒单处理和审计追踪从演示账号拆到采购角色页面。',
+    next: '采购确认已接入真实 API；下一步继续接供应商改派和异常队列。',
   },
   Supplier: {
     title: '供应商工作台',
@@ -150,19 +152,28 @@ function renderDetail() {
 }
 
 function renderActions() {
-  $('role-action-label').textContent = storeAction?.status || (actionRunning ? '执行中' : '等待操作');
-  $('role-action-label').classList.toggle('tag-ok', storeAction?.status === 'PENDING_PROCUREMENT');
-  const disabled = !seed || actionRunning ? 'disabled' : '';
+  $('role-action-label').textContent = purchaserAction?.status || storeAction?.status || (actionRunning ? '执行中' : '等待操作');
+  $('role-action-label').classList.toggle('tag-ok', purchaserAction?.status === 'CONFIRMED' || storeAction?.status === 'PENDING_PROCUREMENT');
+  const storeDisabled = !seed || actionRunning ? 'disabled' : '';
+  const purchaserDisabled = !seed || actionRunning || !storeAction?.requestId || purchaserAction?.status === 'CONFIRMED' ? 'disabled' : '';
   $('role-actions').innerHTML = [
-    `<article><strong>门店真实下单</strong><small>使用 ${esc(seed?.storeUsername || 'pxflow_store')} 登录，调用 /purchase-requests/preview 和 /purchase-requests</small><button id="store-order-action" class="primary" ${disabled}>${actionRunning ? '执行中...' : '预览并创建订货单'}</button></article>`,
-    `<article><strong>最近结果</strong><small id="store-order-result">${esc(storeResultText())}</small></article>`,
+    `<article><strong>门店真实下单</strong><small>使用 ${esc(seed?.storeUsername || 'pxflow_store')} 登录，调用 /purchase-requests/preview 和 /purchase-requests</small><button id="store-order-action" class="primary" ${storeDisabled}>${actionRunning ? '执行中...' : '预览并创建订货单'}</button></article>`,
+    `<article><strong>采购真实确认</strong><small>使用 ${esc(seed?.username || 'pxflow_user')} 的采购权限，调用 /purchase-requests/{id}/confirm 生成供应商单</small><button id="purchaser-confirm-action" class="primary" ${purchaserDisabled}>确认并生成供应商单</button></article>`,
+    `<article><strong>门店结果</strong><small id="store-order-result">${esc(storeResultText())}</small></article>`,
+    `<article><strong>采购结果</strong><small id="purchaser-confirm-result">${esc(purchaserResultText())}</small></article>`,
   ].join('');
   $('store-order-action')?.addEventListener('click', runStoreOrderAction);
+  $('purchaser-confirm-action')?.addEventListener('click', runPurchaserConfirmAction);
 }
 
 function storeResultText() {
   if (!storeAction) return '尚未执行真实门店下单';
   return `${storeAction.requestNo} · ${storeAction.status} · ${storeAction.paymentStatus} · ${storeAction.salesGoodsAmount}`;
+}
+
+function purchaserResultText() {
+  if (!purchaserAction) return storeAction ? '等待采购确认' : '请先执行门店下单';
+  return `${purchaserAction.status} · ${purchaserAction.supplierOrderIds.join(', ')}`;
 }
 
 async function runStoreOrderAction() {
@@ -190,11 +201,41 @@ async function runStoreOrderAction() {
       requestNo: created.requestNo,
       status: created.status,
       paymentStatus: created.paymentStatus,
+      version: created.version,
       salesGoodsAmount: created.totals?.salesGoodsAmount || preview.totals?.salesGoodsAmount,
       previewSupplyAmount: preview.totals?.supplyGoodsAmount,
     };
+    purchaserAction = null;
   } catch (error) {
     storeAction = { status: 'FAILED', requestNo: '门店下单失败', paymentStatus: error.message, salesGoodsAmount: '—' };
+  } finally {
+    actionRunning = false;
+    renderActions();
+  }
+}
+
+async function runPurchaserConfirmAction() {
+  if (!seed || !storeAction?.requestId || actionRunning || purchaserAction?.status === 'CONFIRMED') return;
+  actionRunning = true;
+  renderActions();
+  try {
+    const login = await call('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: seed.username, password: seed.password, client: 'role-workbench' }),
+    }, null);
+    purchaserToken = login.accessToken;
+    const confirmed = await call(`/purchase-requests/${storeAction.requestId}/confirm`, {
+      method: 'POST',
+      headers: { 'idempotency-key': `role-workbench-purchaser-confirm-${crypto.randomUUID()}` },
+      body: JSON.stringify({ expectedVersion: storeAction.version }),
+    }, purchaserToken);
+    purchaserAction = {
+      requestId: confirmed.requestId,
+      status: confirmed.status,
+      supplierOrderIds: confirmed.supplierOrderIds || [],
+    };
+  } catch (error) {
+    purchaserAction = { status: 'FAILED', supplierOrderIds: [error.message] };
   } finally {
     actionRunning = false;
     renderActions();

@@ -257,12 +257,18 @@ async function runRoleWorkbenchStoreOrder(cdp) {
       await waitFor(() => document.querySelector('#store-order-action') && !document.querySelector('#store-order-action').disabled, 'store order action button');
       document.querySelector('#store-order-action').click();
       await waitFor(() => document.querySelector('#role-action-label')?.textContent.trim() === 'PENDING_PROCUREMENT', 'store role order creation');
+      await waitFor(() => document.querySelector('#purchaser-confirm-action') && !document.querySelector('#purchaser-confirm-action').disabled, 'purchaser confirm action button');
+      document.querySelector('#purchaser-confirm-action').click();
+      await waitFor(() => document.querySelector('#role-action-label')?.textContent.trim() === 'CONFIRMED', 'purchaser role order confirmation');
       const resultText = document.querySelector('#store-order-result')?.textContent.trim() || '';
+      const purchaserResultText = document.querySelector('#purchaser-confirm-result')?.textContent.trim() || '';
       return {
         status: document.querySelector('#role-action-label')?.textContent.trim() || '',
-        resultText,
+        storeResultText: resultText,
+        purchaserResultText,
         hasRequestNo: resultText.includes('PR'),
         hasPaidStatus: resultText.includes('PAID'),
+        hasSupplierOrderId: purchaserResultText.includes('CONFIRMED') && purchaserResultText.split('·').length >= 2,
         laneRows: document.querySelectorAll('#role-lanes article').length,
         viewportWidth: window.innerWidth,
         horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
@@ -314,7 +320,7 @@ async function main() {
         console.log(`  Role workbench screenshot: ${roleWorkbenchAction.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
-        console.log(`  Store role order: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.resultText})`);
+        console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText})`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

@@ -139,6 +139,7 @@ assert.ok(roleWorkbenchState.hasOperatorWorkbench, 'Role workbench browser evide
 assert.ok(roleWorkbenchState.hasNextPageBoundary, 'Role workbench browser evidence must show next page boundary');
 assert.ok(roleWorkbenchState.hasEvidenceMapping, 'Role workbench browser evidence must show main-flow evidence mapping');
 assert.ok(roleWorkbenchState.hasStoreOrderAction, 'Role workbench browser evidence must show store order action');
+assert.ok(roleWorkbenchState.hasPurchaserConfirmAction, 'Role workbench browser evidence must show purchaser confirm action');
 assert.ok(await fileReady(mainFlowDemoManifest.roleWorkbenchScreenshot), 'Role workbench screenshot file must exist and be non-empty');
 
 const mainFlowInteractiveState = mainFlowInteractiveManifest.state || {};
@@ -171,9 +172,10 @@ assert.ok(
 assert.equal(mobileInteractiveState.runAllText, '已完成', 'Mobile interactive main-flow run-all control must finish');
 assert.ok(await fileReady(mainFlowInteractiveManifest.mobileScreenshot), 'Mobile interactive main-flow screenshot file must exist and be non-empty');
 const roleWorkbenchAction = mainFlowInteractiveManifest.roleWorkbenchAction || {};
-assert.equal(roleWorkbenchAction.status, 'PENDING_PROCUREMENT', 'Role workbench store action must create a pending procurement request');
+assert.equal(roleWorkbenchAction.status, 'CONFIRMED', 'Role workbench purchaser action must confirm the purchase request');
 assert.ok(roleWorkbenchAction.hasRequestNo, 'Role workbench store action must show the created purchase request number');
 assert.ok(roleWorkbenchAction.hasPaidStatus, 'Role workbench store action must show the paid funding status');
+assert.ok(roleWorkbenchAction.hasSupplierOrderId, 'Role workbench purchaser action must show a generated supplier order id');
 assert.equal(roleWorkbenchAction.horizontalOverflow, false, 'Role workbench store action page must not create page-level horizontal overflow');
 assert.ok(await fileReady(mainFlowInteractiveManifest.roleWorkbenchActionScreenshot), 'Role workbench action screenshot file must exist and be non-empty');
 
@@ -198,7 +200,7 @@ record('R05/W13', 'Reconciliation issues and operations browser evidence', 'READ
 record('DEV-503', 'In-app notification acceptance and business triggers', 'READY', `${demoSteps.filter((step) => step.title.includes('notification')).length} trigger evidence steps; W13 notificationRows=${w13State.notificationRows}`);
 record('DEV-504', 'Audit log coverage and W13 visibility', 'READY', `${actions.size} audited action types; W13 auditRows=${w13State.auditRows}`);
 record('MainFlowUI', 'Browser-visible main-flow notification and audit evidence', 'READY', `${mainFlowDemoState.roleRows} role rows; ${mainFlowDemoState.roleTabRows} role tabs; ${roleWorkbenchState.laneRows} role workbench lanes; ${mainFlowDemoState.evidenceRows} evidence rows; ${mainFlowDemoState.stepRows} operation rows`);
-record('MainFlowRun', 'Browser-executed order-to-payment demo', 'READY', `desktop ${mainFlowInteractiveState.completedRows}/${mainFlowInteractiveState.stepRows}, mobile ${mobileInteractiveState.completedRows}/${mobileInteractiveState.stepRows}; store role ${roleWorkbenchAction.status}; COMPANY_TO_SUPPLIER ¥90.00`);
+record('MainFlowRun', 'Browser-executed order-to-payment demo', 'READY', `desktop ${mainFlowInteractiveState.completedRows}/${mainFlowInteractiveState.stepRows}, mobile ${mobileInteractiveState.completedRows}/${mobileInteractiveState.stepRows}; role workbench ${roleWorkbenchAction.status}; COMPANY_TO_SUPPLIER ¥90.00`);
 
 const chromeReady = await executableReady(w11Manifest.browser) || await executableReady(w13Manifest.browser) || await executableReady(mainFlowDemoManifest.browser) || await executableReady(mainFlowInteractiveManifest.browser);
 record('Browser', 'Chrome evidence runtime', chromeReady ? 'READY' : 'MISSING', w11Manifest.browser || w13Manifest.browser || mainFlowDemoManifest.browser || mainFlowInteractiveManifest.browser || 'browser path missing');

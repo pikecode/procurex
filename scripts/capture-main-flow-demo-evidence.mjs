@@ -256,7 +256,8 @@ async function prepareRoleWorkbenchesPage(cdp) {
         hasOperatorWorkbench: bodyText.includes('运营联调台'),
         hasNextPageBoundary: bodyText.includes('下一步页面边界'),
         hasEvidenceMapping: bodyText.includes('主流程证据映射'),
-        hasStoreOrderAction: bodyText.includes('门店真实下单') && Boolean(document.querySelector('#store-order-action'))
+        hasStoreOrderAction: bodyText.includes('门店真实下单') && Boolean(document.querySelector('#store-order-action')),
+        hasPurchaserConfirmAction: bodyText.includes('采购真实确认') && Boolean(document.querySelector('#purchaser-confirm-action'))
       };
     })()
   `);
