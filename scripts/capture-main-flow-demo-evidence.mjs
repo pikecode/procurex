@@ -257,7 +257,9 @@ async function prepareRoleWorkbenchesPage(cdp) {
         hasNextPageBoundary: bodyText.includes('下一步页面边界'),
         hasEvidenceMapping: bodyText.includes('主流程证据映射'),
         hasStoreOrderAction: bodyText.includes('门店真实下单') && Boolean(document.querySelector('#store-order-action')),
-        hasPurchaserConfirmAction: bodyText.includes('采购真实确认') && Boolean(document.querySelector('#purchaser-confirm-action'))
+        hasPurchaserConfirmAction: bodyText.includes('采购真实确认') && Boolean(document.querySelector('#purchaser-confirm-action')),
+        hasSupplierShipmentAction: bodyText.includes('供应商真实发货') && Boolean(document.querySelector('#supplier-shipment-action')),
+        hasStoreReceiptAction: bodyText.includes('门店真实收货') && Boolean(document.querySelector('#store-receipt-action'))
       };
     })()
   `);

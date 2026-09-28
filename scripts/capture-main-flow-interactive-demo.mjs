@@ -260,15 +260,27 @@ async function runRoleWorkbenchStoreOrder(cdp) {
       await waitFor(() => document.querySelector('#purchaser-confirm-action') && !document.querySelector('#purchaser-confirm-action').disabled, 'purchaser confirm action button');
       document.querySelector('#purchaser-confirm-action').click();
       await waitFor(() => document.querySelector('#role-action-label')?.textContent.trim() === 'CONFIRMED', 'purchaser role order confirmation');
+      await waitFor(() => document.querySelector('#supplier-shipment-action') && !document.querySelector('#supplier-shipment-action').disabled, 'supplier shipment action button');
+      document.querySelector('#supplier-shipment-action').click();
+      await waitFor(() => document.querySelector('#role-action-label')?.textContent.trim() === 'SHIPPED', 'supplier role shipment creation');
+      await waitFor(() => document.querySelector('#store-receipt-action') && !document.querySelector('#store-receipt-action').disabled, 'store receipt action button');
+      document.querySelector('#store-receipt-action').click();
+      await waitFor(() => document.querySelector('#role-action-label')?.textContent.trim() === 'COMPLETED', 'store role receipt completion');
       const resultText = document.querySelector('#store-order-result')?.textContent.trim() || '';
       const purchaserResultText = document.querySelector('#purchaser-confirm-result')?.textContent.trim() || '';
+      const shipmentResultText = document.querySelector('#supplier-shipment-result')?.textContent.trim() || '';
+      const receiptResultText = document.querySelector('#store-receipt-result')?.textContent.trim() || '';
       return {
         status: document.querySelector('#role-action-label')?.textContent.trim() || '',
         storeResultText: resultText,
         purchaserResultText,
+        shipmentResultText,
+        receiptResultText,
         hasRequestNo: resultText.includes('PR'),
         hasPaidStatus: resultText.includes('PAID'),
         hasSupplierOrderId: purchaserResultText.includes('CONFIRMED') && purchaserResultText.split('·').length >= 2,
+        hasShipmentNo: shipmentResultText.includes('SHIPPED') && shipmentResultText.split('·').length >= 2,
+        hasReceiptNo: receiptResultText.includes('COMPLETED') && receiptResultText.split('·').length >= 2,
         laneRows: document.querySelectorAll('#role-lanes article').length,
         viewportWidth: window.innerWidth,
         horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
@@ -320,7 +332,7 @@ async function main() {
         console.log(`  Role workbench screenshot: ${roleWorkbenchAction.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
-        console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText})`);
+        console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText})`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

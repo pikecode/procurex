@@ -140,6 +140,8 @@ assert.ok(roleWorkbenchState.hasNextPageBoundary, 'Role workbench browser eviden
 assert.ok(roleWorkbenchState.hasEvidenceMapping, 'Role workbench browser evidence must show main-flow evidence mapping');
 assert.ok(roleWorkbenchState.hasStoreOrderAction, 'Role workbench browser evidence must show store order action');
 assert.ok(roleWorkbenchState.hasPurchaserConfirmAction, 'Role workbench browser evidence must show purchaser confirm action');
+assert.ok(roleWorkbenchState.hasSupplierShipmentAction, 'Role workbench browser evidence must show supplier shipment action');
+assert.ok(roleWorkbenchState.hasStoreReceiptAction, 'Role workbench browser evidence must show store receipt action');
 assert.ok(await fileReady(mainFlowDemoManifest.roleWorkbenchScreenshot), 'Role workbench screenshot file must exist and be non-empty');
 
 const mainFlowInteractiveState = mainFlowInteractiveManifest.state || {};
@@ -172,10 +174,12 @@ assert.ok(
 assert.equal(mobileInteractiveState.runAllText, '已完成', 'Mobile interactive main-flow run-all control must finish');
 assert.ok(await fileReady(mainFlowInteractiveManifest.mobileScreenshot), 'Mobile interactive main-flow screenshot file must exist and be non-empty');
 const roleWorkbenchAction = mainFlowInteractiveManifest.roleWorkbenchAction || {};
-assert.equal(roleWorkbenchAction.status, 'CONFIRMED', 'Role workbench purchaser action must confirm the purchase request');
+assert.equal(roleWorkbenchAction.status, 'COMPLETED', 'Role workbench receipt action must complete the supplier order');
 assert.ok(roleWorkbenchAction.hasRequestNo, 'Role workbench store action must show the created purchase request number');
 assert.ok(roleWorkbenchAction.hasPaidStatus, 'Role workbench store action must show the paid funding status');
 assert.ok(roleWorkbenchAction.hasSupplierOrderId, 'Role workbench purchaser action must show a generated supplier order id');
+assert.ok(roleWorkbenchAction.hasShipmentNo, 'Role workbench supplier action must show a generated shipment number');
+assert.ok(roleWorkbenchAction.hasReceiptNo, 'Role workbench store receipt action must show a generated receipt number');
 assert.equal(roleWorkbenchAction.horizontalOverflow, false, 'Role workbench store action page must not create page-level horizontal overflow');
 assert.ok(await fileReady(mainFlowInteractiveManifest.roleWorkbenchActionScreenshot), 'Role workbench action screenshot file must exist and be non-empty');
 

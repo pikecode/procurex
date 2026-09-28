@@ -7,8 +7,11 @@ let run = null;
 let activeRole = 'Store';
 let storeToken = null;
 let purchaserToken = null;
+let supplierToken = null;
 let storeAction = null;
 let purchaserAction = null;
+let shipmentAction = null;
+let receiptAction = null;
 let actionRunning = false;
 
 const roleDefinitions = {
@@ -18,7 +21,7 @@ const roleDefinitions = {
     scope: '门店账号只看本门店订单、收货和通知',
     todos: ['创建或复核门店订货', '处理待收货提醒', '查看差异处理结果'],
     actions: ['下单入口', '收货确认', '差异结果通知'],
-    next: '门店下单已接入真实 API；下一步继续接门店收货和移动端证据。',
+    next: '门店下单和收货已接入真实 API；下一步继续接差异结果通知。',
   },
   Purchaser: {
     title: '采购工作台',
@@ -34,7 +37,7 @@ const roleDefinitions = {
     scope: '供应商账号只看本供应商订单、发货和差异',
     todos: ['查看待发货订单', '创建发货记录', '处理收货差异'],
     actions: ['发货', '差异处理', '拒单'],
-    next: '把供应商发货、差异处理和拒单动作拆成供应商端工作台。',
+    next: '供应商发货已接入真实 API；下一步继续接差异处理和拒单。',
   },
   Operator: {
     title: '运营联调台',
@@ -152,18 +155,26 @@ function renderDetail() {
 }
 
 function renderActions() {
-  $('role-action-label').textContent = purchaserAction?.status || storeAction?.status || (actionRunning ? '执行中' : '等待操作');
-  $('role-action-label').classList.toggle('tag-ok', purchaserAction?.status === 'CONFIRMED' || storeAction?.status === 'PENDING_PROCUREMENT');
+  $('role-action-label').textContent = receiptAction?.status || shipmentAction?.status || purchaserAction?.status || storeAction?.status || (actionRunning ? '执行中' : '等待操作');
+  $('role-action-label').classList.toggle('tag-ok', receiptAction?.status === 'COMPLETED' || shipmentAction?.status === 'SHIPPED' || purchaserAction?.status === 'CONFIRMED' || storeAction?.status === 'PENDING_PROCUREMENT');
   const storeDisabled = !seed || actionRunning ? 'disabled' : '';
   const purchaserDisabled = !seed || actionRunning || !storeAction?.requestId || purchaserAction?.status === 'CONFIRMED' ? 'disabled' : '';
+  const supplierDisabled = !seed || actionRunning || !purchaserAction?.supplierOrderIds?.length || shipmentAction?.status === 'SHIPPED' ? 'disabled' : '';
+  const receiptDisabled = !seed || actionRunning || !shipmentAction?.shipmentId || receiptAction?.status === 'COMPLETED' ? 'disabled' : '';
   $('role-actions').innerHTML = [
     `<article><strong>门店真实下单</strong><small>使用 ${esc(seed?.storeUsername || 'pxflow_store')} 登录，调用 /purchase-requests/preview 和 /purchase-requests</small><button id="store-order-action" class="primary" ${storeDisabled}>${actionRunning ? '执行中...' : '预览并创建订货单'}</button></article>`,
     `<article><strong>采购真实确认</strong><small>使用 ${esc(seed?.username || 'pxflow_user')} 的采购权限，调用 /purchase-requests/{id}/confirm 生成供应商单</small><button id="purchaser-confirm-action" class="primary" ${purchaserDisabled}>确认并生成供应商单</button></article>`,
+    `<article><strong>供应商真实发货</strong><small>使用 ${esc(seed?.supplierUsername || 'pxflow_supplier')} 登录，调用 /supplier-orders/{id}/shipment-preview 和 /supplier-orders/{id}/shipments</small><button id="supplier-shipment-action" class="primary" ${supplierDisabled}>预览并创建发货单</button></article>`,
+    `<article><strong>门店真实收货</strong><small>使用 ${esc(seed?.storeUsername || 'pxflow_store')} 的门店权限，调用 /shipments/{id}/receipts 完成收货</small><button id="store-receipt-action" class="primary" ${receiptDisabled}>确认收货并完成订单</button></article>`,
     `<article><strong>门店结果</strong><small id="store-order-result">${esc(storeResultText())}</small></article>`,
     `<article><strong>采购结果</strong><small id="purchaser-confirm-result">${esc(purchaserResultText())}</small></article>`,
+    `<article><strong>供应商结果</strong><small id="supplier-shipment-result">${esc(shipmentResultText())}</small></article>`,
+    `<article><strong>收货结果</strong><small id="store-receipt-result">${esc(receiptResultText())}</small></article>`,
   ].join('');
   $('store-order-action')?.addEventListener('click', runStoreOrderAction);
   $('purchaser-confirm-action')?.addEventListener('click', runPurchaserConfirmAction);
+  $('supplier-shipment-action')?.addEventListener('click', runSupplierShipmentAction);
+  $('store-receipt-action')?.addEventListener('click', runStoreReceiptAction);
 }
 
 function storeResultText() {
@@ -174,6 +185,16 @@ function storeResultText() {
 function purchaserResultText() {
   if (!purchaserAction) return storeAction ? '等待采购确认' : '请先执行门店下单';
   return `${purchaserAction.status} · ${purchaserAction.supplierOrderIds.join(', ')}`;
+}
+
+function shipmentResultText() {
+  if (!shipmentAction) return purchaserAction ? '等待供应商发货' : '请先执行采购确认';
+  return `${shipmentAction.status} · ${shipmentAction.shipmentNo || shipmentAction.shipmentId} · ${shipmentAction.shipQuantity || '—'}`;
+}
+
+function receiptResultText() {
+  if (!receiptAction) return shipmentAction ? '等待门店收货' : '请先执行供应商发货';
+  return `${receiptAction.status} · ${receiptAction.receiptNo || receiptAction.receiptId} · ${receiptAction.receivedQuantity || '—'}`;
 }
 
 async function runStoreOrderAction() {
@@ -206,6 +227,8 @@ async function runStoreOrderAction() {
       previewSupplyAmount: preview.totals?.supplyGoodsAmount,
     };
     purchaserAction = null;
+    shipmentAction = null;
+    receiptAction = null;
   } catch (error) {
     storeAction = { status: 'FAILED', requestNo: '门店下单失败', paymentStatus: error.message, salesGoodsAmount: '—' };
   } finally {
@@ -234,8 +257,95 @@ async function runPurchaserConfirmAction() {
       status: confirmed.status,
       supplierOrderIds: confirmed.supplierOrderIds || [],
     };
+    shipmentAction = null;
+    receiptAction = null;
   } catch (error) {
     purchaserAction = { status: 'FAILED', supplierOrderIds: [error.message] };
+  } finally {
+    actionRunning = false;
+    renderActions();
+  }
+}
+
+async function runSupplierShipmentAction() {
+  if (!seed || !purchaserAction?.supplierOrderIds?.length || actionRunning || shipmentAction?.status === 'SHIPPED') return;
+  actionRunning = true;
+  renderActions();
+  try {
+    const login = await call('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: seed.supplierUsername, password: seed.password, client: 'role-workbench' }),
+    }, null);
+    supplierToken = login.accessToken;
+    const supplierOrderId = purchaserAction.supplierOrderIds[0];
+    const order = await call(`/supplier-orders/${supplierOrderId}`, {}, supplierToken);
+    const items = order.items.map((item) => ({
+      orderItemId: item.id,
+      shipQuantity: item.quantity,
+      permanentlyReduceQuantity: '0',
+    }));
+    const input = { expectedVersion: order.version, items, freight: '0.00', trackingNo: `PX-${Date.now()}` };
+    const preview = await call(`/supplier-orders/${supplierOrderId}/shipment-preview`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }, supplierToken);
+    const shipment = await call(`/supplier-orders/${supplierOrderId}/shipments`, {
+      method: 'POST',
+      headers: { 'idempotency-key': `role-workbench-supplier-shipment-${crypto.randomUUID()}` },
+      body: JSON.stringify(input),
+    }, supplierToken);
+    const updatedOrder = await call(`/supplier-orders/${supplierOrderId}`, {}, supplierToken);
+    shipmentAction = {
+      status: 'SHIPPED',
+      supplierOrderId,
+      supplierOrderVersion: updatedOrder.version,
+      shipmentId: shipment.id,
+      shipmentNo: shipment.shipmentNo,
+      items: shipment.items,
+      shipQuantity: preview.totals?.shipQuantity,
+    };
+    receiptAction = null;
+  } catch (error) {
+    shipmentAction = { status: 'FAILED', shipmentNo: error.message, items: [] };
+  } finally {
+    actionRunning = false;
+    renderActions();
+  }
+}
+
+async function runStoreReceiptAction() {
+  if (!seed || !shipmentAction?.shipmentId || actionRunning || receiptAction?.status === 'COMPLETED') return;
+  actionRunning = true;
+  renderActions();
+  try {
+    if (!storeToken) {
+      const login = await call('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username: seed.storeUsername, password: seed.password, client: 'role-workbench' }),
+      }, null);
+      storeToken = login.accessToken;
+    }
+    const items = (shipmentAction.items || []).map((item) => ({
+      shipmentItemId: item.id,
+      receivedQuantity: item.quantity,
+    }));
+    const receipt = await call(`/shipments/${shipmentAction.shipmentId}/receipts`, {
+      method: 'POST',
+      headers: { 'idempotency-key': `role-workbench-store-receipt-${crypto.randomUUID()}` },
+      body: JSON.stringify({
+        expectedOrderVersion: shipmentAction.supplierOrderVersion,
+        expectedReceiptRevision: 0,
+        items,
+      }),
+    }, storeToken);
+    receiptAction = {
+      status: 'COMPLETED',
+      receiptId: receipt.id,
+      receiptNo: receipt.receiptNo,
+      receivedQuantity: receipt.items.map((item) => item.receivedQuantity).join(', '),
+    };
+  } catch (error) {
+    receiptAction = { status: 'FAILED', receiptNo: error.message, receivedQuantity: '—' };
   } finally {
     actionRunning = false;
     renderActions();
