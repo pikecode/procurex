@@ -88,6 +88,7 @@ checkSyntax('apps/web/role-workbenches.js');
 checkSyntax('apps/web/ops.js');
 checkSyntax('apps/web/m6-readiness.js');
 checkSyntax('scripts/report-m6-readiness.mjs');
+checkSyntax('scripts/check-m6-initialization.mjs');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
 assertIncludes(billingHtml, '账单调整与差额', 'W10 adjustment page');
@@ -149,6 +150,7 @@ assertIncludes(packageJson.scripts['m5:status'], 'report-m5-status.mjs', 'M5 sta
 assertIncludes(packageJson.scripts['m5:gate-status'], 'check-m5-gate-status.mjs', 'M5 gate status script');
 assertIncludes(packageJson.scripts['m6:readiness'], 'report-m6-readiness.mjs', 'M6 readiness script');
 assertIncludes(packageJson.scripts['m6:readiness:strict'], '--strict', 'M6 strict readiness script');
+assertIncludes(packageJson.scripts['m6:initialization-check'], 'check-m6-initialization.mjs', 'M6 initialization script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:gate-status', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'main-flow:check-demo', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:capture-all-evidence', 'M5 close acceptance script');
@@ -300,6 +302,9 @@ assertIncludes(m6ReadinessScript, 'm6-performance-report.json', 'M6 performance 
 assertIncludes(m6ReadinessScript, 'check-m6-performance.mjs', 'M6 performance script evidence');
 assertIncludes(m6ReadinessScript, 'm6-rollback-drill.json', 'M6 rollback evidence check');
 assertIncludes(m6ReadinessScript, 'check-m6-rollback.mjs', 'M6 rollback script evidence');
+assertIncludes(m6ReadinessScript, 'm6-initialization-signoff.json', 'M6 initialization evidence check');
+assertIncludes(m6ReadinessScript, 'check-m6-initialization.mjs', 'M6 initialization script evidence');
+assertIncludes(m6ReadinessScript, 'productionFinalSignoff', 'M6 initialization final signoff guard');
 assertIncludes(m6ReadinessScript, 'RPO<=15 minutes', 'M6 recovery target check');
 assertIncludes(m6ReadinessScript, 'm6-readiness.json', 'M6 readiness output writer');
 

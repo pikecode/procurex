@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-28T14:47:38.177Z",
+  "generatedAt": "2026-09-28T15:06:30.772Z",
   "status": "NOT_READY",
-  "summary": "M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, initialization, and pilot evidence remain open.",
+  "summary": "M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, customer finance sign-off, and pilot evidence remain open.",
   "counts": {
     "ready": 1,
-    "localReady": 5,
+    "localReady": 6,
     "blocked": 3,
-    "planned": 2
+    "planned": 1
   },
   "checks": [
     {
@@ -103,9 +103,10 @@
     {
       "id": "DEV-604",
       "title": "数据初始化与财务对平",
-      "status": "PLANNED",
-      "detail": "Need cutoff date, source files, opening balances, uncleared payables/receivables, role bindings, and finance sign-off.",
+      "status": "LOCAL_READY",
+      "detail": "Local initialization inventory and finance reconciliation checks pass; customer source files and finance sign-off are still required.",
       "evidence": [
+        "scripts/check-m6-initialization.mjs",
         "var/m6-initialization-signoff.json"
       ]
     },

@@ -14,6 +14,7 @@ Use:
 npm run m6:readiness
 npm run m6:performance
 npm run m6:rollback-check
+npm run m6:initialization-check
 ```
 
 The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/m6-readiness.html`.
@@ -46,7 +47,7 @@ npm run m6:readiness:strict
 | DEV-603 deployment | Production `DATABASE_URL`, private file/object storage target, public API base URL, TLS/domain routing, worker process plan | BLOCKED until production environment exists |
 | DEV-603 backup/recovery | Production backup schedule, private evidence-file backup, measured RPO <= 15 minutes, measured RTO <= 4 hours | LOCAL_READY for local drill only |
 | DEV-603 rollback | Migration command owner, one-instance migration rule, rollback package, failed-release decision point, and `m6:rollback-check` evidence | LOCAL_READY when local rollback check passes; production rehearsal still required |
-| DEV-604 initialization | Cutoff date, master data, opening balances, uncleared receivables/payables, role bindings, finance sign-off | PLANNED |
+| DEV-604 initialization | Cutoff date, master data, opening balances, uncleared receivables/payables, role bindings, finance sign-off, and `m6:initialization-check` evidence | LOCAL_READY for local inventory/reconciliation; READY only after customer finance sign-off |
 | DEV-605 pilot | Selected stores/suppliers, recharge/clearing, cross-period replenishment, full statement cycle, issue closure, handover | PLANNED |
 
 ## External Inputs Needed
@@ -78,12 +79,24 @@ npm run m6:rollback-check
 
 The local check is non-destructive. It validates Prisma schema/migration status, required package scripts, migration artifacts, and this runbook text, then writes `var/m6-rollback-drill.json`.
 
+## Initialization And Finance Signoff
+
+Local check:
+
+```bash
+npm run m6:initialization-check
+```
+
+The command reads the configured PostgreSQL database and writes `var/m6-initialization-signoff.json`. The local report inventories stores, suppliers, active products, active templates, template supplier bindings, active role bindings, store/supplier scopes, store accounts, active funding allocations, settlement snapshots, and payment records. It also checks required roles, scoped users, master data, template pricing data, store account opening data, non-negative account figures, and non-negative active funding allocations.
+
+`LOCAL_READY` means the local inventory and reconciliation guard has passed. It is not production finance approval. DEV-604 can become `READY` only when `productionFinalSignoff.signed` is true and the customer-provided cutoff date, source files, opening balances, uncleared receivables/payables, and role bindings have been reviewed by the finance owner.
+
 ## Next Work
 
 1. Keep `npm run acceptance:m5-close`, `npm run mini:check`, and `npm run mini:flow-check` green while adding M6 checks.
 2. Collect real WeChat and production environment inputs.
 3. Keep `npm run m6:performance` fresh locally, then replace or supplement it with production-scale load evidence before launch review.
-4. Produce `var/m6-initialization-signoff.json` after finance checks opening balances.
+4. Replace local DEV-604 evidence with customer source-file and finance-signoff evidence before launch review.
 5. Produce `var/m6-pilot-run.json` after a real pilot cycle.
 
 Do not mark M6 closed from local Web evidence alone.

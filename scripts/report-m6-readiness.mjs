@@ -156,12 +156,19 @@ add(
   ['docs/m6-production-readiness.md', 'scripts/check-m6-rollback.mjs', 'var/m6-rollback-drill.json'],
 );
 
+const initializationSignoff = await readJson('var/m6-initialization-signoff.json');
+const initializationReady = initializationSignoff?.status === 'READY' && initializationSignoff?.productionFinalSignoff?.signed === true;
+const initializationLocalReady = initializationSignoff?.status === 'LOCAL_READY';
 add(
   'DEV-604',
   '数据初始化与财务对平',
-  await fileExists('var/m6-initialization-signoff.json') ? 'READY' : 'PLANNED',
-  'Need cutoff date, source files, opening balances, uncleared payables/receivables, role bindings, and finance sign-off.',
-  ['var/m6-initialization-signoff.json'],
+  initializationReady ? 'READY' : initializationLocalReady ? 'LOCAL_READY' : 'PLANNED',
+  initializationReady
+    ? 'Customer cutoff date, source files, opening balances, uncleared payables/receivables, role bindings, and finance sign-off are complete.'
+    : initializationLocalReady
+      ? 'Local initialization inventory and finance reconciliation checks pass; customer source files and finance sign-off are still required.'
+      : 'Run npm run m6:initialization-check, then collect customer cutoff date, source files, opening balances, uncleared payables/receivables, role bindings, and finance sign-off.',
+  ['scripts/check-m6-initialization.mjs', 'var/m6-initialization-signoff.json'],
 );
 add(
   'DEV-605',
@@ -178,7 +185,7 @@ const plannedCount = checks.filter((check) => check.status === 'PLANNED').length
 const status = checks.every((check) => check.status === 'READY') ? 'READY' : 'NOT_READY';
 const summary = status === 'READY'
   ? 'M6 production readiness evidence is complete.'
-  : 'M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, initialization, and pilot evidence remain open.';
+  : 'M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, customer finance sign-off, and pilot evidence remain open.';
 
 console.log('M6 production readiness');
 console.log(`  Status: ${status}`);
