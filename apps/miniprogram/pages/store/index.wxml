@@ -14,6 +14,26 @@
   </view>
 
   <view class="card">
+    <view class="section-head">
+      <text class="card-title">账款入口</text>
+      <button class="ghost" loading="{{accounting}}" bindtap="loadAccount">刷新</button>
+    </view>
+    <view class="field"><text class="field-label">门店 ID</text><input value="{{storeId}}" data-field="storeId" bindinput="onInput" placeholder="storeId" /></view>
+    <view class="metric-grid" wx:if="{{account}}">
+      <view class="metric"><text class="metric-label">余额</text><text class="metric-value">{{account.balance}}</text></view>
+      <view class="metric"><text class="metric-label">可用额度</text><text class="metric-value">{{account.creditAvailable}}</text></view>
+      <view class="metric"><text class="metric-label">授信额度</text><text class="metric-value">{{account.creditLimit}}</text></view>
+      <view class="metric"><text class="metric-label">已用额度</text><text class="metric-value">{{account.creditUsed}}</text></view>
+    </view>
+    <view class="list" wx:if="{{ledgers.length}}">
+      <view class="row" wx:for="{{ledgers}}" wx:key="id">
+        <view class="row-title"><text>{{item.sourceType}}</text><text class="tag">{{item.direction}}</text></view>
+        <view class="muted">金额 {{item.amount}}，发生后余额 {{item.balanceAfter}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
     <text class="card-title">快速订货</text>
     <view class="field"><text class="field-label">门店 ID</text><input value="{{storeId}}" data-field="storeId" bindinput="onInput" placeholder="storeId" /></view>
     <view class="field"><text class="field-label">商品 ID</text><input value="{{productId}}" data-field="productId" bindinput="onInput" placeholder="productId" /></view>

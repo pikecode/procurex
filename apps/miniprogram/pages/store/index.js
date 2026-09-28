@@ -8,6 +8,8 @@ Page({
     productId: '',
     quantity: '10',
     requests: [],
+    account: null,
+    ledgers: [],
     shipmentId: '',
     shortReceivedQuantity: '0',
     shipmentTodos: [],
@@ -17,6 +19,7 @@ Page({
     previewing: false,
     submitting: false,
     loading: false,
+    accounting: false,
     receiving: false,
     error: ''
   },
@@ -27,7 +30,12 @@ Page({
       wx.redirectTo({ url: '/pages/login/index' });
       return;
     }
-    this.setData({ user, roleText: (user.roles || []).join(' / ') });
+    const scopedStoreId = user.scope && user.scope.storeId;
+    this.setData({
+      user,
+      roleText: (user.roles || []).join(' / '),
+      storeId: this.data.storeId || scopedStoreId || ''
+    });
     this.loadWork();
   },
 
@@ -53,7 +61,9 @@ Page({
   async loadWork() {
     this.setData({ loading: true, error: '' });
     try {
-      await Promise.all([this.loadRequests(false), this.loadShipments(false)]);
+      const tasks = [this.loadRequests(false), this.loadShipments(false)];
+      if (this.data.storeId) tasks.push(this.loadAccount(false));
+      await Promise.all(tasks);
     } finally {
       this.setData({ loading: false });
     }
@@ -91,6 +101,28 @@ Page({
       this.setData({ error: error.message });
     } finally {
       if (toggleLoading) this.setData({ loading: false });
+    }
+  },
+
+  async loadAccount(toggleLoading = true) {
+    if (!this.data.storeId) {
+      this.setData({ error: '请先填写门店 ID' });
+      return;
+    }
+    if (toggleLoading) this.setData({ accounting: true, error: '' });
+    try {
+      const [account, ledgers] = await Promise.all([
+        api.request(`/stores/${this.data.storeId}/account`),
+        api.request(`/stores/${this.data.storeId}/ledgers`)
+      ]);
+      this.setData({
+        account,
+        ledgers: Array.isArray(ledgers) ? ledgers.slice(0, 5) : []
+      });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      if (toggleLoading) this.setData({ accounting: false });
     }
   },
 

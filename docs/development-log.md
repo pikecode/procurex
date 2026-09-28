@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- 小程序门店账款入口：门店小程序页新增“账款入口”，优先使用登录 scope 的 storeId，也支持手工输入门店 ID；调用 `/stores/{id}/account` 显示余额、授信额度、已用额度、可用额度，并调用 `/stores/{id}/ledgers` 展示最近流水。`mini:check` 新增账户与流水入口断言。
 - 小程序门店订单进度：门店小程序页的工作加载现在同时读取 `/purchase-requests` 和 `/notifications`，新增“订单进度”卡片展示门店作用域下的订货单状态、资金状态和销售额；点击订单会回填当前订货结果。`mini:check` 增加订单进度页面保护。
 - 小程序采购拒单待办：采购小程序页现在同时读取 `/purchase-requests` 和 `/notifications`，筛选 `SUPPLIER_ORDER_REJECTED` 站内消息，展示“拒单通知”列表；点通知会自动填入 purchaseRequestId 与 rejectedOrderId，再调用 `/purchase-requests/{id}/reallocate` 改派目标供应商。`mini:check` 新增采购拒单通知、`/notifications` 和重分配守卫断言。
 - 小程序门店收货闭环：新增 `GET /shipments/{id}` 发货单详情接口，门店/门店财务作用域只能读取本门店发货单，返回发货单号、供应商单版本、当前收货 revision 和明细行，用于移动端提交幂等收货。门店小程序页现在读取 `/notifications` 中的 `SHIPMENT_CREATED` 待收货提醒，可选择发货单后调用 `/shipments/{id}` 与 `/shipments/{id}/receipts` 完成“确认收货”或“提交收货差异”；契约和 `mini:check` 同步覆盖 F04 GET/POST、版本守卫和收货按钮。
