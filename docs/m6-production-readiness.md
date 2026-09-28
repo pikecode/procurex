@@ -28,6 +28,8 @@ The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/
 
 `npm run m6:package-local-evidence` writes `var/m6-local-evidence-package.json` and `apps/web/m6-local-evidence-package.json` with the current commit, remote, evidence file digests, local M6 statuses, and the commands needed to refresh the package.
 
+`docs/m6-local-evidence-handoff.md` is the human-readable handoff generated from that local evidence package.
+
 Use the strict gate only when real production materials exist:
 
 ```bash

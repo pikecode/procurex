@@ -1,5 +1,9 @@
 # 开发日志
 
+## 2026-09-29
+
+- M6 本地证据交接文档：新增 `npm run m6:write-local-handoff` / `m6:check-local-handoff` 和 `scripts/write-m6-local-handoff.mjs`，从 `apps/web/m6-local-evidence-package.json` 生成 `docs/m6-local-evidence-handoff.md`，汇总当前 M6 状态、packaged commit、local evidence、external blockers、证据文件 SHA-256、刷新命令和 remote note。
+
 ## 2026-09-28
 
 - M6 本地证据包：新增 `npm run m6:package-local-evidence` 和 `scripts/package-m6-local-evidence.mjs`，读取 readiness、external evidence、性能、回滚、初始化、试运行、小程序、M5 gate、主流程和 M6 页面截图证据，计算 15 个证据文件 SHA-256，记录当前 branch/commit/remote/dirty 状态，并写出 `var/m6-local-evidence-package.json` 与 `apps/web/m6-local-evidence-package.json`。M6 页面新增“本地证据包”区，展示证据文件齐套、Git 状态和刷新命令。
