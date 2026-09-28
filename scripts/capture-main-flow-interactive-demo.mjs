@@ -193,6 +193,15 @@ async function captureScreenshot(cdp, file) {
   if (fileStats.size < 10_000) throw new Error(`Screenshot looks too small: ${file}`);
 }
 
+async function setViewport(cdp, viewport) {
+  await cdp.send('Emulation.setDeviceMetricsOverride', {
+    width: viewport.width,
+    height: viewport.height,
+    deviceScaleFactor: viewport.deviceScaleFactor,
+    mobile: viewport.mobile,
+  });
+}
+
 async function runInteractiveDemo(cdp) {
   await navigate(cdp, `${webBaseUrl}/main-flow-demo.html`);
   return evaluate(cdp, `
@@ -212,6 +221,8 @@ async function runInteractiveDemo(cdp) {
         seedStatus: document.querySelector('#seed-status')?.textContent.trim() || '',
         completedRows: document.querySelectorAll('#steps .tag-settled').length,
         stepRows: document.querySelectorAll('#steps tr').length,
+        viewportWidth: window.innerWidth,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
         currentStage: [...document.querySelectorAll('.metric')].find((item) => item.textContent.includes('当前阶段'))?.textContent.trim() || '',
         paymentPreviewText: document.querySelector('#steps')?.textContent || '',
         noticeText: document.querySelector('#notice')?.textContent.trim() || '',
@@ -219,6 +230,15 @@ async function runInteractiveDemo(cdp) {
       };
     })()
   `);
+}
+
+async function captureRun(cdp, viewport, fileName) {
+  await setViewport(cdp, viewport);
+  const state = await runInteractiveDemo(cdp);
+  const file = resolve(outputDir, fileName);
+  await rm(file, { force: true });
+  await captureScreenshot(cdp, file);
+  return { file, state, viewport };
 }
 
 async function main() {
@@ -232,27 +252,29 @@ async function main() {
         const cdp = await connectToChrome(port);
         await cdp.send('Page.enable');
         await cdp.send('Runtime.enable');
-        const state = await runInteractiveDemo(cdp);
-        const file = resolve(outputDir, 'main-flow-demo-interactive.png');
-        await rm(file, { force: true });
-        await captureScreenshot(cdp, file);
+        const desktop = await captureRun(cdp, { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false }, 'main-flow-demo-interactive.png');
+        const mobile = await captureRun(cdp, { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }, 'main-flow-demo-interactive-mobile.png');
         await writeFile(resolve(outputDir, 'interactive-manifest.json'), `${JSON.stringify({
           generatedAt: new Date().toISOString(),
           browser,
           webBaseUrl,
           apiReadyUrl,
           evidenceType: 'main-flow-interactive-browser-screenshot',
-          note: 'This screenshot proves the main-flow operator demo can execute the order-to-payment path through the browser against real APIs.',
-          screenshot: file,
+          note: 'These screenshots prove the main-flow operator demo can execute the order-to-payment path through desktop and mobile browser viewports against real APIs.',
+          screenshot: desktop.file,
+          mobileScreenshot: mobile.file,
           services: { startedApi, startedWeb },
-          state,
+          state: desktop.state,
+          viewports: { desktop, mobile },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
         console.log(`  API started by script: ${startedApi ? 'yes' : 'no'}`);
         console.log(`  Web started by script: ${startedWeb ? 'yes' : 'no'}`);
-        console.log(`  Screenshot: ${file}`);
-        console.log(`  Completed rows: ${state.completedRows}/${state.stepRows}`);
+        console.log(`  Desktop screenshot: ${desktop.file}`);
+        console.log(`  Mobile screenshot: ${mobile.file}`);
+        console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
+        console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

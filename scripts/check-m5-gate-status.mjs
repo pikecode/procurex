@@ -130,6 +130,22 @@ assert.ok(
 );
 assert.equal(mainFlowInteractiveState.runAllText, '已完成', 'Interactive main-flow run-all control must finish');
 assert.ok(await fileReady(mainFlowInteractiveManifest.screenshot), 'Interactive main-flow screenshot file must exist and be non-empty');
+const mobileInteractive = mainFlowInteractiveManifest.viewports?.mobile || {};
+const mobileInteractiveState = mobileInteractive.state || {};
+assert.equal(Number(mobileInteractiveState.completedRows), 6, 'Mobile interactive main-flow evidence must complete 6 rows');
+assert.equal(Number(mobileInteractiveState.stepRows), 6, 'Mobile interactive main-flow evidence must render 6 rows');
+assert.equal(Number(mobileInteractiveState.viewportWidth), 390, 'Mobile interactive main-flow evidence must run at the expected narrow viewport');
+assert.equal(mobileInteractiveState.horizontalOverflow, false, 'Mobile interactive main-flow page must not create page-level horizontal overflow');
+assert.ok(
+  String(mobileInteractiveState.paymentPreviewText || '').includes('COMPANY_TO_SUPPLIER'),
+  'Mobile interactive main-flow evidence must reach COMPANY_TO_SUPPLIER preview',
+);
+assert.ok(
+  String(mobileInteractiveState.paymentPreviewText || '').includes('¥90.00'),
+  'Mobile interactive main-flow evidence must show the expected ¥90.00 payment preview',
+);
+assert.equal(mobileInteractiveState.runAllText, '已完成', 'Mobile interactive main-flow run-all control must finish');
+assert.ok(await fileReady(mainFlowInteractiveManifest.mobileScreenshot), 'Mobile interactive main-flow screenshot file must exist and be non-empty');
 
 const scripts = packageJson.scripts || {};
 assert.ok(scripts['acceptance:m5-browserless']?.includes('notifications:check-acceptance'), 'M5 browserless command must include notification acceptance');
@@ -152,7 +168,7 @@ record('R05/W13', 'Reconciliation issues and operations browser evidence', 'READ
 record('DEV-503', 'In-app notification acceptance and business triggers', 'READY', `${demoSteps.filter((step) => step.title.includes('notification')).length} trigger evidence steps; W13 notificationRows=${w13State.notificationRows}`);
 record('DEV-504', 'Audit log coverage and W13 visibility', 'READY', `${actions.size} audited action types; W13 auditRows=${w13State.auditRows}`);
 record('MainFlowUI', 'Browser-visible main-flow notification and audit evidence', 'READY', `${mainFlowDemoState.evidenceRows} evidence rows; ${mainFlowDemoState.stepRows} operation rows`);
-record('MainFlowRun', 'Browser-executed order-to-payment demo', 'READY', `${mainFlowInteractiveState.completedRows}/${mainFlowInteractiveState.stepRows} rows; COMPANY_TO_SUPPLIER ¥90.00`);
+record('MainFlowRun', 'Browser-executed order-to-payment demo', 'READY', `desktop ${mainFlowInteractiveState.completedRows}/${mainFlowInteractiveState.stepRows}, mobile ${mobileInteractiveState.completedRows}/${mobileInteractiveState.stepRows}; COMPANY_TO_SUPPLIER ¥90.00`);
 
 const chromeReady = await executableReady(w11Manifest.browser) || await executableReady(w13Manifest.browser) || await executableReady(mainFlowDemoManifest.browser) || await executableReady(mainFlowInteractiveManifest.browser);
 record('Browser', 'Chrome evidence runtime', chromeReady ? 'READY' : 'MISSING', w11Manifest.browser || w13Manifest.browser || mainFlowDemoManifest.browser || mainFlowInteractiveManifest.browser || 'browser path missing');

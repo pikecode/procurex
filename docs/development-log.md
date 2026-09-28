@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- 主流程移动端证据：通用 Web 工作台补充 `max-width:720px` 窄屏布局，解除移动视口被 `min-width:900px` 卡住的问题；`main-flow:capture-interactive-demo` 现在同一次运行抓取桌面和 390px 移动视口截图，移动视口同样点击“一键执行”并完成 6/6 步到 `COMPANY_TO_SUPPLIER / ¥90.00`，且 manifest 记录无页面级横向溢出。`m5:gate-status` 将桌面和移动结果都纳入 `MainFlowRun` gate。验证：`web:check`、`main-flow:capture-interactive-demo`、`m5:gate-status`、`acceptance:m5-close` 通过。
 - M5 收口 gate 接入交互式主流程：`acceptance:m5-close` 现在会运行 `main-flow:capture-interactive-demo`，`m5:gate-status` 校验 `interactive-manifest.json` 中 6/6 浏览器操作行、按钮完成态、`COMPANY_TO_SUPPLIER / ¥90.00` 付款预览和截图文件，并新增 `MainFlowRun` READY gate。验证：`web:check`、`acceptance:m5-close` 通过。
 - 主流程操作台一键执行：`main-flow-demo.html` 新增“一键执行”，可从浏览器页面按顺序调用登录、下单、采购确认、供应商发货、门店收货、账单读取和付款预览真实 API；新增 `main-flow:capture-interactive-demo`，自动准备 PXFLOW 种子、启动 API/Web、用 Chrome 点击“一键执行”，等待 6/6 步完成并捕获 `COMPANY_TO_SUPPLIER` 付款预览截图。最新交互式截图 manifest 记录 6/6 步完成、当前阶段“读取账单并预览付款”、付款预览 `COMPANY_TO_SUPPLIER / ¥90.00`。
 - M5 浏览器证据自动刷新：新增 `m5:capture-all-evidence`，临时启动 API/Web 后顺序刷新 W11 报表页和 W13 运营页 Chrome 证据，并在完成后停止服务；`acceptance:m5-close` 现在会在主流程检查后写入 `m5:status`，自动运行该命令，再刷新主流程操作台截图并执行 `m5:gate-status` 和最终 `m5:status`，避免收口 gate 混用旧 W11/W13 manifest。

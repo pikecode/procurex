@@ -118,17 +118,17 @@ To prove the browser page itself can execute the full path against real APIs, ru
 npm run main-flow:capture-interactive-demo
 ```
 
-This command prepares the PXFLOW seed, starts API/Web as needed, clicks "一键执行" in Chrome, waits for 6/6 operation rows and `COMPANY_TO_SUPPLIER`, then writes `var/main-flow-demo-evidence/main-flow-demo-interactive.png` and `interactive-manifest.json`. The latest local interactive capture reached `COMPANY_TO_SUPPLIER / ¥90.00`.
+This command prepares the PXFLOW seed, starts API/Web as needed, clicks "一键执行" in Chrome for desktop and 390px mobile viewports, waits for 6/6 operation rows and `COMPANY_TO_SUPPLIER` in both, then writes `var/main-flow-demo-evidence/main-flow-demo-interactive.png`, `main-flow-demo-interactive-mobile.png`, and `interactive-manifest.json`. The latest local interactive capture reached `COMPANY_TO_SUPPLIER / ¥90.00` in both viewports and recorded no page-level mobile horizontal overflow.
 
 ## What This Means
 
 The backend main flow is broad and largely connected. A narrow Web demo now exists and now renders the persisted notification/audit evidence, but the full role-specific product flow is still incomplete:
 
-- Store order entry.
-- Purchaser confirmation/splitting.
-- Supplier shipment.
-- Store receipt.
-- Supplier discrepancy handling.
+- Role-specific store order entry beyond the seeded operator demo.
+- Role-specific purchaser confirmation/splitting beyond the seeded operator demo.
+- Role-specific supplier shipment beyond the seeded operator demo.
+- Role-specific store receipt beyond the seeded operator demo.
+- Role-specific supplier discrepancy handling beyond the seeded operator demo.
 
 The visible work currently starts mainly at billing and payment.
 
@@ -138,7 +138,7 @@ The project has not abandoned the original demand, but the execution has become 
 
 The next visible-product priority is:
 
-The scripted runner, browser-readable result page, narrow operator demo, and demo checker are now in place. The next product-facing step is to expand this into role-specific store/purchaser/supplier screens after M4 browser acceptance is no longer blocked.
+The scripted runner, browser-readable result page, narrow operator demo, demo checker, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to expand this into role-specific store/purchaser/supplier screens after M5 close evidence stays green.
 
 ## Recommended Next Step
 

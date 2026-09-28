@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, opsHtml, opsJs] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, mainFlowInteractiveCapture, opsHtml, opsJs] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -46,6 +46,7 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHt
   readProjectFile('apps/web/m4-gates.json'),
   readProjectFile('apps/web/main-flow-demo.html'),
   readProjectFile('apps/web/main-flow-demo.js'),
+  readProjectFile('scripts/capture-main-flow-interactive-demo.mjs'),
   readProjectFile('apps/web/ops.html'),
   readProjectFile('apps/web/ops.js'),
 ]);
@@ -122,6 +123,8 @@ assertIncludes(appJs, 'loadM5Status', 'M5 status summary loader');
 assertIncludes(appJs, 'loadM5GateStatus', 'M5 gate status summary loader');
 assertIncludes(appCss, '.acceptance-list', 'M5 acceptance summary styles');
 assertIncludes(appCss, '.export-card', 'R04 export job list styles');
+assertIncludes(appCss, '@media(max-width:720px)', 'mobile workbench styles');
+assertIncludes(appCss, 'min-width:0', 'mobile workbench body width reset');
 assertIncludes(packageJson.scripts['billing:seed-acceptance'], 'seed-billing-acceptance.mjs', 'billing acceptance seed script');
 assertIncludes(packageJson.scripts['billing:check-acceptance'], 'check-billing-acceptance.mjs', 'billing acceptance check script');
 assertIncludes(packageJson.scripts['reports:seed-acceptance'], 'seed-reports-acceptance.mjs', 'reports acceptance seed script');
@@ -157,6 +160,8 @@ assertIncludes(packageJson.scripts['main-flow:seed-demo'], 'seed-main-flow-demo.
 assertIncludes(packageJson.scripts['main-flow:check-demo'], 'check-main-flow-demo.mjs', 'main-flow demo check script');
 assertIncludes(packageJson.scripts['main-flow:capture-demo-evidence'], 'capture-main-flow-demo-evidence.mjs', 'main-flow demo browser evidence capture script');
 assertIncludes(packageJson.scripts['main-flow:capture-interactive-demo'], 'capture-main-flow-interactive-demo.mjs', 'main-flow interactive browser evidence capture script');
+assertIncludes(mainFlowInteractiveCapture, 'main-flow-demo-interactive-mobile.png', 'main-flow mobile interactive evidence capture');
+assertIncludes(mainFlowInteractiveCapture, 'Emulation.setDeviceMetricsOverride', 'main-flow mobile viewport evidence capture');
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'main-flow:check-demo', 'M4 browserless acceptance script');
 
 assertIncludes(mainFlowHtml, '主流程验收', 'main-flow acceptance page');
