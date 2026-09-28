@@ -13,6 +13,7 @@
     <section class="page-head"><div><div class="eyebrow">Production Readiness</div><h1>M6 上线准备</h1><p>把全场景回归、性能兼容、微信真机、部署恢复、数据初始化和试运行证据拆成可复查状态。</p></div><div class="updated"><span class="pulse"></span><span id="status-label">等待 readiness</span></div></section>
     <section class="summary-grid" id="summary"></section>
     <section class="data-card acceptance-card"><div class="data-head"><div><h3>上线 gate</h3><p id="readiness-summary">运行 npm run m6:readiness 后刷新页面</p></div><span id="readiness-status" class="tag">未生成</span></div><div id="checks" class="acceptance-list"></div></section>
+    <section class="data-card acceptance-card"><div class="data-head"><div><h3>外部证据</h3><p id="external-summary">运行 npm run m6:external-evidence 后刷新页面</p></div><span id="external-status" class="tag">未生成</span></div><div id="external-checks" class="acceptance-list"></div></section>
     <footer>M6 strict gate 只有在真实生产环境、微信、恢复演练、初始化和试运行证据齐全后才应通过。</footer>
   </main>
   <script src="/m6-readiness.js"></script>

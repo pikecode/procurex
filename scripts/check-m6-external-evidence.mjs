@@ -135,7 +135,9 @@ const result = {
 };
 
 await mkdir('var', { recursive: true });
+await mkdir('apps/web', { recursive: true });
 await writeFile('var/m6-external-evidence.json', `${JSON.stringify(result, null, 2)}\n`);
+await writeFile('apps/web/m6-external-evidence.json', `${JSON.stringify(result, null, 2)}\n`);
 
 console.log('M6 external evidence check complete.');
 console.log(`  Status: ${status}`);
@@ -143,4 +145,5 @@ for (const check of checks) {
   console.log(`  ${check.status.padEnd(7)} ${check.id}: ${check.detail}`);
 }
 console.log('  Wrote: var/m6-external-evidence.json');
+console.log('  Wrote: apps/web/m6-external-evidence.json');
 if (strict && status !== 'READY') process.exitCode = 1;

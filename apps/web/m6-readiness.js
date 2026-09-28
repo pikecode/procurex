@@ -29,6 +29,19 @@ function render(data) {
   }).join('');
 }
 
+function renderExternal(data) {
+  $('external-status').textContent = data.status || 'UNKNOWN';
+  $('external-status').className = `tag ${data.status === 'READY' ? 'tag-ok' : 'tag-fail'}`;
+  $('external-summary').textContent = data.summary || '';
+  const artifacts = data.expectedArtifacts || {};
+  $('external-checks').innerHTML = (data.checks || []).map((check) => {
+    const artifact = Object.values(artifacts).find((item) => (check.evidence || []).includes(item.path));
+    const evidence = (check.evidence || []).join(' · ');
+    const template = artifact?.template ? `<br>模板：${esc(artifact.template)}` : '';
+    return `<article><strong>${esc(check.id)} · ${esc(check.title)} <span class="tag ${statusClass(check.status)}">${esc(check.status)}</span></strong><small>${esc(check.detail)}${evidence ? `<br>证据：${esc(evidence)}` : ''}${template}</small></article>`;
+  }).join('');
+}
+
 async function loadReadiness() {
   try {
     const response = await fetch(`/m6-readiness.json?ts=${Date.now()}`);
@@ -44,4 +57,15 @@ async function loadReadiness() {
   }
 }
 
+async function loadExternalEvidence() {
+  try {
+    const response = await fetch(`/m6-external-evidence.json?ts=${Date.now()}`);
+    if (!response.ok) throw new Error('missing external evidence output');
+    renderExternal(await response.json());
+  } catch {
+    $('external-checks').innerHTML = '<article><strong>尚未生成外部证据清单</strong><small>运行 npm run m6:external-evidence 后刷新页面；模板在 docs/m6-evidence-templates/。</small></article>';
+  }
+}
+
 loadReadiness();
+loadExternalEvidence();

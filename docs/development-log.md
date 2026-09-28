@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- M6 外部证据可视化：`m6:external-evidence` 现在同时写出 `apps/web/m6-external-evidence.json`，`apps/web/m6-readiness.html` 新增“外部证据”区，展示微信真机、生产环境、对象存储策略、生产恢复、财务签字、客户试运行等 BLOCKED/READY 项及模板路径；`web:check` 增加页面区块、JSON loader 和模板 fallback 保护。
 - M6 外部证据模板：新增 `npm run m6:write-external-templates` / `m6:check-external-templates` 和 `scripts/write-m6-external-evidence-templates.mjs`，生成 `docs/m6-evidence-templates/` 下的微信真机、生产对象存储策略、生产恢复演练、生产初始化签字、客户试运行模板，并生成 `docs/m6-external-evidence-templates.md` 摘要。`m6:external-evidence` 的 expectedArtifacts 现在同时给出目标证据路径和模板路径，`web:check` 纳入模板脚本与 npm 命令保护。
 - M6 外部证据体检：新增 `npm run m6:external-evidence` / `m6:external-evidence:strict` 和 `scripts/check-m6-external-evidence.mjs`，写出 `var/m6-external-evidence.json`，把微信 AppID/测试账号/真机证据、生产 `DATABASE_URL`/`PRIVATE_FILE_DIR`/`PUBLIC_API_BASE_URL`、对象存储/私有凭证策略、生产恢复演练、客户财务签字、客户试运行/交接签字拆成独立 BLOCKED/READY 项。`.env.example` 补充 `PUBLIC_API_BASE_URL`、`WECHAT_APP_ID`、`WECHAT_TEST_ACCOUNT` 占位，便于后续收集外部材料。
 - M6 本地试运行彩排检查：新增 `npm run m6:pilot-check` 和 `scripts/check-m6-pilot.mjs`，汇总 M5 close gate、桌面/移动角色工作台、mini-program API 流、账单验收、初始化签核、性能报告、回滚检查和交接文档，写出 `var/m6-pilot-run.json`。DEV-605 现在只有本地彩排证据完整时标为 `LOCAL_READY`；真实 `READY` 仍要求客户试运行门店/供应商、试运行窗口、充值或清账、跨期补发或客户认可等效证据、完整账单/付款周期、问题关闭和交接签字。`m6:readiness` 当前输出 READY 1、LOCAL_READY 7、BLOCKED 3、PLANNED 0。
