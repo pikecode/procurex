@@ -1,0 +1,131 @@
+{
+  "generatedAt": "2026-09-28T15:12:06.535Z",
+  "title": "M6 Local Pilot Rehearsal Check",
+  "status": "LOCAL_READY",
+  "summary": "Required local pilot rehearsal evidence is present; real customer pilot participants, handover, and sign-off are still required before production READY.",
+  "customerPilot": {
+    "signed": false,
+    "participantStores": [],
+    "participantSuppliers": [],
+    "pilotWindow": null,
+    "handoverOwner": null,
+    "requiredBeforeReady": [
+      "selected real stores and suppliers",
+      "one recharge or clearing operation in the pilot environment",
+      "one cross-period replenishment or equivalent customer-approved evidence",
+      "one full statement/payment cycle",
+      "issue log closed or explicitly accepted",
+      "handover notes signed by operations owner and customer owner"
+    ]
+  },
+  "evidence": {
+    "m5GateStatus": "apps/web/m5-gate-status.json",
+    "interactiveMainFlow": "var/main-flow-demo-evidence/interactive-manifest.json",
+    "miniProgramFlow": "apps/miniprogram/mini-flow-check.json",
+    "billingAcceptance": "apps/web/billing-acceptance-run.json",
+    "initializationSignoff": "var/m6-initialization-signoff.json",
+    "performanceReport": "var/m6-performance-report.json",
+    "rollbackDrill": "var/m6-rollback-drill.json"
+  },
+  "rehearsalCoverage": {
+    "storeSupplierSelection": true,
+    "rechargeOrClearing": true,
+    "replenishmentBranch": true,
+    "statementAndPaymentCycle": true,
+    "issueClosure": true,
+    "handoffLedger": true
+  },
+  "checks": [
+    {
+      "name": "M5 close gate still ready",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "gates=9"
+    },
+    {
+      "name": "Desktop/mobile role-workbench pilot rehearsal",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "desktopRows=6, mobileRows=6"
+    },
+    {
+      "name": "Mini-program role API rehearsal",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "status=PASSED, endpoints=26"
+    },
+    {
+      "name": "Selected store and supplier sample exists",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "stores=8, suppliers=13"
+    },
+    {
+      "name": "Recharge or clearing evidence exists",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "progress ledger contains selected-credit clearing evidence and billing evidence contains stored-value flow"
+    },
+    {
+      "name": "Replenishment branch evidence exists",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "desktop=BRANCHES_READY · REPLENISH_PENDING/1 · RESOLVED/RETURN, mobile=BRANCHES_READY · REPLENISH_PENDING/1 · RESOLVED/RETURN"
+    },
+    {
+      "name": "Full statement and payment cycle evidence exists",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "billing=PASSED, miniPayment=CONFIRMED"
+    },
+    {
+      "name": "Issue closure evidence exists",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "discrepancy resolution and supplier rejection reallocation are present in desktop/mobile role-workbench evidence"
+    },
+    {
+      "name": "Initialization prerequisite exists",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "status=LOCAL_READY"
+    },
+    {
+      "name": "Performance prerequisite exists",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "status=LOCAL_READY"
+    },
+    {
+      "name": "Rollback prerequisite exists",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "status=LOCAL_READY"
+    },
+    {
+      "name": "Continuation handoff ledger exists",
+      "status": "PASS",
+      "severity": "required",
+      "detail": "docs/progress.md and docs/continuation.md contain current-state handoff notes"
+    },
+    {
+      "name": "Customer pilot participants confirmed",
+      "status": "WARN",
+      "severity": "customer-evidence",
+      "detail": "selected real stores/suppliers and pilot dates must be confirmed outside local evidence"
+    },
+    {
+      "name": "Customer handover signoff confirmed",
+      "status": "WARN",
+      "severity": "customer-evidence",
+      "detail": "operations owner and customer owner must sign the pilot close notes before production READY"
+    },
+    {
+      "name": "Customer cross-period pilot window confirmed",
+      "status": "WARN",
+      "severity": "customer-evidence",
+      "detail": "a real cross-period replenishment/statement window requires calendar time or customer-provided evidence"
+    }
+  ],
+  "blockers": []
+}

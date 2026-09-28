@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- M6 本地试运行彩排检查：新增 `npm run m6:pilot-check` 和 `scripts/check-m6-pilot.mjs`，汇总 M5 close gate、桌面/移动角色工作台、mini-program API 流、账单验收、初始化签核、性能报告、回滚检查和交接文档，写出 `var/m6-pilot-run.json`。DEV-605 现在只有本地彩排证据完整时标为 `LOCAL_READY`；真实 `READY` 仍要求客户试运行门店/供应商、试运行窗口、充值或清账、跨期补发或客户认可等效证据、完整账单/付款周期、问题关闭和交接签字。`m6:readiness` 当前输出 READY 1、LOCAL_READY 7、BLOCKED 3、PLANNED 0。
 - M6 数据初始化本地签核检查：新增 `npm run m6:initialization-check` 和 `scripts/check-m6-initialization.mjs`，读取当前 PostgreSQL 数据库，盘点门店、供应商、商品、模板、模板供应商、门店模板绑定、角色、门店/供应商作用域、门店账户、资金占用、结算快照、付款记录与付款凭证库存，写出 `var/m6-initialization-signoff.json`。DEV-604 现在只有本地库存与金额守卫通过时标为 `LOCAL_READY`；`READY` 仍要求客户截止日、来源文件、期初余额、未清应收/应付、角色绑定和财务最终签字。`web:check` 同步保护初始化脚本、npm 命令和 readiness 对 `productionFinalSignoff` 的判断。
 - M6 本地发布回滚检查：新增 `npm run m6:rollback-check` 和 `scripts/check-m6-rollback.mjs`，非破坏性检查 Prisma schema、migration status、迁移目录、`db:migrate`/`start:api`/`start:worker`/M6 相关脚本，以及 `docs/m6-production-readiness.md` 中的 one-instance migration rule、rollback package、failed-release decision point，写出 `var/m6-rollback-drill.json`。`m6:readiness` 现在只有该报告 status 为 `LOCAL_READY` 时把 DEV-603-ROLLBACK 标为 `LOCAL_READY`；生产环境回滚演练仍然保留。
 - M6 本地性能证据：新增 `npm run m6:performance`，串联 build、`reports:seed-acceptance` 和 `scripts/check-m6-performance.mjs`。脚本启动临时 Nest API，对 PXRPT 数据集执行门店订货列表、订单金额报表、商品数量报表、利润报表、导出任务受理和导出完成时间采样，记录 p50/p95/错误率、阈值、Node/数据库环境和数据规模，写出 `var/m6-performance-report.json`。`m6:readiness` 现在只有在该报告 status 为 `LOCAL_READY` 时把 DEV-602-PERF 标为 `LOCAL_READY`，不再把“文件存在”当作生产级 READY；`web:check` 同步保护性能脚本和报告引用。

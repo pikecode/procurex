@@ -170,12 +170,19 @@ add(
       : 'Run npm run m6:initialization-check, then collect customer cutoff date, source files, opening balances, uncleared payables/receivables, role bindings, and finance sign-off.',
   ['scripts/check-m6-initialization.mjs', 'var/m6-initialization-signoff.json'],
 );
+const pilotRun = await readJson('var/m6-pilot-run.json');
+const pilotReady = pilotRun?.status === 'READY' && pilotRun?.customerPilot?.signed === true;
+const pilotLocalReady = pilotRun?.status === 'LOCAL_READY';
 add(
   'DEV-605',
   '试运行与交接',
-  await fileExists('var/m6-pilot-run.json') ? 'READY' : 'PLANNED',
-  'Need selected stores/suppliers, one recharge/clearing, one cross-period replenishment, one full statement cycle, issue closure, and handover.',
-  ['var/m6-pilot-run.json'],
+  pilotReady ? 'READY' : pilotLocalReady ? 'LOCAL_READY' : 'PLANNED',
+  pilotReady
+    ? 'Customer pilot stores/suppliers, recharge/clearing, cross-period replenishment, statement cycle, issue closure, and handover are complete.'
+    : pilotLocalReady
+      ? 'Local pilot rehearsal evidence is complete; real customer pilot participants, handover, and sign-off are still required.'
+      : 'Run npm run m6:pilot-check, then complete selected stores/suppliers, one recharge/clearing, one cross-period replenishment, one full statement cycle, issue closure, and handover.',
+  ['scripts/check-m6-pilot.mjs', 'var/m6-pilot-run.json'],
 );
 
 const readyCount = checks.filter((check) => check.status === 'READY').length;
@@ -185,7 +192,7 @@ const plannedCount = checks.filter((check) => check.status === 'PLANNED').length
 const status = checks.every((check) => check.status === 'READY') ? 'READY' : 'NOT_READY';
 const summary = status === 'READY'
   ? 'M6 production readiness evidence is complete.'
-  : 'M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, customer finance sign-off, and pilot evidence remain open.';
+  : 'M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, customer finance sign-off, customer pilot, and handover evidence remain open.';
 
 console.log('M6 production readiness');
 console.log(`  Status: ${status}`);

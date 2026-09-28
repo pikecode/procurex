@@ -15,6 +15,7 @@ npm run m6:readiness
 npm run m6:performance
 npm run m6:rollback-check
 npm run m6:initialization-check
+npm run m6:pilot-check
 ```
 
 The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/m6-readiness.html`.
@@ -48,7 +49,7 @@ npm run m6:readiness:strict
 | DEV-603 backup/recovery | Production backup schedule, private evidence-file backup, measured RPO <= 15 minutes, measured RTO <= 4 hours | LOCAL_READY for local drill only |
 | DEV-603 rollback | Migration command owner, one-instance migration rule, rollback package, failed-release decision point, and `m6:rollback-check` evidence | LOCAL_READY when local rollback check passes; production rehearsal still required |
 | DEV-604 initialization | Cutoff date, master data, opening balances, uncleared receivables/payables, role bindings, finance sign-off, and `m6:initialization-check` evidence | LOCAL_READY for local inventory/reconciliation; READY only after customer finance sign-off |
-| DEV-605 pilot | Selected stores/suppliers, recharge/clearing, cross-period replenishment, full statement cycle, issue closure, handover | PLANNED |
+| DEV-605 pilot | Selected stores/suppliers, recharge/clearing, cross-period replenishment, full statement cycle, issue closure, handover, and `m6:pilot-check` evidence | LOCAL_READY for local rehearsal; READY only after customer pilot sign-off |
 
 ## External Inputs Needed
 
@@ -91,12 +92,24 @@ The command reads the configured PostgreSQL database and writes `var/m6-initiali
 
 `LOCAL_READY` means the local inventory and reconciliation guard has passed. It is not production finance approval. DEV-604 can become `READY` only when `productionFinalSignoff.signed` is true and the customer-provided cutoff date, source files, opening balances, uncleared receivables/payables, and role bindings have been reviewed by the finance owner.
 
+## Pilot And Handoff
+
+Local check:
+
+```bash
+npm run m6:pilot-check
+```
+
+The command writes `var/m6-pilot-run.json`. It links the current M5 close gate, desktop/mobile role-workbench run, mini-program API flow, billing acceptance, initialization signoff, performance report, rollback drill, and handoff ledgers into one local pilot rehearsal record. The report covers sample store/supplier selection, recharge or clearing evidence, replenishment branch evidence, statement/payment cycle evidence, issue closure, and continuation handoff notes.
+
+`LOCAL_READY` means local rehearsal evidence is coherent. It is not a real customer pilot. DEV-605 can become `READY` only when `customerPilot.signed` is true and the customer pilot records selected stores/suppliers, pilot window, recharge/clearing action, cross-period replenishment or approved equivalent, full statement/payment cycle, issue closure, and handover sign-off.
+
 ## Next Work
 
 1. Keep `npm run acceptance:m5-close`, `npm run mini:check`, and `npm run mini:flow-check` green while adding M6 checks.
 2. Collect real WeChat and production environment inputs.
 3. Keep `npm run m6:performance` fresh locally, then replace or supplement it with production-scale load evidence before launch review.
 4. Replace local DEV-604 evidence with customer source-file and finance-signoff evidence before launch review.
-5. Produce `var/m6-pilot-run.json` after a real pilot cycle.
+5. Replace local DEV-605 rehearsal evidence with customer pilot and handover sign-off evidence before launch review.
 
 Do not mark M6 closed from local Web evidence alone.

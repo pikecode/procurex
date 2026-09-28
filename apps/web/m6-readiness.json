@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-28T15:06:30.772Z",
+  "generatedAt": "2026-09-28T15:12:06.933Z",
   "status": "NOT_READY",
-  "summary": "M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, customer finance sign-off, and pilot evidence remain open.",
+  "summary": "M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, customer finance sign-off, customer pilot, and handover evidence remain open.",
   "counts": {
     "ready": 1,
-    "localReady": 6,
+    "localReady": 7,
     "blocked": 3,
-    "planned": 1
+    "planned": 0
   },
   "checks": [
     {
@@ -113,9 +113,10 @@
     {
       "id": "DEV-605",
       "title": "试运行与交接",
-      "status": "PLANNED",
-      "detail": "Need selected stores/suppliers, one recharge/clearing, one cross-period replenishment, one full statement cycle, issue closure, and handover.",
+      "status": "LOCAL_READY",
+      "detail": "Local pilot rehearsal evidence is complete; real customer pilot participants, handover, and sign-off are still required.",
       "evidence": [
+        "scripts/check-m6-pilot.mjs",
         "var/m6-pilot-run.json"
       ]
     }
