@@ -6,14 +6,19 @@ Page({
     roleText: '未登录',
     orders: [],
     discrepancies: [],
+    statements: [],
+    payments: [],
     supplierOrderId: '',
     shipQuantity: '10',
     discrepancyId: '',
     discrepancyReason: '',
+    paymentId: '',
+    paymentReason: '',
     loading: false,
     shipping: false,
     rejecting: false,
     resolving: false,
+    paying: false,
     result: null,
     error: ''
   },
@@ -40,10 +45,19 @@ Page({
     this.setData({ discrepancyId: event.currentTarget.dataset.id });
   },
 
+  selectPayment(event) {
+    this.setData({ paymentId: event.currentTarget.dataset.id });
+  },
+
   async loadWork() {
     this.setData({ loading: true, error: '' });
     try {
-      await Promise.all([this.loadOrders(false), this.loadDiscrepancies(false)]);
+      await Promise.all([
+        this.loadOrders(false),
+        this.loadDiscrepancies(false),
+        this.loadStatements(false),
+        this.loadPayments(false)
+      ]);
     } finally {
       this.setData({ loading: false });
     }
@@ -80,6 +94,30 @@ Page({
         }
       }
       this.setData({ discrepancies: discrepancies.slice(0, 20) });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      if (toggleLoading) this.setData({ loading: false });
+    }
+  },
+
+  async loadStatements(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
+    try {
+      const statements = await api.request('/supplier-statements');
+      this.setData({ statements: Array.isArray(statements) ? statements.slice(0, 20) : [] });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      if (toggleLoading) this.setData({ loading: false });
+    }
+  },
+
+  async loadPayments(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
+    try {
+      const payments = await api.request('/payment-records?direction=COMPANY_TO_SUPPLIER');
+      this.setData({ payments: Array.isArray(payments) ? payments.slice(0, 20) : [] });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -175,6 +213,40 @@ Page({
       this.setData({ error: error.message });
     } finally {
       this.setData({ resolving: false });
+    }
+  },
+
+  async handlePayment(event) {
+    const action = event.currentTarget.dataset.action;
+    if (!this.data.paymentId) {
+      this.setData({ error: '请先选择或输入付款记录 ID' });
+      return;
+    }
+
+    this.setData({ paying: true, error: '', result: null });
+    try {
+      const payment = await api.request(`/payment-records/${this.data.paymentId}`);
+      const payload = action === 'confirm'
+        ? { expectedVersion: payment.version }
+        : { expectedVersion: payment.version, reason: this.data.paymentReason || '供应商小程序驳回付款' };
+      const handled = await api.request(`/payment-records/${this.data.paymentId}/${action}`, {
+        method: 'POST',
+        data: payload,
+        header: { 'idempotency-key': `mini-supplier-payment-${action}-${Date.now()}` }
+      });
+      this.setData({
+        result: {
+          title: handled.paymentNo || handled.id,
+          status: handled.status,
+          detail: `付款金额 ${handled.amount}，动作 ${action}`
+        }
+      });
+      await this.loadPayments(false);
+      await this.loadStatements(false);
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      this.setData({ paying: false });
     }
   },
 

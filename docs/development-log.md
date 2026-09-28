@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- 小程序供应商账单与收款：供应商小程序页新增“供应商账单”和“收款确认”区，调用 `/supplier-statements` 展示应付、待确认、已付金额，调用 `/payment-records?direction=COMPANY_TO_SUPPLIER` 展示付款记录；供应商可读取 `/payment-records/{id}` 后用当前 version 调用 `/payment-records/{id}/confirm` 确认收款，或 `/payment-records/{id}/reject` 驳回付款。`mini:check` 新增供应商账单、付款列表和确认/驳回动作保护。
 - 小程序门店账款入口：门店小程序页新增“账款入口”，优先使用登录 scope 的 storeId，也支持手工输入门店 ID；调用 `/stores/{id}/account` 显示余额、授信额度、已用额度、可用额度，并调用 `/stores/{id}/ledgers` 展示最近流水。`mini:check` 新增账户与流水入口断言。
 - 小程序门店订单进度：门店小程序页的工作加载现在同时读取 `/purchase-requests` 和 `/notifications`，新增“订单进度”卡片展示门店作用域下的订货单状态、资金状态和销售额；点击订单会回填当前订货结果。`mini:check` 增加订单进度页面保护。
 - 小程序采购拒单待办：采购小程序页现在同时读取 `/purchase-requests` 和 `/notifications`，筛选 `SUPPLIER_ORDER_REJECTED` 站内消息，展示“拒单通知”列表；点通知会自动填入 purchaseRequestId 与 rejectedOrderId，再调用 `/purchase-requests/{id}/reallocate` 改派目标供应商。`mini:check` 新增采购拒单通知、`/notifications` 和重分配守卫断言。

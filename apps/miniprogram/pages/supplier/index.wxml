@@ -2,7 +2,7 @@
   <view class="hero">
     <text class="eyebrow">SUPPLIER</text>
     <text class="title">供应商工作台</text>
-    <view class="subtitle">面向 S06-S08：待发货、补发、拒单和收货差异。当前切片先接执行单查询、发货和拒单。</view>
+    <view class="subtitle">面向 S06-S08：待发货、补发、拒单、收货差异和收款确认。当前切片接执行单、异常、账单和付款记录。</view>
   </view>
 
   <view class="card">
@@ -56,6 +56,40 @@
         <view class="muted">差异 {{item.id}} · 收货 {{item.receiptId || '—'}}，点击填入差异 ID。</view>
       </view>
       <view wx:if="{{!discrepancies.length}}" class="row"><view class="muted">暂无收货差异通知或尚未刷新。</view></view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="card-title">供应商账单</text>
+      <button class="ghost" loading="{{loading}}" bindtap="loadStatements">刷新</button>
+    </view>
+    <view class="list">
+      <view wx:for="{{statements}}" wx:key="id" class="row">
+        <view class="row-title"><text>{{item.periodKey}}</text><text class="tag">{{item.settlementStatus}}</text></view>
+        <view class="muted">应付 {{item.payableAmount}}，待确认 {{item.pendingPaymentAmount}}，已付 {{item.confirmedPaidAmount}}</view>
+      </view>
+      <view wx:if="{{!statements.length}}" class="row"><view class="muted">暂无供应商账单或尚未刷新。</view></view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="card-title">收款确认</text>
+      <button class="ghost" loading="{{loading}}" bindtap="loadPayments">刷新</button>
+    </view>
+    <view class="field"><text class="field-label">付款记录 ID</text><input value="{{paymentId}}" data-field="paymentId" bindinput="onInput" placeholder="paymentRecordId" /></view>
+    <view class="field"><text class="field-label">驳回原因</text><input value="{{paymentReason}}" data-field="paymentReason" bindinput="onInput" placeholder="仅驳回时填写" /></view>
+    <view class="button-row">
+      <button class="primary" loading="{{paying}}" data-action="confirm" bindtap="handlePayment">确认收款</button>
+      <button class="danger" loading="{{paying}}" data-action="reject" bindtap="handlePayment">驳回付款</button>
+    </view>
+    <view class="list">
+      <view wx:for="{{payments}}" wx:key="id" class="row" bindtap="selectPayment" data-id="{{item.id}}">
+        <view class="row-title"><text>{{item.paymentNo || item.id}}</text><text class="tag {{item.status === 'PENDING_CONFIRMATION' ? 'tag-warn' : ''}}">{{item.status}}</text></view>
+        <view class="muted">金额 {{item.amount}}，方向 {{item.direction}}，点击填入付款记录。</view>
+      </view>
+      <view wx:if="{{!payments.length}}" class="row"><view class="muted">暂无付款记录或尚未刷新。</view></view>
     </view>
   </view>
 
