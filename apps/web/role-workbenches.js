@@ -1,9 +1,13 @@
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+const api = `${location.protocol}//${location.hostname}:3100/api/v1`;
 
 let seed = null;
 let run = null;
 let activeRole = 'Store';
+let storeToken = null;
+let storeAction = null;
+let actionRunning = false;
 
 const roleDefinitions = {
   Store: {
@@ -12,7 +16,7 @@ const roleDefinitions = {
     scope: '门店账号只看本门店订单、收货和通知',
     todos: ['创建或复核门店订货', '处理待收货提醒', '查看差异处理结果'],
     actions: ['下单入口', '收货确认', '差异结果通知'],
-    next: '把主流程里的门店下单和收货动作拆成独立页面，并保留移动端窄屏证据。',
+    next: '门店下单已接入真实 API；下一步继续接门店收货和移动端证据。',
   },
   Purchaser: {
     title: '采购工作台',
@@ -56,6 +60,20 @@ function statusFor(role) {
   return evidenceFor(role)?.status || (seedFor(role) ? 'PENDING' : 'MISSING');
 }
 
+async function call(path, options = {}, token = storeToken) {
+  const response = await fetch(`${api}${path}`, {
+    ...options,
+    headers: {
+      ...(options.body ? { 'content-type': 'application/json' } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message || body.error?.message || `请求失败（${response.status}）`);
+  return body.data ?? body;
+}
+
 async function loadJson(path) {
   const response = await fetch(`${path}?ts=${Date.now()}`);
   if (!response.ok) throw new Error(`${path} 未生成`);
@@ -78,6 +96,8 @@ async function init() {
     $('summary').innerHTML = metric('运行命令', 'main-flow:seed-demo', '生成角色账号') + metric('运行命令', 'main-flow:check-demo', '生成角色证据');
     $('role-lanes-label').textContent = '未生成';
     $('role-detail-label').textContent = '未生成';
+    $('role-action-label').textContent = '未生成';
+    $('role-actions').innerHTML = '';
     $('evidence-label').textContent = '未生成';
   }
 }
@@ -100,6 +120,7 @@ function render() {
     render();
   }));
   renderDetail();
+  renderActions();
   renderEvidenceMap();
 }
 
@@ -126,6 +147,58 @@ function renderDetail() {
     activeRole = button.dataset.lane;
     render();
   }));
+}
+
+function renderActions() {
+  $('role-action-label').textContent = storeAction?.status || (actionRunning ? '执行中' : '等待操作');
+  $('role-action-label').classList.toggle('tag-ok', storeAction?.status === 'PENDING_PROCUREMENT');
+  const disabled = !seed || actionRunning ? 'disabled' : '';
+  $('role-actions').innerHTML = [
+    `<article><strong>门店真实下单</strong><small>使用 ${esc(seed?.storeUsername || 'pxflow_store')} 登录，调用 /purchase-requests/preview 和 /purchase-requests</small><button id="store-order-action" class="primary" ${disabled}>${actionRunning ? '执行中...' : '预览并创建订货单'}</button></article>`,
+    `<article><strong>最近结果</strong><small id="store-order-result">${esc(storeResultText())}</small></article>`,
+  ].join('');
+  $('store-order-action')?.addEventListener('click', runStoreOrderAction);
+}
+
+function storeResultText() {
+  if (!storeAction) return '尚未执行真实门店下单';
+  return `${storeAction.requestNo} · ${storeAction.status} · ${storeAction.paymentStatus} · ${storeAction.salesGoodsAmount}`;
+}
+
+async function runStoreOrderAction() {
+  if (!seed || actionRunning) return;
+  actionRunning = true;
+  renderActions();
+  try {
+    const login = await call('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: seed.storeUsername, password: seed.password, client: 'role-workbench' }),
+    }, null);
+    storeToken = login.accessToken;
+    const input = { storeId: seed.storeId, items: [{ productId: seed.productId, quantity: seed.quantity }] };
+    const preview = await call('/purchase-requests/preview', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    const created = await call('/purchase-requests', {
+      method: 'POST',
+      headers: { 'idempotency-key': `role-workbench-store-order-${crypto.randomUUID()}` },
+      body: JSON.stringify(input),
+    });
+    storeAction = {
+      requestId: created.id,
+      requestNo: created.requestNo,
+      status: created.status,
+      paymentStatus: created.paymentStatus,
+      salesGoodsAmount: created.totals?.salesGoodsAmount || preview.totals?.salesGoodsAmount,
+      previewSupplyAmount: preview.totals?.supplyGoodsAmount,
+    };
+  } catch (error) {
+    storeAction = { status: 'FAILED', requestNo: '门店下单失败', paymentStatus: error.message, salesGoodsAmount: '—' };
+  } finally {
+    actionRunning = false;
+    renderActions();
+  }
 }
 
 function renderEvidenceMap() {

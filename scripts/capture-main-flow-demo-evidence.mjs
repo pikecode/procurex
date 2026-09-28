@@ -255,7 +255,8 @@ async function prepareRoleWorkbenchesPage(cdp) {
         hasSupplierWorkbench: bodyText.includes('供应商工作台'),
         hasOperatorWorkbench: bodyText.includes('运营联调台'),
         hasNextPageBoundary: bodyText.includes('下一步页面边界'),
-        hasEvidenceMapping: bodyText.includes('主流程证据映射')
+        hasEvidenceMapping: bodyText.includes('主流程证据映射'),
+        hasStoreOrderAction: bodyText.includes('门店真实下单') && Boolean(document.querySelector('#store-order-action'))
       };
     })()
   `);

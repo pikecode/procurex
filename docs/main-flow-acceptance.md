@@ -104,7 +104,7 @@ npm run main-flow:check-demo
 
 `main-flow:check-demo` also writes `apps/web/main-flow-demo-run.json`. The operator demo renders that file as "角色复核", "分角色视图", and "主流程证据" sections covering Operator, Store, Supplier, and Purchaser evidence, role-specific next-workbench boundaries, shipment notification, receipt-discrepancy notification, discrepancy-resolution notification, supplier-rejection notification, audited order/fulfillment actions, and the supplier payment preview.
 
-`apps/web/role-workbenches.html` is the first role-specific product split from the operator demo. It renders Store, Purchaser, Supplier, and Operator lanes from the same PXFLOW seed/run output, with account scope, current todos, action boundaries, mapped main-flow evidence, and next-page boundary text. It is visible product scaffolding; the real role-specific operation buttons still need to be connected to dedicated store/purchaser/supplier workflows.
+`apps/web/role-workbenches.html` is the first role-specific product split from the operator demo. It renders Store, Purchaser, Supplier, and Operator lanes from the same PXFLOW seed/run output, with account scope, current todos, action boundaries, mapped main-flow evidence, and next-page boundary text. The Store lane now includes a real order action: it logs in as `pxflow_store`, previews the seeded item, and creates a `PENDING_PROCUREMENT / PAID` purchase request through the real API. The remaining role-specific operation buttons still need to be connected to dedicated purchaser/supplier/receipt workflows.
 
 Chrome-rendered evidence can be refreshed with:
 
@@ -120,13 +120,12 @@ To prove the browser page itself can execute the full path against real APIs, ru
 npm run main-flow:capture-interactive-demo
 ```
 
-This command prepares the PXFLOW seed, starts API/Web as needed, clicks "一键执行" in Chrome for desktop and 390px mobile viewports, waits for 6/6 operation rows and `COMPANY_TO_SUPPLIER` in both, then writes `var/main-flow-demo-evidence/main-flow-demo-interactive.png`, `main-flow-demo-interactive-mobile.png`, and `interactive-manifest.json`. The latest local interactive capture reached `COMPANY_TO_SUPPLIER / ¥90.00` in both viewports and recorded no page-level mobile horizontal overflow.
+This command prepares the PXFLOW seed, refreshes the role evidence, starts API/Web as needed, clicks "一键执行" in Chrome for desktop and 390px mobile viewports, then opens `role-workbenches.html` and clicks the Store role order action. It waits for 6/6 operation rows and `COMPANY_TO_SUPPLIER` in both main-flow viewports, waits for the Store action to create `PENDING_PROCUREMENT / PAID`, then writes `var/main-flow-demo-evidence/main-flow-demo-interactive.png`, `main-flow-demo-interactive-mobile.png`, `role-workbenches-interactive.png`, and `interactive-manifest.json`. The latest local interactive capture reached `COMPANY_TO_SUPPLIER / ¥90.00`, created a Store role purchase request for `120.00`, and recorded no page-level mobile horizontal overflow.
 
 ## What This Means
 
 The backend main flow is broad and largely connected. A narrow Web demo now exists and renders persisted role, notification, and audit evidence, but the full role-specific product flow is still incomplete:
 
-- Role-specific store order entry with real buttons beyond the role workbench skeleton.
 - Role-specific purchaser confirmation/splitting with real buttons beyond the role workbench skeleton.
 - Role-specific supplier shipment with real buttons beyond the role workbench skeleton.
 - Role-specific store receipt with real buttons beyond the role workbench skeleton.
@@ -140,8 +139,8 @@ The project has not abandoned the original demand, but the execution has become 
 
 The next visible-product priority is:
 
-The scripted runner, browser-readable result page, narrow operator demo, role evidence checker, role-view tabs, role workbench skeleton, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to connect the Store/Purchaser/Supplier workbench lanes to real role-specific API actions.
+The scripted runner, browser-readable result page, narrow operator demo, role evidence checker, role-view tabs, role workbench lanes, real Store role order action, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to connect the Purchaser/Supplier/receipt workbench lanes to real role-specific API actions.
 
 ## Recommended Next Step
 
-Keep M5 close evidence green while evolving `role-workbenches.html` from evidence-driven scaffolding into real store, purchaser, supplier, and receipt workbenches.
+Keep M5 close evidence green while evolving `role-workbenches.html` from one real Store action into purchaser confirmation, supplier shipment, store receipt, and supplier discrepancy workbenches.

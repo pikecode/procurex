@@ -222,9 +222,13 @@ assertIncludes(roleWorkbenchesHtml, '/role-workbenches.js', 'role workbenches sc
 assertIncludes(roleWorkbenchesHtml, '门店、采购、供应商工作台', 'role workbenches heading');
 assertIncludes(roleWorkbenchesHtml, 'id="role-lanes"', 'role workbenches lane grid');
 assertIncludes(roleWorkbenchesHtml, 'id="role-detail"', 'role workbenches detail grid');
+assertIncludes(roleWorkbenchesHtml, 'id="role-actions"', 'role workbenches real action panel');
 assertIncludes(roleWorkbenchesHtml, 'id="evidence-map"', 'role workbenches evidence map');
 assertIncludes(roleWorkbenchesJs, 'main-flow-demo-seed.json', 'role workbenches seed loader');
 assertIncludes(roleWorkbenchesJs, 'main-flow-demo-run.json', 'role workbenches evidence loader');
+assertIncludes(roleWorkbenchesJs, '/purchase-requests/preview', 'role workbenches store order preview');
+assertIncludes(roleWorkbenchesJs, '/purchase-requests', 'role workbenches store order creation');
+assertIncludes(roleWorkbenchesJs, 'store-order-action', 'role workbenches store action button');
 assertIncludes(roleWorkbenchesJs, '门店工作台', 'role workbenches store lane');
 assertIncludes(roleWorkbenchesJs, '采购工作台', 'role workbenches purchaser lane');
 assertIncludes(roleWorkbenchesJs, '供应商工作台', 'role workbenches supplier lane');

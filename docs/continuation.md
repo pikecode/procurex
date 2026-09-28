@@ -15,6 +15,7 @@ M5 has resumed. The current M5 slice has a repeatable browserless acceptance cha
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
 
 ```text
+4351eaa Add role workbench skeleton
 a8fda49 Add role views to main flow demo
 f499e73 Show role evidence in main flow gate
 67567d4 Add mobile main flow evidence to M5 gate
@@ -108,7 +109,7 @@ npm run m5:gate-status
 
 The latest local run on 2026-09-28 has Docker, PostgreSQL, Chrome, M5 browserless output, and W11/W13 evidence READY. The browserless chain passed 10/10 steps, W11 capture recorded `PASSED`, M5 status `READY`, M5 gate `READY` with 9 gate rows, 1 report row, and 1 export row; W13 capture recorded 5 reconciliation issues, 0 export-health exception rows, 2 notification rows, and 16 audit rows. The follow-up full baseline also passed: build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.
 
-`npm run acceptance:m5-close` is now the strongest single M5 close-readiness command. It reruns the M5 browserless reporting/export/reconciliation/notification chain, reseeds/checks the main-flow demo, writes `apps/web/main-flow-demo-run.json`, writes the M5 status snapshot, refreshes W11/W13 browser evidence through `m5:capture-all-evidence`, captures the main-flow demo role/evidence card, role-view tabs, and `role-workbenches.html` role lanes in Chrome, clicks the main-flow page's one-click browser run through `main-flow:capture-interactive-demo` in desktop and mobile viewports, runs `m5:gate-status`, and writes a final M5 status snapshot. The latest run marks DEV-501/502, R04/W11, DEV-505, R05/W13, DEV-503, DEV-504, MainFlowUI, MainFlowRun, and Chrome evidence as READY; MainFlowUI includes 4 role rows, 4 role tabs, and 4 role workbench lanes.
+`npm run acceptance:m5-close` is now the strongest single M5 close-readiness command. It reruns the M5 browserless reporting/export/reconciliation/notification chain, reseeds/checks the main-flow demo, writes `apps/web/main-flow-demo-run.json`, writes the M5 status snapshot, refreshes W11/W13 browser evidence through `m5:capture-all-evidence`, captures the main-flow demo role/evidence card, role-view tabs, and `role-workbenches.html` role lanes in Chrome, clicks the main-flow page's one-click browser run through `main-flow:capture-interactive-demo` in desktop and mobile viewports, clicks the Store role workbench's real order action, runs `m5:gate-status`, and writes a final M5 status snapshot. The latest run marks DEV-501/502, R04/W11, DEV-505, R05/W13, DEV-503, DEV-504, MainFlowUI, MainFlowRun, and Chrome evidence as READY; MainFlowUI includes 4 role rows, 4 role tabs, and 4 role workbench lanes; MainFlowRun includes a real Store role order reaching `PENDING_PROCUREMENT / PAID`.
 
 This performs:
 
@@ -236,7 +237,7 @@ npm run main-flow:capture-demo-evidence
 npm run main-flow:capture-interactive-demo
 ```
 
-The demo page renders `apps/web/main-flow-demo-run.json` as visible role and evidence sections, plus role tabs with next-workbench boundary text. `apps/web/role-workbenches.html` now renders Store/Purchaser/Supplier/Operator lanes from the same PXFLOW evidence, including account scope, todos, actions, evidence mapping, and next-page boundary text. The latest Chrome capture under `var/main-flow-demo-evidence/` records `PASSED`, 4 role rows, 4 role tabs, 4 role workbench lanes, 7 evidence rows, 6 step rows, and true notification/audit evidence flags. `main-flow:capture-interactive-demo` also proves the page's one-click run control can execute the browser flow against real APIs in desktop and 390px mobile viewports; it is now part of `acceptance:m5-close` and the `MainFlowRun` gate.
+The demo page renders `apps/web/main-flow-demo-run.json` as visible role and evidence sections, plus role tabs with next-workbench boundary text. `apps/web/role-workbenches.html` now renders Store/Purchaser/Supplier/Operator lanes from the same PXFLOW evidence, including account scope, todos, actions, evidence mapping, and next-page boundary text. The Store lane also has a real order action that logs in as `pxflow_store`, previews the order, and creates a `PENDING_PROCUREMENT / PAID` purchase request. The latest Chrome capture under `var/main-flow-demo-evidence/` records `PASSED`, 4 role rows, 4 role tabs, 4 role workbench lanes, 7 evidence rows, 6 step rows, and true notification/audit evidence flags. `main-flow:capture-interactive-demo` also proves the page's one-click run control can execute the browser flow against real APIs in desktop and 390px mobile viewports and that the Store role action can create a real order; it is now part of `acceptance:m5-close` and the `MainFlowRun` gate.
 
 For the M4 gate status summary, run:
 

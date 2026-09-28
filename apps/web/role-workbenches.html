@@ -15,8 +15,9 @@
     <section class="summary-grid" id="summary"></section>
     <section class="data-card acceptance-card"><div class="data-head"><div><h3>角色总览</h3><p>从单一操作台拆出的四类角色入口</p></div><span id="role-lanes-label" class="tag">等待加载</span></div><div id="role-lanes" class="role-lanes"></div></section>
     <section class="data-card acceptance-card"><div class="data-head"><div><h3>当前角色</h3><p>查看该角色的账号、待办、证据和下一步页面边界</p></div><span id="role-detail-label" class="tag">等待选择</span></div><div class="tabs" id="role-tabs"></div><div id="role-detail" class="workbench-grid"></div></section>
+    <section class="data-card acceptance-card"><div class="data-head"><div><h3>角色真实操作</h3><p>先把门店工作台接入真实下单 API，后续再扩展采购、供应商和收货动作</p></div><span id="role-action-label" class="tag">等待操作</span></div><div id="role-actions" class="acceptance-list"></div></section>
     <section class="data-card acceptance-card"><div class="data-head"><div><h3>主流程证据映射</h3><p>把通知、审计和付款预览证据映射到角色工作台</p></div><span id="evidence-label" class="tag">等待检查</span></div><div id="evidence-map" class="acceptance-list"></div></section>
-    <footer>此页面是角色工作台拆分的第一块可见产品骨架；真实操作仍复用主流程操作台和现有 API 验收。</footer>
+    <footer>此页面从角色骨架继续拆真实动作；当前门店下单已调用真实 API，采购、供应商和收货动作继续分批接入。</footer>
   </main>
   <script src="/role-workbenches.js"></script>
 </body>
