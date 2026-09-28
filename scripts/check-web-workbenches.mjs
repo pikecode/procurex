@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, mainFlowInteractiveCapture, opsHtml, opsJs] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, mainFlowInteractiveCapture, opsHtml, opsJs] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -46,6 +46,8 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHt
   readProjectFile('apps/web/m4-gates.json'),
   readProjectFile('apps/web/main-flow-demo.html'),
   readProjectFile('apps/web/main-flow-demo.js'),
+  readProjectFile('apps/web/role-workbenches.html'),
+  readProjectFile('apps/web/role-workbenches.js'),
   readProjectFile('scripts/capture-main-flow-interactive-demo.mjs'),
   readProjectFile('apps/web/ops.html'),
   readProjectFile('apps/web/ops.js'),
@@ -64,6 +66,8 @@ for (const path of [
   'apps/web/m4-gates.json',
   'apps/web/main-flow-demo.html',
   'apps/web/main-flow-demo.js',
+  'apps/web/role-workbenches.html',
+  'apps/web/role-workbenches.js',
   'apps/web/ops.html',
   'apps/web/ops.js',
 ]) {
@@ -75,6 +79,7 @@ checkSyntax('apps/web/app.js');
 checkSyntax('apps/web/main-flow.js');
 checkSyntax('apps/web/m4-acceptance.js');
 checkSyntax('apps/web/main-flow-demo.js');
+checkSyntax('apps/web/role-workbenches.js');
 checkSyntax('apps/web/ops.js');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
@@ -196,6 +201,7 @@ assertIncludes(m4Css, '.manual-plan', 'M4 manual acceptance plan styles');
 
 assertIncludes(mainFlowDemoHtml, '主流程操作台', 'main-flow demo page');
 assertIncludes(mainFlowDemoHtml, '/main-flow-demo.js', 'main-flow demo script');
+assertIncludes(mainFlowDemoHtml, '/role-workbenches.html', 'role workbench navigation');
 assertIncludes(mainFlowDemoHtml, '角色复核', 'main-flow demo role evidence card');
 assertIncludes(mainFlowDemoHtml, '分角色视图', 'main-flow demo role view card');
 assertIncludes(mainFlowDemoHtml, '主流程证据', 'main-flow demo evidence card');
@@ -210,6 +216,20 @@ assertIncludes(mainFlowDemoJs, 'loadDemoEvidence', 'main-flow demo evidence load
 assertIncludes(mainFlowDemoJs, 'runAll', 'main-flow demo run-all workflow');
 assertIncludes(mainFlowDemoJs, '/purchase-requests', 'main-flow demo purchase request call');
 assertIncludes(mainFlowDemoJs, '/shipments/', 'main-flow demo receipt call');
+
+assertIncludes(roleWorkbenchesHtml, '角色工作台', 'role workbenches page');
+assertIncludes(roleWorkbenchesHtml, '/role-workbenches.js', 'role workbenches script');
+assertIncludes(roleWorkbenchesHtml, '门店、采购、供应商工作台', 'role workbenches heading');
+assertIncludes(roleWorkbenchesHtml, 'id="role-lanes"', 'role workbenches lane grid');
+assertIncludes(roleWorkbenchesHtml, 'id="role-detail"', 'role workbenches detail grid');
+assertIncludes(roleWorkbenchesHtml, 'id="evidence-map"', 'role workbenches evidence map');
+assertIncludes(roleWorkbenchesJs, 'main-flow-demo-seed.json', 'role workbenches seed loader');
+assertIncludes(roleWorkbenchesJs, 'main-flow-demo-run.json', 'role workbenches evidence loader');
+assertIncludes(roleWorkbenchesJs, '门店工作台', 'role workbenches store lane');
+assertIncludes(roleWorkbenchesJs, '采购工作台', 'role workbenches purchaser lane');
+assertIncludes(roleWorkbenchesJs, '供应商工作台', 'role workbenches supplier lane');
+assertIncludes(roleWorkbenchesJs, '下一步页面边界', 'role workbenches next page boundary');
+assertIncludes(roleWorkbenchesJs, 'roleEvidence', 'role workbenches role evidence mapping');
 
 assertIncludes(opsHtml, '运营与对账', 'W13 ops page');
 assertIncludes(opsHtml, '/ops.js', 'W13 ops script');

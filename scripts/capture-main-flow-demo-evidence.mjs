@@ -227,6 +227,40 @@ async function prepareDemoPage(cdp) {
   `);
 }
 
+async function prepareRoleWorkbenchesPage(cdp) {
+  await navigate(cdp, `${webBaseUrl}/role-workbenches.html`);
+  return evaluate(cdp, `
+    (async () => {
+      const waitFor = async (predicate, label) => {
+        for (let i = 0; i < 80; i += 1) {
+          if (await predicate()) return;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        throw new Error(label + ' did not become ready.');
+      };
+      await waitFor(() => document.querySelector('#role-workbench-status')?.textContent.trim() === 'PASSED', 'role workbench status');
+      await waitFor(() => document.querySelectorAll('#role-lanes article').length >= 4, 'role workbench lanes');
+      await waitFor(() => document.querySelectorAll('#role-tabs .tab').length >= 4, 'role workbench tabs');
+      await waitFor(() => document.querySelectorAll('#role-detail article').length >= 4, 'role workbench detail');
+      await waitFor(() => document.querySelectorAll('#evidence-map article').length >= 6, 'role workbench evidence map');
+      const bodyText = document.body.textContent || '';
+      return {
+        status: document.querySelector('#role-workbench-status')?.textContent.trim() || '',
+        laneRows: document.querySelectorAll('#role-lanes article').length,
+        tabRows: document.querySelectorAll('#role-tabs .tab').length,
+        detailRows: document.querySelectorAll('#role-detail article').length,
+        evidenceRows: document.querySelectorAll('#evidence-map article').length,
+        hasStoreWorkbench: bodyText.includes('门店工作台'),
+        hasPurchaserWorkbench: bodyText.includes('采购工作台'),
+        hasSupplierWorkbench: bodyText.includes('供应商工作台'),
+        hasOperatorWorkbench: bodyText.includes('运营联调台'),
+        hasNextPageBoundary: bodyText.includes('下一步页面边界'),
+        hasEvidenceMapping: bodyText.includes('主流程证据映射')
+      };
+    })()
+  `);
+}
+
 const browser = await findBrowser();
 await mkdir(outputDir, { recursive: true });
 
@@ -240,7 +274,11 @@ const captured = await withWebServer(async (startedServer) => {
     const file = resolve(outputDir, 'main-flow-demo.png');
     await rm(file, { force: true });
     await captureScreenshot(cdp, file);
-    return { startedServer, file, state };
+    const roleWorkbenchState = await prepareRoleWorkbenchesPage(cdp);
+    const roleWorkbenchFile = resolve(outputDir, 'role-workbenches.png');
+    await rm(roleWorkbenchFile, { force: true });
+    await captureScreenshot(cdp, roleWorkbenchFile);
+    return { startedServer, file, roleWorkbenchFile, state, roleWorkbenchState };
   } finally {
     chrome.kill('SIGTERM');
   }
@@ -253,7 +291,9 @@ const manifest = {
   evidenceType: 'main-flow-demo-browser-screenshot',
   note: 'This screenshot proves the main-flow operator demo can render persisted notification, audit, and payment-preview evidence in a real browser session.',
   screenshot: captured.file,
+  roleWorkbenchScreenshot: captured.roleWorkbenchFile,
   state: captured.state,
+  roleWorkbenchState: captured.roleWorkbenchState,
 };
 
 await writeFile(resolve(outputDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -265,5 +305,6 @@ console.log(`  Screenshot: ${captured.file}`);
 console.log(`  Evidence status: ${captured.state.evidenceStatus} (${captured.state.evidenceRows} rows)`);
 console.log(`  Role status: ${captured.state.roleStatus} (${captured.state.roleRows} rows)`);
 console.log(`  Role view: ${captured.state.roleViewStatus} (${captured.state.roleTabRows} tabs)`);
+console.log(`  Role workbenches: ${captured.roleWorkbenchState.status} (${captured.roleWorkbenchState.laneRows} lanes)`);
 console.log(`  Step rows: ${captured.state.stepRows}`);
 console.log(`  Manifest: ${resolve(outputDir, 'manifest.json')}`);

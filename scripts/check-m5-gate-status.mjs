@@ -126,6 +126,19 @@ assert.ok(mainFlowDemoState.hasSupplierNotification, 'Main-flow demo browser evi
 assert.ok(mainFlowDemoState.hasRejectionNotification, 'Main-flow demo browser evidence must show supplier rejection notification');
 assert.ok(mainFlowDemoState.hasAuditEvidence, 'Main-flow demo browser evidence must show audit evidence');
 assert.ok(await fileReady(mainFlowDemoManifest.screenshot), 'Main-flow demo screenshot file must exist and be non-empty');
+const roleWorkbenchState = mainFlowDemoManifest.roleWorkbenchState || {};
+assert.equal(roleWorkbenchState.status, 'PASSED', 'Role workbench browser evidence must show PASSED status');
+assert.ok(Number(roleWorkbenchState.laneRows) >= 4, 'Role workbench browser evidence must show at least 4 role lanes');
+assert.ok(Number(roleWorkbenchState.tabRows) >= 4, 'Role workbench browser evidence must show at least 4 role tabs');
+assert.ok(Number(roleWorkbenchState.detailRows) >= 4, 'Role workbench browser evidence must show role detail panels');
+assert.ok(Number(roleWorkbenchState.evidenceRows) >= 6, 'Role workbench browser evidence must show mapped main-flow evidence rows');
+assert.ok(roleWorkbenchState.hasStoreWorkbench, 'Role workbench browser evidence must show store workbench');
+assert.ok(roleWorkbenchState.hasPurchaserWorkbench, 'Role workbench browser evidence must show purchaser workbench');
+assert.ok(roleWorkbenchState.hasSupplierWorkbench, 'Role workbench browser evidence must show supplier workbench');
+assert.ok(roleWorkbenchState.hasOperatorWorkbench, 'Role workbench browser evidence must show operator workbench');
+assert.ok(roleWorkbenchState.hasNextPageBoundary, 'Role workbench browser evidence must show next page boundary');
+assert.ok(roleWorkbenchState.hasEvidenceMapping, 'Role workbench browser evidence must show main-flow evidence mapping');
+assert.ok(await fileReady(mainFlowDemoManifest.roleWorkbenchScreenshot), 'Role workbench screenshot file must exist and be non-empty');
 
 const mainFlowInteractiveState = mainFlowInteractiveManifest.state || {};
 assert.equal(Number(mainFlowInteractiveState.completedRows), 6, 'Interactive main-flow browser evidence must complete 6 rows');
@@ -177,7 +190,7 @@ record('DEV-505', 'Export recovery, health visibility, and failed retry', 'READY
 record('R05/W13', 'Reconciliation issues and operations browser evidence', 'READY', `${reconciliationStep.data.issueCount} seeded issues; W13 rows=${w13State.issueRows}`);
 record('DEV-503', 'In-app notification acceptance and business triggers', 'READY', `${demoSteps.filter((step) => step.title.includes('notification')).length} trigger evidence steps; W13 notificationRows=${w13State.notificationRows}`);
 record('DEV-504', 'Audit log coverage and W13 visibility', 'READY', `${actions.size} audited action types; W13 auditRows=${w13State.auditRows}`);
-record('MainFlowUI', 'Browser-visible main-flow notification and audit evidence', 'READY', `${mainFlowDemoState.roleRows} role rows; ${mainFlowDemoState.roleTabRows} role tabs; ${mainFlowDemoState.evidenceRows} evidence rows; ${mainFlowDemoState.stepRows} operation rows`);
+record('MainFlowUI', 'Browser-visible main-flow notification and audit evidence', 'READY', `${mainFlowDemoState.roleRows} role rows; ${mainFlowDemoState.roleTabRows} role tabs; ${roleWorkbenchState.laneRows} role workbench lanes; ${mainFlowDemoState.evidenceRows} evidence rows; ${mainFlowDemoState.stepRows} operation rows`);
 record('MainFlowRun', 'Browser-executed order-to-payment demo', 'READY', `desktop ${mainFlowInteractiveState.completedRows}/${mainFlowInteractiveState.stepRows}, mobile ${mobileInteractiveState.completedRows}/${mobileInteractiveState.stepRows}; COMPANY_TO_SUPPLIER ¥90.00`);
 
 const chromeReady = await executableReady(w11Manifest.browser) || await executableReady(w13Manifest.browser) || await executableReady(mainFlowDemoManifest.browser) || await executableReady(mainFlowInteractiveManifest.browser);

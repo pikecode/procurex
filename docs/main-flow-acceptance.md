@@ -104,13 +104,15 @@ npm run main-flow:check-demo
 
 `main-flow:check-demo` also writes `apps/web/main-flow-demo-run.json`. The operator demo renders that file as "角色复核", "分角色视图", and "主流程证据" sections covering Operator, Store, Supplier, and Purchaser evidence, role-specific next-workbench boundaries, shipment notification, receipt-discrepancy notification, discrepancy-resolution notification, supplier-rejection notification, audited order/fulfillment actions, and the supplier payment preview.
 
+`apps/web/role-workbenches.html` is the first role-specific product split from the operator demo. It renders Store, Purchaser, Supplier, and Operator lanes from the same PXFLOW seed/run output, with account scope, current todos, action boundaries, mapped main-flow evidence, and next-page boundary text. It is visible product scaffolding; the real role-specific operation buttons still need to be connected to dedicated store/purchaser/supplier workflows.
+
 Chrome-rendered evidence can be refreshed with:
 
 ```bash
 npm run main-flow:capture-demo-evidence
 ```
 
-The latest local capture wrote `var/main-flow-demo-evidence/main-flow-demo.png` and a manifest with `PASSED`, 4 role rows, 4 role tabs, 7 evidence rows, 6 visible operation steps, next-workbench boundary text, and true notification/audit evidence flags.
+The latest local capture wrote `var/main-flow-demo-evidence/main-flow-demo.png`, `role-workbenches.png`, and a manifest with `PASSED`, 4 role rows, 4 role tabs, 4 role workbench lanes, 7 evidence rows, 6 visible operation steps, next-workbench/next-page boundary text, and true notification/audit evidence flags.
 
 To prove the browser page itself can execute the full path against real APIs, run:
 
@@ -124,11 +126,11 @@ This command prepares the PXFLOW seed, starts API/Web as needed, clicks "一键�
 
 The backend main flow is broad and largely connected. A narrow Web demo now exists and renders persisted role, notification, and audit evidence, but the full role-specific product flow is still incomplete:
 
-- Role-specific store order entry beyond the seeded operator demo.
-- Role-specific purchaser confirmation/splitting beyond the seeded operator demo.
-- Role-specific supplier shipment beyond the seeded operator demo.
-- Role-specific store receipt beyond the seeded operator demo.
-- Role-specific supplier discrepancy handling beyond the seeded operator demo.
+- Role-specific store order entry with real buttons beyond the role workbench skeleton.
+- Role-specific purchaser confirmation/splitting with real buttons beyond the role workbench skeleton.
+- Role-specific supplier shipment with real buttons beyond the role workbench skeleton.
+- Role-specific store receipt with real buttons beyond the role workbench skeleton.
+- Role-specific supplier discrepancy handling with real buttons beyond the role workbench skeleton.
 
 The visible work currently starts mainly at billing and payment.
 
@@ -138,8 +140,8 @@ The project has not abandoned the original demand, but the execution has become 
 
 The next visible-product priority is:
 
-The scripted runner, browser-readable result page, narrow operator demo, role evidence checker, role-view tabs, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to expand this into role-specific store/purchaser/supplier screens after M5 close evidence stays green.
+The scripted runner, browser-readable result page, narrow operator demo, role evidence checker, role-view tabs, role workbench skeleton, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to connect the Store/Purchaser/Supplier workbench lanes to real role-specific API actions.
 
 ## Recommended Next Step
 
-Keep M4 closure first: run real browser/manual acceptance for W09/S05/S08 and W10 when a browser runtime is available. After that, evolve `main-flow-demo.html` into role-specific store, purchaser, supplier, and receipt workbenches.
+Keep M5 close evidence green while evolving `role-workbenches.html` from evidence-driven scaffolding into real store, purchaser, supplier, and receipt workbenches.

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProcureX · 角色工作台</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <aside class="sidebar"><div class="brand"><span class="mark">P</span><span>ProcureX<small>采购协同平台</small></span></div><div class="nav-label">工作台</div><a class="nav-item" href="/m4-acceptance.html">M4 验收</a><a class="nav-item" href="/main-flow-demo.html">主流程操作台</a><a class="nav-item active" href="/role-workbenches.html">角色工作台</a><a class="nav-item" href="/main-flow.html">主流程验收</a><a class="nav-item" href="/billing.html">财务结算</a><a class="nav-item" href="/">报表与分析</a><a class="nav-item" href="/ops.html">运营与对账</a><div class="side-foot"><span class="pulse"></span>角色拆分中</div></aside>
+  <main class="main">
+    <header class="topbar"><div class="crumb">工作台 <span>/</span> 角色工作台</div><div class="profile"><span id="identity">等待证据</span><span class="avatar">P</span></div></header>
+    <section class="page-head"><div><div class="eyebrow">Role Workbenches</div><h1>门店、采购、供应商工作台</h1><p>基于 `PXFLOW` 主流程证据拆分各角色的待办、可见数据和下一步动作边界。</p></div><div class="updated"><span class="pulse"></span><span id="role-workbench-status">等待主流程证据</span></div></section>
+    <div id="notice" class="notice hidden"></div>
+    <section class="summary-grid" id="summary"></section>
+    <section class="data-card acceptance-card"><div class="data-head"><div><h3>角色总览</h3><p>从单一操作台拆出的四类角色入口</p></div><span id="role-lanes-label" class="tag">等待加载</span></div><div id="role-lanes" class="role-lanes"></div></section>
+    <section class="data-card acceptance-card"><div class="data-head"><div><h3>当前角色</h3><p>查看该角色的账号、待办、证据和下一步页面边界</p></div><span id="role-detail-label" class="tag">等待选择</span></div><div class="tabs" id="role-tabs"></div><div id="role-detail" class="workbench-grid"></div></section>
+    <section class="data-card acceptance-card"><div class="data-head"><div><h3>主流程证据映射</h3><p>把通知、审计和付款预览证据映射到角色工作台</p></div><span id="evidence-label" class="tag">等待检查</span></div><div id="evidence-map" class="acceptance-list"></div></section>
+    <footer>此页面是角色工作台拆分的第一块可见产品骨架；真实操作仍复用主流程操作台和现有 API 验收。</footer>
+  </main>
+  <script src="/role-workbenches.js"></script>
+</body>
+</html>
