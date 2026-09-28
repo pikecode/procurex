@@ -2,10 +2,11 @@
 
 ## 2026-09-28
 
+- M5 浏览器证据自动刷新：新增 `m5:capture-all-evidence`，临时启动 API/Web 后顺序刷新 W11 报表页和 W13 运营页 Chrome 证据，并在完成后停止服务；`acceptance:m5-close` 现在会在主流程检查后写入 `m5:status`，自动运行该命令，再刷新主流程操作台截图并执行 `m5:gate-status` 和最终 `m5:status`，避免收口 gate 混用旧 W11/W13 manifest。
 - 主流程操作台证据可视化：`main-flow-demo.html` 新增“主流程证据”卡片，读取 `main-flow-demo-run.json` 展示待收货通知、收货差异通知、差异处理结果通知、供应商拒单通知、审计动作和付款预览结果；新增 `main-flow:capture-demo-evidence` 用 Chrome 抓取主流程操作台截图并写出 manifest。最新截图记录 `PASSED`、7 条证据行、6 个操作步骤，且发货通知、供应商差异通知、拒单通知和审计证据均为 true。验证：`web:check`、`main-flow:capture-demo-evidence` 通过。
 - M5 收口链补强：`acceptance:m5-close` 现在会在 `main-flow:check-demo` 后自动运行 `main-flow:capture-demo-evidence`，`m5:gate-status` 也会校验主流程操作台截图 manifest，并新增 `MainFlowUI` gate，防止主流程可见证据只停留在脚本层。
 - M5 收口 gate：新增 `npm run m5:gate-status`，读取 `reports-acceptance-run.json`、W11/W13 browser manifest 和 `main-flow-demo-run.json`，把 DEV-501/502、R04/W11、DEV-505、R05/W13、DEV-503、DEV-504、Chrome 证据汇总为 READY/缺口状态；新增 `acceptance:m5-close` 串联 M5 browserless、主流程 demo 通知/审计检查和 gate-status。`main-flow:check-demo` 现在写出 `apps/web/main-flow-demo-run.json`，用于持久记录待收货、收货差异、差异处理结果、拒单通知和 6 类审计动作。验证：`acceptance:m5-close` 通过。
-- M5 收口可视化：W11 报表页新增“M5 收口状态”卡片，读取 `m5-gate-status.json` 展示各 gate READY/缺口；`m5:capture-browser-evidence` 同步记录 `m5GateLabel` 和 gate 行数，方便从截图 manifest 判断页面是否加载了收口状态。最新 W11 Chrome capture 记录 `PASSED`、M5 status `READY`、M5 gate `READY`、8 条 gate 行、1 条报表行和 1 条导出任务。
+- M5 收口可视化：W11 报表页新增“M5 收口状态”卡片，读取 `m5-gate-status.json` 展示各 gate READY/缺口；`m5:capture-browser-evidence` 同步记录 `m5GateLabel` 和 gate 行数，方便从截图 manifest 判断页面是否加载了收口状态。最新 W11 Chrome capture 记录 `PASSED`、M5 status `READY`、M5 gate `READY`、9 条 gate 行、1 条报表行和 1 条导出任务。
 - M5 完整回归基线：在刷新 W11/W13 Chrome 证据后继续运行全链基线，`npm run build`、47 项单测、31 项集成测试、`contract:check`、`web:check`、`m5:status` 和 `git diff --check` 全部通过；`m5:status` 继续显示 Docker 29.7.2、PostgreSQL `127.0.0.1:55438`、Chrome、10/10 M5 browserless、W11/W13 证据 READY。集成测试仍有 `pg` v9 相关 deprecation warning，但不影响当前通过结果。
 
 ## 2026-09-27

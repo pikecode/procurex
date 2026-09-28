@@ -28,7 +28,7 @@ There was one recorded deviation: R01-R04 and W11 reporting/export work started 
 | DEV-503 notifications | Active | I08 in-app notification list/read/bulk-read and owner isolation are implemented, seeded, visible on W13; supplier shipment creates store "待收货提醒", receipt discrepancy creates supplier "收货差异待处理", discrepancy resolution notifies the store, supplier rejection notifies ADMIN/PURCHASER, and overdue unreceived shipments create de-duplicated store reminders. |
 | DEV-504/505 operations and recovery | Active | R05/W13 reconciliation is visible and exportable; audit logs are queryable/filterable/exportable for purchase requests, supplier operations, shipment, receipt, discrepancy resolution, payment create/confirm/reject/cancel, W10 difference-disposal create/confirm, and store recharge/credit-limit/clearing operations; stale export recovery, export health monitoring/export, and failed export retry are covered for R04. |
 
-Latest M5 local evidence on 2026-09-28: `npm run acceptance:m5-browserless` passed 10/10 steps, `npm run m5:status` reports Docker/PostgreSQL/Chrome/W11/W13 evidence READY, `m5:capture-browser-evidence` refreshed W11 with `PASSED`, M5 status `READY`, and M5 gate `READY`, and `m5:capture-ops-evidence` refreshed W13 with 5 reconciliation issues, 0 export-health exception rows, 1 notification row, and 13 audit rows. The follow-up regression baseline passed build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.
+Latest M5 local evidence on 2026-09-28: `npm run acceptance:m5-browserless` passed 10/10 steps, `npm run m5:status` reports Docker/PostgreSQL/Chrome/W11/W13 evidence READY, `m5:capture-browser-evidence` refreshed W11 with `PASSED`, M5 status `READY`, M5 gate `READY`, 9 gate rows, 1 report row, and 1 export row; `m5:capture-ops-evidence` refreshed W13 with 5 reconciliation issues, 0 export-health exception rows, 2 notification rows, and 16 audit rows. The follow-up regression baseline passed build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.
 
 Latest M5 close-readiness gate: `npm run acceptance:m5-close` passed and `m5:gate-status` marks DEV-501/502, R04/W11, DEV-505, R05/W13, DEV-503, DEV-504, MainFlowUI, and Chrome evidence READY. This does not claim production launch readiness; broader browser/mobile acceptance, WeChat adaptation, and M6 production operations policy remain open.
 
@@ -91,6 +91,8 @@ The strongest M5 close-readiness check is:
 ```bash
 npm run acceptance:m5-close
 ```
+
+It refreshes W11/W13 Chrome evidence, main-flow demo evidence, and the M5 gate summary in one run.
 
 The current browserless M4 acceptance chain is:
 
