@@ -1,6 +1,6 @@
 # ProcureX Acceptance Dashboard
 
-Last updated: 2026-09-27
+Last updated: 2026-09-28
 
 This file is the visible checkpoint for product direction. It maps implemented work back to the plan, shows what can be tried locally, and lists the remaining acceptance gaps. Start with `docs/continuation.md`, then use this file with `docs/progress.md` before starting new work.
 
@@ -25,8 +25,8 @@ There was one recorded deviation: R01-R04 and W11 reporting/export work started 
 | DEV-405 clearing | Closed | A04-A06 selected-credit clearing, ledger/account updates, scope checks, and local restore evidence are covered. |
 | DEV-406 adjustments and difference disposal | Closed | B05/B12, persisted adjustments, returns, offsets, overpayments, W10 workbench, and browser evidence are covered in the local close gate. |
 | DEV-501/502 reporting and export | Active | R01-R04 and W11 are implemented with browserless acceptance, CSV export, task listing, and Chrome evidence. |
-| DEV-503 notifications | Active | I08 in-app notification list/read and owner isolation are implemented, seeded, visible on W13; supplier shipment creates store "待收货提醒", receipt discrepancy creates supplier "收货差异待处理", discrepancy resolution notifies the store, and overdue unreceived shipments create de-duplicated store reminders. |
-| DEV-504/505 operations and recovery | Active | R05/W13 reconciliation is visible; audit logs are queryable/visible for shipment, receipt, discrepancy resolution, payment create/confirm, and W10 difference-disposal create/confirm; stale export recovery, export health monitoring, and failed export retry are covered for R04. |
+| DEV-503 notifications | Active | I08 in-app notification list/read and owner isolation are implemented, seeded, visible on W13; supplier shipment creates store "待收货提醒", receipt discrepancy creates supplier "收货差异待处理", discrepancy resolution notifies the store, supplier rejection notifies ADMIN/PURCHASER, and overdue unreceived shipments create de-duplicated store reminders. |
+| DEV-504/505 operations and recovery | Active | R05/W13 reconciliation is visible; audit logs are queryable/filterable for purchase requests, supplier operations, shipment, receipt, discrepancy resolution, payment create/confirm/reject/cancel, W10 difference-disposal create/confirm, and store recharge/credit-limit/clearing operations; stale export recovery, export health monitoring, and failed export retry are covered for R04. |
 
 ## Visible Workbenches
 
@@ -60,7 +60,7 @@ Open these pages:
 | Four statement families | B01 store, B02 supplier total, B03 supplier-store, B04 direct statements. | Browser-level W09/S05/S08 acceptance. |
 | Payment and evidence | B06-B11, private file upload/download, required PAYMENT evidence, participant authorization. | Production storage policy and deployment configuration. |
 | Price change and adjustments | P01-P03, persisted adjustment documents, repeated-change netting, B05 reads, B12 returns/offsets. | Browser-level W10 acceptance and final M4 closure review. |
-| Reporting/export/operations | R01-R05 backend, W11 report page, W13 operations page, R04 export recovery, export health monitoring, failed export retry, I08 in-app notification list/read, supplier-shipment notification trigger, receipt-discrepancy notification trigger, discrepancy-resolution notification trigger, overdue receipt reminders, and first fulfillment/payment/finance audit-log coverage. | Remaining M5 work is adding more notification/audit triggers, WeChat adaptation, audit expansion, and broader recovery only for newly implemented async flows. |
+| Reporting/export/operations | R01-R05 backend, W11 report page, W13 operations page, R04 export recovery, export health monitoring, failed export retry, I08 in-app notification list/read, supplier-shipment notification trigger, receipt-discrepancy notification trigger, discrepancy-resolution notification trigger, supplier-rejection notification trigger, overdue receipt reminders, and broad order/payment/finance audit-log coverage. | Remaining M5 work is mainly broader browser/mobile acceptance, WeChat adaptation, and recovery only for newly implemented async flows; add more notification/audit triggers only where a user-facing operation still lacks operational visibility. |
 
 ## Verification Commands
 

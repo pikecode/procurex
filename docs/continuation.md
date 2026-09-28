@@ -1,6 +1,6 @@
 # ProcureX Continuation Handoff
 
-Last updated: 2026-09-27
+Last updated: 2026-09-28
 
 Use this as the first document when continuing development in a new window.
 
@@ -8,13 +8,20 @@ Use this as the first document when continuing development in a new window.
 
 M4 is locally closed against the current acceptance gates. DEV-401 through DEV-406 are closed, `npm run acceptance:m4-close` passes, Chrome is ready, local PostgreSQL is reachable, automatic evidence is complete, and the manual browser evidence package is 6/6.
 
-M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, I08 in-app notification list/read, real DEV-503 supplier-shipment, receipt-discrepancy, discrepancy-resolution, and overdue-receipt reminder triggers, DEV-504 audit logs for shipment/receipt/discrepancy resolution, payment create/confirm/reject/cancel, and W10 difference-disposal create/confirm, W11 visibility, R04 export task listing and failed retry, DEV-505 stale export recovery and export health monitoring, W13 reconciliation/operations/notification/audit visibility, and Chrome-captured W11/W13 screenshots.
+M5 has resumed. The current M5 slice has a repeatable browserless acceptance chain for R01-R05 reporting/export/reconciliation, I08 in-app notification list/read, real DEV-503 supplier-shipment, receipt-discrepancy, discrepancy-resolution, supplier-rejection, and overdue-receipt reminder triggers, DEV-504 audit logs for purchase requests, supplier operations, shipment/receipt/discrepancy resolution, payment create/confirm/reject/cancel, W10 difference-disposal create/confirm, and store recharge/credit-limit/clearing operations, W11 visibility, R04 export task listing and failed retry, DEV-505 stale export recovery and export health monitoring, W13 reconciliation/operations/notification/audit visibility, and Chrome-captured W11/W13 screenshots.
 
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
 
 ```text
+0003eb0 Audit store funds operations
+ab30908 Audit supplier order operations
+c5d2d2c Add audit log filters to W13
+c738288 Audit purchase request commands
+5bab429 Harden settlement item locking
+9679479 Record audit rows in W13 evidence capture
+adbafbe Add overdue receipt reminder scan
 0bd495e Audit payment record actions
 d4d6614 Audit difference disposal actions
 b2b21ea Add audit logs for fulfillment actions

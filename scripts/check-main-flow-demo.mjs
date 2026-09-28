@@ -181,6 +181,22 @@ async function run() {
     const resolutionNotification = storeNotificationsAfterResolution.notifications.find((item) => item.payload?.discrepancyId === discrepancyId);
     assert.equal(resolutionNotification?.title, '差异已同意少收');
 
+    const rejectedOrder = await createSupplierOrder(baseUrl, token, seed, 'flow-demo-reject');
+    const rejection = await request(`${baseUrl}/supplier-orders/${rejectedOrder.id}/reject`, {
+      method: 'POST',
+      headers: authHeaders(token, { 'idempotency-key': `flow-demo-reject-${Date.now()}` }),
+      body: JSON.stringify({
+        expectedVersion: rejectedOrder.version,
+        reason: 'PXFLOW demo supplier cannot fulfill this order',
+      }),
+    });
+    assert.equal(rejection.status, 'REJECTED');
+    const adminNotifications = await request(`${baseUrl}/notifications`, {
+      headers: authHeaders(token),
+    });
+    const rejectionNotification = adminNotifications.notifications.find((item) => item.payload?.supplierOrderId === rejectedOrder.id);
+    assert.equal(rejectionNotification?.title, '供应商拒单待处理');
+
     const auditLogs = await request(`${baseUrl}/audit-logs`, {
       headers: authHeaders(token),
     });
@@ -190,6 +206,7 @@ async function run() {
     assert.ok(actions.has('supplier-order.shipment.create'));
     assert.ok(actions.has('shipment.receipt.create'));
     assert.ok(actions.has('discrepancy.resolve'));
+    assert.ok(actions.has('supplier-order.reject'));
     const createdAuditLogs = await request(`${baseUrl}/audit-logs?action=purchase-request.create`, {
       headers: authHeaders(token),
     });
@@ -201,7 +218,8 @@ async function run() {
     console.log(`  Store notification: ${shipmentNotification.title}`);
     console.log(`  Supplier notification: ${discrepancyNotification.title}`);
     console.log(`  Resolution notification: ${resolutionNotification.title}`);
-    console.log(`  Audit actions: ${Array.from(actions).filter((action) => action.includes('purchase-request') || action.includes('shipment') || action.includes('discrepancy')).sort().join(', ')}`);
+    console.log(`  Rejection notification: ${rejectionNotification.title}`);
+    console.log(`  Audit actions: ${Array.from(actions).filter((action) => action.includes('purchase-request') || action.includes('supplier-order') || action.includes('shipment') || action.includes('discrepancy')).sort().join(', ')}`);
     console.log(`  Payment preview: ${preview.direction} ${preview.totalPayableAmount}`);
   } finally {
     await app.close();

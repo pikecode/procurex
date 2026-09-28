@@ -537,6 +537,34 @@ export class SupplierOrdersService {
         },
       });
 
+      const recipients = await tx.user.findMany({
+        where: {
+          status: UserStatus.ACTIVE,
+          roles: { some: { role: { code: { in: ['ADMIN', 'PURCHASER'] } } } },
+        },
+        select: { id: true },
+      });
+      if (recipients.length) {
+        await tx.notification.createMany({
+          data: recipients.map((recipient) => ({
+            recipientId: recipient.id,
+            eventKey: `SUPPLIER_ORDER_REJECTED:${updated.id}`,
+            channel: 'IN_APP',
+            title: '供应商拒单待处理',
+            body: `供应商订单 ${updated.supplierOrderNo} 已拒单，请采购跟进重分配。`,
+            payload: {
+              type: 'SUPPLIER_ORDER_REJECTED',
+              route: '/main-flow-demo.html',
+              supplierOrderId: updated.id,
+              supplierOrderNo: updated.supplierOrderNo,
+              purchaseRequestId: updated.requestId,
+              reason,
+            },
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       return updated;
     });
 
