@@ -111,9 +111,10 @@ Generated local file:
 
 ```text
 apps/web/reports-acceptance-run.json
+apps/web/m5-status.json
 ```
 
-This file is intentionally ignored by git.
+These files are intentionally ignored by git.
 
 The W13 ops evidence logs in as `pxrpt_admin`, renders `GET /exports/health`, `GET /notifications`, `GET /audit-logs`, and `GET /reconciliation-issues`, and writes `ops-manifest.json` with export health, notification, audit, and reconciliation issue row counts.
 
@@ -165,7 +166,7 @@ http://127.0.0.1:4173/main-flow.html
 http://127.0.0.1:4173/
 ```
 
-The root report page is now the best first M5 reporting screen: after `npm run acceptance:m5-browserless`, it displays the latest 10-step R01-R05/DEV-505 acceptance result from `apps/web/reports-acceptance-run.json` and can be re-captured with `npm run m5:capture-browser-evidence`.
+The root report page is now the best first M5 reporting screen: after `npm run m5:status` and `npm run acceptance:m5-browserless`, it displays the latest local M5 environment snapshot from `apps/web/m5-status.json` plus the latest 10-step R01-R05/DEV-505 acceptance result from `apps/web/reports-acceptance-run.json`; it can be re-captured with `npm run m5:capture-browser-evidence`.
 
 `ops.html` is the best first M5 operations screen: it shows DEV-505 export task health with CSV export, I08 in-app notifications with single/bulk read actions, DEV-504 filterable audit logs with current-result CSV export, and R05 reconciliation issues with CSV export for the seeded admin account.
 

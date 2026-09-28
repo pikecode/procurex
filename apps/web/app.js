@@ -36,6 +36,24 @@ async function loadAcceptance() {
     $('m5-acceptance').innerHTML = '<article><strong>尚未生成 M5 验收结果</strong><small>运行 npm run acceptance:m5-browserless 后刷新页面</small></article>';
   }
 }
+async function loadM5Status() {
+  try {
+    const response = await fetch(`/m5-status.json?ts=${Date.now()}`);
+    if (!response.ok) throw new Error('missing M5 status output');
+    const data = await response.json();
+    const blocked = (data.checks || []).some((check) => check.status === 'BLOCKED');
+    $('m5-status-label').textContent = blocked ? 'BLOCKED' : 'READY';
+    $('m5-status-label').classList.toggle('tag-fail', blocked);
+    $('m5-status-label').classList.toggle('tag-ok', !blocked);
+    $('m5-status').innerHTML = [
+      `<article><strong>${esc(data.summary || 'M5 状态已生成')}</strong><small>${esc(data.generatedAt || '')}</small></article>`,
+      ...(data.checks || []).map((check) => `<article><strong>${esc(check.label)} · ${esc(check.status)}</strong><small>${esc(check.detail)}</small></article>`),
+    ].join('');
+  } catch {
+    $('m5-status-label').textContent = '未生成';
+    $('m5-status').innerHTML = '<article><strong>尚未生成 M5 状态总览</strong><small>运行 npm run m5:status 后刷新页面</small></article>';
+  }
+}
 async function loadExportJobs() {
   if (!token) return;
   try {
@@ -101,4 +119,4 @@ function render(data) {
   $('summary').innerHTML = cards; $('thead').innerHTML = head; $('tbody').innerHTML = rows; $('empty').classList.toggle('hidden', !!rows);
 }
 $('download').addEventListener('click', async () => { if (!latest) return; const button = $('download'); button.disabled = true; button.querySelector('span').textContent = '生成中…'; try { const job = await call('/exports', { method: 'POST', body: JSON.stringify({ reportType: active, filters: { from: $('from').value || undefined, to: $('to').value || undefined, storeId: $('storeId').value || undefined, supplierId: $('supplierId').value || undefined } }) }); await loadExportJobs(); let status; for (let i = 0; i < 30; i++) { status = await call(`/exports/${job.jobId}`); if (status.status === 'READY' || status.status === 'FAILED') break; await new Promise((resolve) => setTimeout(resolve, 1000)); } if (status.status !== 'READY') throw new Error(status.error || '导出仍在处理中，请稍后重试'); await downloadExportJob(job.jobId); await loadExportJobs(); } catch (error) { $('notice').textContent = error.message; $('notice').classList.remove('hidden'); } finally { button.disabled = false; button.querySelector('span').textContent = '导出 CSV'; } });
-showSession(); loadMe(); updateMeta(); loadAcceptance();
+showSession(); loadMe(); updateMeta(); loadAcceptance(); loadM5Status();

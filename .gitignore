@@ -21,3 +21,4 @@ apps/web/main-flow-run.json
 apps/web/billing-acceptance-run.json
 apps/web/main-flow-demo-seed.json
 apps/web/reports-acceptance-run.json
+apps/web/m5-status.json
