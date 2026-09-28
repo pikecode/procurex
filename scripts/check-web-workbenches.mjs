@@ -296,6 +296,8 @@ assertIncludes(m6Js, 'BLOCKED', 'M6 blocked status rendering');
 assertIncludes(m6ReadinessScript, 'WECHAT_APP_ID', 'M6 WeChat external dependency check');
 assertIncludes(m6ReadinessScript, 'mini-flow-check.json', 'M6 mini-program flow evidence check');
 assertIncludes(m6ReadinessScript, 'check-miniprogram-flow.mjs', 'M6 mini-program flow script evidence');
+assertIncludes(m6ReadinessScript, 'm6-performance-report.json', 'M6 performance evidence check');
+assertIncludes(m6ReadinessScript, 'check-m6-performance.mjs', 'M6 performance script evidence');
 assertIncludes(m6ReadinessScript, 'RPO<=15 minutes', 'M6 recovery target check');
 assertIncludes(m6ReadinessScript, 'm6-readiness.json', 'M6 readiness output writer');
 

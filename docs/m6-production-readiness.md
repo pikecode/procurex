@@ -12,6 +12,7 @@ Use:
 
 ```bash
 npm run m6:readiness
+npm run m6:performance
 ```
 
 The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/m6-readiness.html`.
@@ -37,7 +38,7 @@ npm run m6:readiness:strict
 | Area | Required Evidence | Current Expected Status |
 |---|---|---|
 | DEV-601 full regression | Latest `acceptance:m5-close`, M5 gate, desktop/mobile main-flow and role-workbench evidence | READY when current local evidence is fresh |
-| DEV-602 performance | Reproducible dataset size, environment, p50/p95/error rate, report query timing, export generation timing | PLANNED |
+| DEV-602 performance | Reproducible dataset size, environment, p50/p95/error rate, report query timing, export generation timing from `m6:performance` | LOCAL_READY when `var/m6-performance-report.json` is fresh; still needs production-scale evidence |
 | DEV-602 browser/device | Desktop and 390px Web evidence plus broader production-device review | LOCAL_READY |
 | DEV-602 mini-program product flow | Native mini-program login plus Store, Supplier, and Purchaser product pages checked by `mini:check`; local role API flow checked by `mini:flow-check` and `apps/miniprogram/mini-flow-check.json` | LOCAL_READY when both checks are fresh |
 | DEV-602 WeChat | Real AppID, test account, binding mode, upload behavior, subscription-message behavior, real-device screenshots or recording | BLOCKED until external materials exist |
@@ -62,7 +63,7 @@ npm run m6:readiness:strict
 
 1. Keep `npm run acceptance:m5-close`, `npm run mini:check`, and `npm run mini:flow-check` green while adding M6 checks.
 2. Collect real WeChat and production environment inputs.
-3. Produce `var/m6-performance-report.json` from a reproducible data-scale run.
+3. Keep `npm run m6:performance` fresh locally, then replace or supplement it with production-scale load evidence before launch review.
 4. Produce `var/m6-initialization-signoff.json` after finance checks opening balances.
 5. Produce `var/m6-pilot-run.json` after a real pilot cycle.
 

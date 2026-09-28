@@ -37,6 +37,7 @@
     "m5:capture-all-evidence": "node scripts/capture-m5-all-evidence.mjs",
     "m5:status": "node --env-file-if-exists=.env scripts/report-m5-status.mjs",
     "m5:gate-status": "node scripts/check-m5-gate-status.mjs",
+    "m6:performance": "npm run build && npm run reports:seed-acceptance && node --env-file-if-exists=.env scripts/check-m6-performance.mjs",
     "m6:readiness": "node --env-file-if-exists=.env scripts/report-m6-readiness.mjs",
     "m6:readiness:strict": "node --env-file-if-exists=.env scripts/report-m6-readiness.mjs --strict",
     "acceptance:m5-close": "npm run acceptance:m5-browserless && npm run main-flow:seed-demo && npm run main-flow:check-demo && npm run m5:status && npm run m5:capture-all-evidence && npm run main-flow:capture-demo-evidence && npm run main-flow:capture-interactive-demo && npm run m5:gate-status && npm run m5:status",

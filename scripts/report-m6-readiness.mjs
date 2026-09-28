@@ -66,17 +66,18 @@ let hasBrowser = false;
 for (const candidate of browserReady) {
   if (await executableExists(candidate)) hasBrowser = true;
 }
-const perfReportReady = await fileExists('var/m6-performance-report.json');
+const perfReport = await readJson('var/m6-performance-report.json');
+const perfReportReady = perfReport?.status === 'LOCAL_READY';
 const miniFlow = await readJson('apps/miniprogram/mini-flow-check.json');
 const miniFlowReady = miniFlow?.status === 'PASSED' && (miniFlow.coveredEndpoints || []).length >= 20;
 add(
   'DEV-602-PERF',
   '性能与兼容压测',
-  perfReportReady ? 'READY' : 'PLANNED',
+  perfReportReady ? 'LOCAL_READY' : 'PLANNED',
   perfReportReady
-    ? 'A performance evidence manifest exists for review.'
+    ? 'Local list/report/export performance evidence exists with p50/p95/error-rate and export timing; production-scale load evidence is still required.'
     : 'Need reproducible data scale, p50/p95/error-rate report, and export generation timing before production launch.',
-  ['var/m6-performance-report.json'],
+  ['scripts/check-m6-performance.mjs', 'var/m6-performance-report.json'],
 );
 add(
   'DEV-602-BROWSER',

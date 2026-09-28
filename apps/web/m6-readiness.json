@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-28T09:20:22.571Z",
+  "generatedAt": "2026-09-28T14:13:05.052Z",
   "status": "NOT_READY",
   "summary": "M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, initialization, and pilot evidence remain open.",
   "counts": {
     "ready": 1,
-    "localReady": 3,
+    "localReady": 4,
     "blocked": 3,
-    "planned": 4
+    "planned": 3
   },
   "checks": [
     {
@@ -22,9 +22,10 @@
     {
       "id": "DEV-602-PERF",
       "title": "性能与兼容压测",
-      "status": "PLANNED",
-      "detail": "Need reproducible data scale, p50/p95/error-rate report, and export generation timing before production launch.",
+      "status": "LOCAL_READY",
+      "detail": "Local list/report/export performance evidence exists with p50/p95/error-rate and export timing; production-scale load evidence is still required.",
       "evidence": [
+        "scripts/check-m6-performance.mjs",
         "var/m6-performance-report.json"
       ]
     },
