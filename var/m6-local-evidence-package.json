@@ -1,0 +1,162 @@
+{
+  "generatedAt": "2026-09-28T15:49:04.627Z",
+  "title": "M6 Local Evidence Package",
+  "status": "LOCAL_READY",
+  "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
+  "git": {
+    "branch": "main",
+    "commit": "f796fd2d35cee9421eabeabcd9f3a470c1921a47",
+    "remote": "git@github.com:pikecode/procurex.git",
+    "dirty": true,
+    "dirtyStatus": [
+      "M apps/web/m6-readiness.html",
+      " M apps/web/m6-readiness.js",
+      " M docs/development-log.md",
+      " M docs/m6-production-readiness.md",
+      " M docs/progress.md",
+      " M package.json",
+      " M scripts/check-web-workbenches.mjs",
+      "?? apps/web/m6-local-evidence-package.json",
+      "?? scripts/package-m6-local-evidence.mjs",
+      "?? var/m6-local-evidence-package.json"
+    ]
+  },
+  "commands": [
+    "npm run m6:performance",
+    "npm run m6:rollback-check",
+    "npm run m6:initialization-check",
+    "npm run m6:pilot-check",
+    "npm run m6:external-evidence",
+    "npm run m6:check-external-templates",
+    "npm run m6:readiness",
+    "npm run m6:capture-readiness-evidence"
+  ],
+  "readiness": {
+    "status": "NOT_READY",
+    "counts": {
+      "ready": 1,
+      "localReady": 7,
+      "blocked": 3,
+      "planned": 0
+    }
+  },
+  "externalEvidence": {
+    "status": "BLOCKED",
+    "blocked": [
+      "WECHAT_DEVICE",
+      "PRODUCTION_RUNTIME",
+      "STORAGE_POLICY",
+      "PRODUCTION_RECOVERY",
+      "FINANCE_SIGNOFF",
+      "CUSTOMER_PILOT"
+    ]
+  },
+  "localEvidence": {
+    "performance": "LOCAL_READY",
+    "rollback": "LOCAL_READY",
+    "initialization": "LOCAL_READY",
+    "pilot": "LOCAL_READY",
+    "browserEvidence": {
+      "desktopRows": 11,
+      "desktopExternalRows": 6,
+      "mobileRows": 11,
+      "mobileExternalRows": 6,
+      "desktopOverflow": false,
+      "mobileOverflow": false
+    }
+  },
+  "files": [
+    {
+      "path": "apps/web/m6-readiness.json",
+      "exists": true,
+      "sizeBytes": 4596,
+      "sha256": "09f83d9990c683f372df3f0f524bae6ba7232b45adc94b91d67bd9d0d825c396"
+    },
+    {
+      "path": "apps/web/m6-external-evidence.json",
+      "exists": true,
+      "sizeBytes": 4071,
+      "sha256": "83ead54062d28e05f65d8b478ec169d05343c2eb48420b50d2f18f49aecd6b92"
+    },
+    {
+      "path": "var/m6-external-evidence.json",
+      "exists": true,
+      "sizeBytes": 4071,
+      "sha256": "27ee1c99e88cec766468b8c962e5e7a007de0513004f06591eecd9457e972037"
+    },
+    {
+      "path": "var/m6-performance-report.json",
+      "exists": true,
+      "sizeBytes": 2502,
+      "sha256": "ef810f1d3c8971f25c81655682576cf9f1408dc33b3c8c1af7fb87bbd4c92838"
+    },
+    {
+      "path": "var/m6-rollback-drill.json",
+      "exists": true,
+      "sizeBytes": 4421,
+      "sha256": "6d5028efb0082f04e1473b200e973e5d97758bf23a906d5fb44d0c15fb5d3296"
+    },
+    {
+      "path": "var/m6-initialization-signoff.json",
+      "exists": true,
+      "sizeBytes": 4806,
+      "sha256": "95f3ba32a422fdaad43a0b7f7a171b6b31bd3f6b83addc293f100e60bea2ce28"
+    },
+    {
+      "path": "var/m6-pilot-run.json",
+      "exists": true,
+      "sizeBytes": 4557,
+      "sha256": "66abf81a69e53e2c0944787bf82481eef0b8ed2edf49e889e2c18027529377b1"
+    },
+    {
+      "path": "var/m6-readiness-evidence/manifest.json",
+      "exists": true,
+      "sizeBytes": 1676,
+      "sha256": "5af793c2c5b265402946ba7ad30d9e1c53f0ca60fc49258cfa99e93e8196f528"
+    },
+    {
+      "path": "var/m6-readiness-evidence/m6-readiness-desktop.png",
+      "exists": true,
+      "sizeBytes": 308001,
+      "sha256": "0c55435319fa5a536c358b2d1de56ef6c8cefae29a1ae1abfc2dd4ff6cbbe022"
+    },
+    {
+      "path": "var/m6-readiness-evidence/m6-readiness-mobile.png",
+      "exists": true,
+      "sizeBytes": 830974,
+      "sha256": "a23aed30c7ea479a227d9506272ceadc361ea79a52398991d8ba9a096024f9ba"
+    },
+    {
+      "path": "apps/miniprogram/mini-flow-check.json",
+      "exists": true,
+      "sizeBytes": 2097,
+      "sha256": "03357d581baa087de537c1c844fb55c460da619a738b1acef7a9387f942682d1"
+    },
+    {
+      "path": "apps/web/m5-gate-status.json",
+      "exists": true,
+      "sizeBytes": 2122,
+      "sha256": "52708240ad461741a37aa4f9bc0865bfa2f1660288d7b1b3d1ebaf66f156631e"
+    },
+    {
+      "path": "var/main-flow-demo-evidence/interactive-manifest.json",
+      "exists": true,
+      "sizeBytes": 8880,
+      "sha256": "b6639f0e33ec4e1a1350f8d8bd11d526e28d108c206b8d440f9d61623cb4d42c"
+    },
+    {
+      "path": "docs/m6-production-readiness.md",
+      "exists": true,
+      "sizeBytes": 9345,
+      "sha256": "18dbc2f43ca6cfb808c397afacbdf7b41408220f147ffe82a16af3a063f8b48f"
+    },
+    {
+      "path": "docs/m6-external-evidence-templates.md",
+      "exists": true,
+      "sizeBytes": 1031,
+      "sha256": "54b07a540d31876d8996f9fbd24549c2791035d14198d4ab7ad27cc820d9ec1b"
+    }
+  ],
+  "missingFiles": [],
+  "failedStatusChecks": []
+}

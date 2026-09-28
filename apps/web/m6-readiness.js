@@ -42,6 +42,20 @@ function renderExternal(data) {
   }).join('');
 }
 
+function renderPackage(data) {
+  $('package-status').textContent = data.status || 'UNKNOWN';
+  $('package-status').className = `tag ${data.status === 'LOCAL_READY' ? 'tag-ok' : 'tag-fail'}`;
+  $('package-summary').textContent = data.summary || '';
+  const commandRows = (data.commands || []).slice(0, 8).map((command) => `<br>命令：${esc(command)}`).join('');
+  const files = data.files || [];
+  const existing = files.filter((file) => file.exists).length;
+  $('package-checks').innerHTML = [
+    `<article><strong>Git · ${esc(data.git?.branch || 'unknown')} <span class="tag ${data.git?.dirty ? 'tag-pending' : 'tag-ok'}">${data.git?.dirty ? 'DIRTY' : 'CLEAN'}</span></strong><small>${esc(data.git?.commit || '')}<br>${esc(data.git?.remote || '')}</small></article>`,
+    `<article><strong>Evidence Files <span class="tag ${existing === files.length ? 'tag-ok' : 'tag-fail'}">${existing}/${files.length}</span></strong><small>缺失：${esc((data.missingFiles || []).join(' · ') || '无')}</small></article>`,
+    `<article><strong>Local Checks <span class="tag ${data.status === 'LOCAL_READY' ? 'tag-ok' : 'tag-fail'}">${esc(data.status || 'UNKNOWN')}</span></strong><small>失败：${esc((data.failedStatusChecks || []).join(' · ') || '无')}${commandRows}</small></article>`,
+  ].join('');
+}
+
 async function loadReadiness() {
   try {
     const response = await fetch(`/m6-readiness.json?ts=${Date.now()}`);
@@ -67,5 +81,16 @@ async function loadExternalEvidence() {
   }
 }
 
+async function loadEvidencePackage() {
+  try {
+    const response = await fetch(`/m6-local-evidence-package.json?ts=${Date.now()}`);
+    if (!response.ok) throw new Error('missing local evidence package output');
+    renderPackage(await response.json());
+  } catch {
+    $('package-checks').innerHTML = '<article><strong>尚未生成本地证据包</strong><small>运行 npm run m6:package-local-evidence 后刷新页面。</small></article>';
+  }
+}
+
 loadReadiness();
 loadExternalEvidence();
+loadEvidencePackage();

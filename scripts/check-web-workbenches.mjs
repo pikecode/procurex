@@ -93,6 +93,7 @@ checkSyntax('scripts/check-m6-pilot.mjs');
 checkSyntax('scripts/check-m6-external-evidence.mjs');
 checkSyntax('scripts/write-m6-external-evidence-templates.mjs');
 checkSyntax('scripts/capture-m6-readiness-evidence.mjs');
+checkSyntax('scripts/package-m6-local-evidence.mjs');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
 assertIncludes(billingHtml, '账单调整与差额', 'W10 adjustment page');
@@ -161,6 +162,7 @@ assertIncludes(packageJson.scripts['m6:external-evidence:strict'], '--strict', '
 assertIncludes(packageJson.scripts['m6:write-external-templates'], 'write-m6-external-evidence-templates.mjs', 'M6 external evidence template writer');
 assertIncludes(packageJson.scripts['m6:check-external-templates'], '--check', 'M6 external evidence template check');
 assertIncludes(packageJson.scripts['m6:capture-readiness-evidence'], 'capture-m6-readiness-evidence.mjs', 'M6 readiness browser evidence capture');
+assertIncludes(packageJson.scripts['m6:package-local-evidence'], 'package-m6-local-evidence.mjs', 'M6 local evidence package');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:gate-status', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'main-flow:check-demo', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:capture-all-evidence', 'M5 close acceptance script');
@@ -303,8 +305,10 @@ assertIncludes(m6Html, '/m6-readiness.js', 'M6 readiness script');
 assertIncludes(m6Html, 'id="readiness-status"', 'M6 readiness status label');
 assertIncludes(m6Html, 'id="checks"', 'M6 readiness check list');
 assertIncludes(m6Html, 'id="external-checks"', 'M6 external evidence check list');
+assertIncludes(m6Html, 'id="package-checks"', 'M6 local evidence package list');
 assertIncludes(m6Js, 'm6-readiness.json', 'M6 readiness output loader');
 assertIncludes(m6Js, 'm6-external-evidence.json', 'M6 external evidence output loader');
+assertIncludes(m6Js, 'm6-local-evidence-package.json', 'M6 local evidence package output loader');
 assertIncludes(m6Js, 'LOCAL_READY', 'M6 local-ready status rendering');
 assertIncludes(m6Js, 'BLOCKED', 'M6 blocked status rendering');
 assertIncludes(m6Js, 'docs/m6-evidence-templates/', 'M6 external evidence template fallback');

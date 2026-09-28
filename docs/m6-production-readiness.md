@@ -19,11 +19,14 @@ npm run m6:pilot-check
 npm run m6:external-evidence
 npm run m6:check-external-templates
 npm run m6:capture-readiness-evidence
+npm run m6:package-local-evidence
 ```
 
 The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/m6-readiness.html`.
 
 `npm run m6:capture-readiness-evidence` refreshes the M6 JSON outputs, opens `apps/web/m6-readiness.html` in Chrome, and writes desktop/mobile screenshots plus `var/m6-readiness-evidence/manifest.json`.
+
+`npm run m6:package-local-evidence` writes `var/m6-local-evidence-package.json` and `apps/web/m6-local-evidence-package.json` with the current commit, remote, evidence file digests, local M6 statuses, and the commands needed to refresh the package.
 
 Use the strict gate only when real production materials exist:
 

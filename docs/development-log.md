@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- M6 本地证据包：新增 `npm run m6:package-local-evidence` 和 `scripts/package-m6-local-evidence.mjs`，读取 readiness、external evidence、性能、回滚、初始化、试运行、小程序、M5 gate、主流程和 M6 页面截图证据，计算 15 个证据文件 SHA-256，记录当前 branch/commit/remote/dirty 状态，并写出 `var/m6-local-evidence-package.json` 与 `apps/web/m6-local-evidence-package.json`。M6 页面新增“本地证据包”区，展示证据文件齐套、Git 状态和刷新命令。
 - M6 readiness 页面浏览器证据：新增 `npm run m6:capture-readiness-evidence` 和 `scripts/capture-m6-readiness-evidence.mjs`，刷新 `m6:readiness` 与 `m6:external-evidence` 后用 Chrome 打开 `m6-readiness.html`，采集桌面与 390px 移动截图到 `var/m6-readiness-evidence/`，manifest 断言页面显示 `NOT_READY`、外部证据 `BLOCKED`、11 条 readiness gate、6 条外部证据、DEV-604/DEV-605、微信与生产环境阻塞、模板路径，且无页面级横向溢出。`m6:readiness` 的 DEV-602-BROWSER 证据列表和 `web:check` 同步纳入该 manifest。
 - M6 外部证据可视化：`m6:external-evidence` 现在同时写出 `apps/web/m6-external-evidence.json`，`apps/web/m6-readiness.html` 新增“外部证据”区，展示微信真机、生产环境、对象存储策略、生产恢复、财务签字、客户试运行等 BLOCKED/READY 项及模板路径；`web:check` 增加页面区块、JSON loader 和模板 fallback 保护。
 - M6 外部证据模板：新增 `npm run m6:write-external-templates` / `m6:check-external-templates` 和 `scripts/write-m6-external-evidence-templates.mjs`，生成 `docs/m6-evidence-templates/` 下的微信真机、生产对象存储策略、生产恢复演练、生产初始化签字、客户试运行模板，并生成 `docs/m6-external-evidence-templates.md` 摘要。`m6:external-evidence` 的 expectedArtifacts 现在同时给出目标证据路径和模板路径，`web:check` 纳入模板脚本与 npm 命令保护。
