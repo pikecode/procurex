@@ -188,6 +188,19 @@ assert.ok(roleWorkbenchAction.hasReallocatedRejection, 'Role workbench purchaser
 assert.ok(roleWorkbenchAction.hasDiscrepancyBranches, 'Role workbench discrepancy branch action must show replenishment and return evidence');
 assert.equal(roleWorkbenchAction.horizontalOverflow, false, 'Role workbench store action page must not create page-level horizontal overflow');
 assert.ok(await fileReady(mainFlowInteractiveManifest.roleWorkbenchActionScreenshot), 'Role workbench action screenshot file must exist and be non-empty');
+const mobileRoleWorkbenchAction = mainFlowInteractiveManifest.mobileRoleWorkbenchAction || {};
+assert.equal(mobileRoleWorkbenchAction.status, 'BRANCHES_READY', 'Mobile role workbench discrepancy branches action must cover replenishment and return');
+assert.ok(mobileRoleWorkbenchAction.hasRequestNo, 'Mobile role workbench store action must show the created purchase request number');
+assert.ok(mobileRoleWorkbenchAction.hasPaidStatus, 'Mobile role workbench store action must show the paid funding status');
+assert.ok(mobileRoleWorkbenchAction.hasSupplierOrderId, 'Mobile role workbench purchaser action must show a generated supplier order id');
+assert.ok(mobileRoleWorkbenchAction.hasShipmentNo, 'Mobile role workbench supplier action must show a generated shipment number');
+assert.ok(mobileRoleWorkbenchAction.hasReceiptNo, 'Mobile role workbench store receipt action must show a generated receipt number');
+assert.ok(mobileRoleWorkbenchAction.hasResolvedDiscrepancy, 'Mobile role workbench supplier discrepancy action must resolve a short receipt discrepancy');
+assert.ok(mobileRoleWorkbenchAction.hasReallocatedRejection, 'Mobile role workbench purchaser rejection action must handle the rejected supplier order');
+assert.ok(mobileRoleWorkbenchAction.hasDiscrepancyBranches, 'Mobile role workbench discrepancy branch action must show replenishment and return evidence');
+assert.equal(Number(mobileRoleWorkbenchAction.viewportWidth), 390, 'Mobile role workbench action evidence must run at the expected narrow viewport');
+assert.equal(mobileRoleWorkbenchAction.horizontalOverflow, false, 'Mobile role workbench action page must not create page-level horizontal overflow');
+assert.ok(await fileReady(mainFlowInteractiveManifest.mobileRoleWorkbenchActionScreenshot), 'Mobile role workbench action screenshot file must exist and be non-empty');
 
 const scripts = packageJson.scripts || {};
 assert.ok(scripts['acceptance:m5-browserless']?.includes('notifications:check-acceptance'), 'M5 browserless command must include notification acceptance');
@@ -210,7 +223,7 @@ record('R05/W13', 'Reconciliation issues and operations browser evidence', 'READ
 record('DEV-503', 'In-app notification acceptance and business triggers', 'READY', `${demoSteps.filter((step) => step.title.includes('notification')).length} trigger evidence steps; W13 notificationRows=${w13State.notificationRows}`);
 record('DEV-504', 'Audit log coverage and W13 visibility', 'READY', `${actions.size} audited action types; W13 auditRows=${w13State.auditRows}`);
 record('MainFlowUI', 'Browser-visible main-flow notification and audit evidence', 'READY', `${mainFlowDemoState.roleRows} role rows; ${mainFlowDemoState.roleTabRows} role tabs; ${roleWorkbenchState.laneRows} role workbench lanes; ${mainFlowDemoState.evidenceRows} evidence rows; ${mainFlowDemoState.stepRows} operation rows`);
-record('MainFlowRun', 'Browser-executed order-to-payment demo', 'READY', `desktop ${mainFlowInteractiveState.completedRows}/${mainFlowInteractiveState.stepRows}, mobile ${mobileInteractiveState.completedRows}/${mobileInteractiveState.stepRows}; role workbench ${roleWorkbenchAction.status}; COMPANY_TO_SUPPLIER ¥90.00`);
+record('MainFlowRun', 'Browser-executed order-to-payment demo', 'READY', `desktop ${mainFlowInteractiveState.completedRows}/${mainFlowInteractiveState.stepRows}, mobile ${mobileInteractiveState.completedRows}/${mobileInteractiveState.stepRows}; role workbench desktop ${roleWorkbenchAction.status}, mobile ${mobileRoleWorkbenchAction.status}; COMPANY_TO_SUPPLIER ¥90.00`);
 
 const chromeReady = await executableReady(w11Manifest.browser) || await executableReady(w13Manifest.browser) || await executableReady(mainFlowDemoManifest.browser) || await executableReady(mainFlowInteractiveManifest.browser);
 record('Browser', 'Chrome evidence runtime', chromeReady ? 'READY' : 'MISSING', w11Manifest.browser || w13Manifest.browser || mainFlowDemoManifest.browser || mainFlowInteractiveManifest.browser || 'browser path missing');

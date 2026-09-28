@@ -241,8 +241,8 @@ async function captureRun(cdp, viewport, fileName) {
   return { file, state, viewport };
 }
 
-async function runRoleWorkbenchStoreOrder(cdp) {
-  await setViewport(cdp, { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false });
+async function runRoleWorkbenchStoreOrder(cdp, viewport, fileName) {
+  await setViewport(cdp, viewport);
   await navigate(cdp, `${webBaseUrl}/role-workbenches.html`);
   const state = await evaluate(cdp, `
     (async () => {
@@ -305,10 +305,10 @@ async function runRoleWorkbenchStoreOrder(cdp) {
       };
     })()
   `);
-  const file = resolve(outputDir, 'role-workbenches-interactive.png');
+  const file = resolve(outputDir, fileName);
   await rm(file, { force: true });
   await captureScreenshot(cdp, file);
-  return { file, state };
+  return { file, state, viewport };
 }
 
 async function main() {
@@ -325,21 +325,32 @@ async function main() {
         await cdp.send('Runtime.enable');
         const desktop = await captureRun(cdp, { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false }, 'main-flow-demo-interactive.png');
         const mobile = await captureRun(cdp, { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }, 'main-flow-demo-interactive-mobile.png');
-        const roleWorkbenchAction = await runRoleWorkbenchStoreOrder(cdp);
+        const roleWorkbenchAction = await runRoleWorkbenchStoreOrder(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'role-workbenches-interactive.png',
+        );
+        const mobileRoleWorkbenchAction = await runRoleWorkbenchStoreOrder(
+          cdp,
+          { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
+          'role-workbenches-interactive-mobile.png',
+        );
         await writeFile(resolve(outputDir, 'interactive-manifest.json'), `${JSON.stringify({
           generatedAt: new Date().toISOString(),
           browser,
           webBaseUrl,
           apiReadyUrl,
           evidenceType: 'main-flow-interactive-browser-screenshot',
-          note: 'These screenshots prove the main-flow operator demo can execute the order-to-payment path through desktop and mobile browser viewports against real APIs.',
+          note: 'These screenshots prove the main-flow operator demo and role workbench can execute the order-to-payment and role exception paths through desktop and mobile browser viewports against real APIs.',
           screenshot: desktop.file,
           mobileScreenshot: mobile.file,
           roleWorkbenchActionScreenshot: roleWorkbenchAction.file,
+          mobileRoleWorkbenchActionScreenshot: mobileRoleWorkbenchAction.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
-          viewports: { desktop, mobile },
+          mobileRoleWorkbenchAction: mobileRoleWorkbenchAction.state,
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -348,9 +359,11 @@ async function main() {
         console.log(`  Desktop screenshot: ${desktop.file}`);
         console.log(`  Mobile screenshot: ${mobile.file}`);
         console.log(`  Role workbench screenshot: ${roleWorkbenchAction.file}`);
+        console.log(`  Mobile role workbench screenshot: ${mobileRoleWorkbenchAction.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
         console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText}; ${roleWorkbenchAction.state.discrepancyResultText}; ${roleWorkbenchAction.state.rejectionResultText}; ${roleWorkbenchAction.state.discrepancyBranchesResultText})`);
+        console.log(`  Mobile role workbench flow: ${mobileRoleWorkbenchAction.state.status} (${mobileRoleWorkbenchAction.state.storeResultText}; ${mobileRoleWorkbenchAction.state.purchaserResultText}; ${mobileRoleWorkbenchAction.state.shipmentResultText}; ${mobileRoleWorkbenchAction.state.receiptResultText}; ${mobileRoleWorkbenchAction.state.discrepancyResultText}; ${mobileRoleWorkbenchAction.state.rejectionResultText}; ${mobileRoleWorkbenchAction.state.discrepancyBranchesResultText})`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');
