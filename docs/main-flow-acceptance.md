@@ -102,7 +102,7 @@ npm run main-flow:seed-demo
 npm run main-flow:check-demo
 ```
 
-`main-flow:check-demo` also writes `apps/web/main-flow-demo-run.json`. The operator demo renders that file as "角色复核" and "主流程证据" sections covering Operator, Store, Supplier, and Purchaser evidence, shipment notification, receipt-discrepancy notification, discrepancy-resolution notification, supplier-rejection notification, audited order/fulfillment actions, and the supplier payment preview.
+`main-flow:check-demo` also writes `apps/web/main-flow-demo-run.json`. The operator demo renders that file as "角色复核", "分角色视图", and "主流程证据" sections covering Operator, Store, Supplier, and Purchaser evidence, role-specific next-workbench boundaries, shipment notification, receipt-discrepancy notification, discrepancy-resolution notification, supplier-rejection notification, audited order/fulfillment actions, and the supplier payment preview.
 
 Chrome-rendered evidence can be refreshed with:
 
@@ -110,7 +110,7 @@ Chrome-rendered evidence can be refreshed with:
 npm run main-flow:capture-demo-evidence
 ```
 
-The latest local capture wrote `var/main-flow-demo-evidence/main-flow-demo.png` and a manifest with `PASSED`, 4 role rows, 7 evidence rows, 6 visible operation steps, and true notification/audit evidence flags.
+The latest local capture wrote `var/main-flow-demo-evidence/main-flow-demo.png` and a manifest with `PASSED`, 4 role rows, 4 role tabs, 7 evidence rows, 6 visible operation steps, next-workbench boundary text, and true notification/audit evidence flags.
 
 To prove the browser page itself can execute the full path against real APIs, run:
 
@@ -138,7 +138,7 @@ The project has not abandoned the original demand, but the execution has become 
 
 The next visible-product priority is:
 
-The scripted runner, browser-readable result page, narrow operator demo, role evidence checker, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to expand this into role-specific store/purchaser/supplier screens after M5 close evidence stays green.
+The scripted runner, browser-readable result page, narrow operator demo, role evidence checker, role-view tabs, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to expand this into role-specific store/purchaser/supplier screens after M5 close evidence stays green.
 
 ## Recommended Next Step
 

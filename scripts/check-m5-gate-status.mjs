@@ -112,6 +112,10 @@ assert.equal(mainFlowDemoState.evidenceStatus, 'PASSED', 'Main-flow demo browser
 assert.ok(Number(mainFlowDemoState.evidenceRows) >= 6, 'Main-flow demo browser evidence must show at least 6 evidence rows');
 assert.equal(mainFlowDemoState.roleStatus, 'PASSED', 'Main-flow demo browser evidence must show PASSED role status');
 assert.ok(Number(mainFlowDemoState.roleRows) >= 4, 'Main-flow demo browser evidence must show at least 4 role rows');
+assert.equal(mainFlowDemoState.roleViewStatus, 'PASSED', 'Main-flow demo browser evidence must show PASSED role view status');
+assert.ok(Number(mainFlowDemoState.roleTabRows) >= 4, 'Main-flow demo browser evidence must show at least 4 role view tabs');
+assert.ok(Number(mainFlowDemoState.roleDetailRows) >= 4, 'Main-flow demo browser evidence must show role detail rows');
+assert.ok(mainFlowDemoState.hasRoleNextBoundary, 'Main-flow demo browser evidence must show next role workbench boundary');
 assert.ok(mainFlowDemoState.hasOperatorRole, 'Main-flow demo browser evidence must show operator role evidence');
 assert.ok(mainFlowDemoState.hasStoreRole, 'Main-flow demo browser evidence must show store role evidence');
 assert.ok(mainFlowDemoState.hasSupplierRole, 'Main-flow demo browser evidence must show supplier role evidence');
@@ -173,7 +177,7 @@ record('DEV-505', 'Export recovery, health visibility, and failed retry', 'READY
 record('R05/W13', 'Reconciliation issues and operations browser evidence', 'READY', `${reconciliationStep.data.issueCount} seeded issues; W13 rows=${w13State.issueRows}`);
 record('DEV-503', 'In-app notification acceptance and business triggers', 'READY', `${demoSteps.filter((step) => step.title.includes('notification')).length} trigger evidence steps; W13 notificationRows=${w13State.notificationRows}`);
 record('DEV-504', 'Audit log coverage and W13 visibility', 'READY', `${actions.size} audited action types; W13 auditRows=${w13State.auditRows}`);
-record('MainFlowUI', 'Browser-visible main-flow notification and audit evidence', 'READY', `${mainFlowDemoState.roleRows} role rows; ${mainFlowDemoState.evidenceRows} evidence rows; ${mainFlowDemoState.stepRows} operation rows`);
+record('MainFlowUI', 'Browser-visible main-flow notification and audit evidence', 'READY', `${mainFlowDemoState.roleRows} role rows; ${mainFlowDemoState.roleTabRows} role tabs; ${mainFlowDemoState.evidenceRows} evidence rows; ${mainFlowDemoState.stepRows} operation rows`);
 record('MainFlowRun', 'Browser-executed order-to-payment demo', 'READY', `desktop ${mainFlowInteractiveState.completedRows}/${mainFlowInteractiveState.stepRows}, mobile ${mobileInteractiveState.completedRows}/${mobileInteractiveState.stepRows}; COMPANY_TO_SUPPLIER ¥90.00`);
 
 const chromeReady = await executableReady(w11Manifest.browser) || await executableReady(w13Manifest.browser) || await executableReady(mainFlowDemoManifest.browser) || await executableReady(mainFlowInteractiveManifest.browser);

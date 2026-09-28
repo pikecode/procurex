@@ -6,6 +6,8 @@ let token = null;
 let seed = null;
 let state = {};
 let running = false;
+let roleEvidence = [];
+let activeRole = 'Operator';
 
 const steps = [
   { key: 'login', title: '登录演示账号', run: login },
@@ -47,14 +49,19 @@ async function loadSeed() {
     $('identity').textContent = seed.username;
     render();
     renderSeedRoles();
+    renderRoleView();
   } catch (error) {
     seed = null;
     state = {};
+    roleEvidence = [];
     $('seed-status').textContent = '未生成';
     $('identity').textContent = '未登录';
     $('summary').innerHTML = metric('运行命令', 'main-flow:seed-demo', '先执行 npm run build');
     $('role-evidence-label').textContent = '未生成';
     $('role-evidence').innerHTML = '';
+    $('role-view-label').textContent = '未生成';
+    $('role-tabs').innerHTML = '';
+    $('role-detail').innerHTML = '';
     $('steps').innerHTML = '';
     $('empty').classList.remove('hidden');
     notice(error.message);
@@ -67,7 +74,7 @@ async function loadDemoEvidence() {
     if (!response.ok) throw new Error('missing demo run output');
     const result = await response.json();
     const steps = result.steps || [];
-    const roleEvidence = result.roleEvidence || [];
+    roleEvidence = result.roleEvidence || [];
     $('demo-evidence-label').textContent = result.status || 'UNKNOWN';
     $('demo-evidence-label').classList.toggle('tag-ok', result.status === 'PASSED');
     $('demo-evidence-label').classList.toggle('tag-fail', result.status && result.status !== 'PASSED');
@@ -76,6 +83,7 @@ async function loadDemoEvidence() {
     $('role-evidence-label').classList.toggle('tag-fail', result.status && result.status !== 'PASSED');
     if (roleEvidence.length) {
       $('role-evidence').innerHTML = roleEvidence.map((role) => roleCard(role)).join('');
+      renderRoleView(result.status);
     }
     $('demo-evidence').innerHTML = [
       `<article><strong>${esc(result.summary || '主流程证据已生成')}</strong><small>${esc(result.generatedAt || '')}</small></article>`,
@@ -84,7 +92,9 @@ async function loadDemoEvidence() {
   } catch {
     $('demo-evidence-label').textContent = '未生成';
     $('demo-evidence').innerHTML = '<article><strong>尚未生成主流程证据</strong><small>运行 npm run main-flow:check-demo 后刷新页面</small></article>';
+    roleEvidence = [];
     renderSeedRoles();
+    renderRoleView();
   }
 }
 
@@ -99,6 +109,53 @@ function renderSeedRoles() {
     surface: role.surface,
     evidence: '等待 main-flow:check-demo 生成角色证据',
   })).join('');
+}
+
+function currentRoles() {
+  if (roleEvidence.length) return roleEvidence;
+  return (seed?.roleAccounts || []).map((role) => ({
+    role: role.role,
+    account: role.username,
+    status: 'PENDING',
+    surface: role.surface,
+    evidence: `scope: ${role.scope}`,
+  }));
+}
+
+function rolePlan(role) {
+  const plans = {
+    Operator: ['统一演示账号继续负责完整链路冒烟', '后续拆成采购、门店、供应商独立登录入口'],
+    Store: ['复核待收货通知和差异处理结果通知', '后续扩成门店下单、收货和移动端处理页'],
+    Supplier: ['复核收货差异通知和差异处理动作', '后续扩成供应商发货、差异处理和拒单页'],
+    Purchaser: ['复核采购确认、拒单通知和审计追踪', '后续扩成采购确认、改派和异常队列页'],
+  };
+  return plans[role] || ['复核当前角色证据', '后续扩成独立工作台'];
+}
+
+function renderRoleView(status) {
+  const roles = currentRoles();
+  if (!roles.length) {
+    $('role-view-label').textContent = '未生成';
+    $('role-tabs').innerHTML = '';
+    $('role-detail').innerHTML = '';
+    return;
+  }
+  if (!roles.some((role) => role.role === activeRole)) activeRole = roles[0].role;
+  $('role-view-label').textContent = roleEvidence.length ? status || 'PASSED' : '种子账号';
+  $('role-view-label').classList.toggle('tag-ok', roleEvidence.length > 0);
+  $('role-tabs').innerHTML = roles.map((role) => `<button class="tab ${role.role === activeRole ? 'active' : ''}" data-role="${esc(role.role)}">${esc(role.role)}<span>${esc(role.status)}</span></button>`).join('');
+  const selected = roles.find((role) => role.role === activeRole) || roles[0];
+  const plan = rolePlan(selected.role);
+  $('role-detail').innerHTML = [
+    `<article><strong>${esc(selected.role)} · ${esc(selected.account)}</strong><small>${esc(selected.surface)}</small></article>`,
+    `<article><strong>当前证据</strong><small>${esc(selected.status)} · ${esc(selected.evidence)}</small></article>`,
+    `<article><strong>下一步工作台边界</strong><small>${esc(plan.join(' · '))}</small></article>`,
+    `<article><strong>验收状态</strong><small>${roleEvidence.length ? '已进入 MainFlowUI gate' : '等待 main-flow:check-demo 生成角色证据'}</small></article>`,
+  ].join('');
+  $('role-tabs').querySelectorAll('[data-role]').forEach((button) => button.addEventListener('click', () => {
+    activeRole = button.dataset.role;
+    renderRoleView(status);
+  }));
 }
 
 function roleCard(role) {
@@ -253,5 +310,10 @@ async function previewPayment() {
 
 $('reset').addEventListener('click', loadSeed);
 $('run-all').addEventListener('click', runAll);
-loadSeed();
-loadDemoEvidence();
+
+async function init() {
+  await loadSeed();
+  await loadDemoEvidence();
+}
+
+init();

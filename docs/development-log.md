@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- 主流程分角色视图：`main-flow-demo.html` 在“角色复核”之后新增“分角色视图”，可在 Operator/Store/Supplier/Purchaser 之间切换，查看当前账号、角色表面、证据状态和“下一步工作台边界”；`main-flow:capture-demo-evidence` 与 `m5:gate-status` 现在校验 4 个角色 tab、详情行和边界提示，`MainFlowUI` gate 输出 role rows、role tabs、evidence rows 和 operation rows。验证：`web:check`、`main-flow:seed-demo`、`main-flow:check-demo`、`main-flow:capture-demo-evidence`、`m5:gate-status`、`acceptance:m5-close` 通过。
 - 主流程角色复核可视化：`main-flow:seed-demo` 写出 Operator/Store/Supplier/Purchaser 种子账号矩阵，`main-flow:check-demo` 写出 4 条角色证据，`main-flow-demo.html` 新增“角色复核”卡片展示各角色账号、可见表面和证据结果；`main-flow:capture-demo-evidence` 与 `m5:gate-status` 现在校验 4 条角色行，`MainFlowUI` gate 输出 role/evidence/operation rows。验证：`web:check`、`main-flow:seed-demo`、`main-flow:check-demo`、`main-flow:capture-demo-evidence`、`acceptance:m5-close` 通过。
 - 主流程移动端证据：通用 Web 工作台补充 `max-width:720px` 窄屏布局，解除移动视口被 `min-width:900px` 卡住的问题；`main-flow:capture-interactive-demo` 现在同一次运行抓取桌面和 390px 移动视口截图，移动视口同样点击“一键执行”并完成 6/6 步到 `COMPANY_TO_SUPPLIER / ¥90.00`，且 manifest 记录无页面级横向溢出。`m5:gate-status` 将桌面和移动结果都纳入 `MainFlowRun` gate。验证：`web:check`、`main-flow:capture-interactive-demo`、`m5:gate-status`、`acceptance:m5-close` 通过。
 - M5 收口 gate 接入交互式主流程：`acceptance:m5-close` 现在会运行 `main-flow:capture-interactive-demo`，`m5:gate-status` 校验 `interactive-manifest.json` 中 6/6 浏览器操作行、按钮完成态、`COMPANY_TO_SUPPLIER / ¥90.00` 付款预览和截图文件，并新增 `MainFlowRun` READY gate。验证：`web:check`、`acceptance:m5-close` 通过。

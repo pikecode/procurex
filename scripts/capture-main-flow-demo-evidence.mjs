@@ -200,12 +200,19 @@ async function prepareDemoPage(cdp) {
       await waitFor(() => document.querySelectorAll('#demo-evidence article').length >= 6, 'main-flow demo evidence rows');
       await waitFor(() => document.querySelector('#role-evidence-label')?.textContent.trim() === 'PASSED', 'main-flow role evidence');
       await waitFor(() => document.querySelectorAll('#role-evidence article').length >= 4, 'main-flow role evidence rows');
+      await waitFor(() => document.querySelector('#role-view-label')?.textContent.trim() === 'PASSED', 'main-flow role view');
+      await waitFor(() => document.querySelectorAll('#role-tabs .tab').length >= 4, 'main-flow role view tabs');
+      await waitFor(() => document.querySelectorAll('#role-detail article').length >= 4, 'main-flow role view detail');
       return {
         seedStatus: document.querySelector('#seed-status')?.textContent.trim() || '',
         evidenceStatus: document.querySelector('#demo-evidence-label')?.textContent.trim() || '',
         evidenceRows: document.querySelectorAll('#demo-evidence article').length,
         roleStatus: document.querySelector('#role-evidence-label')?.textContent.trim() || '',
         roleRows: document.querySelectorAll('#role-evidence article').length,
+        roleViewStatus: document.querySelector('#role-view-label')?.textContent.trim() || '',
+        roleTabRows: document.querySelectorAll('#role-tabs .tab').length,
+        roleDetailRows: document.querySelectorAll('#role-detail article').length,
+        hasRoleNextBoundary: document.querySelector('#role-detail')?.textContent.includes('下一步工作台边界') || false,
         hasOperatorRole: document.querySelector('#role-evidence')?.textContent.includes('Operator') || false,
         hasStoreRole: document.querySelector('#role-evidence')?.textContent.includes('Store') || false,
         hasSupplierRole: document.querySelector('#role-evidence')?.textContent.includes('Supplier') || false,
@@ -257,5 +264,6 @@ console.log(`  Web server started by script: ${captured.startedServer ? 'yes' : 
 console.log(`  Screenshot: ${captured.file}`);
 console.log(`  Evidence status: ${captured.state.evidenceStatus} (${captured.state.evidenceRows} rows)`);
 console.log(`  Role status: ${captured.state.roleStatus} (${captured.state.roleRows} rows)`);
+console.log(`  Role view: ${captured.state.roleViewStatus} (${captured.state.roleTabRows} tabs)`);
 console.log(`  Step rows: ${captured.state.stepRows}`);
 console.log(`  Manifest: ${resolve(outputDir, 'manifest.json')}`);
