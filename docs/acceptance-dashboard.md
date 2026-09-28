@@ -30,7 +30,7 @@ There was one recorded deviation: R01-R04 and W11 reporting/export work started 
 
 Latest M5 local evidence on 2026-09-28: `npm run acceptance:m5-browserless` passed 10/10 steps, `npm run m5:status` reports Docker/PostgreSQL/Chrome/W11/W13 evidence READY, `m5:capture-browser-evidence` refreshed W11 with `PASSED`, M5 status `READY`, and M5 gate `READY`, and `m5:capture-ops-evidence` refreshed W13 with 5 reconciliation issues, 0 export-health exception rows, 1 notification row, and 13 audit rows. The follow-up regression baseline passed build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.
 
-Latest M5 close-readiness gate: `npm run acceptance:m5-close` passed and `m5:gate-status` marks DEV-501/502, R04/W11, DEV-505, R05/W13, DEV-503, DEV-504, and Chrome evidence READY. This does not claim production launch readiness; broader browser/mobile acceptance, WeChat adaptation, and M6 production operations policy remain open.
+Latest M5 close-readiness gate: `npm run acceptance:m5-close` passed and `m5:gate-status` marks DEV-501/502, R04/W11, DEV-505, R05/W13, DEV-503, DEV-504, MainFlowUI, and Chrome evidence READY. This does not claim production launch readiness; broader browser/mobile acceptance, WeChat adaptation, and M6 production operations policy remain open.
 
 ## Visible Workbenches
 

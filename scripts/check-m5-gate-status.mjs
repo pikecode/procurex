@@ -42,6 +42,7 @@ const reportsRun = await readJson('apps/web/reports-acceptance-run.json');
 const w11Manifest = await readJson('var/m5-browser-evidence/manifest.json');
 const w13Manifest = await readJson('var/m5-browser-evidence/ops-manifest.json');
 const mainFlowDemoRun = await readJson('apps/web/main-flow-demo-run.json');
+const mainFlowDemoManifest = await readJson('var/main-flow-demo-evidence/manifest.json');
 const packageJson = await readJson('package.json');
 
 assert.equal(reportsRun.status, 'PASSED', 'M5 reports acceptance output must be PASSED');
@@ -105,8 +106,19 @@ for (const action of [
   assert.ok(actions.has(action), `Main flow demo audit evidence is missing ${action}`);
 }
 
+const mainFlowDemoState = mainFlowDemoManifest.state || {};
+assert.equal(mainFlowDemoState.evidenceStatus, 'PASSED', 'Main-flow demo browser evidence must show PASSED status');
+assert.ok(Number(mainFlowDemoState.evidenceRows) >= 6, 'Main-flow demo browser evidence must show at least 6 evidence rows');
+assert.ok(Number(mainFlowDemoState.stepRows) >= 6, 'Main-flow demo browser evidence must show at least 6 operation rows');
+assert.ok(mainFlowDemoState.hasShipmentNotification, 'Main-flow demo browser evidence must show shipment notification');
+assert.ok(mainFlowDemoState.hasSupplierNotification, 'Main-flow demo browser evidence must show supplier discrepancy notification');
+assert.ok(mainFlowDemoState.hasRejectionNotification, 'Main-flow demo browser evidence must show supplier rejection notification');
+assert.ok(mainFlowDemoState.hasAuditEvidence, 'Main-flow demo browser evidence must show audit evidence');
+assert.ok(await fileReady(mainFlowDemoManifest.screenshot), 'Main-flow demo screenshot file must exist and be non-empty');
+
 const scripts = packageJson.scripts || {};
 assert.ok(scripts['acceptance:m5-browserless']?.includes('notifications:check-acceptance'), 'M5 browserless command must include notification acceptance');
+assert.ok(scripts['acceptance:m5-close']?.includes('main-flow:capture-demo-evidence'), 'M5 close command must refresh main-flow demo browser evidence');
 assert.ok(scripts['acceptance:m5-close']?.includes('m5:gate-status'), 'M5 close command must include m5:gate-status');
 
 console.log('M5 gate status from local evidence');
@@ -114,6 +126,7 @@ console.log(`  Reports generated: ${reportsRun.generatedAt}`);
 console.log(`  W11 evidence: ${w11Manifest.generatedAt}`);
 console.log(`  W13 evidence: ${w13Manifest.generatedAt}`);
 console.log(`  Main flow demo: ${mainFlowDemoRun.generatedAt}`);
+console.log(`  Main flow browser evidence: ${mainFlowDemoManifest.generatedAt}`);
 
 record('DEV-501/502', 'R01-R03 reports and permission boundaries', 'READY', `${reportSteps.length} report/scope evidence steps passed`);
 record('R04/W11', 'CSV export, task listing, and W11 browser evidence', 'READY', `job ${exportStep.data.jobId}; reportRows=${w11State.reportRows}; exportRows=${w11State.exportRows}`);
@@ -121,9 +134,10 @@ record('DEV-505', 'Export recovery, health visibility, and failed retry', 'READY
 record('R05/W13', 'Reconciliation issues and operations browser evidence', 'READY', `${reconciliationStep.data.issueCount} seeded issues; W13 rows=${w13State.issueRows}`);
 record('DEV-503', 'In-app notification acceptance and business triggers', 'READY', `${demoSteps.filter((step) => step.title.includes('notification')).length} trigger evidence steps; W13 notificationRows=${w13State.notificationRows}`);
 record('DEV-504', 'Audit log coverage and W13 visibility', 'READY', `${actions.size} audited action types; W13 auditRows=${w13State.auditRows}`);
+record('MainFlowUI', 'Browser-visible main-flow notification and audit evidence', 'READY', `${mainFlowDemoState.evidenceRows} evidence rows; ${mainFlowDemoState.stepRows} operation rows`);
 
-const chromeReady = await executableReady(w11Manifest.browser) || await executableReady(w13Manifest.browser);
-record('Browser', 'Chrome evidence runtime', chromeReady ? 'READY' : 'MISSING', w11Manifest.browser || w13Manifest.browser || 'browser path missing');
+const chromeReady = await executableReady(w11Manifest.browser) || await executableReady(w13Manifest.browser) || await executableReady(mainFlowDemoManifest.browser);
+record('Browser', 'Chrome evidence runtime', chromeReady ? 'READY' : 'MISSING', w11Manifest.browser || w13Manifest.browser || mainFlowDemoManifest.browser || 'browser path missing');
 
 const summary = 'M5 local close evidence is ready for review; remaining product gaps are broader browser/mobile acceptance, WeChat adaptation, and production operations policy in M6.';
 console.log('');
