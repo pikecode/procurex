@@ -16,6 +16,7 @@ npm run m6:performance
 npm run m6:rollback-check
 npm run m6:initialization-check
 npm run m6:pilot-check
+npm run m6:external-evidence
 ```
 
 The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/m6-readiness.html`.
@@ -24,6 +25,7 @@ Use the strict gate only when real production materials exist:
 
 ```bash
 npm run m6:readiness:strict
+npm run m6:external-evidence:strict
 ```
 
 ## Evidence Policy
@@ -61,6 +63,14 @@ npm run m6:readiness:strict
 | Reminder thresholds and channel authorization | Notification operations | Before pilot |
 | Cutoff date, balances, uncleared payables/receivables, migration source files | Initialization and finance reconciliation | Before data switch |
 | Monitoring receiver and escalation owner | Operations handover | Before pilot |
+
+External evidence check:
+
+```bash
+npm run m6:external-evidence
+```
+
+The command writes `var/m6-external-evidence.json` and keeps a machine-readable list of the evidence still required to move from local readiness to launch review. It checks WeChat identifiers and real-device evidence, production `DATABASE_URL`/`PRIVATE_FILE_DIR`/`PUBLIC_API_BASE_URL`, signed private-file storage policy, production recovery drill, customer finance sign-off, and customer pilot/handover sign-off. Use `npm run m6:external-evidence:strict` only when those external materials should already be complete.
 
 ## Release And Rollback Runbook
 

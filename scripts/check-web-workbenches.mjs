@@ -90,6 +90,7 @@ checkSyntax('apps/web/m6-readiness.js');
 checkSyntax('scripts/report-m6-readiness.mjs');
 checkSyntax('scripts/check-m6-initialization.mjs');
 checkSyntax('scripts/check-m6-pilot.mjs');
+checkSyntax('scripts/check-m6-external-evidence.mjs');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
 assertIncludes(billingHtml, '账单调整与差额', 'W10 adjustment page');
@@ -153,6 +154,8 @@ assertIncludes(packageJson.scripts['m6:readiness'], 'report-m6-readiness.mjs', '
 assertIncludes(packageJson.scripts['m6:readiness:strict'], '--strict', 'M6 strict readiness script');
 assertIncludes(packageJson.scripts['m6:initialization-check'], 'check-m6-initialization.mjs', 'M6 initialization script');
 assertIncludes(packageJson.scripts['m6:pilot-check'], 'check-m6-pilot.mjs', 'M6 pilot script');
+assertIncludes(packageJson.scripts['m6:external-evidence'], 'check-m6-external-evidence.mjs', 'M6 external evidence script');
+assertIncludes(packageJson.scripts['m6:external-evidence:strict'], '--strict', 'M6 strict external evidence script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:gate-status', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'main-flow:check-demo', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:capture-all-evidence', 'M5 close acceptance script');
