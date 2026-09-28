@@ -84,6 +84,8 @@ npm run m5:capture-browser-evidence
 npm run m5:capture-ops-evidence
 ```
 
+The latest local run on 2026-09-28 has Docker, PostgreSQL, Chrome, M5 browserless output, and W11/W13 evidence READY. The browserless chain passed 10/10 steps, W11 capture recorded `PASSED` plus M5 status `READY`, and W13 capture recorded 5 reconciliation issues, 0 export-health exception rows, 1 notification row, and 13 audit rows.
+
 This performs:
 
 0. `m5:status` checks Docker, local PostgreSQL, browser runtime, latest M5 browserless output, and W11/W13 evidence manifests. If Docker/PostgreSQL is down, DB-backed M5 acceptance is environment-blocked until `npm run db:up` succeeds.

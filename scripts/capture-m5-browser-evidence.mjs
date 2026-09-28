@@ -219,6 +219,7 @@ async function prepareReportPage(cdp) {
       };
       await waitFor(() => !document.querySelector('#workspace')?.classList.contains('hidden'), 'workspace');
       await waitFor(() => document.querySelector('#m5-acceptance-status')?.textContent.trim() === 'PASSED', 'M5 acceptance summary');
+      await waitFor(() => document.querySelectorAll('#m5-status article').length > 0, 'M5 status summary');
       document.querySelector('#from').value = '2026-09-01';
       document.querySelector('#to').value = '2026-09-30';
       document.querySelector('#run').click();
@@ -240,6 +241,8 @@ async function prepareReportPage(cdp) {
       return {
         acceptanceStatus: document.querySelector('#m5-acceptance-status').textContent.trim(),
         acceptanceSteps: document.querySelectorAll('#m5-acceptance article').length,
+        m5StatusLabel: document.querySelector('#m5-status-label').textContent.trim(),
+        m5StatusRows: document.querySelectorAll('#m5-status article').length,
         reportRows: document.querySelectorAll('#tbody tr').length,
         exportRows: document.querySelectorAll('#export-jobs tr').length,
         tableTitle: document.querySelector('#table-title').textContent.trim()
@@ -288,6 +291,7 @@ console.log(`  Browser: ${browser}`);
 console.log(`  Web server started by script: ${captured.startedServer ? 'yes' : 'no'}`);
 console.log(`  Screenshot: ${captured.file}`);
 console.log(`  Acceptance status: ${captured.state.acceptanceStatus} (${captured.state.acceptanceSteps} steps)`);
+console.log(`  M5 status: ${captured.state.m5StatusLabel} (${captured.state.m5StatusRows} rows)`);
 console.log(`  Report rows: ${captured.state.reportRows}`);
 console.log(`  Export rows: ${captured.state.exportRows}`);
 console.log(`  Manifest: ${resolve(outputDir, 'manifest.json')}`);

@@ -2,6 +2,7 @@
 
 ## 2026-09-27
 
+- M5 验收与证据刷新：启动 Docker Desktop 后本地 PostgreSQL 恢复可达，`db:up` 健康、迁移无待执行；`acceptance:m5-browserless` 通过 10/10 步，`m5:status` 显示 Docker/PostgreSQL/Chrome/M5 browserless/W11/W13 证据 READY；W11 Chrome 证据刷新为 `PASSED`、M5 status `READY`、1 条报表行、2 条导出任务；W13 Chrome 证据刷新为 5 条对账异常、0 条导出健康异常、1 条通知、13 条审计日志。
 - M5 状态可视化：`m5:status` 现在写出 `apps/web/m5-status.json`，W11 报表页新增“M5 环境状态”卡片，直接展示 Docker、PostgreSQL、浏览器、browserless 结果和 W11/W13 证据状态；`web:check` 增加页面区块和加载器保护。验证：`m5:status`、构建、`web:check`、`git diff --check` 通过。
 - M5 状态总览：新增 `npm run m5:status`，汇总 Docker daemon、本地 PostgreSQL、浏览器 runtime、最新 M5 browserless 输出、W11/W13 浏览器证据 manifest 和关键 M5 脚本；Docker/PostgreSQL 未运行时明确标记为环境阻塞，不把 DB-backed 验收阻塞误判为应用回归。当前本机 Docker daemon 与 `127.0.0.1:55438` PostgreSQL 阻塞，Chrome、最新 10 步 M5 browserless 结果、W11/W13 截图证据和 M5 脚本均就绪。验证：`m5:status`、构建、`web:check`、`git diff --check` 通过。
 - M5/DEV-505 W13 导出健康导出：运营页导出任务健康区新增“导出 CSV”，导出当前超时处理中和近 24 小时失败任务的类型、任务 ID、报表、状态、创建时间、任务年龄和说明；`web:check` 增加按钮与文件名前缀保护。验证：构建、`web:check`、`git diff --check` 通过。

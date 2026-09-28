@@ -28,6 +28,8 @@ There was one recorded deviation: R01-R04 and W11 reporting/export work started 
 | DEV-503 notifications | Active | I08 in-app notification list/read/bulk-read and owner isolation are implemented, seeded, visible on W13; supplier shipment creates store "待收货提醒", receipt discrepancy creates supplier "收货差异待处理", discrepancy resolution notifies the store, supplier rejection notifies ADMIN/PURCHASER, and overdue unreceived shipments create de-duplicated store reminders. |
 | DEV-504/505 operations and recovery | Active | R05/W13 reconciliation is visible and exportable; audit logs are queryable/filterable/exportable for purchase requests, supplier operations, shipment, receipt, discrepancy resolution, payment create/confirm/reject/cancel, W10 difference-disposal create/confirm, and store recharge/credit-limit/clearing operations; stale export recovery, export health monitoring/export, and failed export retry are covered for R04. |
 
+Latest M5 local evidence on 2026-09-28: `npm run acceptance:m5-browserless` passed 10/10 steps, `npm run m5:status` reports Docker/PostgreSQL/Chrome/W11/W13 evidence READY, `m5:capture-browser-evidence` refreshed W11 with `PASSED` and M5 status `READY`, and `m5:capture-ops-evidence` refreshed W13 with 5 reconciliation issues, 0 export-health exception rows, 1 notification row, and 13 audit rows.
+
 ## Visible Workbenches
 
 Run the API and web static server after building:
