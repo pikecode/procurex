@@ -39,3 +39,19 @@ test('notifications can only be marked read by the recipient', async () => {
   assert.ok(read?.readAt);
   assert.equal(updates[0].where.id, 'n1');
 });
+
+test('notifications can mark all unread messages read for the recipient only', async () => {
+  const updates: any[] = [];
+  const service = new NotificationsService({ client: { notification: {
+    updateMany: async (query: any) => {
+      updates.push(query);
+      return { count: 3 };
+    },
+  } } } as any);
+  const result = await service.markAllRead('owner');
+  assert.equal(result.updatedCount, 3);
+  assert.equal(updates[0].where.recipientId, 'owner');
+  assert.equal(updates[0].where.status, 'UNREAD');
+  assert.equal(updates[0].data.status, 'READ');
+  assert.ok(updates[0].data.readAt instanceof Date);
+});

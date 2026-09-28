@@ -2,6 +2,7 @@
 
 ## 2026-09-27
 
+- M5/DEV-503 W13 消息处理：新增 `POST /notifications/read-all`，仅批量标记当前用户自己的未读站内消息；W13 站内消息卡片显示未读数并提供“全部已读”，仍保留单条已读。`web:check` 增加批量已读入口和接口调用保护。验证：构建、47 项单测、契约检查、`web:check`、`git diff --check` 通过。
 - M5/DEV-503 拒单通知：供应商拒单成功后，系统向 active ADMIN/PURCHASER 用户写入“供应商拒单待处理”站内通知，payload 关联执行单、订货单和拒单原因；`main-flow:check-demo` 新增真实拒单步骤，并和 `supplier-order.reject` 审计一起验证。同步刷新 `progress`、`acceptance-dashboard`、`continuation`，让换窗口能看到最新 M5 通知/审计边界。验证：构建、46 项单测、`web:check`、`git diff --check` 通过；DB 验收因 Docker daemon 未运行而暂未执行。
 - W09/S05/S08：新增 `billing:seed-acceptance` 本地验收种子，稳定生成 `PXACC` 账号、门店、供应商、公司账期/储值/信用/直接账期订单，以及一笔供应商总单与分店单共享的待付款保留。API 精确查询验证：储值总单/分店单均显示 `69.00` pending、信用单半月周期为 `2026-09-16`、直接账期预览为 `STORE_TO_SUPPLIER / DIRECT`、公司账期未结清时供应商付款预览被阻断。验证：构建、种子脚本、Web 可见性检查、diff 检查通过。
 - W09/S05/S08：新增 `billing:check-acceptance`，自动启动临时 API，登录 `pxacc_admin` 后通过 HTTP 断言储值共享待付款、信用半月周期、直接账期付款通道、公司账期付款阻断和 `PXACC-PAY-SHARED` 待确认付款记录。

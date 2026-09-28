@@ -90,6 +90,8 @@ async function loadNotifications() {
   try {
     const data = await call('/notifications');
     const notifications = data.notifications || [];
+    $('notifications-summary').textContent = `I08 当前账号通知与已读处理 · 未读 ${data.unreadCount || 0}`;
+    $('read-all-notifications').disabled = !data.unreadCount;
     $('notifications-empty').classList.toggle('hidden', notifications.length > 0);
     $('notifications').innerHTML = notifications.map((item) => `<tr><td><span class="tag ${item.status === 'UNREAD' ? 'tag-pending' : 'tag-ok'}">${item.status === 'UNREAD' ? '未读' : '已读'}</span></td><td><strong>${esc(item.title)}</strong><br><small>${esc(item.channel)}</small></td><td>${esc(item.body)}</td><td>${esc(new Date(item.createdAt).toLocaleString('zh-CN'))}</td><td>${item.status === 'UNREAD' ? `<button class="secondary" data-notification-read="${esc(item.id)}">已读</button>` : ''}</td></tr>`).join('');
     $('notifications').querySelectorAll('[data-notification-read]').forEach((button) => button.addEventListener('click', async () => {
@@ -143,6 +145,15 @@ $('logout').addEventListener('click', async () => { try { await call('/auth/logo
 $('refresh').addEventListener('click', loadOperations);
 $('refresh-issues').addEventListener('click', loadOperations);
 $('refresh-notifications').addEventListener('click', loadOperations);
+$('read-all-notifications').addEventListener('click', async () => {
+  try {
+    await call('/notifications/read-all', { method: 'POST' });
+    await loadNotifications();
+  } catch (error) {
+    $('notice').textContent = error.message;
+    $('notice').classList.remove('hidden');
+  }
+});
 $('refresh-audit-logs').addEventListener('click', loadOperations);
 $('audit-filter-form').addEventListener('submit', async (event) => { event.preventDefault(); await loadAuditLogs(); });
 $('clear-audit-filters').addEventListener('click', async () => { $('audit-filter-form').reset(); await loadAuditLogs(); });

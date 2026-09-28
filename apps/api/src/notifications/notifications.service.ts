@@ -39,6 +39,15 @@ export class NotificationsService {
     });
     return notificationView(updated);
   }
+
+  async markAllRead(recipientId: string): Promise<{ updatedCount: number }> {
+    const readAt = new Date();
+    const result = await this.database.client.notification.updateMany({
+      where: { recipientId, status: 'UNREAD' },
+      data: { status: 'READ', readAt },
+    });
+    return { updatedCount: result.count };
+  }
 }
 
 function notificationView(row: {

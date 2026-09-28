@@ -12,6 +12,12 @@ export class NotificationsController {
     return this.notifications.list(request.auth!.user.id);
   }
 
+  @Post('read-all')
+  @HttpCode(200)
+  markAllRead(@Req() request: AuthenticatedRequest) {
+    return this.notifications.markAllRead(request.auth!.user.id);
+  }
+
   @Post(':id/read')
   @HttpCode(200)
   async markRead(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
