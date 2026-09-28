@@ -33,6 +33,7 @@
     <view class="field"><text class="field-label">采购申请 ID</text><input value="{{requestId}}" data-field="requestId" bindinput="onInput" placeholder="purchaseRequestId" /></view>
     <view class="field"><text class="field-label">被拒供应商单 ID</text><input value="{{rejectedOrderId}}" data-field="rejectedOrderId" bindinput="onInput" placeholder="supplierOrderId" /></view>
     <view class="field"><text class="field-label">改派供应商 ID</text><input value="{{targetSupplierId}}" data-field="targetSupplierId" bindinput="onInput" placeholder="supplierId" /></view>
+    <view class="field"><text class="field-label">改派原因</text><input value="{{reallocateReason}}" data-field="reallocateReason" bindinput="onInput" placeholder="供应商拒单后改派" /></view>
     <view class="button-row">
       <button class="secondary" loading="{{detailing}}" bindtap="loadRequestDetail">读取详情</button>
       <button class="primary" loading="{{confirming}}" bindtap="confirmRequest">确认并推送</button>

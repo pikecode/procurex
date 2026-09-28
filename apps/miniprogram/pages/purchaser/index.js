@@ -10,6 +10,7 @@ Page({
     requestId: '',
     rejectedOrderId: '',
     targetSupplierId: '',
+    reallocateReason: '供应商拒单后改派',
     loading: false,
     detailing: false,
     confirming: false,
@@ -143,6 +144,7 @@ Page({
         data: {
           expectedVersion: detail.version,
           rejectedOrderId: this.data.rejectedOrderId,
+          reason: this.data.reallocateReason,
           assignments: (detail.items || []).map((item) => ({
             requestItemId: item.id,
             supplierId: this.data.targetSupplierId

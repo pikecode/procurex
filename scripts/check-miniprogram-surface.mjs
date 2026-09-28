@@ -39,6 +39,7 @@ function assertIncludes(source, expected, label) {
 
 const appJson = JSON.parse(await read('apps/miniprogram/app.json'));
 const projectConfig = JSON.parse(await read('apps/miniprogram/project.config.json'));
+const packageJson = JSON.parse(await read('package.json'));
 
 assert.equal(projectConfig.compileType, 'miniprogram', 'project config must target WeChat mini-program');
 assert.deepEqual(appJson.pages, [
@@ -58,10 +59,14 @@ for (const page of appJson.pages) {
 for (const path of [
   'apps/miniprogram/app.js',
   'apps/miniprogram/utils/api.js',
+  'scripts/check-miniprogram-flow.mjs',
 ]) {
   assert.ok(await exists(path), `${path} is missing`);
   checkSyntax(path);
 }
+
+assertIncludes(packageJson.scripts['mini:flow-check'], 'check-miniprogram-flow.mjs', 'mini-program flow check script');
+assertIncludes(packageJson.scripts['mini:flow-check'], 'main-flow:seed-demo', 'mini-program flow check seed dependency');
 
 const files = await walk(miniRoot);
 assert.equal(files.filter((file) => file.endsWith('.html')).length, 0, 'mini-program surface must not use HTML pages');
@@ -129,12 +134,31 @@ assertIncludes(purchaserJs, '/confirm', 'purchaser confirmation');
 assertIncludes(purchaserJs, '/reallocate', 'purchaser reallocation');
 assertIncludes(purchaserJs, 'expectedVersion', 'purchaser version guard');
 assertIncludes(purchaserJs, 'rejectedOrderId', 'purchaser rejection reallocation guard');
+assertIncludes(purchaserJs, 'reallocateReason', 'purchaser rejection reallocation reason');
 assertIncludes(purchaserJs, 'SUPPLIER_ORDER_REJECTED', 'purchaser supplier rejection notification filter');
 assertIncludes(purchaserWxml, '确认并推送', 'purchaser confirmation screen');
 assertIncludes(purchaserWxml, '读取详情', 'purchaser request detail action');
 assertIncludes(purchaserWxml, '申请详情', 'purchaser request detail screen');
 assertIncludes(purchaserWxml, '缺口金额', 'purchaser shortfall signal');
 assertIncludes(purchaserWxml, '拒单通知', 'purchaser rejection notification screen');
+assertIncludes(purchaserWxml, '改派原因', 'purchaser reallocation reason screen');
 assertIncludes(purchaserWxml, '改派供应商', 'purchaser reallocation screen');
+
+const miniFlowCheck = await read('scripts/check-miniprogram-flow.mjs');
+for (const endpoint of [
+  '/stores/${seed.storeId}/account',
+  '/purchase-requests/preview',
+  '/purchase-requests/${requestId}',
+  '/supplier-orders/${supplierOrderId}/shipment-preview',
+  '/shipments/${shipmentId}',
+  '/discrepancies/${discrepancyId}/resolve',
+  '/supplier-statements',
+  '/payment-records?direction=COMPANY_TO_SUPPLIER',
+  '/payment-records/${payment.id}/confirm',
+  '/purchase-requests/${rejectionRequest.id}/reallocate',
+]) {
+  assertIncludes(miniFlowCheck, endpoint, 'mini-program flow check endpoint coverage');
+}
+assertIncludes(miniFlowCheck, 'apps/miniprogram/mini-flow-check.json', 'mini-program flow evidence output');
 
 console.log('Mini-program surface check passed.');

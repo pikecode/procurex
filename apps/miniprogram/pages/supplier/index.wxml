@@ -86,7 +86,7 @@
     </view>
     <view class="list">
       <view wx:for="{{payments}}" wx:key="id" class="row" bindtap="selectPayment" data-id="{{item.id}}">
-        <view class="row-title"><text>{{item.paymentNo || item.id}}</text><text class="tag {{item.status === 'PENDING_CONFIRMATION' ? 'tag-warn' : ''}}">{{item.status}}</text></view>
+        <view class="row-title"><text>{{item.paymentNo || item.id}}</text><text class="tag {{item.status === 'PENDING' ? 'tag-warn' : ''}}">{{item.status}}</text></view>
         <view class="muted">金额 {{item.amount}}，方向 {{item.direction}}，点击填入付款记录。</view>
       </view>
       <view wx:if="{{!payments.length}}" class="row"><view class="muted">暂无付款记录或尚未刷新。</view></view>

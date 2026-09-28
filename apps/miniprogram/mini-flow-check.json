@@ -1,0 +1,55 @@
+{
+  "generatedAt": "2026-09-28T09:05:21.867Z",
+  "title": "Mini-program Flow Check",
+  "status": "PASSED",
+  "summary": "Native mini-program role APIs are reachable through Store, Purchaser, and Supplier flows.",
+  "evidence": {
+    "store": {
+      "accountStoreId": "3d127bac-1563-463a-b220-320827bb8600",
+      "purchaseRequestId": "7265134c-d082-4c71-9727-fc35db397c1d",
+      "shipmentNotification": "待收货提醒",
+      "receiptNo": "RC20260928090521539026"
+    },
+    "purchaser": {
+      "confirmedRequestId": "7265134c-d082-4c71-9727-fc35db397c1d",
+      "rejectionNotification": "供应商拒单待处理",
+      "reallocatedRequestStatus": "CONFIRMED",
+      "secondarySupplierId": "ab5d2dc2-834f-4aaa-bab1-f6af6dd45612"
+    },
+    "supplier": {
+      "supplierOrderId": "6046e0c4-f356-480f-90f3-05d43b0acdc6",
+      "shipmentNo": "SH20260928090521675214",
+      "statementId": "eyJzdXBwbGllcklkIjoiMGI4MWU3NzAtZmI1ZS00ZGViLWIyZTktZTJjYmE2Mjc3NzJkIiwiY3ljbGUiOiJNT05USExZIiwicGVyaW9kU3RhcnQiOiIyMDI2LTA5LTAxIiwicGVyaW9kRW5kRXhjbHVzaXZlIjoiMjAyNi0xMC0wMSJ9",
+      "paymentStatus": "CONFIRMED",
+      "discrepancyStatus": "RESOLVED"
+    }
+  },
+  "coveredEndpoints": [
+    "POST /auth/login",
+    "GET /stores/{id}/account",
+    "GET /stores/{id}/ledgers",
+    "POST /purchase-requests/preview",
+    "POST /purchase-requests",
+    "GET /purchase-requests",
+    "GET /purchase-requests/{id}",
+    "POST /purchase-requests/{id}/confirm",
+    "POST /purchase-requests/{id}/reallocate",
+    "GET /supplier-orders",
+    "GET /supplier-orders/{id}",
+    "POST /supplier-orders/{id}/shipment-preview",
+    "POST /supplier-orders/{id}/shipments",
+    "POST /supplier-orders/{id}/reject",
+    "GET /notifications",
+    "GET /shipments/{id}",
+    "POST /shipments/{id}/receipts",
+    "GET /discrepancies/{id}",
+    "POST /discrepancies/{id}/resolve",
+    "GET /supplier-statements",
+    "GET /supplier-statements/{id}",
+    "GET /payment-records",
+    "GET /payment-records/{id}",
+    "POST /payment-records/preview",
+    "POST /payment-records",
+    "POST /payment-records/{id}/confirm"
+  ]
+}
