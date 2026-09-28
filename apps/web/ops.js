@@ -13,6 +13,7 @@ const exportStatusLabels = {
   READY: '已完成',
   FAILED: '失败',
 };
+let currentAuditLogs = [];
 
 function metric(label, value, foot, emphasis = false) {
   return `<div class="metric ${emphasis ? 'emphasis' : ''}"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div><div class="metric-foot">${esc(foot)}</div></div>`;
@@ -119,12 +120,40 @@ async function loadAuditLogs() {
     }
     const suffix = filters.toString() ? `?${filters}` : '';
     const logs = await call(`/audit-logs${suffix}`);
+    currentAuditLogs = logs;
+    $('export-audit-logs').disabled = logs.length === 0;
     $('audit-logs-empty').classList.toggle('hidden', logs.length > 0);
     $('audit-logs').innerHTML = logs.map((item) => `<tr><td><strong>${esc(item.action)}</strong><br><small>${esc(item.reason || '')}</small></td><td>${esc(item.entityType)}<br><small>${esc(item.entityId)}</small></td><td>${esc(item.actorName)}</td><td><small>${esc(item.traceId)}</small></td><td>${esc(new Date(item.createdAt).toLocaleString('zh-CN'))}</td></tr>`).join('');
   } catch (error) {
     $('notice').textContent = error.message;
     $('notice').classList.remove('hidden');
   }
+}
+
+function csvCell(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+function exportAuditLogs() {
+  if (!currentAuditLogs.length) return;
+  const header = ['action', 'entityType', 'entityId', 'actorName', 'traceId', 'reason', 'createdAt'];
+  const rows = currentAuditLogs.map((item) => [
+    item.action,
+    item.entityType,
+    item.entityId,
+    item.actorName,
+    item.traceId,
+    item.reason || '',
+    item.createdAt,
+  ]);
+  const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\n');
+  const blob = new Blob([`\uFEFF${csv}\n`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `procurex-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 $('login-form').addEventListener('submit', async (event) => {
@@ -155,6 +184,7 @@ $('read-all-notifications').addEventListener('click', async () => {
   }
 });
 $('refresh-audit-logs').addEventListener('click', loadOperations);
+$('export-audit-logs').addEventListener('click', exportAuditLogs);
 $('audit-filter-form').addEventListener('submit', async (event) => { event.preventDefault(); await loadAuditLogs(); });
 $('clear-audit-filters').addEventListener('click', async () => { $('audit-filter-form').reset(); await loadAuditLogs(); });
 showSession();
