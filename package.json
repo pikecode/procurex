@@ -32,6 +32,7 @@
     "acceptance:m5-browserless": "npm run build && npm run reports:seed-acceptance && npm run notifications:seed-acceptance && npm run notifications:send-overdue-receipt-reminders -- --hours=24 && npm run reports:check-acceptance && npm run notifications:check-acceptance && npm run web:check",
     "m5:capture-browser-evidence": "node scripts/capture-m5-browser-evidence.mjs",
     "m5:capture-ops-evidence": "node scripts/capture-m5-ops-evidence.mjs",
+    "m5:status": "node --env-file-if-exists=.env scripts/report-m5-status.mjs",
     "billing:seed-acceptance": "node --env-file-if-exists=.env scripts/seed-billing-acceptance.mjs",
     "billing:check-acceptance": "node --env-file-if-exists=.env scripts/check-billing-acceptance.mjs",
     "acceptance:m4-browserless": "npm run build && npm run billing:seed-acceptance && npm run billing:check-acceptance && npm run m4:gate-status && npm run m4:check-manual-checklist && npm run main-flow:seed-demo && npm run main-flow:check-demo && npm run acceptance:main-flow && npm run web:check",

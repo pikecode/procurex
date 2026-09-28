@@ -78,6 +78,7 @@ dc2e5ea Add billing acceptance checker
 Run the M5 reporting/export browserless chain:
 
 ```bash
+npm run m5:status
 npm run acceptance:m5-browserless
 npm run m5:capture-browser-evidence
 npm run m5:capture-ops-evidence
@@ -85,6 +86,7 @@ npm run m5:capture-ops-evidence
 
 This performs:
 
+0. `m5:status` checks Docker, local PostgreSQL, browser runtime, latest M5 browserless output, and W11/W13 evidence manifests. If Docker/PostgreSQL is down, DB-backed M5 acceptance is environment-blocked until `npm run db:up` succeeds.
 1. TypeScript build.
 2. `PXRPT` report acceptance seeding.
 3. R01/R02/R03/R04/R05 HTTP acceptance checks.

@@ -76,6 +76,12 @@ The browserless workbench visibility check is:
 npm run web:check
 ```
 
+The fastest M5 orientation check is:
+
+```bash
+npm run m5:status
+```
+
 The current browserless M4 acceptance chain is:
 
 ```bash

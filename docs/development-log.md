@@ -2,6 +2,7 @@
 
 ## 2026-09-27
 
+- M5 状态总览：新增 `npm run m5:status`，汇总 Docker daemon、本地 PostgreSQL、浏览器 runtime、最新 M5 browserless 输出、W11/W13 浏览器证据 manifest 和关键 M5 脚本；Docker/PostgreSQL 未运行时明确标记为环境阻塞，不把 DB-backed 验收阻塞误判为应用回归。当前本机 Docker daemon 与 `127.0.0.1:55438` PostgreSQL 阻塞，Chrome、最新 10 步 M5 browserless 结果、W11/W13 截图证据和 M5 脚本均就绪。验证：`m5:status`、构建、`web:check`、`git diff --check` 通过。
 - M5/DEV-505 W13 导出健康导出：运营页导出任务健康区新增“导出 CSV”，导出当前超时处理中和近 24 小时失败任务的类型、任务 ID、报表、状态、创建时间、任务年龄和说明；`web:check` 增加按钮与文件名前缀保护。验证：构建、`web:check`、`git diff --check` 通过。
 - M5/R05 W13 对账导出：运营页对账异常区新增“导出 CSV”，导出当前 R05 异常结果的门店、异常类型、严重级别、系统记录、核算值、差额和核查依据，便于财务线下复核；`web:check` 增加按钮与文件名前缀保护。验证：构建、`web:check`、`git diff --check` 通过。
 - M5/DEV-504 W13 审计导出：运营页审计日志区新增“导出 CSV”，导出当前筛选结果的 action/entity/actor/traceId/reason/createdAt，方便财务或运营把排查证据带出页面复核；`web:check` 增加按钮与文件名前缀保护。验证：构建、`web:check`、`git diff --check` 通过。
