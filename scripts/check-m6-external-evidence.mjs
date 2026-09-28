@@ -108,22 +108,27 @@ const result = {
   expectedArtifacts: {
     wechatManifest: {
       path: 'var/m6-wechat-device-evidence/manifest.json',
+      template: 'docs/m6-evidence-templates/wechat-device-manifest.json',
       fields: ['appId', 'testAccounts', 'deviceModels', 'screenshotsOrRecording', 'subscriptionMessageResult', 'signedBy'],
     },
     storagePolicy: {
       path: 'var/m6-production-storage-policy.json',
+      template: 'docs/m6-evidence-templates/production-storage-policy.json',
       fields: ['signed', 'owner', 'retentionDays', 'accessReview', 'backupSchedule', 'restoreTestReference'],
     },
     recoveryDrill: {
       path: 'var/m6-production-recovery-drill.json',
+      template: 'docs/m6-evidence-templates/production-recovery-drill.json',
       fields: ['signed', 'owner', 'rpoMinutes', 'rtoMinutes', 'databaseBackupReference', 'privateFileBackupReference'],
     },
     initializationSignoff: {
       path: 'var/m6-initialization-signoff.json',
+      template: 'docs/m6-evidence-templates/production-initialization-signoff.json',
       fields: ['status=READY', 'productionFinalSignoff.signed=true', 'financeApprover', 'customerSourceFiles'],
     },
     pilotRun: {
       path: 'var/m6-pilot-run.json',
+      template: 'docs/m6-evidence-templates/customer-pilot-run.json',
       fields: ['status=READY', 'customerPilot.signed=true', 'participantStores', 'participantSuppliers', 'pilotWindow', 'handoverOwner'],
     },
   },

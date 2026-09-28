@@ -1,0 +1,21 @@
+{
+  "signed": true,
+  "owner": "operations owner",
+  "storageProvider": "object-storage-or-mounted-private-file-service",
+  "privateFileRoot": "production-private-file-root",
+  "retentionDays": 365,
+  "accessReview": {
+    "roles": [
+      "ADMIN",
+      "HQ_FINANCE"
+    ],
+    "lastReviewedAt": "2026-09-28",
+    "reviewer": "security or operations owner"
+  },
+  "backupSchedule": {
+    "frequency": "hourly incremental plus daily full snapshot",
+    "retention": "at least 30 days"
+  },
+  "restoreTestReference": "var/m6-production-recovery-drill.json",
+  "downloadAuditPolicy": "payment evidence downloads must be authenticated and audit logged"
+}

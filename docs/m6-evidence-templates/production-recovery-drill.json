@@ -1,0 +1,18 @@
+{
+  "signed": true,
+  "owner": "release or operations owner",
+  "drillWindow": {
+    "startedAt": "2026-09-28T10:00:00+08:00",
+    "finishedAt": "2026-09-28T12:00:00+08:00"
+  },
+  "rpoMinutes": 15,
+  "rtoMinutes": 240,
+  "databaseBackupReference": "production-database-backup-id",
+  "privateFileBackupReference": "production-private-file-backup-id",
+  "restoredEnvironment": "production-like recovery environment",
+  "verification": [
+    "database schema and migration status matched release target",
+    "private payment evidence files restored and checksum verified",
+    "login, order creation, receipt, statement, and payment smoke checks passed"
+  ]
+}

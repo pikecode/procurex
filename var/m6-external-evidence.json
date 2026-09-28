@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T15:17:09.551Z",
+  "generatedAt": "2026-09-28T15:21:47.148Z",
   "title": "M6 External Evidence Check",
   "status": "BLOCKED",
   "summary": "External launch evidence is still missing; local readiness remains useful but cannot close M6 production launch.",
@@ -66,6 +66,7 @@
   "expectedArtifacts": {
     "wechatManifest": {
       "path": "var/m6-wechat-device-evidence/manifest.json",
+      "template": "docs/m6-evidence-templates/wechat-device-manifest.json",
       "fields": [
         "appId",
         "testAccounts",
@@ -77,6 +78,7 @@
     },
     "storagePolicy": {
       "path": "var/m6-production-storage-policy.json",
+      "template": "docs/m6-evidence-templates/production-storage-policy.json",
       "fields": [
         "signed",
         "owner",
@@ -88,6 +90,7 @@
     },
     "recoveryDrill": {
       "path": "var/m6-production-recovery-drill.json",
+      "template": "docs/m6-evidence-templates/production-recovery-drill.json",
       "fields": [
         "signed",
         "owner",
@@ -99,6 +102,7 @@
     },
     "initializationSignoff": {
       "path": "var/m6-initialization-signoff.json",
+      "template": "docs/m6-evidence-templates/production-initialization-signoff.json",
       "fields": [
         "status=READY",
         "productionFinalSignoff.signed=true",
@@ -108,6 +112,7 @@
     },
     "pilotRun": {
       "path": "var/m6-pilot-run.json",
+      "template": "docs/m6-evidence-templates/customer-pilot-run.json",
       "fields": [
         "status=READY",
         "customerPilot.signed=true",

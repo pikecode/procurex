@@ -1,0 +1,31 @@
+{
+  "appId": "wx1234567890abcdef",
+  "testAccounts": [
+    "store-tester-openid",
+    "supplier-tester-openid",
+    "purchaser-tester-openid"
+  ],
+  "bindingOperationMode": "test-account-binding-or-customer-approved-binding-mode",
+  "deviceModels": [
+    "iPhone 15 / iOS 18",
+    "Android 14 representative device"
+  ],
+  "checkedFlows": [
+    "login",
+    "store order create",
+    "store receive shipment",
+    "supplier shipment",
+    "supplier payment confirmation",
+    "purchaser confirmation",
+    "supplier rejection reallocation",
+    "subscription message delivery"
+  ],
+  "screenshotsOrRecording": [
+    "var/m6-wechat-device-evidence/store-flow.png",
+    "var/m6-wechat-device-evidence/supplier-flow.png",
+    "var/m6-wechat-device-evidence/purchaser-flow.png"
+  ],
+  "subscriptionMessageResult": "PASS",
+  "signedBy": "wechat acceptance owner",
+  "signedAt": "2026-09-28"
+}

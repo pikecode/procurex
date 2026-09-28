@@ -1,0 +1,22 @@
+{
+  "status": "READY",
+  "cutoffDate": "2026-09-28",
+  "productionFinalSignoff": {
+    "signed": true,
+    "financeApprover": "customer finance owner",
+    "signedAt": "2026-09-28",
+    "customerSourceFiles": [
+      "stores.xlsx",
+      "suppliers.xlsx",
+      "products.xlsx",
+      "opening-balances.xlsx",
+      "uncleared-payables-receivables.xlsx"
+    ]
+  },
+  "reconciliationSummary": {
+    "storeOpeningBalanceTotal": "0.00",
+    "storeCreditReceivableTotal": "0.00",
+    "supplierPayableTotal": "0.00",
+    "unmatchedRows": 0
+  }
+}

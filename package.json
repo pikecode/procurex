@@ -43,6 +43,8 @@
     "m6:pilot-check": "node --env-file-if-exists=.env scripts/check-m6-pilot.mjs",
     "m6:external-evidence": "node --env-file-if-exists=.env scripts/check-m6-external-evidence.mjs",
     "m6:external-evidence:strict": "node --env-file-if-exists=.env scripts/check-m6-external-evidence.mjs --strict",
+    "m6:write-external-templates": "node scripts/write-m6-external-evidence-templates.mjs",
+    "m6:check-external-templates": "node scripts/write-m6-external-evidence-templates.mjs --check",
     "m6:readiness": "node --env-file-if-exists=.env scripts/report-m6-readiness.mjs",
     "m6:readiness:strict": "node --env-file-if-exists=.env scripts/report-m6-readiness.mjs --strict",
     "acceptance:m5-close": "npm run acceptance:m5-browserless && npm run main-flow:seed-demo && npm run main-flow:check-demo && npm run m5:status && npm run m5:capture-all-evidence && npm run main-flow:capture-demo-evidence && npm run main-flow:capture-interactive-demo && npm run m5:gate-status && npm run m5:status",

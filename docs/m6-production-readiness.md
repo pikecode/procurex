@@ -17,6 +17,7 @@ npm run m6:rollback-check
 npm run m6:initialization-check
 npm run m6:pilot-check
 npm run m6:external-evidence
+npm run m6:check-external-templates
 ```
 
 The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/m6-readiness.html`.
@@ -71,6 +72,12 @@ npm run m6:external-evidence
 ```
 
 The command writes `var/m6-external-evidence.json` and keeps a machine-readable list of the evidence still required to move from local readiness to launch review. It checks WeChat identifiers and real-device evidence, production `DATABASE_URL`/`PRIVATE_FILE_DIR`/`PUBLIC_API_BASE_URL`, signed private-file storage policy, production recovery drill, customer finance sign-off, and customer pilot/handover sign-off. Use `npm run m6:external-evidence:strict` only when those external materials should already be complete.
+
+External evidence templates live in `docs/m6-evidence-templates/` and are summarized in `docs/m6-external-evidence-templates.md`. Keep them synchronized with:
+
+```bash
+npm run m6:check-external-templates
+```
 
 ## Release And Rollback Runbook
 

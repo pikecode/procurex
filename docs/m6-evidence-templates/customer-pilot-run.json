@@ -1,0 +1,30 @@
+{
+  "status": "READY",
+  "customerPilot": {
+    "signed": true,
+    "participantStores": [
+      "customer-store-code-1"
+    ],
+    "participantSuppliers": [
+      "customer-supplier-code-1"
+    ],
+    "pilotWindow": {
+      "startedAt": "2026-09-28T09:00:00+08:00",
+      "finishedAt": "2026-09-30T18:00:00+08:00"
+    },
+    "handoverOwner": "customer operations owner",
+    "signedAt": "2026-09-30"
+  },
+  "executedFlows": [
+    "one recharge or clearing operation",
+    "one cross-period replenishment or approved equivalent evidence",
+    "one full statement/payment cycle",
+    "issue log closed or explicitly accepted",
+    "handover notes reviewed"
+  ],
+  "issueLog": {
+    "opened": 0,
+    "closed": 0,
+    "acceptedOpen": 0
+  }
+}
