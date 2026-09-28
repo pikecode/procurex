@@ -67,6 +67,8 @@ for (const candidate of browserReady) {
   if (await executableExists(candidate)) hasBrowser = true;
 }
 const perfReportReady = await fileExists('var/m6-performance-report.json');
+const miniFlow = await readJson('apps/miniprogram/mini-flow-check.json');
+const miniFlowReady = miniFlow?.status === 'PASSED' && (miniFlow.coveredEndpoints || []).length >= 20;
 add(
   'DEV-602-PERF',
   '性能与兼容压测',
@@ -87,12 +89,14 @@ add(
 );
 add(
   'DEV-602-MINI',
-  '小程序产品端表面',
-  await fileExists('apps/miniprogram/app.json') && await fileExists('scripts/check-miniprogram-surface.mjs') ? 'LOCAL_READY' : 'PLANNED',
-  await fileExists('apps/miniprogram/app.json')
-    ? 'Native mini-program role pages exist for Store, Supplier, and Purchaser; real-device WeChat acceptance remains open.'
-    : 'Mini-program product-client pages have not been created yet.',
-  ['apps/miniprogram/app.json', 'scripts/check-miniprogram-surface.mjs'],
+  '小程序产品端与真实 API 流',
+  miniFlowReady ? 'LOCAL_READY' : await fileExists('apps/miniprogram/app.json') ? 'PLANNED' : 'BLOCKED',
+  miniFlowReady
+    ? 'Native Store/Purchaser/Supplier mini-program role APIs pass the local HTTP flow check; real-device WeChat acceptance remains open.'
+    : await fileExists('apps/miniprogram/app.json')
+      ? 'Native mini-program role pages exist, but npm run mini:flow-check must pass before local product-client readiness is claimed.'
+      : 'Mini-program product-client pages have not been created yet.',
+  ['apps/miniprogram/app.json', 'scripts/check-miniprogram-surface.mjs', 'scripts/check-miniprogram-flow.mjs', 'apps/miniprogram/mini-flow-check.json'],
 );
 add(
   'DEV-602-WECHAT',

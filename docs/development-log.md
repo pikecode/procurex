@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- M6 小程序真实流纳入 readiness：`m6:readiness` 的 DEV-602-MINI 现在读取 `apps/miniprogram/mini-flow-check.json`，只有 `mini:flow-check` 生成 `PASSED` 且覆盖足够端点时才标为 `LOCAL_READY`；否则只保留 PLANNED/BLOCKED，不再仅凭小程序文件存在声明本地产品端就绪。`web:check` 新增 readiness 脚本对 `mini-flow-check.json` 和 `check-miniprogram-flow.mjs` 的保护，`docs/m6-production-readiness.md` 同步要求 `mini:check` 与 `mini:flow-check` 都保持绿色。
 - 小程序真实流验收：新增 `npm run mini:flow-check`，串联 build、`main-flow:seed-demo` 和 `scripts/check-miniprogram-flow.mjs`。该脚本启动临时 Nest API，用 PXFLOW 的 Store/Purchaser/Supplier 三类账号按小程序已接入的端点跑真实 API：门店账户/流水、下单、订单列表、采购详情/确认、供应商列表/发货、门店通知/发货详情/收货、供应商账单、付款登记/供应商确认收款、少收差异通知/处理、供应商拒单通知/采购改派，并写出 `apps/miniprogram/mini-flow-check.json`。真实流同时校正了供应商付款待确认状态为 `PENDING`，以及采购拒单改派必须提交 `reason`。`mini:check` 新增 flow-check 脚本、端点覆盖和证据输出保护。
 - 小程序采购详情与资金缺口：采购小程序页新增申请详情读取，点击采购待办或点“读取详情”会调用 `/purchase-requests/{id}`，展示资金状态、缺口金额、销售/供货金额、商品行和已生成的供应商执行单。确认/改派前也会把最新详情写入页面状态，`mini:check` 新增详情接口、详情卡片和缺口金额保护。
 - 小程序供应商账单与收款：供应商小程序页新增“供应商账单”和“收款确认”区，调用 `/supplier-statements` 展示应付、待确认、已付金额，调用 `/payment-records?direction=COMPANY_TO_SUPPLIER` 展示付款记录；供应商可读取 `/payment-records/{id}` 后用当前 version 调用 `/payment-records/{id}/confirm` 确认收款，或 `/payment-records/{id}/reject` 驳回付款。`mini:check` 新增供应商账单、付款列表和确认/驳回动作保护。
