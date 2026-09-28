@@ -18,9 +18,12 @@ npm run m6:initialization-check
 npm run m6:pilot-check
 npm run m6:external-evidence
 npm run m6:check-external-templates
+npm run m6:capture-readiness-evidence
 ```
 
 The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/m6-readiness.html`.
+
+`npm run m6:capture-readiness-evidence` refreshes the M6 JSON outputs, opens `apps/web/m6-readiness.html` in Chrome, and writes desktop/mobile screenshots plus `var/m6-readiness-evidence/manifest.json`.
 
 Use the strict gate only when real production materials exist:
 

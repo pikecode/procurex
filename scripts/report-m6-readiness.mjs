@@ -86,7 +86,7 @@ add(
   hasBrowser && mainFlowReady
     ? 'Local Chrome desktop and 390px mobile viewport evidence is available; production device breadth remains open.'
     : 'Chrome/mobile viewport evidence is missing or stale.',
-  ['var/main-flow-demo-evidence/main-flow-demo-interactive-mobile.png', 'var/main-flow-demo-evidence/role-workbenches-interactive-mobile.png'],
+  ['var/main-flow-demo-evidence/main-flow-demo-interactive-mobile.png', 'var/main-flow-demo-evidence/role-workbenches-interactive-mobile.png', 'var/m6-readiness-evidence/manifest.json'],
 );
 add(
   'DEV-602-MINI',

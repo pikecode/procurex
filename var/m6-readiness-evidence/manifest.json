@@ -1,0 +1,53 @@
+{
+  "generatedAt": "2026-09-28T15:35:54.630Z",
+  "browser": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "webBaseUrl": "http://127.0.0.1:4173",
+  "evidenceType": "m6-readiness-browser-screenshot",
+  "note": "Shows the M6 internal readiness ledger and external launch-material blockers on desktop and 390px mobile viewports.",
+  "desktop": {
+    "file": "/Users/ompeak/work/github/pikecode/procurex/var/m6-readiness-evidence/m6-readiness-desktop.png",
+    "viewport": {
+      "width": 1440,
+      "height": 1200,
+      "deviceScaleFactor": 1,
+      "mobile": false
+    },
+    "state": {
+      "readinessStatus": "NOT_READY",
+      "externalStatus": "BLOCKED",
+      "readyMetric": "READY1可作为上线证据",
+      "readinessRows": 11,
+      "externalRows": 6,
+      "hasDev604": true,
+      "hasDev605": true,
+      "hasWechatBlocker": true,
+      "hasProductionRuntimeBlocker": true,
+      "hasTemplatePath": true,
+      "viewportWidth": 1440,
+      "horizontalOverflow": false
+    }
+  },
+  "mobile": {
+    "file": "/Users/ompeak/work/github/pikecode/procurex/var/m6-readiness-evidence/m6-readiness-mobile.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "deviceScaleFactor": 2,
+      "mobile": true
+    },
+    "state": {
+      "readinessStatus": "NOT_READY",
+      "externalStatus": "BLOCKED",
+      "readyMetric": "READY1可作为上线证据",
+      "readinessRows": 11,
+      "externalRows": 6,
+      "hasDev604": true,
+      "hasDev605": true,
+      "hasWechatBlocker": true,
+      "hasProductionRuntimeBlocker": true,
+      "hasTemplatePath": true,
+      "viewportWidth": 390,
+      "horizontalOverflow": false
+    }
+  }
+}

@@ -92,6 +92,7 @@ checkSyntax('scripts/check-m6-initialization.mjs');
 checkSyntax('scripts/check-m6-pilot.mjs');
 checkSyntax('scripts/check-m6-external-evidence.mjs');
 checkSyntax('scripts/write-m6-external-evidence-templates.mjs');
+checkSyntax('scripts/capture-m6-readiness-evidence.mjs');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
 assertIncludes(billingHtml, '账单调整与差额', 'W10 adjustment page');
@@ -159,6 +160,7 @@ assertIncludes(packageJson.scripts['m6:external-evidence'], 'check-m6-external-e
 assertIncludes(packageJson.scripts['m6:external-evidence:strict'], '--strict', 'M6 strict external evidence script');
 assertIncludes(packageJson.scripts['m6:write-external-templates'], 'write-m6-external-evidence-templates.mjs', 'M6 external evidence template writer');
 assertIncludes(packageJson.scripts['m6:check-external-templates'], '--check', 'M6 external evidence template check');
+assertIncludes(packageJson.scripts['m6:capture-readiness-evidence'], 'capture-m6-readiness-evidence.mjs', 'M6 readiness browser evidence capture');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:gate-status', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'main-flow:check-demo', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:capture-all-evidence', 'M5 close acceptance script');
@@ -321,5 +323,6 @@ assertIncludes(m6ReadinessScript, 'check-m6-pilot.mjs', 'M6 pilot script evidenc
 assertIncludes(m6ReadinessScript, 'customerPilot', 'M6 pilot final signoff guard');
 assertIncludes(m6ReadinessScript, 'RPO<=15 minutes', 'M6 recovery target check');
 assertIncludes(m6ReadinessScript, 'm6-readiness.json', 'M6 readiness output writer');
+assertIncludes(m6ReadinessScript, 'var/m6-readiness-evidence/manifest.json', 'M6 readiness browser evidence manifest');
 
 console.log('Web workbench check passed.');
