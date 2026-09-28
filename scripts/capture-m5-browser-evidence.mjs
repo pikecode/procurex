@@ -220,6 +220,7 @@ async function prepareReportPage(cdp) {
       await waitFor(() => !document.querySelector('#workspace')?.classList.contains('hidden'), 'workspace');
       await waitFor(() => document.querySelector('#m5-acceptance-status')?.textContent.trim() === 'PASSED', 'M5 acceptance summary');
       await waitFor(() => document.querySelectorAll('#m5-status article').length > 0, 'M5 status summary');
+      await waitFor(() => document.querySelectorAll('#m5-gate-status article').length > 0, 'M5 gate status summary');
       document.querySelector('#from').value = '2026-09-01';
       document.querySelector('#to').value = '2026-09-30';
       document.querySelector('#run').click();
@@ -243,6 +244,8 @@ async function prepareReportPage(cdp) {
         acceptanceSteps: document.querySelectorAll('#m5-acceptance article').length,
         m5StatusLabel: document.querySelector('#m5-status-label').textContent.trim(),
         m5StatusRows: document.querySelectorAll('#m5-status article').length,
+        m5GateLabel: document.querySelector('#m5-gate-label').textContent.trim(),
+        m5GateRows: document.querySelectorAll('#m5-gate-status article').length,
         reportRows: document.querySelectorAll('#tbody tr').length,
         exportRows: document.querySelectorAll('#export-jobs tr').length,
         tableTitle: document.querySelector('#table-title').textContent.trim()
@@ -292,6 +295,7 @@ console.log(`  Web server started by script: ${captured.startedServer ? 'yes' : 
 console.log(`  Screenshot: ${captured.file}`);
 console.log(`  Acceptance status: ${captured.state.acceptanceStatus} (${captured.state.acceptanceSteps} steps)`);
 console.log(`  M5 status: ${captured.state.m5StatusLabel} (${captured.state.m5StatusRows} rows)`);
+console.log(`  M5 gate status: ${captured.state.m5GateLabel} (${captured.state.m5GateRows} rows)`);
 console.log(`  Report rows: ${captured.state.reportRows}`);
 console.log(`  Export rows: ${captured.state.exportRows}`);
 console.log(`  Manifest: ${resolve(outputDir, 'manifest.json')}`);

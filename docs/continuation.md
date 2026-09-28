@@ -94,7 +94,7 @@ npm run m5:capture-ops-evidence
 npm run m5:gate-status
 ```
 
-The latest local run on 2026-09-28 has Docker, PostgreSQL, Chrome, M5 browserless output, and W11/W13 evidence READY. The browserless chain passed 10/10 steps, W11 capture recorded `PASSED` plus M5 status `READY`, and W13 capture recorded 5 reconciliation issues, 0 export-health exception rows, 1 notification row, and 13 audit rows. The follow-up full baseline also passed: build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.
+The latest local run on 2026-09-28 has Docker, PostgreSQL, Chrome, M5 browserless output, and W11/W13 evidence READY. The browserless chain passed 10/10 steps, W11 capture recorded `PASSED`, M5 status `READY`, M5 gate `READY` with 8 gate rows, 1 report row, and 1 export row; W13 capture recorded 5 reconciliation issues, 0 export-health exception rows, 1 notification row, and 13 audit rows. The follow-up full baseline also passed: build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.
 
 `npm run acceptance:m5-close` is now the strongest single M5 close-readiness command. It reruns the M5 browserless reporting/export/reconciliation/notification chain, reseeds/checks the main-flow demo, writes `apps/web/main-flow-demo-run.json`, and then runs `m5:gate-status`. The latest run marks DEV-501/502, R04/W11, DEV-505, R05/W13, DEV-503, DEV-504, and Chrome evidence as READY.
 
@@ -182,7 +182,7 @@ http://127.0.0.1:4173/main-flow.html
 http://127.0.0.1:4173/
 ```
 
-The root report page is now the best first M5 reporting screen: after `npm run m5:status` and `npm run acceptance:m5-browserless`, it displays the latest local M5 environment snapshot from `apps/web/m5-status.json` plus the latest 10-step R01-R05/DEV-505 acceptance result from `apps/web/reports-acceptance-run.json`; it can be re-captured with `npm run m5:capture-browser-evidence`.
+The root report page is now the best first M5 reporting screen: after `npm run acceptance:m5-close` and `npm run m5:status`, it displays the latest local M5 environment snapshot from `apps/web/m5-status.json`, the latest 10-step R01-R05/DEV-505 acceptance result from `apps/web/reports-acceptance-run.json`, and the M5 close-readiness gate from `apps/web/m5-gate-status.json`; it can be re-captured with `npm run m5:capture-browser-evidence`.
 
 `ops.html` is the best first M5 operations screen: it shows DEV-505 export task health with CSV export, I08 in-app notifications with single/bulk read actions, DEV-504 filterable audit logs with current-result CSV export, and R05 reconciliation issues with CSV export for the seeded admin account.
 
