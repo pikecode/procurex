@@ -1,25 +1,14 @@
 {
-  "generatedAt": "2026-09-28T15:49:04.627Z",
+  "generatedAt": "2026-09-28T15:50:31.100Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "f796fd2d35cee9421eabeabcd9f3a470c1921a47",
+    "commit": "85648360bc2feba0e2d75c34708ebcbf5d25bcd4",
     "remote": "git@github.com:pikecode/procurex.git",
-    "dirty": true,
-    "dirtyStatus": [
-      "M apps/web/m6-readiness.html",
-      " M apps/web/m6-readiness.js",
-      " M docs/development-log.md",
-      " M docs/m6-production-readiness.md",
-      " M docs/progress.md",
-      " M package.json",
-      " M scripts/check-web-workbenches.mjs",
-      "?? apps/web/m6-local-evidence-package.json",
-      "?? scripts/package-m6-local-evidence.mjs",
-      "?? var/m6-local-evidence-package.json"
-    ]
+    "dirty": false,
+    "dirtyStatus": []
   },
   "commands": [
     "npm run m6:performance",
@@ -70,7 +59,7 @@
       "path": "apps/web/m6-readiness.json",
       "exists": true,
       "sizeBytes": 4596,
-      "sha256": "09f83d9990c683f372df3f0f524bae6ba7232b45adc94b91d67bd9d0d825c396"
+      "sha256": "b2e4d5ffa966ce83a9ddeaf7e6cb334230b4bfc7007979c7403301a68774765d"
     },
     {
       "path": "apps/web/m6-external-evidence.json",
