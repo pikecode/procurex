@@ -222,9 +222,10 @@ For the interactive main-flow demo, run:
 npm run main-flow:seed-demo
 npm run main-flow:check-demo
 npm run main-flow:capture-demo-evidence
+npm run main-flow:capture-interactive-demo
 ```
 
-The demo page renders `apps/web/main-flow-demo-run.json` as a visible evidence section, and the latest Chrome capture under `var/main-flow-demo-evidence/` records `PASSED`, 7 evidence rows, 6 step rows, and true notification/audit evidence flags.
+The demo page renders `apps/web/main-flow-demo-run.json` as a visible evidence section, and the latest Chrome capture under `var/main-flow-demo-evidence/` records `PASSED`, 7 evidence rows, 6 step rows, and true notification/audit evidence flags. `main-flow:capture-interactive-demo` also proves the page's one-click run control can execute the browser flow against real APIs.
 
 For the M4 gate status summary, run:
 

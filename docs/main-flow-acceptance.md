@@ -93,6 +93,8 @@ login
 
 This is a narrow operator workbench for manual visibility. The repeatable proof remains `npm run acceptance:main-flow` and `npm run acceptance:m4-browserless`.
 
+The page can run those steps either one by one or with the "一键执行" control.
+
 The demo flow can also be verified without a browser:
 
 ```bash
@@ -109,6 +111,14 @@ npm run main-flow:capture-demo-evidence
 ```
 
 The latest local capture wrote `var/main-flow-demo-evidence/main-flow-demo.png` and a manifest with `PASSED`, 7 evidence rows, 6 visible operation steps, and true notification/audit evidence flags.
+
+To prove the browser page itself can execute the full path against real APIs, run:
+
+```bash
+npm run main-flow:capture-interactive-demo
+```
+
+This command prepares the PXFLOW seed, starts API/Web as needed, clicks "一键执行" in Chrome, waits for 6/6 operation rows and `COMPANY_TO_SUPPLIER`, then writes `var/main-flow-demo-evidence/main-flow-demo-interactive.png` and `interactive-manifest.json`. The latest local interactive capture reached `COMPANY_TO_SUPPLIER / ¥90.00`.
 
 ## What This Means
 

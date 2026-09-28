@@ -155,6 +155,7 @@ assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'acceptance:mai
 assertIncludes(packageJson.scripts['main-flow:seed-demo'], 'seed-main-flow-demo.mjs', 'main-flow demo seed script');
 assertIncludes(packageJson.scripts['main-flow:check-demo'], 'check-main-flow-demo.mjs', 'main-flow demo check script');
 assertIncludes(packageJson.scripts['main-flow:capture-demo-evidence'], 'capture-main-flow-demo-evidence.mjs', 'main-flow demo browser evidence capture script');
+assertIncludes(packageJson.scripts['main-flow:capture-interactive-demo'], 'capture-main-flow-interactive-demo.mjs', 'main-flow interactive browser evidence capture script');
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'main-flow:check-demo', 'M4 browserless acceptance script');
 
 assertIncludes(mainFlowHtml, '主流程验收', 'main-flow acceptance page');
@@ -190,9 +191,11 @@ assertIncludes(m4Css, '.manual-plan', 'M4 manual acceptance plan styles');
 assertIncludes(mainFlowDemoHtml, '主流程操作台', 'main-flow demo page');
 assertIncludes(mainFlowDemoHtml, '/main-flow-demo.js', 'main-flow demo script');
 assertIncludes(mainFlowDemoHtml, '主流程证据', 'main-flow demo evidence card');
+assertIncludes(mainFlowDemoHtml, '一键执行', 'main-flow demo run-all control');
 assertIncludes(mainFlowDemoJs, 'main-flow-demo-seed.json', 'main-flow demo seed output');
 assertIncludes(mainFlowDemoJs, 'main-flow-demo-run.json', 'main-flow demo evidence output');
 assertIncludes(mainFlowDemoJs, 'loadDemoEvidence', 'main-flow demo evidence loader');
+assertIncludes(mainFlowDemoJs, 'runAll', 'main-flow demo run-all workflow');
 assertIncludes(mainFlowDemoJs, '/purchase-requests', 'main-flow demo purchase request call');
 assertIncludes(mainFlowDemoJs, '/shipments/', 'main-flow demo receipt call');
 

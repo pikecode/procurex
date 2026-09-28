@@ -16,6 +16,7 @@ var/chrome-m5-browser-evidence/
 var/chrome-m5-ops-evidence/
 var/main-flow-demo-evidence/
 var/chrome-main-flow-demo-evidence/
+var/chrome-main-flow-interactive-demo/
 docs/.omc/
 packages/backend/generated/
 *.tsbuildinfo

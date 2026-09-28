@@ -5,6 +5,7 @@ const money = (value) => `¥${Number(value || 0).toLocaleString('zh-CN', { minim
 let token = null;
 let seed = null;
 let state = {};
+let running = false;
 
 const steps = [
   { key: 'login', title: '登录演示账号', run: login },
@@ -82,6 +83,9 @@ function flattenData(data) {
 
 function render() {
   $('empty').classList.toggle('hidden', !!seed);
+  $('run-all').disabled = !seed || running || allDone();
+  $('run-all').textContent = running ? '执行中...' : allDone() ? '已完成' : '一键执行';
+  $('reset').disabled = running;
   $('summary').innerHTML =
     metric('门店下单金额', seed?.expectedSalesAmount || '—', seed ? money(seed.expectedSalesAmount) : '等待种子') +
     metric('供应商应付', seed?.expectedSupplyAmount || '—', seed ? money(seed.expectedSupplyAmount) : '等待种子', true) +
@@ -89,7 +93,7 @@ function render() {
     metric('付款预览', state.paymentPreview?.totalPayableAmount || '—', state.paymentPreview ? state.paymentPreview.direction : '未到达');
   $('steps').innerHTML = steps.map((step, index) => {
     const done = state[step.key];
-    const enabled = seed && (index === 0 || state[steps[index - 1].key]) && !done;
+    const enabled = seed && !running && (index === 0 || state[steps[index - 1].key]) && !done;
     return `<tr><td><strong>${esc(step.title)}</strong></td><td>${done ? '<span class="tag tag-settled">已完成</span>' : '<span class="tag tag-open">待执行</span>'}</td><td>${esc(summary(step.key))}</td><td><button class="payment-button" data-step="${esc(step.key)}" ${enabled ? '' : 'disabled'}>执行</button></td></tr>`;
   }).join('');
   $('steps').querySelectorAll('[data-step]').forEach((button) => button.addEventListener('click', () => runStep(button.dataset.step)));
@@ -102,6 +106,10 @@ function metric(label, value, foot, emphasis = false) {
 function currentStage() {
   const last = [...steps].reverse().find((step) => state[step.key]);
   return last ? last.title : '尚未开始';
+}
+
+function allDone() {
+  return steps.every((step) => state[step.key]);
 }
 
 function summary(key) {
@@ -118,10 +126,36 @@ async function runStep(key) {
   $('notice').classList.add('hidden');
   const step = steps.find((item) => item.key === key);
   try {
+    running = true;
+    render();
     await step.run();
+    running = false;
     render();
   } catch (error) {
+    running = false;
+    render();
     notice(error.message);
+  }
+}
+
+async function runAll() {
+  if (!seed || running || allDone()) return;
+  $('notice').classList.add('hidden');
+  running = true;
+  render();
+  try {
+    for (const step of steps) {
+      if (!state[step.key]) {
+        await step.run();
+        render();
+      }
+    }
+    notice('主流程已执行到付款预览。');
+  } catch (error) {
+    notice(error.message);
+  } finally {
+    running = false;
+    render();
   }
 }
 
@@ -190,5 +224,6 @@ async function previewPayment() {
 }
 
 $('reset').addEventListener('click', loadSeed);
+$('run-all').addEventListener('click', runAll);
 loadSeed();
 loadDemoEvidence();
