@@ -1,0 +1,34 @@
+{
+  "pages": [
+    "pages/login/index",
+    "pages/store/index",
+    "pages/supplier/index",
+    "pages/purchaser/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "ProcureX",
+    "navigationBarBackgroundColor": "#167e5a",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f7f9f8"
+  },
+  "tabBar": {
+    "color": "#7f8b85",
+    "selectedColor": "#167e5a",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/store/index",
+        "text": "门店"
+      },
+      {
+        "pagePath": "pages/supplier/index",
+        "text": "供应商"
+      },
+      {
+        "pagePath": "pages/purchaser/index",
+        "text": "采购"
+      }
+    ]
+  }
+}

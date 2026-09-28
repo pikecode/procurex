@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-09-28T07:56:29.718Z",
+  "generatedAt": "2026-09-28T08:06:42.788Z",
   "status": "NOT_READY",
   "summary": "M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, initialization, and pilot evidence remain open.",
   "counts": {
     "ready": 1,
-    "localReady": 2,
+    "localReady": 3,
     "blocked": 3,
     "planned": 4
   },
@@ -36,6 +36,16 @@
       "evidence": [
         "var/main-flow-demo-evidence/main-flow-demo-interactive-mobile.png",
         "var/main-flow-demo-evidence/role-workbenches-interactive-mobile.png"
+      ]
+    },
+    {
+      "id": "DEV-602-MINI",
+      "title": "小程序产品端表面",
+      "status": "LOCAL_READY",
+      "detail": "Native mini-program role pages exist for Store, Supplier, and Purchaser; real-device WeChat acceptance remains open.",
+      "evidence": [
+        "apps/miniprogram/app.json",
+        "scripts/check-miniprogram-surface.mjs"
       ]
     },
     {

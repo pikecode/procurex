@@ -86,6 +86,15 @@ add(
   ['var/main-flow-demo-evidence/main-flow-demo-interactive-mobile.png', 'var/main-flow-demo-evidence/role-workbenches-interactive-mobile.png'],
 );
 add(
+  'DEV-602-MINI',
+  '小程序产品端表面',
+  await fileExists('apps/miniprogram/app.json') && await fileExists('scripts/check-miniprogram-surface.mjs') ? 'LOCAL_READY' : 'PLANNED',
+  await fileExists('apps/miniprogram/app.json')
+    ? 'Native mini-program role pages exist for Store, Supplier, and Purchaser; real-device WeChat acceptance remains open.'
+    : 'Mini-program product-client pages have not been created yet.',
+  ['apps/miniprogram/app.json', 'scripts/check-miniprogram-surface.mjs'],
+);
+add(
   'DEV-602-WECHAT',
   '微信小程序真机与订阅消息',
   envReady(['WECHAT_APP_ID', 'WECHAT_TEST_ACCOUNT']) && await fileExists('var/m6-wechat-device-evidence/manifest.json') ? 'READY' : 'BLOCKED',

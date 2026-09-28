@@ -1,0 +1,14 @@
+{
+  "description": "ProcureX role mini-program",
+  "appid": "touristappid",
+  "projectname": "procurex-miniprogram",
+  "miniprogramRoot": "./",
+  "compileType": "miniprogram",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true
+  }
+}

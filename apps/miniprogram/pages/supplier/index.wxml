@@ -1,0 +1,46 @@
+<view class="page">
+  <view class="hero">
+    <text class="eyebrow">SUPPLIER</text>
+    <text class="title">供应商工作台</text>
+    <view class="subtitle">面向 S06-S08：待发货、补发、拒单和收货差异。当前切片先接执行单查询、发货和拒单。</view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">当前账号</text>
+    <view class="metric-grid">
+      <view class="metric"><text class="metric-label">用户</text><text class="metric-value">{{user.displayName || '未登录'}}</text></view>
+      <view class="metric"><text class="metric-label">角色</text><text class="metric-value">{{roleText}}</text></view>
+    </view>
+    <view class="button-row">
+      <button class="secondary" loading="{{loading}}" bindtap="loadOrders">刷新待办</button>
+      <button class="danger" bindtap="logout">退出</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">手动处理执行单</text>
+    <view class="field"><text class="field-label">供应商单 ID</text><input value="{{supplierOrderId}}" data-field="supplierOrderId" bindinput="onInput" placeholder="supplierOrderId" /></view>
+    <view class="field"><text class="field-label">发货数量</text><input type="digit" value="{{shipQuantity}}" data-field="shipQuantity" bindinput="onInput" /></view>
+    <view class="button-row">
+      <button class="primary" loading="{{shipping}}" bindtap="shipOrder">创建发货</button>
+      <button class="danger" loading="{{rejecting}}" bindtap="rejectOrder">拒单</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">待办列表</text>
+    <view class="list">
+      <view wx:for="{{orders}}" wx:key="id" class="row" bindtap="selectOrder" data-id="{{item.id}}">
+        <view class="row-title"><text>{{item.orderNo || item.id}}</text><text class="tag">{{item.status || item.fulfillmentStatus}}</text></view>
+        <view class="muted">点击填入执行单。仅显示当前账号可读的供应商订单。</view>
+      </view>
+      <view wx:if="{{!orders.length}}" class="row"><view class="muted">暂无待办或尚未刷新。</view></view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{result}}">
+    <text class="card-title">处理结果</text>
+    <view class="row"><view class="row-title"><text>{{result.title}}</text><text class="tag">{{result.status}}</text></view><view class="muted">{{result.detail}}</view></view>
+  </view>
+  <view wx:if="{{error}}" class="card"><text class="tag tag-fail">{{error}}</text></view>
+</view>

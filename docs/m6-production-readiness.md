@@ -39,6 +39,7 @@ npm run m6:readiness:strict
 | DEV-601 full regression | Latest `acceptance:m5-close`, M5 gate, desktop/mobile main-flow and role-workbench evidence | READY when current local evidence is fresh |
 | DEV-602 performance | Reproducible dataset size, environment, p50/p95/error rate, report query timing, export generation timing | PLANNED |
 | DEV-602 browser/device | Desktop and 390px Web evidence plus broader production-device review | LOCAL_READY |
+| DEV-602 mini-program surface | Native mini-program login plus Store, Supplier, and Purchaser product pages checked by `mini:check` | LOCAL_READY |
 | DEV-602 WeChat | Real AppID, test account, binding mode, upload behavior, subscription-message behavior, real-device screenshots or recording | BLOCKED until external materials exist |
 | DEV-603 deployment | Production `DATABASE_URL`, private file/object storage target, public API base URL, TLS/domain routing, worker process plan | BLOCKED until production environment exists |
 | DEV-603 backup/recovery | Production backup schedule, private evidence-file backup, measured RPO <= 15 minutes, measured RTO <= 4 hours | LOCAL_READY for local drill only |

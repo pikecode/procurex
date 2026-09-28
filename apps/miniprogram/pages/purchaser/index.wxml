@@ -1,0 +1,47 @@
+<view class="page">
+  <view class="hero">
+    <text class="eyebrow">PURCHASER</text>
+    <text class="title">采购工作台</text>
+    <view class="subtitle">面向 S09/S10：采购确认、资金缺口提示、供应商拒单改派。当前切片先接采购申请列表、确认和改派。</view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">当前账号</text>
+    <view class="metric-grid">
+      <view class="metric"><text class="metric-label">用户</text><text class="metric-value">{{user.displayName || '未登录'}}</text></view>
+      <view class="metric"><text class="metric-label">角色</text><text class="metric-value">{{roleText}}</text></view>
+    </view>
+    <view class="button-row">
+      <button class="secondary" loading="{{loading}}" bindtap="loadRequests">刷新待办</button>
+      <button class="danger" bindtap="logout">退出</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">处理采购申请</text>
+    <view class="field"><text class="field-label">采购申请 ID</text><input value="{{requestId}}" data-field="requestId" bindinput="onInput" placeholder="purchaseRequestId" /></view>
+    <view class="field"><text class="field-label">被拒供应商单 ID</text><input value="{{rejectedOrderId}}" data-field="rejectedOrderId" bindinput="onInput" placeholder="supplierOrderId" /></view>
+    <view class="field"><text class="field-label">改派供应商 ID</text><input value="{{targetSupplierId}}" data-field="targetSupplierId" bindinput="onInput" placeholder="supplierId" /></view>
+    <view class="button-row">
+      <button class="primary" loading="{{confirming}}" bindtap="confirmRequest">确认并推送</button>
+      <button class="secondary" loading="{{reallocating}}" bindtap="reallocateRequest">改派供应商</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">采购待办</text>
+    <view class="list">
+      <view wx:for="{{requests}}" wx:key="id" class="row" bindtap="selectRequest" data-id="{{item.id}}">
+        <view class="row-title"><text>{{item.requestNo || item.id}}</text><text class="tag {{item.paymentStatus === 'SHORTFALL' ? 'tag-warn' : ''}}">{{item.status}}</text></view>
+        <view class="muted">资金 {{item.paymentStatus || 'UNKNOWN'}}，点击填入申请 ID。</view>
+      </view>
+      <view wx:if="{{!requests.length}}" class="row"><view class="muted">暂无待办或尚未刷新。</view></view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{result}}">
+    <text class="card-title">处理结果</text>
+    <view class="row"><view class="row-title"><text>{{result.title}}</text><text class="tag">{{result.status}}</text></view><view class="muted">{{result.detail}}</view></view>
+  </view>
+  <view wx:if="{{error}}" class="card"><text class="tag tag-fail">{{error}}</text></view>
+</view>

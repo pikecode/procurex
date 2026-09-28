@@ -12,6 +12,8 @@ M5 has resumed. The current M5 slice has a repeatable browserless acceptance cha
 
 M6 readiness tracking has started without claiming production launch readiness. `npm run m6:readiness` writes `apps/web/m6-readiness.json` and `apps/web/m6-readiness.html` renders DEV-601 through DEV-605. Current expected status is `NOT_READY`: DEV-601 is READY from M5 close evidence, browser/mobile Web and local restore evidence are LOCAL_READY, while WeChat real-device evidence, production environment config, object-storage policy, production recovery drill, initialization sign-off, and pilot evidence remain open.
 
+The first actual mini-program product-client slice now lives under `apps/miniprogram`. It is not another HTML validation page: it uses native WeChat mini-program files and exposes login, Store, Supplier, and Purchaser pages. `npm run mini:check` verifies the surface, role routing, real API paths, command version guards, supplier order item IDs, rejected-order reallocation input, and that no HTML files exist under the mini-program app.
+
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
@@ -108,6 +110,7 @@ npm run m5:capture-browser-evidence
 npm run m5:capture-ops-evidence
 npm run m5:gate-status
 npm run m6:readiness
+npm run mini:check
 ```
 
 The latest local run on 2026-09-28 has Docker, PostgreSQL, Chrome, M5 browserless output, and W11/W13 evidence READY. The browserless chain passed 10/10 steps, W11 capture recorded `PASSED`, M5 status `READY`, M5 gate `READY` with 9 gate rows, 1 report row, and 1 export row; W13 capture recorded 5 reconciliation issues, 0 export-health exception rows, 2 notification rows, and 16 audit rows. The follow-up full baseline also passed: build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.

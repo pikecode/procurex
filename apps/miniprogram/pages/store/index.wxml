@@ -1,0 +1,43 @@
+<view class="page">
+  <view class="hero">
+    <text class="eyebrow">STORE</text>
+    <text class="title">门店工作台</text>
+    <view class="subtitle">面向 S01-S05：订货、订单进度、按批次收货和账款入口。当前切片先接真实下单预览与提交。</view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">当前账号</text>
+    <view class="metric-grid">
+      <view class="metric"><text class="metric-label">用户</text><text class="metric-value">{{user.displayName || '未登录'}}</text></view>
+      <view class="metric"><text class="metric-label">角色</text><text class="metric-value">{{roleText}}</text></view>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">快速订货</text>
+    <view class="field"><text class="field-label">门店 ID</text><input value="{{storeId}}" data-field="storeId" bindinput="onInput" placeholder="storeId" /></view>
+    <view class="field"><text class="field-label">商品 ID</text><input value="{{productId}}" data-field="productId" bindinput="onInput" placeholder="productId" /></view>
+    <view class="field"><text class="field-label">数量</text><input type="digit" value="{{quantity}}" data-field="quantity" bindinput="onInput" /></view>
+    <view class="button-row">
+      <button class="secondary" loading="{{previewing}}" bindtap="previewOrder">预览金额</button>
+      <button class="primary" loading="{{submitting}}" bindtap="submitOrder">提交订货</button>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{preview}}">
+    <text class="card-title">预览结果</text>
+    <view class="metric-grid">
+      <view class="metric"><text class="metric-label">销售商品额</text><text class="metric-value">{{preview.totals.salesGoodsAmount}}</text></view>
+      <view class="metric"><text class="metric-label">供货商品额</text><text class="metric-value">{{preview.totals.supplyGoodsAmount}}</text></view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{created}}">
+    <text class="card-title">订货结果</text>
+    <view class="list">
+      <view class="row"><view class="row-title"><text>{{created.requestNo}}</text><text class="tag">{{created.status}}</text></view><view class="muted">资金状态 {{created.paymentStatus}}，等待采购确认后推送供应商。</view></view>
+    </view>
+  </view>
+
+  <view wx:if="{{error}}" class="card"><text class="tag tag-fail">{{error}}</text></view>
+</view>

@@ -23,6 +23,7 @@
     "test:integration": "node --env-file-if-exists=.env --test --test-concurrency=1 dist/tests/integration/*.test.js",
     "contract:check": "node scripts/check-contract.mjs",
     "web:check": "node scripts/check-web-workbenches.mjs",
+    "mini:check": "node scripts/check-miniprogram-surface.mjs",
     "acceptance:main-flow": "node --env-file-if-exists=.env scripts/run-main-flow-acceptance.mjs",
     "reports:seed-acceptance": "node --env-file-if-exists=.env scripts/seed-reports-acceptance.mjs",
     "reports:check-acceptance": "node --env-file-if-exists=.env scripts/check-reports-acceptance.mjs",
