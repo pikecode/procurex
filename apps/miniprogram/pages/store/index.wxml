@@ -2,7 +2,7 @@
   <view class="hero">
     <text class="eyebrow">STORE</text>
     <text class="title">门店工作台</text>
-    <view class="subtitle">面向 S01-S05：订货、订单进度、按批次收货和账款入口。当前切片先接真实下单预览与提交。</view>
+    <view class="subtitle">面向 S01-S05：订货、订单进度、按批次收货和账款入口。当前切片接真实下单、待收货通知和收货提交。</view>
   </view>
 
   <view class="card">
@@ -36,6 +36,33 @@
     <text class="card-title">订货结果</text>
     <view class="list">
       <view class="row"><view class="row-title"><text>{{created.requestNo}}</text><text class="tag">{{created.status}}</text></view><view class="muted">资金状态 {{created.paymentStatus}}，等待采购确认后推送供应商。</view></view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="card-title">待收货通知</text>
+      <button class="ghost" loading="{{loading}}" bindtap="loadWork">刷新</button>
+    </view>
+    <view class="list" wx:if="{{shipmentTodos.length}}">
+      <view class="row" wx:for="{{shipmentTodos}}" wx:key="id" data-id="{{item.id}}" bindtap="selectShipment">
+        <view class="row-title"><text>{{item.shipmentNo}}</text><text class="tag">待收货</text></view>
+        <view class="muted">供应商单 {{item.supplierOrderId}}</view>
+      </view>
+    </view>
+    <view class="muted" wx:else>暂无待收货通知，可手工输入发货单 ID。</view>
+    <view class="field"><text class="field-label">发货单 ID</text><input value="{{shipmentId}}" data-field="shipmentId" bindinput="onInput" placeholder="shipmentId" /></view>
+    <view class="field"><text class="field-label">少收数量</text><input type="digit" value="{{shortReceivedQuantity}}" data-field="shortReceivedQuantity" bindinput="onInput" /></view>
+    <view class="button-row">
+      <button class="primary" loading="{{receiving}}" data-mode="FULL" bindtap="receiveShipment">确认收货</button>
+      <button class="secondary" loading="{{receiving}}" data-mode="SHORT" bindtap="receiveShipment">提交收货差异</button>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{receiptResult}}">
+    <text class="card-title">收货结果</text>
+    <view class="list">
+      <view class="row"><view class="row-title"><text>{{receiptResult.title}}</text><text class="tag">{{receiptResult.status}}</text></view><view class="muted">{{receiptResult.detail}}</view></view>
     </view>
   </view>
 

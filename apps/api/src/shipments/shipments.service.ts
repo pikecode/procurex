@@ -8,7 +8,7 @@ import {
   UserScopeType,
   UserStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { Receipt, ReceiptItem } from '../../../../packages/backend/generated/prisma/client.js';
+import type { Receipt, ReceiptItem, Shipment, ShipmentItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import { resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
 
@@ -39,9 +39,58 @@ export type ReceiptItemView = {
   receivedQuantity: string;
 };
 
+export type ShipmentDetailView = {
+  id: string;
+  shipmentNo: string;
+  supplierOrderId: string;
+  supplierOrderNo: string;
+  supplierOrderVersion: number;
+  kind: string;
+  shippedAt: string;
+  trackingNo: string | null;
+  currentReceiptRevision: number;
+  items: ShipmentDetailItemView[];
+};
+
+export type ShipmentDetailItemView = {
+  id: string;
+  orderItemId: string;
+  productId: string;
+  productName: string;
+  shippedQuantity: string;
+  salesPriceSnapshot: string;
+  supplyPriceSnapshot: string;
+};
+
 @Injectable()
 export class ShipmentsService {
   constructor(private readonly database: DatabaseService) {}
+
+  async get(id: string, scope?: { type: string; storeId?: string }): Promise<ShipmentDetailView> {
+    const shipment = await this.database.client.shipment.findUnique({
+      where: {
+        id,
+        supplierOrder: scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? { storeId: scope?.storeId } : undefined,
+      },
+      include: {
+        supplierOrder: true,
+        items: { include: { orderItem: { include: { product: true } } }, orderBy: { createdAt: 'asc' } },
+        receipts: {
+          where: { isCurrent: true },
+          orderBy: { revision: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    if (!shipment) {
+      throw new NotFoundException({
+        code: 'SHIPMENT_NOT_FOUND',
+        message: 'Shipment was not found',
+      });
+    }
+
+    return toShipmentDetailView(shipment);
+  }
 
   async createReceipt(shipmentId: string, input: CreateReceiptInput, scope?: { type: string; storeId?: string }): Promise<ReceiptView> {
     const shipment = await this.database.client.shipment.findUnique({
@@ -247,6 +296,33 @@ export class ShipmentsService {
 
     return toReceiptView(receipt);
   }
+}
+
+function toShipmentDetailView(shipment: Shipment & {
+  supplierOrder: SupplierOrder;
+  items: Array<ShipmentItem & { orderItem: { productId: string; product: { name: string } } }>;
+  receipts: Receipt[];
+}): ShipmentDetailView {
+  return {
+    id: shipment.id,
+    shipmentNo: shipment.shipmentNo,
+    supplierOrderId: shipment.supplierOrderId,
+    supplierOrderNo: shipment.supplierOrder.supplierOrderNo,
+    supplierOrderVersion: shipment.supplierOrder.version,
+    kind: shipment.kind,
+    shippedAt: shipment.shippedAt.toISOString(),
+    trackingNo: shipment.trackingNo,
+    currentReceiptRevision: shipment.receipts[0]?.revision ?? 0,
+    items: shipment.items.map((item) => ({
+      id: item.id,
+      orderItemId: item.orderItemId,
+      productId: item.orderItem.productId,
+      productName: item.orderItem.product.name,
+      shippedQuantity: item.quantity.toString(),
+      salesPriceSnapshot: item.salesPriceSnapshot.toString(),
+      supplyPriceSnapshot: item.supplyPriceSnapshot.toString(),
+    })),
+  };
 }
 
 function toReceiptView(receipt: Receipt & { items: ReceiptItem[] }): ReceiptView {

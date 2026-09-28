@@ -53,6 +53,13 @@ page {
   font-weight: 750;
 }
 
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
 .muted {
   color: #7f8b85;
   font-size: 23rpx;
@@ -130,6 +137,16 @@ button {
 .secondary {
   background: #eef6f1;
   color: #167e5a;
+}
+
+.ghost {
+  width: auto;
+  min-width: 132rpx;
+  height: 64rpx;
+  padding: 0 20rpx;
+  background: #fff;
+  color: #167e5a;
+  border: 1rpx solid #dbe8e1;
 }
 
 .danger {

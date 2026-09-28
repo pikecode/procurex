@@ -83,9 +83,17 @@ assertIncludes(loginJs, "wx.switchTab({ url: '/pages/purchaser/index' })", 'purc
 
 assertIncludes(storeJs, '/purchase-requests/preview', 'store order preview');
 assertIncludes(storeJs, '/purchase-requests', 'store order creation');
+assertIncludes(storeJs, '/notifications', 'store shipment notification list');
+assertIncludes(storeJs, '/shipments/${this.data.shipmentId}', 'store shipment detail');
+assertIncludes(storeJs, '/receipts', 'store receipt creation');
+assertIncludes(storeJs, 'expectedOrderVersion', 'store receipt order version guard');
+assertIncludes(storeJs, 'expectedReceiptRevision', 'store receipt revision guard');
 assertIncludes(storeWxml, '快速订货', 'store order screen');
 assertIncludes(storeWxml, '预览金额', 'store order preview button');
 assertIncludes(storeWxml, '提交订货', 'store order submit button');
+assertIncludes(storeWxml, '待收货通知', 'store shipment notification screen');
+assertIncludes(storeWxml, '确认收货', 'store full receipt action');
+assertIncludes(storeWxml, '提交收货差异', 'store short receipt action');
 
 assertIncludes(supplierJs, '/supplier-orders', 'supplier order list');
 assertIncludes(supplierJs, '/shipment-preview', 'supplier shipment preview');

@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
@@ -8,7 +8,7 @@ import { RolesGuard } from '../auth/roles.guard.js';
 import { CommandsService } from '../commands/commands.service.js';
 import { getOrCreateTraceId } from '../common/request-context.js';
 import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contract.js';
-import { ShipmentsService, type CreateReceiptInput, type ReceiptView } from './shipments.service.js';
+import { ShipmentsService, type CreateReceiptInput, type ReceiptView, type ShipmentDetailView } from './shipments.service.js';
 import {
   validateDecimalString,
   validateExpectedVersion,
@@ -30,6 +30,13 @@ export class ShipmentsController {
     private readonly commandsService: CommandsService,
     private readonly audit: AuditService,
   ) {}
+
+  @Get(':id')
+  @RequireRoles('ADMIN', 'STORE', 'STORE_FINANCE')
+  async get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<ShipmentDetailView> {
+    throwIfInvalid(validateUuid('id', id));
+    return this.shipmentsService.get(id, storeScope(request));
+  }
 
   @Post(':id/receipts')
   @RequireRoles('ADMIN', 'STORE')

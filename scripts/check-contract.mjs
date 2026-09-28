@@ -250,7 +250,8 @@ assertIncludes(reconciliationController, "@Controller('reconciliation-issues')",
 assertIncludes(reconciliationController, "@RequireRoles('ADMIN', 'HQ_FINANCE')", 'reconciliation controller');
 assertIncludes(prismaSchema, 'model ShipmentGapAllocation', 'prisma schema');
 assertIncludes(prismaSchema, 'freightConfirmationId String?', 'prisma schema');
-assertIncludes(apiDesign, '`POST /shipments/{id}/receipts`', 'api design');
+assertIncludes(apiDesign, '`GET /shipments/{id}`、`POST /shipments/{id}/receipts`', 'api design');
+assertIncludes(shipmentsController, "@Get(':id')", 'shipments controller');
 assertIncludes(shipmentsController, "@Post(':id/receipts')", 'shipments controller');
 assertIncludes(apiDesign, '`GET /discrepancies/{id}`、`POST /discrepancies/{id}/resolve`', 'api design');
 assertIncludes(discrepanciesController, "@Get(':id')", 'discrepancies controller');

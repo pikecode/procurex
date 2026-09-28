@@ -7,10 +7,16 @@ Page({
     storeId: '',
     productId: '',
     quantity: '10',
+    shipmentId: '',
+    shortReceivedQuantity: '0',
+    shipmentTodos: [],
     preview: null,
     created: null,
+    receiptResult: null,
     previewing: false,
     submitting: false,
+    loading: false,
+    receiving: false,
     error: ''
   },
 
@@ -21,10 +27,38 @@ Page({
       return;
     }
     this.setData({ user, roleText: (user.roles || []).join(' / ') });
+    this.loadWork();
   },
 
   onInput(event) {
     this.setData({ [event.currentTarget.dataset.field]: event.detail.value });
+  },
+
+  selectShipment(event) {
+    this.setData({ shipmentId: event.currentTarget.dataset.id });
+  },
+
+  async loadWork() {
+    this.setData({ loading: true, error: '' });
+    try {
+      const data = await api.request('/notifications');
+      const notifications = data.notifications || [];
+      const shipmentTodos = notifications
+        .filter((item) => item.payload && item.payload.type === 'SHIPMENT_CREATED' && item.payload.shipmentId)
+        .map((item) => ({
+          id: item.payload.shipmentId,
+          shipmentNo: item.payload.shipmentNo || item.payload.shipmentId,
+          supplierOrderId: item.payload.supplierOrderId,
+          title: item.title,
+          createdAt: item.createdAt
+        }))
+        .slice(0, 20);
+      this.setData({ shipmentTodos });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      this.setData({ loading: false });
+    }
   },
 
   orderInput() {
@@ -62,6 +96,44 @@ Page({
       this.setData({ error: error.message });
     } finally {
       this.setData({ submitting: false });
+    }
+  },
+
+  async receiveShipment(event) {
+    const mode = event.currentTarget.dataset.mode;
+    if (!this.data.shipmentId) {
+      this.setData({ error: '请先选择或输入发货单 ID' });
+      return;
+    }
+
+    this.setData({ receiving: true, error: '', receiptResult: null });
+    try {
+      const shipment = await api.request(`/shipments/${this.data.shipmentId}`);
+      const items = (shipment.items || []).map((item, index) => ({
+        shipmentItemId: item.id,
+        receivedQuantity: mode === 'SHORT' && index === 0 ? this.data.shortReceivedQuantity : item.shippedQuantity
+      }));
+      const receipt = await api.request(`/shipments/${this.data.shipmentId}/receipts`, {
+        method: 'POST',
+        data: {
+          expectedOrderVersion: shipment.supplierOrderVersion,
+          expectedReceiptRevision: shipment.currentReceiptRevision,
+          items
+        },
+        header: { 'idempotency-key': `mini-store-receipt-${mode}-${Date.now()}` }
+      });
+      this.setData({
+        receiptResult: {
+          title: receipt.receiptNo || receipt.id,
+          status: mode === 'SHORT' ? 'SHORT_RECEIVED' : 'RECEIVED',
+          detail: `发货单 ${shipment.shipmentNo} 已提交第 ${receipt.revision} 版收货`
+        }
+      });
+      await this.loadWork();
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      this.setData({ receiving: false });
     }
   }
 });

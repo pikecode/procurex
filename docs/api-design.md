@@ -177,7 +177,7 @@ O10 只处理拒单留下的待重分配商品；同次订货中目标供应商�
 | F01 | `GET /supplier-orders`、`GET /supplier-orders/{id}` | 各角色对应范围 | state、storeId、supplierId、资金阻断、待补标记及日期；按角色返回投影 |
 | F02 | `POST /supplier-orders/{id}/shipment-preview` | SUPPLIER/ADMIN | expectedVersion、items、freight、trackingNo、freightConfirmationId?；返回本次量/剩余待补/永久减量和资金阻断 |
 | F03 | `POST /supplier-orders/{id}/shipments` | SUPPLIER/ADMIN | 同 F02；服务端记录实际 shippedAt，不接受客户端回填首次发货日期 |
-| F04 | `POST /shipments/{id}/receipts` | STORE/ADMIN | expectedOrderVersion、expectedReceiptRevision（首次 0）、items[{shipmentItemId,receivedQuantity}]、evidenceFileIds；整批完整提交 |
+| F04 | `GET /shipments/{id}`、`POST /shipments/{id}/receipts` | STORE/ADMIN | 读取发货单明细、supplierOrderVersion、currentReceiptRevision 后提交 expectedOrderVersion、expectedReceiptRevision（首次 0）、items[{shipmentItemId,receivedQuantity}]、evidenceFileIds；整批完整提交 |
 | F05 | `GET /discrepancies/{id}`、`POST /discrepancies/{id}/resolve` | SUPPLIER/ADMIN | 读取差异详情和版本；处理时提交 expectedVersion、action REPLENISH/RETURN/ACCEPT、reason?；REPLENISH 产生待补资格，不伪造已发货 |
 | F06 | `POST /supplier-orders/{id}/freight-confirmations` | SUPPLIER/ADMIN | expectedVersion、amount、reason；补发额外运费待采购确认 |
 | F07 | `POST /freight-confirmations/{id}/confirm` 或 `/reject` | PURCHASER/ADMIN | expectedVersion、reason；只确认此笔费用，不引入审批流 |
