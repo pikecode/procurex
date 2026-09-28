@@ -2,6 +2,7 @@
 
 ## 2026-09-28
 
+- 小程序采购拒单待办：采购小程序页现在同时读取 `/purchase-requests` 和 `/notifications`，筛选 `SUPPLIER_ORDER_REJECTED` 站内消息，展示“拒单通知”列表；点通知会自动填入 purchaseRequestId 与 rejectedOrderId，再调用 `/purchase-requests/{id}/reallocate` 改派目标供应商。`mini:check` 新增采购拒单通知、`/notifications` 和重分配守卫断言。
 - 小程序门店收货闭环：新增 `GET /shipments/{id}` 发货单详情接口，门店/门店财务作用域只能读取本门店发货单，返回发货单号、供应商单版本、当前收货 revision 和明细行，用于移动端提交幂等收货。门店小程序页现在读取 `/notifications` 中的 `SHIPMENT_CREATED` 待收货提醒，可选择发货单后调用 `/shipments/{id}` 与 `/shipments/{id}/receipts` 完成“确认收货”或“提交收货差异”；契约和 `mini:check` 同步覆盖 F04 GET/POST、版本守卫和收货按钮。
 - 小程序供应商异常处理：新增 `GET /discrepancies/{id}` 只读详情接口，供应商作用域只能读取自身执行单差异，用于移动端拿到版本号后提交处理；供应商小程序页现在从 `/notifications` 读取收货差异待办，选择 discrepancyId 后可调用 `/discrepancies/{id}/resolve` 执行 `ACCEPT` 同意少收、`REPLENISH` 安排补发、`RETURN` 退回核对。契约文档同步 F05 的 GET/POST 组合，`contract:check` 和 `mini:check` 覆盖差异详情、三种处理动作和版本守卫。验证：`build`、`contract:check`、`mini:check` 通过。
 - 小程序产品端起步：新增 `apps/miniprogram` 微信小程序原生工程，不再放在 `apps/web` 验证页里。首批页面包含登录、门店、供应商、采购三个角色入口：门店页接 `/purchase-requests/preview` 与 `/purchase-requests` 做订货预览/提交；供应商页接 `/supplier-orders`、`/shipment-preview`、`/shipments`、`/reject`，并带 `expectedVersion` 与 `orderItemId`；采购页接 `/purchase-requests`、`/confirm`、`/reallocate`，并要求 `expectedVersion`、`rejectedOrderId` 和目标供应商。新增 `npm run mini:check`，校验小程序页面、真实 API 端点、版本守卫、三角色路由，并确认小程序目录不使用 HTML。验证：`mini:check`、`web:check` 通过。

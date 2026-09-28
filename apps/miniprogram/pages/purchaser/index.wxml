@@ -2,7 +2,7 @@
   <view class="hero">
     <text class="eyebrow">PURCHASER</text>
     <text class="title">采购工作台</text>
-    <view class="subtitle">面向 S09/S10：采购确认、资金缺口提示、供应商拒单改派。当前切片先接采购申请列表、确认和改派。</view>
+    <view class="subtitle">面向 S09/S10：采购确认、资金缺口提示、供应商拒单改派。当前切片接采购申请列表、拒单通知、确认和改派。</view>
   </view>
 
   <view class="card">
@@ -12,8 +12,19 @@
       <view class="metric"><text class="metric-label">角色</text><text class="metric-value">{{roleText}}</text></view>
     </view>
     <view class="button-row">
-      <button class="secondary" loading="{{loading}}" bindtap="loadRequests">刷新待办</button>
+      <button class="secondary" loading="{{loading}}" bindtap="loadWork">刷新待办</button>
       <button class="danger" bindtap="logout">退出</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">拒单通知</text>
+    <view class="list">
+      <view wx:for="{{rejectionTodos}}" wx:key="id" class="row" bindtap="selectRejection" data-request-id="{{item.purchaseRequestId}}" data-supplier-order-id="{{item.supplierOrderId}}">
+        <view class="row-title"><text>{{item.supplierOrderNo}}</text><text class="tag tag-warn">待改派</text></view>
+        <view class="muted">采购申请 {{item.purchaseRequestId}}，原因 {{item.reason || '未填写'}}</view>
+      </view>
+      <view wx:if="{{!rejectionTodos.length}}" class="row"><view class="muted">暂无供应商拒单待处理。</view></view>
     </view>
   </view>
 

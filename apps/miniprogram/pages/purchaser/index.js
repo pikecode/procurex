@@ -5,6 +5,7 @@ Page({
     user: {},
     roleText: '未登录',
     requests: [],
+    rejectionTodos: [],
     requestId: '',
     rejectedOrderId: '',
     targetSupplierId: '',
@@ -22,7 +23,7 @@ Page({
       return;
     }
     this.setData({ user, roleText: (user.roles || []).join(' / ') });
-    this.loadRequests();
+    this.loadWork();
   },
 
   onInput(event) {
@@ -33,15 +34,56 @@ Page({
     this.setData({ requestId: event.currentTarget.dataset.id });
   },
 
-  async loadRequests() {
+  selectRejection(event) {
+    this.setData({
+      requestId: event.currentTarget.dataset.requestId,
+      rejectedOrderId: event.currentTarget.dataset.supplierOrderId
+    });
+  },
+
+  async loadWork() {
     this.setData({ loading: true, error: '' });
+    try {
+      await Promise.all([this.loadRequests(false), this.loadRejections(false)]);
+    } finally {
+      this.setData({ loading: false });
+    }
+  },
+
+  async loadRequests(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
       const requests = await api.request('/purchase-requests');
       this.setData({ requests: Array.isArray(requests) ? requests.slice(0, 20) : [] });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
-      this.setData({ loading: false });
+      if (toggleLoading) this.setData({ loading: false });
+    }
+  },
+
+  async loadRejections(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
+    try {
+      const data = await api.request('/notifications');
+      const notifications = data.notifications || [];
+      const rejectionTodos = notifications
+        .filter((item) => item.payload && item.payload.type === 'SUPPLIER_ORDER_REJECTED' && item.payload.purchaseRequestId && item.payload.supplierOrderId)
+        .map((item) => ({
+          id: item.id,
+          title: item.title,
+          purchaseRequestId: item.payload.purchaseRequestId,
+          supplierOrderId: item.payload.supplierOrderId,
+          supplierOrderNo: item.payload.supplierOrderNo || item.payload.supplierOrderId,
+          reason: item.payload.reason || '',
+          createdAt: item.createdAt
+        }))
+        .slice(0, 20);
+      this.setData({ rejectionTodos });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      if (toggleLoading) this.setData({ loading: false });
     }
   },
 
@@ -61,7 +103,7 @@ Page({
           detail: `生成供应商单 ${(confirmed.supplierOrders || []).map((order) => order.id).join(', ') || '已推送'}`
         }
       });
-      await this.loadRequests();
+      await this.loadWork();
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -92,7 +134,7 @@ Page({
           detail: `已改派到 ${this.data.targetSupplierId}`
         }
       });
-      await this.loadRequests();
+      await this.loadWork();
     } catch (error) {
       this.setData({ error: error.message });
     } finally {

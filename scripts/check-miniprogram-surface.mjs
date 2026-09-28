@@ -111,11 +111,14 @@ assertIncludes(supplierWxml, '安排补发', 'supplier discrepancy replenish act
 assertIncludes(supplierWxml, '退回核对', 'supplier discrepancy return action');
 
 assertIncludes(purchaserJs, '/purchase-requests', 'purchaser request list');
+assertIncludes(purchaserJs, '/notifications', 'purchaser rejection notification list');
 assertIncludes(purchaserJs, '/confirm', 'purchaser confirmation');
 assertIncludes(purchaserJs, '/reallocate', 'purchaser reallocation');
 assertIncludes(purchaserJs, 'expectedVersion', 'purchaser version guard');
 assertIncludes(purchaserJs, 'rejectedOrderId', 'purchaser rejection reallocation guard');
+assertIncludes(purchaserJs, 'SUPPLIER_ORDER_REJECTED', 'purchaser supplier rejection notification filter');
 assertIncludes(purchaserWxml, '确认并推送', 'purchaser confirmation screen');
+assertIncludes(purchaserWxml, '拒单通知', 'purchaser rejection notification screen');
 assertIncludes(purchaserWxml, '改派供应商', 'purchaser reallocation screen');
 
 console.log('Mini-program surface check passed.');
