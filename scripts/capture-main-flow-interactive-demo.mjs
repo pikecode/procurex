@@ -266,21 +266,33 @@ async function runRoleWorkbenchStoreOrder(cdp) {
       await waitFor(() => document.querySelector('#store-receipt-action') && !document.querySelector('#store-receipt-action').disabled, 'store receipt action button');
       document.querySelector('#store-receipt-action').click();
       await waitFor(() => document.querySelector('#role-action-label')?.textContent.trim() === 'COMPLETED', 'store role receipt completion');
+      await waitFor(() => document.querySelector('#supplier-discrepancy-action') && !document.querySelector('#supplier-discrepancy-action').disabled, 'supplier discrepancy action button');
+      document.querySelector('#supplier-discrepancy-action').click();
+      await waitFor(() => document.querySelector('#role-action-label')?.textContent.trim() === 'RESOLVED', 'supplier discrepancy resolution');
+      await waitFor(() => document.querySelector('#supplier-rejection-action') && !document.querySelector('#supplier-rejection-action').disabled, 'supplier rejection action button');
+      document.querySelector('#supplier-rejection-action').click();
+      await waitFor(() => document.querySelector('#role-action-label')?.textContent.trim() === 'REALLOCATED', 'supplier rejection handling');
       const resultText = document.querySelector('#store-order-result')?.textContent.trim() || '';
       const purchaserResultText = document.querySelector('#purchaser-confirm-result')?.textContent.trim() || '';
       const shipmentResultText = document.querySelector('#supplier-shipment-result')?.textContent.trim() || '';
       const receiptResultText = document.querySelector('#store-receipt-result')?.textContent.trim() || '';
+      const discrepancyResultText = document.querySelector('#supplier-discrepancy-result')?.textContent.trim() || '';
+      const rejectionResultText = document.querySelector('#supplier-rejection-result')?.textContent.trim() || '';
       return {
         status: document.querySelector('#role-action-label')?.textContent.trim() || '',
         storeResultText: resultText,
         purchaserResultText,
         shipmentResultText,
         receiptResultText,
+        discrepancyResultText,
+        rejectionResultText,
         hasRequestNo: resultText.includes('PR'),
         hasPaidStatus: resultText.includes('PAID'),
         hasSupplierOrderId: purchaserResultText.includes('CONFIRMED') && purchaserResultText.split('·').length >= 2,
         hasShipmentNo: shipmentResultText.includes('SHIPPED') && shipmentResultText.split('·').length >= 2,
         hasReceiptNo: receiptResultText.includes('COMPLETED') && receiptResultText.split('·').length >= 2,
+        hasResolvedDiscrepancy: discrepancyResultText.includes('RESOLVED') && discrepancyResultText.split('·').length >= 2,
+        hasReallocatedRejection: rejectionResultText.includes('REALLOCATED') && rejectionResultText.split('·').length >= 2,
         laneRows: document.querySelectorAll('#role-lanes article').length,
         viewportWidth: window.innerWidth,
         horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
@@ -332,7 +344,7 @@ async function main() {
         console.log(`  Role workbench screenshot: ${roleWorkbenchAction.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
-        console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText})`);
+        console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText}; ${roleWorkbenchAction.state.discrepancyResultText}; ${roleWorkbenchAction.state.rejectionResultText})`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');
