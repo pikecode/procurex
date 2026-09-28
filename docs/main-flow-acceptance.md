@@ -33,7 +33,7 @@ This flow is mostly implemented in the backend and covered by integration tests.
 | 6. Supplier order read | F01 | `GET /supplier-orders`, detail | Supplier scope hardening covered | Not yet in Web/S06 | Need supplier order list/detail UI |
 | 7. Shipment preview/create | F02-F03, DEV-301/302 | shipment preview and creation | Integration covers shipment, freight confirmation use, replenishment allocation | Not yet in Web/S06 | Need visible supplier shipment UI |
 | 8. Store receipt | F04, DEV-303 | `POST /shipments/{id}/receipts` | Integration covers receipt revisions, short receipt, replacement | Not yet in Web/S04 | Need visible receipt UI |
-| 9. Discrepancy resolution | F05, DEV-304 | `POST /discrepancies/{id}/resolve` | ACCEPT, REPLENISH, RETURN covered through backend flows | Role workbench now has a supplier discrepancy ACCEPT action | REPLENISH and RETURN branches still need visible UI coverage |
+| 9. Discrepancy resolution | F05, DEV-304 | `POST /discrepancies/{id}/resolve` | ACCEPT, REPLENISH, RETURN covered through backend flows | Role workbench now has supplier discrepancy ACCEPT plus REPLENISH/RETURN branch actions | Mobile role-specific coverage remains open |
 | 10. Store/supplier statements | B01-B04, DEV-402/403 | store, supplier total, supplier-store, direct statements | 31 integration tests and statement-specific evidence | W09/S05/S08 in `apps/web/billing.html` | Browser E2E still blocked |
 | 11. Payment registration | B06-B07, DEV-404 | preview/create payment with evidence file | Required PAYMENT evidence and idempotency covered | W09/S05/S08 in `apps/web/billing.html` | Browser E2E still blocked |
 | 12. Receiver confirmation | B08, DEV-404 | payment confirmation | Receiver authorization and direct/company gates covered | W09/S05/S08 in `apps/web/billing.html` | Browser E2E still blocked |
@@ -104,7 +104,7 @@ npm run main-flow:check-demo
 
 `main-flow:check-demo` also writes `apps/web/main-flow-demo-run.json`. The operator demo renders that file as "角色复核", "分角色视图", and "主流程证据" sections covering Operator, Store, Supplier, and Purchaser evidence, role-specific next-workbench boundaries, shipment notification, receipt-discrepancy notification, discrepancy-resolution notification, supplier-rejection notification, audited order/fulfillment actions, and the supplier payment preview.
 
-`apps/web/role-workbenches.html` is the first role-specific product split from the operator demo. It renders Store, Purchaser, Supplier, and Operator lanes from the same PXFLOW seed/run output, with account scope, current todos, action boundaries, mapped main-flow evidence, and next-page boundary text. The Store lane includes a real order action: it logs in as `pxflow_store`, previews the seeded item, and creates a `PENDING_PROCUREMENT / PAID` purchase request through the real API. The Purchaser lane then confirms that request through `/purchase-requests/{id}/confirm`, reaches `CONFIRMED`, and returns the generated supplier order id. The Supplier lane logs in as `pxflow_supplier`, previews and creates a shipment through `/supplier-orders/{id}/shipment-preview` and `/supplier-orders/{id}/shipments`, and the Store receipt action calls `/shipments/{id}/receipts` to reach `COMPLETED`. The Supplier discrepancy action creates a separate short-receipt exception and calls `/discrepancies/{id}/resolve` to reach `RESOLVED`; the supplier rejection action rejects a pushed order and has Purchaser call `/purchase-requests/{id}/reallocate` with cancellation assignments to reach `REALLOCATED`. The remaining role-specific operation branches are multi-supplier reallocation plus discrepancy REPLENISH/RETURN.
+`apps/web/role-workbenches.html` is the first role-specific product split from the operator demo. It renders Store, Purchaser, Supplier, and Operator lanes from the same PXFLOW seed/run output, with account scope, current todos, action boundaries, mapped main-flow evidence, and next-page boundary text. The Store lane includes a real order action: it logs in as `pxflow_store`, previews the seeded item, and creates a `PENDING_PROCUREMENT / PAID` purchase request through the real API. The Purchaser lane then confirms that request through `/purchase-requests/{id}/confirm`, reaches `CONFIRMED`, and returns the generated supplier order id. The Supplier lane logs in as `pxflow_supplier`, previews and creates a shipment through `/supplier-orders/{id}/shipment-preview` and `/supplier-orders/{id}/shipments`, and the Store receipt action calls `/shipments/{id}/receipts` to reach `COMPLETED`. The Supplier discrepancy action creates a separate short-receipt exception and calls `/discrepancies/{id}/resolve` to reach `RESOLVED`; the supplier rejection action rejects a pushed order and has Purchaser call `/purchase-requests/{id}/reallocate` to reallocate the item to the backup supplier; the discrepancy branch action covers `REPLENISH` with a replenishment shipment/receipt and `RETURN` with a returnRecord. The remaining role-specific work is mobile/browser breadth and production readiness, not core API reachability.
 
 Chrome-rendered evidence can be refreshed with:
 
@@ -126,8 +126,8 @@ This command prepares the PXFLOW seed, refreshes the role evidence, starts API/W
 
 The backend main flow is broad and largely connected. A narrow Web demo now exists and renders persisted role, notification, and audit evidence, but the full role-specific product flow is still incomplete:
 
-- Multi-supplier reallocation branch with a second supplier seed.
-- Supplier discrepancy REPLENISH and RETURN visible branches beyond the current ACCEPT action.
+- Mobile/narrow role-specific acceptance beyond the current desktop role-workbench action capture.
+- Production operations policy and launch hardening.
 
 The visible work currently starts mainly at billing and payment.
 
@@ -137,8 +137,8 @@ The project has not abandoned the original demand, but the execution has become 
 
 The next visible-product priority is:
 
-The scripted runner, browser-readable result page, narrow operator demo, role evidence checker, role-view tabs, role workbench lanes, real Store role order action, real Purchaser confirmation action, real Supplier shipment action, real Store receipt action, real Supplier discrepancy action, real supplier rejection handling action, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to broaden exception coverage into multi-supplier reallocation and discrepancy REPLENISH/RETURN branches.
+The scripted runner, browser-readable result page, narrow operator demo, role evidence checker, role-view tabs, role workbench lanes, real Store role order action, real Purchaser confirmation action, real Supplier shipment action, real Store receipt action, real Supplier discrepancy action, real supplier rejection reallocation action, real discrepancy REPLENISH/RETURN branch action, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to broaden role-specific browser/mobile acceptance and production-readiness coverage.
 
 ## Recommended Next Step
 
-Keep M5 close evidence green while evolving `role-workbenches.html` from order-to-exception actions into multi-supplier reallocation, discrepancy replenishment/return, mobile, and production-readiness coverage.
+Keep M5 close evidence green while evolving `role-workbenches.html` from order-to-exception actions into mobile, broader browser, and production-readiness coverage.

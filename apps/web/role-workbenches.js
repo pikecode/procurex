@@ -14,6 +14,7 @@ let shipmentAction = null;
 let receiptAction = null;
 let discrepancyAction = null;
 let rejectionAction = null;
+let discrepancyBranchesAction = null;
 let actionRunning = false;
 
 const roleDefinitions = {
@@ -31,7 +32,7 @@ const roleDefinitions = {
     scope: '采购账号处理确认、分派、拒单和异常队列',
     todos: ['确认采购申请', '查看供应商拒单通知', '追踪订单审计动作'],
     actions: ['采购确认', '供应商改派', '异常队列'],
-    next: '采购确认和拒单处理已接入真实 API；下一步继续接多供应商改派。',
+    next: '采购确认、拒单处理和多供应商改派已接入真实 API；下一步继续接移动端异常队列。',
   },
   Supplier: {
     title: '供应商工作台',
@@ -39,7 +40,7 @@ const roleDefinitions = {
     scope: '供应商账号只看本供应商订单、发货和差异',
     todos: ['查看待发货订单', '创建发货记录', '处理收货差异'],
     actions: ['发货', '差异处理', '拒单'],
-    next: '供应商发货、差异处理和拒单已接入真实 API；下一步继续接补发/退回分支。',
+    next: '供应商发货、差异处理、补发、退回和拒单已接入真实 API；下一步继续接移动端异常队列。',
   },
   Operator: {
     title: '运营联调台',
@@ -157,27 +158,30 @@ function renderDetail() {
 }
 
 function renderActions() {
-  $('role-action-label').textContent = rejectionAction?.status || discrepancyAction?.status || receiptAction?.status || shipmentAction?.status || purchaserAction?.status || storeAction?.status || (actionRunning ? '执行中' : '等待操作');
-  $('role-action-label').classList.toggle('tag-ok', rejectionAction?.status === 'REALLOCATED' || discrepancyAction?.status === 'RESOLVED' || receiptAction?.status === 'COMPLETED' || shipmentAction?.status === 'SHIPPED' || purchaserAction?.status === 'CONFIRMED' || storeAction?.status === 'PENDING_PROCUREMENT');
+  $('role-action-label').textContent = discrepancyBranchesAction?.status || rejectionAction?.status || discrepancyAction?.status || receiptAction?.status || shipmentAction?.status || purchaserAction?.status || storeAction?.status || (actionRunning ? '执行中' : '等待操作');
+  $('role-action-label').classList.toggle('tag-ok', discrepancyBranchesAction?.status === 'BRANCHES_READY' || rejectionAction?.status === 'REALLOCATED' || discrepancyAction?.status === 'RESOLVED' || receiptAction?.status === 'COMPLETED' || shipmentAction?.status === 'SHIPPED' || purchaserAction?.status === 'CONFIRMED' || storeAction?.status === 'PENDING_PROCUREMENT');
   const storeDisabled = !seed || actionRunning ? 'disabled' : '';
   const purchaserDisabled = !seed || actionRunning || !storeAction?.requestId || purchaserAction?.status === 'CONFIRMED' ? 'disabled' : '';
   const supplierDisabled = !seed || actionRunning || !purchaserAction?.supplierOrderIds?.length || shipmentAction?.status === 'SHIPPED' ? 'disabled' : '';
   const receiptDisabled = !seed || actionRunning || !shipmentAction?.shipmentId || receiptAction?.status === 'COMPLETED' ? 'disabled' : '';
   const discrepancyDisabled = !seed || actionRunning || discrepancyAction?.status === 'RESOLVED' ? 'disabled' : '';
   const rejectionDisabled = !seed || actionRunning || rejectionAction?.status === 'REALLOCATED' ? 'disabled' : '';
+  const discrepancyBranchesDisabled = !seed || actionRunning || discrepancyBranchesAction?.status === 'BRANCHES_READY' ? 'disabled' : '';
   $('role-actions').innerHTML = [
     `<article><strong>门店真实下单</strong><small>使用 ${esc(seed?.storeUsername || 'pxflow_store')} 登录，调用 /purchase-requests/preview 和 /purchase-requests</small><button id="store-order-action" class="primary" ${storeDisabled}>${actionRunning ? '执行中...' : '预览并创建订货单'}</button></article>`,
     `<article><strong>采购真实确认</strong><small>使用 ${esc(seed?.username || 'pxflow_user')} 的采购权限，调用 /purchase-requests/{id}/confirm 生成供应商单</small><button id="purchaser-confirm-action" class="primary" ${purchaserDisabled}>确认并生成供应商单</button></article>`,
     `<article><strong>供应商真实发货</strong><small>使用 ${esc(seed?.supplierUsername || 'pxflow_supplier')} 登录，调用 /supplier-orders/{id}/shipment-preview 和 /supplier-orders/{id}/shipments</small><button id="supplier-shipment-action" class="primary" ${supplierDisabled}>预览并创建发货单</button></article>`,
     `<article><strong>门店真实收货</strong><small>使用 ${esc(seed?.storeUsername || 'pxflow_store')} 的门店权限，调用 /shipments/{id}/receipts 完成收货</small><button id="store-receipt-action" class="primary" ${receiptDisabled}>确认收货并完成订单</button></article>`,
     `<article><strong>供应商差异处理</strong><small>创建一张少收异常单，读取供应商差异通知，并调用 /discrepancies/{id}/resolve 同意少收</small><button id="supplier-discrepancy-action" class="primary" ${discrepancyDisabled}>少收并处理差异</button></article>`,
-    `<article><strong>供应商拒单处理</strong><small>创建一张待发供应商单，供应商拒单后由采购调用 /purchase-requests/{id}/reallocate 取消拒单行</small><button id="supplier-rejection-action" class="primary" ${rejectionDisabled}>拒单并采购处理</button></article>`,
+    `<article><strong>供应商拒单改派</strong><small>创建一张待发供应商单，供应商拒单后由采购调用 /purchase-requests/{id}/reallocate 改派到备用供应商</small><button id="supplier-rejection-action" class="primary" ${rejectionDisabled}>拒单并改派供应商</button></article>`,
+    `<article><strong>差异补发与退回</strong><small>分别演练 REPLENISH 补发到货和 RETURN 退回记录，覆盖差异处理剩余分支</small><button id="supplier-discrepancy-branches-action" class="primary" ${discrepancyBranchesDisabled}>补发并退回分支</button></article>`,
     `<article><strong>门店结果</strong><small id="store-order-result">${esc(storeResultText())}</small></article>`,
     `<article><strong>采购结果</strong><small id="purchaser-confirm-result">${esc(purchaserResultText())}</small></article>`,
     `<article><strong>供应商结果</strong><small id="supplier-shipment-result">${esc(shipmentResultText())}</small></article>`,
     `<article><strong>收货结果</strong><small id="store-receipt-result">${esc(receiptResultText())}</small></article>`,
     `<article><strong>差异结果</strong><small id="supplier-discrepancy-result">${esc(discrepancyResultText())}</small></article>`,
     `<article><strong>拒单结果</strong><small id="supplier-rejection-result">${esc(rejectionResultText())}</small></article>`,
+    `<article><strong>差异分支</strong><small id="supplier-discrepancy-branches-result">${esc(discrepancyBranchesResultText())}</small></article>`,
   ].join('');
   $('store-order-action')?.addEventListener('click', runStoreOrderAction);
   $('purchaser-confirm-action')?.addEventListener('click', runPurchaserConfirmAction);
@@ -185,6 +189,7 @@ function renderActions() {
   $('store-receipt-action')?.addEventListener('click', runStoreReceiptAction);
   $('supplier-discrepancy-action')?.addEventListener('click', runSupplierDiscrepancyAction);
   $('supplier-rejection-action')?.addEventListener('click', runSupplierRejectionAction);
+  $('supplier-discrepancy-branches-action')?.addEventListener('click', runSupplierDiscrepancyBranchesAction);
 }
 
 function storeResultText() {
@@ -214,7 +219,12 @@ function discrepancyResultText() {
 
 function rejectionResultText() {
   if (!rejectionAction) return '尚未执行供应商拒单处理';
-  return `${rejectionAction.status} · ${rejectionAction.supplierOrderId || rejectionAction.requestId} · ${rejectionAction.requestStatus || '—'}`;
+  return `${rejectionAction.status} · ${rejectionAction.supplierOrderId || rejectionAction.requestId} · ${rejectionAction.targetSupplierId || rejectionAction.requestStatus || '—'}`;
+}
+
+function discrepancyBranchesResultText() {
+  if (!discrepancyBranchesAction) return '尚未执行补发/退回分支';
+  return `${discrepancyBranchesAction.status} · ${discrepancyBranchesAction.replenishStatus || '—'} · ${discrepancyBranchesAction.returnStatus || '—'}`;
 }
 
 async function runStoreOrderAction() {
@@ -251,6 +261,7 @@ async function runStoreOrderAction() {
     receiptAction = null;
     discrepancyAction = null;
     rejectionAction = null;
+    discrepancyBranchesAction = null;
   } catch (error) {
     storeAction = { status: 'FAILED', requestNo: '门店下单失败', paymentStatus: error.message, salesGoodsAmount: '—' };
   } finally {
@@ -310,13 +321,14 @@ async function createConfirmedSupplierOrder(prefix) {
   };
 }
 
-async function createShipmentForOrder(supplierOrderId, prefix) {
+async function createShipmentForOrder(supplierOrderId, prefix, options = {}) {
   const supplierAuth = await ensureSupplierToken();
   const order = await call(`/supplier-orders/${supplierOrderId}`, {}, supplierAuth);
   const items = order.items.map((item) => ({
     orderItemId: item.id,
-    shipQuantity: item.quantity,
-    permanentlyReduceQuantity: '0',
+    shipQuantity: options.shipQuantity || item.quantity,
+    permanentlyReduceQuantity: options.permanentlyReduceQuantity || '0',
+    ...(options.gapId ? { gapAllocations: [{ gapId: options.gapId, quantity: options.gapQuantity || options.shipQuantity || item.quantity }] } : {}),
   }));
   const input = { expectedVersion: order.version, items, freight: '0.00', trackingNo: `PX-${Date.now()}` };
   await call(`/supplier-orders/${supplierOrderId}/shipment-preview`, {
@@ -505,18 +517,107 @@ async function runSupplierRejectionAction() {
       body: JSON.stringify({
         expectedVersion: request.version,
         rejectedOrderId: rejected.supplierOrderId,
-        reason: 'Role workbench cancels rejected supplier line',
-        assignments: request.items.map((item) => ({ requestItemId: item.id, cancel: true })),
+        reason: 'Role workbench reallocates rejected supplier line',
+        assignments: request.items.map((item) => ({ requestItemId: item.id, supplierId: seed.secondarySupplierId })),
       }),
     }, purchaserAuth);
+    const targetOrder = (reallocated.supplierOrders || []).find((order) => order.supplierId === seed.secondarySupplierId);
     rejectionAction = {
       status: 'REALLOCATED',
       supplierOrderId: rejected.supplierOrderId,
       requestId: flow.requestId,
       requestStatus: reallocated.status,
+      targetSupplierId: targetOrder?.supplierId || seed.secondarySupplierId,
+      targetSupplierOrderId: targetOrder?.id,
     };
   } catch (error) {
     rejectionAction = { status: 'FAILED', supplierOrderId: error.message, requestStatus: '—' };
+  } finally {
+    actionRunning = false;
+    renderActions();
+  }
+}
+
+async function createShortReceiptDiscrepancy(prefix, { shipQuantity = seed.quantity, receivedQuantity = '8.000000' } = {}) {
+  const flow = await createConfirmedSupplierOrder(prefix);
+  const { shipment, supplierOrderVersion } = await createShipmentForOrder(flow.supplierOrderId, prefix, { shipQuantity });
+  const storeAuth = await ensureStoreToken();
+  const receipt = await call(`/shipments/${shipment.id}/receipts`, {
+    method: 'POST',
+    headers: { 'idempotency-key': `${prefix}-receipt-${crypto.randomUUID()}` },
+    body: JSON.stringify({
+      expectedOrderVersion: supplierOrderVersion,
+      expectedReceiptRevision: 0,
+      items: shipment.items.map((item) => ({ shipmentItemId: item.id, receivedQuantity })),
+    }),
+  }, storeAuth);
+  const supplierAuth = await ensureSupplierToken();
+  const notifications = await call('/notifications', {}, supplierAuth);
+  const notification = (notifications.notifications || []).find((item) => item.payload?.receiptId === receipt.id);
+  const discrepancyId = notification?.payload?.discrepancyIds?.[0];
+  if (!discrepancyId) throw new Error('未找到供应商收货差异通知');
+  return { flow, shipment, receipt, discrepancyId };
+}
+
+async function runSupplierDiscrepancyBranchesAction() {
+  if (!seed || actionRunning || discrepancyBranchesAction?.status === 'BRANCHES_READY') return;
+  actionRunning = true;
+  renderActions();
+  try {
+    const supplierAuth = await ensureSupplierToken();
+    const replenishFlow = await createShortReceiptDiscrepancy('role-workbench-replenish', {
+      shipQuantity: '8.000000',
+      receivedQuantity: '6.000000',
+    });
+    const replenished = await call(`/discrepancies/${replenishFlow.discrepancyId}/resolve`, {
+      method: 'POST',
+      headers: { 'idempotency-key': `role-workbench-replenish-resolve-${crypto.randomUUID()}` },
+      body: JSON.stringify({
+        expectedVersion: 1,
+        action: 'REPLENISH',
+        reason: 'Role workbench schedules replenishment',
+      }),
+    }, supplierAuth);
+    const replenishmentGap = replenished.replenishmentGap;
+    if (!replenishmentGap?.id) throw new Error('补发缺口未生成');
+    const replenishmentShipment = await createShipmentForOrder(replenishFlow.flow.supplierOrderId, 'role-workbench-replenish', {
+      shipQuantity: replenishmentGap.quantity,
+      gapId: replenishmentGap.id,
+      gapQuantity: replenishmentGap.quantity,
+    });
+    const storeAuth = await ensureStoreToken();
+    const replenishReceipt = await call(`/shipments/${replenishmentShipment.shipment.id}/receipts`, {
+      method: 'POST',
+      headers: { 'idempotency-key': `role-workbench-replenish-receipt-${crypto.randomUUID()}` },
+      body: JSON.stringify({
+        expectedOrderVersion: replenishmentShipment.supplierOrderVersion,
+        expectedReceiptRevision: 0,
+        items: replenishmentShipment.shipment.items.map((item) => ({ shipmentItemId: item.id, receivedQuantity: item.quantity })),
+      }),
+    }, storeAuth);
+
+    const returnFlow = await createShortReceiptDiscrepancy('role-workbench-return', {
+      shipQuantity: seed.quantity,
+      receivedQuantity: '8.000000',
+    });
+    const returned = await call(`/discrepancies/${returnFlow.discrepancyId}/resolve`, {
+      method: 'POST',
+      headers: { 'idempotency-key': `role-workbench-return-resolve-${crypto.randomUUID()}` },
+      body: JSON.stringify({
+        expectedVersion: 1,
+        action: 'RETURN',
+        reason: 'Role workbench records return shortage',
+      }),
+    }, supplierAuth);
+    discrepancyBranchesAction = {
+      status: 'BRANCHES_READY',
+      replenishStatus: `${replenished.status}/${replenishReceipt.revision}`,
+      returnStatus: `${returned.status}/${returned.returnRecord?.id ? 'RETURN' : 'MISSING'}`,
+      replenishmentGapId: replenishmentGap.id,
+      returnRecordId: returned.returnRecord?.id,
+    };
+  } catch (error) {
+    discrepancyBranchesAction = { status: 'FAILED', replenishStatus: error.message, returnStatus: '—' };
   } finally {
     actionRunning = false;
     renderActions();

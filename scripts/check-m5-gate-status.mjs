@@ -144,6 +144,7 @@ assert.ok(roleWorkbenchState.hasSupplierShipmentAction, 'Role workbench browser 
 assert.ok(roleWorkbenchState.hasStoreReceiptAction, 'Role workbench browser evidence must show store receipt action');
 assert.ok(roleWorkbenchState.hasSupplierDiscrepancyAction, 'Role workbench browser evidence must show supplier discrepancy action');
 assert.ok(roleWorkbenchState.hasSupplierRejectionAction, 'Role workbench browser evidence must show supplier rejection action');
+assert.ok(roleWorkbenchState.hasSupplierDiscrepancyBranchesAction, 'Role workbench browser evidence must show supplier discrepancy replenishment/return action');
 assert.ok(await fileReady(mainFlowDemoManifest.roleWorkbenchScreenshot), 'Role workbench screenshot file must exist and be non-empty');
 
 const mainFlowInteractiveState = mainFlowInteractiveManifest.state || {};
@@ -176,7 +177,7 @@ assert.ok(
 assert.equal(mobileInteractiveState.runAllText, '已完成', 'Mobile interactive main-flow run-all control must finish');
 assert.ok(await fileReady(mainFlowInteractiveManifest.mobileScreenshot), 'Mobile interactive main-flow screenshot file must exist and be non-empty');
 const roleWorkbenchAction = mainFlowInteractiveManifest.roleWorkbenchAction || {};
-assert.equal(roleWorkbenchAction.status, 'REALLOCATED', 'Role workbench rejection action must handle a rejected supplier order');
+assert.equal(roleWorkbenchAction.status, 'BRANCHES_READY', 'Role workbench discrepancy branches action must cover replenishment and return');
 assert.ok(roleWorkbenchAction.hasRequestNo, 'Role workbench store action must show the created purchase request number');
 assert.ok(roleWorkbenchAction.hasPaidStatus, 'Role workbench store action must show the paid funding status');
 assert.ok(roleWorkbenchAction.hasSupplierOrderId, 'Role workbench purchaser action must show a generated supplier order id');
@@ -184,6 +185,7 @@ assert.ok(roleWorkbenchAction.hasShipmentNo, 'Role workbench supplier action mus
 assert.ok(roleWorkbenchAction.hasReceiptNo, 'Role workbench store receipt action must show a generated receipt number');
 assert.ok(roleWorkbenchAction.hasResolvedDiscrepancy, 'Role workbench supplier discrepancy action must resolve a short receipt discrepancy');
 assert.ok(roleWorkbenchAction.hasReallocatedRejection, 'Role workbench purchaser rejection action must handle the rejected supplier order');
+assert.ok(roleWorkbenchAction.hasDiscrepancyBranches, 'Role workbench discrepancy branch action must show replenishment and return evidence');
 assert.equal(roleWorkbenchAction.horizontalOverflow, false, 'Role workbench store action page must not create page-level horizontal overflow');
 assert.ok(await fileReady(mainFlowInteractiveManifest.roleWorkbenchActionScreenshot), 'Role workbench action screenshot file must exist and be non-empty');
 

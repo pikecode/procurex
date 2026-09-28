@@ -261,7 +261,8 @@ async function prepareRoleWorkbenchesPage(cdp) {
         hasSupplierShipmentAction: bodyText.includes('供应商真实发货') && Boolean(document.querySelector('#supplier-shipment-action')),
         hasStoreReceiptAction: bodyText.includes('门店真实收货') && Boolean(document.querySelector('#store-receipt-action')),
         hasSupplierDiscrepancyAction: bodyText.includes('供应商差异处理') && Boolean(document.querySelector('#supplier-discrepancy-action')),
-        hasSupplierRejectionAction: bodyText.includes('供应商拒单处理') && Boolean(document.querySelector('#supplier-rejection-action'))
+        hasSupplierRejectionAction: bodyText.includes('供应商拒单改派') && Boolean(document.querySelector('#supplier-rejection-action')),
+        hasSupplierDiscrepancyBranchesAction: bodyText.includes('差异补发与退回') && Boolean(document.querySelector('#supplier-discrepancy-branches-action'))
       };
     })()
   `);

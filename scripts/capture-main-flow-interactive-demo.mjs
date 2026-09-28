@@ -272,12 +272,16 @@ async function runRoleWorkbenchStoreOrder(cdp) {
       await waitFor(() => document.querySelector('#supplier-rejection-action') && !document.querySelector('#supplier-rejection-action').disabled, 'supplier rejection action button');
       document.querySelector('#supplier-rejection-action').click();
       await waitFor(() => document.querySelector('#role-action-label')?.textContent.trim() === 'REALLOCATED', 'supplier rejection handling');
+      await waitFor(() => document.querySelector('#supplier-discrepancy-branches-action') && !document.querySelector('#supplier-discrepancy-branches-action').disabled, 'supplier discrepancy branches action button');
+      document.querySelector('#supplier-discrepancy-branches-action').click();
+      await waitFor(() => document.querySelector('#role-action-label')?.textContent.trim() === 'BRANCHES_READY', 'supplier discrepancy replenishment and return branches');
       const resultText = document.querySelector('#store-order-result')?.textContent.trim() || '';
       const purchaserResultText = document.querySelector('#purchaser-confirm-result')?.textContent.trim() || '';
       const shipmentResultText = document.querySelector('#supplier-shipment-result')?.textContent.trim() || '';
       const receiptResultText = document.querySelector('#store-receipt-result')?.textContent.trim() || '';
       const discrepancyResultText = document.querySelector('#supplier-discrepancy-result')?.textContent.trim() || '';
       const rejectionResultText = document.querySelector('#supplier-rejection-result')?.textContent.trim() || '';
+      const discrepancyBranchesResultText = document.querySelector('#supplier-discrepancy-branches-result')?.textContent.trim() || '';
       return {
         status: document.querySelector('#role-action-label')?.textContent.trim() || '',
         storeResultText: resultText,
@@ -286,6 +290,7 @@ async function runRoleWorkbenchStoreOrder(cdp) {
         receiptResultText,
         discrepancyResultText,
         rejectionResultText,
+        discrepancyBranchesResultText,
         hasRequestNo: resultText.includes('PR'),
         hasPaidStatus: resultText.includes('PAID'),
         hasSupplierOrderId: purchaserResultText.includes('CONFIRMED') && purchaserResultText.split('·').length >= 2,
@@ -293,6 +298,7 @@ async function runRoleWorkbenchStoreOrder(cdp) {
         hasReceiptNo: receiptResultText.includes('COMPLETED') && receiptResultText.split('·').length >= 2,
         hasResolvedDiscrepancy: discrepancyResultText.includes('RESOLVED') && discrepancyResultText.split('·').length >= 2,
         hasReallocatedRejection: rejectionResultText.includes('REALLOCATED') && rejectionResultText.split('·').length >= 2,
+        hasDiscrepancyBranches: discrepancyBranchesResultText.includes('BRANCHES_READY') && discrepancyBranchesResultText.includes('REPLENISH_PENDING') && discrepancyBranchesResultText.includes('RETURN'),
         laneRows: document.querySelectorAll('#role-lanes article').length,
         viewportWidth: window.innerWidth,
         horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
@@ -344,7 +350,7 @@ async function main() {
         console.log(`  Role workbench screenshot: ${roleWorkbenchAction.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
-        console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText}; ${roleWorkbenchAction.state.discrepancyResultText}; ${roleWorkbenchAction.state.rejectionResultText})`);
+        console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText}; ${roleWorkbenchAction.state.discrepancyResultText}; ${roleWorkbenchAction.state.rejectionResultText}; ${roleWorkbenchAction.state.discrepancyBranchesResultText})`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

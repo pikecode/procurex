@@ -12,6 +12,7 @@ const prefix = 'PXFLOW';
 const username = 'pxflow_user';
 const storeUsername = 'pxflow_store';
 const supplierUsername = 'pxflow_supplier';
+const secondarySupplierUsername = 'pxflow_supplier2';
 const password = 'correct-password';
 
 async function roles() {
@@ -79,9 +80,10 @@ async function run() {
   await cleanup();
   const roleRows = await roles();
   const roleByCode = Object.fromEntries(roleRows.map((role) => [role.code, role]));
-  const [store, supplier, template, category, unit] = await Promise.all([
+  const [store, supplier, secondarySupplier, template, category, unit] = await Promise.all([
     prisma.store.create({ data: { code: `${prefix}-STORE`, name: 'PX Flow Demo Store' } }),
     prisma.supplier.create({ data: { code: `${prefix}-SUP`, name: 'PX Flow Demo Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.STORED_VALUE, defaultSettlementCycle: 'MONTHLY' } }),
+    prisma.supplier.create({ data: { code: `${prefix}-SUP2`, name: 'PX Flow Demo Backup Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.STORED_VALUE, defaultSettlementCycle: 'MONTHLY' } }),
     prisma.orderTemplate.create({ data: { code: `${prefix}-TPL`, name: 'PX Flow Demo Template' } }),
     prisma.category.create({ data: { code: `${prefix}-CAT`, name: 'PX Flow Demo Category' } }),
     prisma.unit.create({ data: { code: `${prefix}-UNIT`, name: 'piece' } }),
@@ -113,11 +115,22 @@ async function run() {
       scopes: { create: { scopeType: 'SUPPLIER', supplierId: supplier.id } },
     },
   });
+  await prisma.user.create({
+    data: {
+      username: secondarySupplierUsername,
+      displayName: 'PX Flow Backup Supplier User',
+      passwordHash: await hashPassword(password),
+      roles: { create: [{ roleId: roleByCode.SUPPLIER.id }] },
+      scopes: { create: { scopeType: 'SUPPLIER', supplierId: secondarySupplier.id } },
+    },
+  });
   await prisma.storeAccount.create({ data: { storeId: store.id, balance: '1000.00' } });
   const templateItem = await prisma.templateItem.create({ data: { templateId: template.id, productId: product.id } });
   await prisma.templateItemSupplier.create({ data: { templateItemId: templateItem.id, supplierId: supplier.id, priority: 1 } });
+  await prisma.templateItemSupplier.create({ data: { templateItemId: templateItem.id, supplierId: secondarySupplier.id, priority: 2 } });
   await prisma.storeTemplateBinding.create({ data: { storeId: store.id, templateId: template.id } });
   await prisma.supplierProduct.create({ data: { supplierId: supplier.id, productId: product.id } });
+  await prisma.supplierProduct.create({ data: { supplierId: secondarySupplier.id, productId: product.id } });
   const scope = await prisma.priceScope.create({ data: { productId: product.id, supplierId: supplier.id } });
   await prisma.priceVersion.create({
     data: {
@@ -128,15 +141,27 @@ async function run() {
       reason: 'PX flow demo baseline',
     },
   });
+  const secondaryScope = await prisma.priceScope.create({ data: { productId: product.id, supplierId: secondarySupplier.id } });
+  await prisma.priceVersion.create({
+    data: {
+      scopeId: secondaryScope.id,
+      salesPrice: '12.000000',
+      supplyPrice: '9.500000',
+      effectiveAt: new Date('2026-09-01T00:00:00.000Z'),
+      reason: 'PX flow demo backup supplier',
+    },
+  });
 
   const seed = {
     generatedAt: new Date().toISOString(),
     username,
     storeUsername,
     supplierUsername,
+    secondarySupplierUsername,
     password,
     storeId: store.id,
     supplierId: supplier.id,
+    secondarySupplierId: secondarySupplier.id,
     productId: product.id,
     quantity: '10.000000',
     expectedSalesAmount: '120.00',
@@ -144,8 +169,8 @@ async function run() {
     roleAccounts: [
       { role: 'Operator', username, scope: 'ADMIN/PURCHASER/HQ_FINANCE/STORE/SUPPLIER', surface: '下单、采购确认、发货、收货、账单和付款预览' },
       { role: 'Store', username: storeUsername, scope: 'STORE scoped to PXFLOW store', surface: '待收货与差异处理结果通知' },
-      { role: 'Supplier', username: supplierUsername, scope: 'SUPPLIER scoped to PXFLOW supplier', surface: '收货差异通知与差异处理' },
-      { role: 'Purchaser', username, scope: 'ADMIN/PURCHASER', surface: '供应商拒单通知与审计追踪' },
+      { role: 'Supplier', username: supplierUsername, scope: 'SUPPLIER scoped to PXFLOW supplier', surface: '收货差异通知、补发、退回与差异处理' },
+      { role: 'Purchaser', username, scope: 'ADMIN/PURCHASER', surface: '供应商拒单通知、多供应商改派与审计追踪' },
     ],
   };
   await writeFile(resolve(process.cwd(), 'apps/web/main-flow-demo-seed.json'), `${JSON.stringify(seed, null, 2)}\n`);
