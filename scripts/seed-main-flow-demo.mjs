@@ -141,6 +141,12 @@ async function run() {
     quantity: '10.000000',
     expectedSalesAmount: '120.00',
     expectedSupplyAmount: '90.00',
+    roleAccounts: [
+      { role: 'Operator', username, scope: 'ADMIN/PURCHASER/HQ_FINANCE/STORE/SUPPLIER', surface: '下单、采购确认、发货、收货、账单和付款预览' },
+      { role: 'Store', username: storeUsername, scope: 'STORE scoped to PXFLOW store', surface: '待收货与差异处理结果通知' },
+      { role: 'Supplier', username: supplierUsername, scope: 'SUPPLIER scoped to PXFLOW supplier', surface: '收货差异通知与差异处理' },
+      { role: 'Purchaser', username, scope: 'ADMIN/PURCHASER', surface: '供应商拒单通知与审计追踪' },
+    ],
   };
   await writeFile(resolve(process.cwd(), 'apps/web/main-flow-demo-seed.json'), `${JSON.stringify(seed, null, 2)}\n`);
   console.log('Main flow demo seed ready.');

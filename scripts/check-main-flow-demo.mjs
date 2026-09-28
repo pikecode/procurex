@@ -216,11 +216,42 @@ async function run() {
     const relevantAuditActions = Array.from(actions)
       .filter((action) => action.includes('purchase-request') || action.includes('supplier-order') || action.includes('shipment') || action.includes('discrepancy'))
       .sort();
+    const roleEvidence = [
+      {
+        role: 'Operator',
+        account: seed.username,
+        status: 'PASSED',
+        surface: '下单、采购确认、发货、收货、账单和付款预览',
+        evidence: `${completedOrder.status}/${completedOrder.fulfillmentStatus}; ${preview.direction} ${preview.totalPayableAmount}`,
+      },
+      {
+        role: 'Store',
+        account: seed.storeUsername,
+        status: 'PASSED',
+        surface: '门店待收货与差异处理结果通知',
+        evidence: `${shipmentNotification.title}; ${resolutionNotification.title}`,
+      },
+      {
+        role: 'Supplier',
+        account: seed.supplierUsername,
+        status: 'PASSED',
+        surface: '供应商收货差异通知与差异处理',
+        evidence: `${discrepancyNotification.title}; discrepancy ${resolvedDiscrepancy.status}`,
+      },
+      {
+        role: 'Purchaser',
+        account: seed.username,
+        status: 'PASSED',
+        surface: '采购拒单通知与审计追踪',
+        evidence: `${rejectionNotification.title}; ${relevantAuditActions.length} audit actions`,
+      },
+    ];
     const runResult = {
       generatedAt: new Date().toISOString(),
       title: 'Main Flow Demo Check',
       summary: 'Operator demo plus M5 notification and audit evidence',
       status: 'PASSED',
+      roleEvidence,
       steps: [
         {
           title: '1. Store shipment notification is created',

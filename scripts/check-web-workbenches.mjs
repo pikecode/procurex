@@ -196,10 +196,13 @@ assertIncludes(m4Css, '.manual-plan', 'M4 manual acceptance plan styles');
 
 assertIncludes(mainFlowDemoHtml, '主流程操作台', 'main-flow demo page');
 assertIncludes(mainFlowDemoHtml, '/main-flow-demo.js', 'main-flow demo script');
+assertIncludes(mainFlowDemoHtml, '角色复核', 'main-flow demo role evidence card');
 assertIncludes(mainFlowDemoHtml, '主流程证据', 'main-flow demo evidence card');
 assertIncludes(mainFlowDemoHtml, '一键执行', 'main-flow demo run-all control');
 assertIncludes(mainFlowDemoJs, 'main-flow-demo-seed.json', 'main-flow demo seed output');
 assertIncludes(mainFlowDemoJs, 'main-flow-demo-run.json', 'main-flow demo evidence output');
+assertIncludes(mainFlowDemoJs, 'roleEvidence', 'main-flow demo role evidence loader');
+assertIncludes(mainFlowDemoJs, 'roleAccounts', 'main-flow demo role seed accounts');
 assertIncludes(mainFlowDemoJs, 'loadDemoEvidence', 'main-flow demo evidence loader');
 assertIncludes(mainFlowDemoJs, 'runAll', 'main-flow demo run-all workflow');
 assertIncludes(mainFlowDemoJs, '/purchase-requests', 'main-flow demo purchase request call');

@@ -102,7 +102,7 @@ npm run main-flow:seed-demo
 npm run main-flow:check-demo
 ```
 
-`main-flow:check-demo` also writes `apps/web/main-flow-demo-run.json`. The operator demo renders that file as a "主流程证据" section covering shipment notification, receipt-discrepancy notification, discrepancy-resolution notification, supplier-rejection notification, audited order/fulfillment actions, and the supplier payment preview.
+`main-flow:check-demo` also writes `apps/web/main-flow-demo-run.json`. The operator demo renders that file as "角色复核" and "主流程证据" sections covering Operator, Store, Supplier, and Purchaser evidence, shipment notification, receipt-discrepancy notification, discrepancy-resolution notification, supplier-rejection notification, audited order/fulfillment actions, and the supplier payment preview.
 
 Chrome-rendered evidence can be refreshed with:
 
@@ -110,7 +110,7 @@ Chrome-rendered evidence can be refreshed with:
 npm run main-flow:capture-demo-evidence
 ```
 
-The latest local capture wrote `var/main-flow-demo-evidence/main-flow-demo.png` and a manifest with `PASSED`, 7 evidence rows, 6 visible operation steps, and true notification/audit evidence flags.
+The latest local capture wrote `var/main-flow-demo-evidence/main-flow-demo.png` and a manifest with `PASSED`, 4 role rows, 7 evidence rows, 6 visible operation steps, and true notification/audit evidence flags.
 
 To prove the browser page itself can execute the full path against real APIs, run:
 
@@ -122,7 +122,7 @@ This command prepares the PXFLOW seed, starts API/Web as needed, clicks "一键�
 
 ## What This Means
 
-The backend main flow is broad and largely connected. A narrow Web demo now exists and now renders the persisted notification/audit evidence, but the full role-specific product flow is still incomplete:
+The backend main flow is broad and largely connected. A narrow Web demo now exists and renders persisted role, notification, and audit evidence, but the full role-specific product flow is still incomplete:
 
 - Role-specific store order entry beyond the seeded operator demo.
 - Role-specific purchaser confirmation/splitting beyond the seeded operator demo.
@@ -138,7 +138,7 @@ The project has not abandoned the original demand, but the execution has become 
 
 The next visible-product priority is:
 
-The scripted runner, browser-readable result page, narrow operator demo, demo checker, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to expand this into role-specific store/purchaser/supplier screens after M5 close evidence stays green.
+The scripted runner, browser-readable result page, narrow operator demo, role evidence checker, desktop interactive capture, and mobile interactive capture are now in place. The next product-facing step is to expand this into role-specific store/purchaser/supplier screens after M5 close evidence stays green.
 
 ## Recommended Next Step
 

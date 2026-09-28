@@ -46,12 +46,15 @@ async function loadSeed() {
     $('seed-status').textContent = new Date(seed.generatedAt).toLocaleString('zh-CN');
     $('identity').textContent = seed.username;
     render();
+    renderSeedRoles();
   } catch (error) {
     seed = null;
     state = {};
     $('seed-status').textContent = '未生成';
     $('identity').textContent = '未登录';
     $('summary').innerHTML = metric('运行命令', 'main-flow:seed-demo', '先执行 npm run build');
+    $('role-evidence-label').textContent = '未生成';
+    $('role-evidence').innerHTML = '';
     $('steps').innerHTML = '';
     $('empty').classList.remove('hidden');
     notice(error.message);
@@ -64,9 +67,16 @@ async function loadDemoEvidence() {
     if (!response.ok) throw new Error('missing demo run output');
     const result = await response.json();
     const steps = result.steps || [];
+    const roleEvidence = result.roleEvidence || [];
     $('demo-evidence-label').textContent = result.status || 'UNKNOWN';
     $('demo-evidence-label').classList.toggle('tag-ok', result.status === 'PASSED');
     $('demo-evidence-label').classList.toggle('tag-fail', result.status && result.status !== 'PASSED');
+    $('role-evidence-label').textContent = roleEvidence.length ? result.status || 'UNKNOWN' : '种子账号';
+    $('role-evidence-label').classList.toggle('tag-ok', result.status === 'PASSED' && roleEvidence.length > 0);
+    $('role-evidence-label').classList.toggle('tag-fail', result.status && result.status !== 'PASSED');
+    if (roleEvidence.length) {
+      $('role-evidence').innerHTML = roleEvidence.map((role) => roleCard(role)).join('');
+    }
     $('demo-evidence').innerHTML = [
       `<article><strong>${esc(result.summary || '主流程证据已生成')}</strong><small>${esc(result.generatedAt || '')}</small></article>`,
       ...steps.map((step) => `<article><strong>${esc(step.title)}</strong><small>${esc(flattenData(step.data))}</small></article>`),
@@ -74,7 +84,25 @@ async function loadDemoEvidence() {
   } catch {
     $('demo-evidence-label').textContent = '未生成';
     $('demo-evidence').innerHTML = '<article><strong>尚未生成主流程证据</strong><small>运行 npm run main-flow:check-demo 后刷新页面</small></article>';
+    renderSeedRoles();
   }
+}
+
+function renderSeedRoles() {
+  const roles = seed?.roleAccounts || [];
+  $('role-evidence-label').textContent = roles.length ? '种子账号' : '未生成';
+  $('role-evidence-label').classList.remove('tag-ok', 'tag-fail');
+  $('role-evidence').innerHTML = roles.map((role) => roleCard({
+    role: role.role,
+    account: role.username,
+    status: role.scope,
+    surface: role.surface,
+    evidence: '等待 main-flow:check-demo 生成角色证据',
+  })).join('');
+}
+
+function roleCard(role) {
+  return `<article><strong>${esc(role.role)} · ${esc(role.account)}</strong><small>${esc(role.surface)} · ${esc(role.status)} · ${esc(role.evidence)}</small></article>`;
 }
 
 function flattenData(data) {

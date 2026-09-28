@@ -13,6 +13,7 @@
     <section class="page-head"><div><div class="eyebrow">Order To Payment</div><h1>下单到付款预览</h1><p>使用 `main-flow:seed-demo` 生成的数据，按步骤驱动真实 API。</p></div><div class="updated"><span class="pulse"></span><span id="seed-status">等待种子数据</span></div></section>
     <div id="notice" class="notice hidden"></div>
     <section class="summary-grid" id="summary"></section>
+    <section class="data-card acceptance-card"><div class="data-head"><div><h3>角色复核</h3><p>按账号范围展示主流程中已经可见的角色证据</p></div><span id="role-evidence-label" class="tag">等待检查</span></div><div id="role-evidence" class="acceptance-list"></div></section>
     <section class="data-card acceptance-card"><div class="data-head"><div><h3>主流程证据</h3><p>来自 main-flow:check-demo 的通知、审计和付款预览结果</p></div><span id="demo-evidence-label" class="tag">等待检查</span></div><div id="demo-evidence" class="acceptance-list"></div></section>
     <section class="data-card"><div class="data-head"><div><h3>执行步骤</h3><p>每个按钮会调用一次真实后端接口</p></div><div class="actions"><button id="run-all" class="primary">一键执行</button><button id="reset" class="secondary">重新加载种子</button></div></div><div class="table-wrap"><table><thead><tr><th>步骤</th><th>状态</th><th>结果</th><th></th></tr></thead><tbody id="steps"></tbody></table><div id="empty" class="empty hidden"><span>◌</span><strong>暂无种子数据</strong><small>先运行 npm run build && npm run main-flow:seed-demo</small></div></div></section>
     <footer>操作台用于人工查看主流程；自动证明仍以 `acceptance:main-flow` 和 `acceptance:m4-browserless` 为准。</footer>
