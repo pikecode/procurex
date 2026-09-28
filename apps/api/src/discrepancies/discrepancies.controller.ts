@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
@@ -26,6 +26,13 @@ export class DiscrepanciesController {
     private readonly commandsService: CommandsService,
     private readonly audit: AuditService,
   ) {}
+
+  @Get(':id')
+  @RequireRoles('ADMIN', 'SUPPLIER')
+  get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<DiscrepancyView> {
+    throwIfInvalid(validateUuid('id', id));
+    return this.discrepanciesService.get(id, supplierScope(request));
+  }
 
   @Post(':id/resolve')
   @RequireRoles('ADMIN', 'SUPPLIER')

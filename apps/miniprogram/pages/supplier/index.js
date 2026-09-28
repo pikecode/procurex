@@ -5,11 +5,15 @@ Page({
     user: {},
     roleText: '未登录',
     orders: [],
+    discrepancies: [],
     supplierOrderId: '',
     shipQuantity: '10',
+    discrepancyId: '',
+    discrepancyReason: '',
     loading: false,
     shipping: false,
     rejecting: false,
+    resolving: false,
     result: null,
     error: ''
   },
@@ -21,7 +25,7 @@ Page({
       return;
     }
     this.setData({ user, roleText: (user.roles || []).join(' / ') });
-    this.loadOrders();
+    this.loadWork();
   },
 
   onInput(event) {
@@ -32,15 +36,54 @@ Page({
     this.setData({ supplierOrderId: event.currentTarget.dataset.id });
   },
 
-  async loadOrders() {
+  selectDiscrepancy(event) {
+    this.setData({ discrepancyId: event.currentTarget.dataset.id });
+  },
+
+  async loadWork() {
     this.setData({ loading: true, error: '' });
+    try {
+      await Promise.all([this.loadOrders(false), this.loadDiscrepancies(false)]);
+    } finally {
+      this.setData({ loading: false });
+    }
+  },
+
+  async loadOrders(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
       const orders = await api.request('/supplier-orders');
       this.setData({ orders: Array.isArray(orders) ? orders.slice(0, 20) : [] });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
-      this.setData({ loading: false });
+      if (toggleLoading) this.setData({ loading: false });
+    }
+  },
+
+  async loadDiscrepancies(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
+    try {
+      const data = await api.request('/notifications');
+      const notifications = data.notifications || [];
+      const discrepancies = [];
+      for (const item of notifications) {
+        const ids = item.payload && item.payload.discrepancyIds;
+        if (!Array.isArray(ids)) continue;
+        for (const id of ids) {
+          discrepancies.push({
+            id,
+            title: item.title,
+            receiptId: item.payload.receiptId,
+            createdAt: item.createdAt
+          });
+        }
+      }
+      this.setData({ discrepancies: discrepancies.slice(0, 20) });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      if (toggleLoading) this.setData({ loading: false });
     }
   },
 
@@ -74,7 +117,7 @@ Page({
           detail: `预览 ${preview.kind || 'SHIPMENT'}，本次发货 ${this.data.shipQuantity}`
         }
       });
-      await this.loadOrders();
+      await this.loadWork();
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -98,11 +141,40 @@ Page({
           detail: '已通知采购处理拒单改派'
         }
       });
-      await this.loadOrders();
+      await this.loadWork();
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
       this.setData({ rejecting: false });
+    }
+  },
+
+  async resolveDiscrepancy(event) {
+    const action = event.currentTarget.dataset.action;
+    this.setData({ resolving: true, error: '', result: null });
+    try {
+      const discrepancy = await api.request(`/discrepancies/${this.data.discrepancyId}`);
+      const resolved = await api.request(`/discrepancies/${this.data.discrepancyId}/resolve`, {
+        method: 'POST',
+        data: {
+          expectedVersion: discrepancy.version,
+          action,
+          reason: this.data.discrepancyReason || undefined
+        },
+        header: { 'idempotency-key': `mini-discrepancy-${action}-${Date.now()}` }
+      });
+      this.setData({
+        result: {
+          title: resolved.id,
+          status: resolved.status,
+          detail: `处理动作 ${action}，差异数量 ${resolved.missingQuantity}`
+        }
+      });
+      await this.loadWork();
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      this.setData({ resolving: false });
     }
   },
 

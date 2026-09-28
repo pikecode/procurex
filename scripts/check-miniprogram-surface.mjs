@@ -91,10 +91,16 @@ assertIncludes(supplierJs, '/supplier-orders', 'supplier order list');
 assertIncludes(supplierJs, '/shipment-preview', 'supplier shipment preview');
 assertIncludes(supplierJs, '/shipments', 'supplier shipment creation');
 assertIncludes(supplierJs, '/reject', 'supplier rejection action');
+assertIncludes(supplierJs, '/notifications', 'supplier discrepancy notification list');
+assertIncludes(supplierJs, '/discrepancies/${this.data.discrepancyId}', 'supplier discrepancy detail');
+assertIncludes(supplierJs, '/resolve', 'supplier discrepancy resolution');
 assertIncludes(supplierJs, 'orderItemId', 'supplier shipment item binding');
 assertIncludes(supplierJs, 'expectedVersion', 'supplier version guard');
 assertIncludes(supplierWxml, '发货', 'supplier shipment screen');
 assertIncludes(supplierWxml, '拒单', 'supplier rejection screen');
+assertIncludes(supplierWxml, '同意少收', 'supplier discrepancy accept action');
+assertIncludes(supplierWxml, '安排补发', 'supplier discrepancy replenish action');
+assertIncludes(supplierWxml, '退回核对', 'supplier discrepancy return action');
 
 assertIncludes(purchaserJs, '/purchase-requests', 'purchaser request list');
 assertIncludes(purchaserJs, '/confirm', 'purchaser confirmation');

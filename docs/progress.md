@@ -120,6 +120,8 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 `apps/miniprogram` is now the first non-HTML product client slice. It is a WeChat mini-program native surface with `app.json`, `wxml`, `wxss`, and `js` pages for login, Store, Supplier, and Purchaser. The Store page calls the real order preview/create APIs; the Supplier page lists supplier orders and calls shipment preview/create plus reject with version and item guards; the Purchaser page lists purchase requests and calls confirm/reallocate with version, rejected-order, and assignment guards. `npm run mini:check` verifies the page files, API endpoints, role routing, no HTML under the mini-program surface, and the critical command fields.
 
+Latest mini-program product slice: Supplier discrepancy handling is now connected beyond the straight-line shipment path. `GET /discrepancies/{id}` exposes scoped discrepancy detail/version for supplier mobile handling, and the Supplier mini-program page reads `/notifications` for receipt-discrepancy todos, then can resolve the selected discrepancy through ACCEPT, REPLENISH, or RETURN. `contract:check` covers the new F05 read endpoint and `mini:check` covers the mobile actions.
+
 Latest commits:
 
 Latest functional slice in this update: the Store, Purchaser, Supplier, Store receipt, Supplier discrepancy, Supplier rejection, multi-supplier reallocation, and discrepancy REPLENISH/RETURN role workbench actions can create, confirm, ship, receive, resolve, reallocate, replenish, and return through real APIs; these are checked in the M5 close gate.

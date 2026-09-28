@@ -12,7 +12,7 @@ M5 has resumed. The current M5 slice has a repeatable browserless acceptance cha
 
 M6 readiness tracking has started without claiming production launch readiness. `npm run m6:readiness` writes `apps/web/m6-readiness.json` and `apps/web/m6-readiness.html` renders DEV-601 through DEV-605. Current expected status is `NOT_READY`: DEV-601 is READY from M5 close evidence, browser/mobile Web and local restore evidence are LOCAL_READY, while WeChat real-device evidence, production environment config, object-storage policy, production recovery drill, initialization sign-off, and pilot evidence remain open.
 
-The first actual mini-program product-client slice now lives under `apps/miniprogram`. It is not another HTML validation page: it uses native WeChat mini-program files and exposes login, Store, Supplier, and Purchaser pages. `npm run mini:check` verifies the surface, role routing, real API paths, command version guards, supplier order item IDs, rejected-order reallocation input, and that no HTML files exist under the mini-program app.
+The first actual mini-program product-client slice now lives under `apps/miniprogram`. It is not another HTML validation page: it uses native WeChat mini-program files and exposes login, Store, Supplier, and Purchaser pages. `npm run mini:check` verifies the surface, role routing, real API paths, command version guards, supplier order item IDs, rejected-order reallocation input, supplier discrepancy ACCEPT/REPLENISH/RETURN actions, and that no HTML files exist under the mini-program app.
 
 ## Latest High-Signal Work
 

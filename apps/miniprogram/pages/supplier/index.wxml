@@ -12,7 +12,7 @@
       <view class="metric"><text class="metric-label">角色</text><text class="metric-value">{{roleText}}</text></view>
     </view>
     <view class="button-row">
-      <button class="secondary" loading="{{loading}}" bindtap="loadOrders">刷新待办</button>
+      <button class="secondary" loading="{{loading}}" bindtap="loadWork">刷新待办</button>
       <button class="danger" bindtap="logout">退出</button>
     </view>
   </view>
@@ -35,6 +35,27 @@
         <view class="muted">点击填入执行单。仅显示当前账号可读的供应商订单。</view>
       </view>
       <view wx:if="{{!orders.length}}" class="row"><view class="muted">暂无待办或尚未刷新。</view></view>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">收货差异处理</text>
+    <view class="field"><text class="field-label">差异 ID</text><input value="{{discrepancyId}}" data-field="discrepancyId" bindinput="onInput" placeholder="discrepancyId" /></view>
+    <view class="field"><text class="field-label">原因说明</text><input value="{{discrepancyReason}}" data-field="discrepancyReason" bindinput="onInput" placeholder="补发安排、退回原因或同意说明" /></view>
+    <view class="button-row">
+      <button class="secondary" loading="{{resolving}}" data-action="ACCEPT" bindtap="resolveDiscrepancy">同意少收</button>
+      <button class="primary" loading="{{resolving}}" data-action="REPLENISH" bindtap="resolveDiscrepancy">安排补发</button>
+    </view>
+    <view class="button-row">
+      <button class="danger" loading="{{resolving}}" data-action="RETURN" bindtap="resolveDiscrepancy">退回核对</button>
+      <button class="secondary" loading="{{loading}}" bindtap="loadDiscrepancies">刷新差异</button>
+    </view>
+    <view class="list">
+      <view wx:for="{{discrepancies}}" wx:key="id" class="row" bindtap="selectDiscrepancy" data-id="{{item.id}}">
+        <view class="row-title"><text>{{item.title}}</text><text class="tag tag-warn">OPEN</text></view>
+        <view class="muted">差异 {{item.id}} · 收货 {{item.receiptId || '—'}}，点击填入差异 ID。</view>
+      </view>
+      <view wx:if="{{!discrepancies.length}}" class="row"><view class="muted">暂无收货差异通知或尚未刷新。</view></view>
     </view>
   </view>
 

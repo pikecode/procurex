@@ -56,6 +56,24 @@ export type DiscrepancyReturnView = {
 export class DiscrepanciesService {
   constructor(private readonly database: DatabaseService) {}
 
+  async get(id: string, scope?: { type: string; supplierId?: string }): Promise<DiscrepancyView> {
+    const discrepancy = await this.database.client.discrepancy.findUnique({
+      where: {
+        id,
+        orderItem: scope?.type === 'SUPPLIER' ? { supplierOrder: { supplierId: scope?.supplierId } } : undefined,
+      },
+      include: { replenishmentGap: true, returnRecord: true },
+    });
+    if (!discrepancy) {
+      throw new NotFoundException({
+        code: 'DISCREPANCY_NOT_FOUND',
+        message: 'Discrepancy was not found',
+      });
+    }
+
+    return toDiscrepancyView(discrepancy);
+  }
+
   async resolve(id: string, input: ResolveDiscrepancyInput, scope?: { type: string; supplierId?: string }): Promise<DiscrepancyView> {
     const discrepancy = await this.database.client.discrepancy.findUnique({
       where: {
