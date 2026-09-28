@@ -1,5 +1,9 @@
 # 开发日志
 
+## 2026-09-28
+
+- M5 完整回归基线：在刷新 W11/W13 Chrome 证据后继续运行全链基线，`npm run build`、47 项单测、31 项集成测试、`contract:check`、`web:check`、`m5:status` 和 `git diff --check` 全部通过；`m5:status` 继续显示 Docker 29.7.2、PostgreSQL `127.0.0.1:55438`、Chrome、10/10 M5 browserless、W11/W13 证据 READY。集成测试仍有 `pg` v9 相关 deprecation warning，但不影响当前通过结果。
+
 ## 2026-09-27
 
 - M5 验收与证据刷新：启动 Docker Desktop 后本地 PostgreSQL 恢复可达，`db:up` 健康、迁移无待执行；`acceptance:m5-browserless` 通过 10/10 步，`m5:status` 显示 Docker/PostgreSQL/Chrome/M5 browserless/W11/W13 证据 READY；W11 Chrome 证据刷新为 `PASSED`、M5 status `READY`、1 条报表行、2 条导出任务；W13 Chrome 证据刷新为 5 条对账异常、0 条导出健康异常、1 条通知、13 条审计日志。

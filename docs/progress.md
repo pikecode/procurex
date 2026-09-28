@@ -50,6 +50,8 @@ Latest recovery evidence: an independent PostgreSQL backup/restore drill complet
 
 Latest W09/S05/S08 verification: the local API health endpoint and `billing.html` served successfully, `billing.js` passed syntax checking, and the full backend baseline passed with 36 unit tests, 31 integration tests, build, contract check, and diff check. Google Chrome is available locally, and DEV-402/403/406 browser evidence has been collected under `var/m4-manual-evidence/`.
 
+Latest full M5 regression baseline: after refreshing the M5 W11/W13 browser evidence, `npm run build`, 47 unit tests, 31 integration tests, `contract:check`, `web:check`, `m5:status`, and `git diff --check` all passed. `m5:status` reports Docker 29.7.2, local PostgreSQL `127.0.0.1:55438`, Chrome, the 10/10 M5 browserless run, and W11/W13 evidence as READY. The integration suite still emits the known `pg` v9 deprecation warning for `client.query()` while another query is executing, but it is non-blocking in the current baseline.
+
 W10 workbench now provides adjustment filtering, original/actual period comparison, detail, B12 offline-return registration and receiver confirmation, plus offsets to a selected positive adjustment on the same settlement side. A real-database HTTP test now follows a negative price adjustment through B05 list/detail into B12 creation and receiver confirmation. B05 exposes actionable source/target IDs only when a price adjustment maps to one persisted document; ambiguous multi-run netting remains read-only. Browser E2E remains open. Verification: 36 unit tests, 31 integration tests, build, contract check, Web syntax, HTTP smoke, diff check, and the targeted W10 HTTP test pass.
 
 `npm run web:check` now provides a browserless visibility guard for W09/W10/W11. It verifies the billing page, adjustment section, payment/evidence controls, difference-disposal controls, report page, JavaScript syntax, and required web assets. It is not a replacement for browser E2E, but it prevents silent removal of the visible workbench entry points.
@@ -114,10 +116,12 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice in this update: W11 M5 status visibility.
-Latest commit before this progress update: `8bb8cd9 Add M5 status report`.
+Latest functional slice in this update: refreshed M5 evidence and full regression baseline.
+Latest commit before this progress update: `2623e51 Refresh M5 acceptance evidence`.
 
 ```text
+2623e51 Refresh M5 acceptance evidence
+559916f Show M5 status on W11
 8bb8cd9 Add M5 status report
 e1375c1 Export W13 export health to CSV
 d218a12 Export W13 reconciliation issues to CSV

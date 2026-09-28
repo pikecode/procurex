@@ -15,6 +15,14 @@ M5 has resumed. The current M5 slice has a repeatable browserless acceptance cha
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
 
 ```text
+2623e51 Refresh M5 acceptance evidence
+559916f Show M5 status on W11
+8bb8cd9 Add M5 status report
+e1375c1 Export W13 export health to CSV
+d218a12 Export W13 reconciliation issues to CSV
+0ca1e7a Export W13 audit logs to CSV
+d3bb9cf Add bulk read for in-app notifications
+0649036 Notify purchasers about supplier rejections
 0003eb0 Audit store funds operations
 ab30908 Audit supplier order operations
 c5d2d2c Add audit log filters to W13
@@ -84,7 +92,7 @@ npm run m5:capture-browser-evidence
 npm run m5:capture-ops-evidence
 ```
 
-The latest local run on 2026-09-28 has Docker, PostgreSQL, Chrome, M5 browserless output, and W11/W13 evidence READY. The browserless chain passed 10/10 steps, W11 capture recorded `PASSED` plus M5 status `READY`, and W13 capture recorded 5 reconciliation issues, 0 export-health exception rows, 1 notification row, and 13 audit rows.
+The latest local run on 2026-09-28 has Docker, PostgreSQL, Chrome, M5 browserless output, and W11/W13 evidence READY. The browserless chain passed 10/10 steps, W11 capture recorded `PASSED` plus M5 status `READY`, and W13 capture recorded 5 reconciliation issues, 0 export-health exception rows, 1 notification row, and 13 audit rows. The follow-up full baseline also passed: build, 47 unit tests, 31 integration tests, contract check, Web check, M5 status, and diff check.
 
 This performs:
 
