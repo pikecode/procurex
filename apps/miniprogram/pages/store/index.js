@@ -7,6 +7,7 @@ Page({
     storeId: '',
     productId: '',
     quantity: '10',
+    requests: [],
     shipmentId: '',
     shortReceivedQuantity: '0',
     shipmentTodos: [],
@@ -38,8 +39,40 @@ Page({
     this.setData({ shipmentId: event.currentTarget.dataset.id });
   },
 
+  selectRequest(event) {
+    this.setData({
+      created: {
+        id: event.currentTarget.dataset.id,
+        requestNo: event.currentTarget.dataset.no,
+        status: event.currentTarget.dataset.status,
+        paymentStatus: event.currentTarget.dataset.paymentStatus
+      }
+    });
+  },
+
   async loadWork() {
     this.setData({ loading: true, error: '' });
+    try {
+      await Promise.all([this.loadRequests(false), this.loadShipments(false)]);
+    } finally {
+      this.setData({ loading: false });
+    }
+  },
+
+  async loadRequests(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
+    try {
+      const requests = await api.request('/purchase-requests');
+      this.setData({ requests: Array.isArray(requests) ? requests.slice(0, 20) : [] });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      if (toggleLoading) this.setData({ loading: false });
+    }
+  },
+
+  async loadShipments(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
       const data = await api.request('/notifications');
       const notifications = data.notifications || [];
@@ -57,7 +90,7 @@ Page({
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
-      this.setData({ loading: false });
+      if (toggleLoading) this.setData({ loading: false });
     }
   },
 

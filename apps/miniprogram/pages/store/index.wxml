@@ -41,6 +41,20 @@
 
   <view class="card">
     <view class="section-head">
+      <text class="card-title">订单进度</text>
+      <button class="ghost" loading="{{loading}}" bindtap="loadWork">刷新</button>
+    </view>
+    <view class="list">
+      <view wx:for="{{requests}}" wx:key="id" class="row" bindtap="selectRequest" data-id="{{item.id}}" data-no="{{item.requestNo}}" data-status="{{item.status}}" data-payment-status="{{item.paymentStatus}}">
+        <view class="row-title"><text>{{item.requestNo || item.id}}</text><text class="tag">{{item.status}}</text></view>
+        <view class="muted">资金 {{item.paymentStatus || 'UNKNOWN'}}，销售额 {{item.salesGoodsAmount || '-'}}</view>
+      </view>
+      <view wx:if="{{!requests.length}}" class="row"><view class="muted">暂无订货记录或尚未刷新。</view></view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
       <text class="card-title">待收货通知</text>
       <button class="ghost" loading="{{loading}}" bindtap="loadWork">刷新</button>
     </view>

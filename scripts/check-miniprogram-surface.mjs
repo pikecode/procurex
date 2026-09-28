@@ -91,6 +91,7 @@ assertIncludes(storeJs, 'expectedReceiptRevision', 'store receipt revision guard
 assertIncludes(storeWxml, '快速订货', 'store order screen');
 assertIncludes(storeWxml, '预览金额', 'store order preview button');
 assertIncludes(storeWxml, '提交订货', 'store order submit button');
+assertIncludes(storeWxml, '订单进度', 'store order progress screen');
 assertIncludes(storeWxml, '待收货通知', 'store shipment notification screen');
 assertIncludes(storeWxml, '确认收货', 'store full receipt action');
 assertIncludes(storeWxml, '提交收货差异', 'store short receipt action');
