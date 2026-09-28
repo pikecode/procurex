@@ -57,6 +57,29 @@ async function loadSeed() {
   }
 }
 
+async function loadDemoEvidence() {
+  try {
+    const response = await fetch(`/main-flow-demo-run.json?ts=${Date.now()}`);
+    if (!response.ok) throw new Error('missing demo run output');
+    const result = await response.json();
+    const steps = result.steps || [];
+    $('demo-evidence-label').textContent = result.status || 'UNKNOWN';
+    $('demo-evidence-label').classList.toggle('tag-ok', result.status === 'PASSED');
+    $('demo-evidence-label').classList.toggle('tag-fail', result.status && result.status !== 'PASSED');
+    $('demo-evidence').innerHTML = [
+      `<article><strong>${esc(result.summary || '主流程证据已生成')}</strong><small>${esc(result.generatedAt || '')}</small></article>`,
+      ...steps.map((step) => `<article><strong>${esc(step.title)}</strong><small>${esc(flattenData(step.data))}</small></article>`),
+    ].join('');
+  } catch {
+    $('demo-evidence-label').textContent = '未生成';
+    $('demo-evidence').innerHTML = '<article><strong>尚未生成主流程证据</strong><small>运行 npm run main-flow:check-demo 后刷新页面</small></article>';
+  }
+}
+
+function flattenData(data) {
+  return Object.entries(data || {}).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ');
+}
+
 function render() {
   $('empty').classList.toggle('hidden', !!seed);
   $('summary').innerHTML =
@@ -168,3 +191,4 @@ async function previewPayment() {
 
 $('reset').addEventListener('click', loadSeed);
 loadSeed();
+loadDemoEvidence();

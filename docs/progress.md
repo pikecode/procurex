@@ -114,14 +114,16 @@ The gate cards also provide a local manual-evidence checklist. Reviewers can mar
 
 The M4 acceptance page now also renders a copyable acceptance summary. It combines the generated automatic evidence, local manual checklist state, and remaining manual evidence so the current M4 closure status can be handed off without reading terminal output.
 
-`apps/web/main-flow-demo.html` now provides a narrow interactive operator demo. `npm run main-flow:seed-demo` creates `PXFLOW` master data and a browser-readable seed file, then the page can call the real APIs through login, order creation, procurement confirmation, supplier shipment, store receipt, supplier statement, and payment preview. `npm run main-flow:check-demo` runs the same sequence through a temporary API and reaches `COMPANY_TO_SUPPLIER` payable preview for `90.00`.
+`apps/web/main-flow-demo.html` now provides a narrow interactive operator demo plus visible operational evidence. `npm run main-flow:seed-demo` creates `PXFLOW` master data and a browser-readable seed file, then the page can call the real APIs through login, order creation, procurement confirmation, supplier shipment, store receipt, supplier statement, and payment preview. `npm run main-flow:check-demo` runs the same sequence through a temporary API, reaches `COMPANY_TO_SUPPLIER` payable preview for `90.00`, and writes `apps/web/main-flow-demo-run.json` with the shipment notification, receipt-discrepancy notification, discrepancy-resolution notification, supplier-rejection notification, audit actions, and payment-preview evidence. `npm run main-flow:capture-demo-evidence` captures the browser-rendered demo evidence under `var/main-flow-demo-evidence/`; the latest manifest records `PASSED`, 7 evidence rows, 6 step rows, and true notification/audit evidence flags.
 
 Latest commits:
 
-Latest functional slice in this update: M5 close-readiness gate.
-Latest commit before this progress update: `e773875 Record full M5 regression baseline`.
+Latest functional slice in this update: visible main-flow demo evidence.
+Latest commit before this progress update: `e539f86 Show M5 close gate on W11`.
 
 ```text
+e539f86 Show M5 close gate on W11
+690bf16 Add M5 close readiness gate
 e773875 Record full M5 regression baseline
 2623e51 Refresh M5 acceptance evidence
 559916f Show M5 status on W11

@@ -100,9 +100,19 @@ npm run main-flow:seed-demo
 npm run main-flow:check-demo
 ```
 
+`main-flow:check-demo` also writes `apps/web/main-flow-demo-run.json`. The operator demo renders that file as a "主流程证据" section covering shipment notification, receipt-discrepancy notification, discrepancy-resolution notification, supplier-rejection notification, audited order/fulfillment actions, and the supplier payment preview.
+
+Chrome-rendered evidence can be refreshed with:
+
+```bash
+npm run main-flow:capture-demo-evidence
+```
+
+The latest local capture wrote `var/main-flow-demo-evidence/main-flow-demo.png` and a manifest with `PASSED`, 7 evidence rows, 6 visible operation steps, and true notification/audit evidence flags.
+
 ## What This Means
 
-The backend main flow is broad and largely connected. A narrow Web demo now exists, but the full role-specific product flow is still incomplete:
+The backend main flow is broad and largely connected. A narrow Web demo now exists and now renders the persisted notification/audit evidence, but the full role-specific product flow is still incomplete:
 
 - Store order entry.
 - Purchaser confirmation/splitting.

@@ -220,7 +220,10 @@ For the interactive main-flow demo, run:
 ```bash
 npm run main-flow:seed-demo
 npm run main-flow:check-demo
+npm run main-flow:capture-demo-evidence
 ```
+
+The demo page renders `apps/web/main-flow-demo-run.json` as a visible evidence section, and the latest Chrome capture under `var/main-flow-demo-evidence/` records `PASSED`, 7 evidence rows, 6 step rows, and true notification/audit evidence flags.
 
 For the M4 gate status summary, run:
 
