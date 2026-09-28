@@ -60,7 +60,7 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 
 R04 export reliability now has the first DEV-505 slices: the worker scans both fresh `QUEUED` jobs and `PROCESSING` jobs older than a 10-minute lease, reclaims them with an atomic status/age condition, clears stale error text on retry, and marks expired `PROCESSING` jobs as `FAILED`. `GET /exports/health` exposes admin/HQ-only status counts, stale processing jobs, and recent failures for W13. `POST /exports/{id}/retry` lets the owner retry an unexpired FAILED export in its saved permission scope and rejects non-failed jobs with 409. This avoids a service crash or interrupted worker leaving an export permanently stuck while keeping the existing no-migration schema.
 
-`apps/web/ops.html` now provides the W13 operations/reconciliation view. It logs in with an authorized company account, renders `GET /exports/health` as a DEV-505导出任务健康卡片, and renders `GET /reconciliation-issues` as a read-only exception list. `npm run m5:capture-ops-evidence` captures Chrome evidence under `var/m5-browser-evidence/ops-reconciliation.png`; the latest local screenshot showed 5 current local reconciliation issues and 0 export health exception rows after the clean acceptance seed.
+`apps/web/ops.html` now provides the W13 operations/reconciliation view. It logs in with an authorized company account, renders `GET /exports/health` as a DEV-505导出任务健康卡片, renders `GET /reconciliation-issues` as a read-only exception list, and can export the current R05 exception result to CSV for offline finance review. `npm run m5:capture-ops-evidence` captures Chrome evidence under `var/m5-browser-evidence/ops-reconciliation.png`; the latest local screenshot showed 5 current local reconciliation issues and 0 export health exception rows after the clean acceptance seed.
 
 DEV-503 now has I08 in-app notification list/read/bulk-read plus real business triggers. `Notification` persists recipient, channel, status, title/body, payload, read timestamp, and a per-recipient event key; `GET /notifications` returns the current user's latest 50 messages with unread count, `POST /notifications/{id}/read` marks only the current user's message as read, and `POST /notifications/read-all` marks the current user's unread messages as read in one action. `notifications:seed-acceptance` seeds admin reconciliation and overdue receipt facts, `notifications:send-overdue-receipt-reminders -- --hours=24` scans shipped-but-not-received uncompleted shipments and creates de-duplicated "超时收货提醒", `notifications:check-acceptance` verifies list/read/isolation plus reminder idempotency over HTTP, and W13 renders a "站内消息" card with single and bulk read actions. Supplier shipment creation writes a "待收货提醒" notification to active users scoped to the destination store; receipt with missing quantity writes a "收货差异待处理" notification to active users scoped to the supplier; supplier discrepancy resolution writes a store notification such as "差异已同意少收"; supplier rejection writes "供应商拒单待处理" to active ADMIN/PURCHASER users. `main-flow:check-demo` verifies these immediate business messages through real `PXFLOW` order, shipment, receipt, F05 resolution, and rejection steps.
 
@@ -112,10 +112,11 @@ The M4 acceptance page now also renders a copyable acceptance summary. It combin
 
 Latest commits:
 
-Latest functional slice in this update: DEV-504 W13 audit CSV export.
-Latest commit before this progress update: `d3bb9cf Add bulk read for in-app notifications`.
+Latest functional slice in this update: R05 W13 reconciliation CSV export.
+Latest commit before this progress update: `0ca1e7a Export W13 audit logs to CSV`.
 
 ```text
+0ca1e7a Export W13 audit logs to CSV
 d3bb9cf Add bulk read for in-app notifications
 0649036 Notify purchasers about supplier rejections
 0003eb0 Audit store funds operations

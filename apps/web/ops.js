@@ -14,6 +14,7 @@ const exportStatusLabels = {
   FAILED: '失败',
 };
 let currentAuditLogs = [];
+let currentIssues = [];
 
 function metric(label, value, foot, emphasis = false) {
   return `<div class="metric ${emphasis ? 'emphasis' : ''}"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div><div class="metric-foot">${esc(foot)}</div></div>`;
@@ -54,7 +55,9 @@ async function loadOperations() {
 async function loadIssues() {
   try {
     const issues = await call('/reconciliation-issues');
+    currentIssues = issues;
     const stores = new Set(issues.map((issue) => issue.storeId));
+    $('export-issues').disabled = issues.length === 0;
     $('summary').innerHTML =
       metric('异常数', issues.length, 'R05 当前发现') +
       metric('影响门店', stores.size, '按门店聚合') +
@@ -146,14 +149,34 @@ function exportAuditLogs() {
     item.reason || '',
     item.createdAt,
   ]);
+  downloadCsv(`procurex-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
+}
+
+function downloadCsv(filename, header, rows) {
   const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\n');
   const blob = new Blob([`\uFEFF${csv}\n`], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `procurex-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function exportIssues() {
+  if (!currentIssues.length) return;
+  const header = ['storeCode', 'storeName', 'type', 'severity', 'actualAmount', 'expectedAmount', 'deltaAmount', 'basis'];
+  const rows = currentIssues.map((issue) => [
+    issue.storeCode,
+    issue.storeName,
+    labels[issue.type] || issue.type,
+    issue.severity,
+    issue.actualAmount,
+    issue.expectedAmount,
+    issue.deltaAmount,
+    issue.basis,
+  ]);
+  downloadCsv(`procurex-reconciliation-issues-${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
 }
 
 $('login-form').addEventListener('submit', async (event) => {
@@ -173,6 +196,7 @@ $('login-form').addEventListener('submit', async (event) => {
 $('logout').addEventListener('click', async () => { try { await call('/auth/logout', { method: 'POST' }); } catch {} token = null; sessionStorage.removeItem('procurex-token'); showSession(); });
 $('refresh').addEventListener('click', loadOperations);
 $('refresh-issues').addEventListener('click', loadOperations);
+$('export-issues').addEventListener('click', exportIssues);
 $('refresh-notifications').addEventListener('click', loadOperations);
 $('read-all-notifications').addEventListener('click', async () => {
   try {
