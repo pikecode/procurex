@@ -229,6 +229,9 @@ assertIncludes(productStorePage, '完整收货', 'product app store receipt acti
 assertIncludes(productPurchaserPage, '/purchase-requests/${requestId}', 'product app purchaser request detail endpoint');
 assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/confirm', 'product app purchaser confirm endpoint');
 assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/reallocate', 'product app purchaser reallocate endpoint');
+assertIncludes(productPurchaserPage, 'app-request-items', 'product app purchaser request item table');
+assertIncludes(productPurchaserPage, '处理结果', 'product app purchaser action result panel');
+assertIncludes(productPurchaserPage, '供应商单', 'product app purchaser confirm result');
 assertIncludes(productSupplierPage, '/supplier-orders/${id}', 'product app supplier detail endpoint');
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/shipments', 'product app supplier shipment endpoint');
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/reject', 'product app supplier reject endpoint');
