@@ -13,7 +13,7 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | External evidence status | BLOCKED |
 | Git branch | main |
-| Packaged commit | 440d8840c31d7bd53c80d3d33ce41a82dca7a5a3 |
+| Packaged commit | e86d825a74f3454c4e77a63094b49c74d602a086 |
 | Remote | git@github.com-pikecode:pikecode/procurex.git |
 | Dirty at packaging | yes |
 
@@ -74,26 +74,28 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | apps/web/supplier-workbench.js | present | 15424 | 4913cea43201584a6da807cf64f757155eab5b3148d037c2f350f9f557ad442d |
 | apps/web/m7-business-flow.html | present | 2942 | 7a3170e3e54be514b8be6ede23c043113bc42c98493f858445e192ee7e078c13 |
 | apps/web/m7-business-flow.js | present | 8187 | c98f1d41f64fe0b80437c5101ab4be7b416d7188df0d2f7a136aeee2ff5ff7ee |
-| var/main-flow-demo-evidence/interactive-manifest.json | present | 33677 | a9d6f260ac2879a2e2e0d468b9a922ab2dab3efbd269e67763ced53bf54fe7d4 |
-| var/main-flow-demo-evidence/store-workbench.png | present | 235559 | 5eaf8e523ffd5c9e8dc42c551f22570286d244a7c46106a6eb798a7951f96b4a |
-| var/main-flow-demo-evidence/store-workbench-mobile.png | present | 495358 | 86ff65e2ae7bec17c7960acc77be4cec8ed6ef414986d4ea96c58b80036e29b4 |
-| var/main-flow-demo-evidence/purchaser-workbench.png | present | 221843 | 29b667c86c96d870db301c6f95ea755ec6779ab815d4e343a2cdcc05092ddf56 |
-| var/main-flow-demo-evidence/purchaser-workbench-mobile.png | present | 450438 | 7a0f22e4dfc44db8fe8e64bc12828ad1f7271d224e29895e0f93be6280f1c678 |
-| var/main-flow-demo-evidence/supplier-workbench.png | present | 288903 | 4516118555eb38af4882d70e499086cc05a2db546a5723ef75fa4687c09bdb87 |
-| var/main-flow-demo-evidence/supplier-workbench-mobile.png | present | 605699 | 04dadd0a64eac79d1f5a66a43b9b4ec5b80bea3105f01f1a646c6fb3543931d0 |
-| var/main-flow-demo-evidence/product-app.png | present | 277410 | 89a45ba31038767679e6565cdfdc7cc55db6f9e9bc354ba512a16114b4ba3b0f |
-| var/main-flow-demo-evidence/product-app-mobile.png | present | 600210 | 452e724df672ab482e4f4617bed33d1193de74424766be75fdc8783346cea261 |
-| var/main-flow-demo-evidence/product-app-store.png | present | 198277 | 3accf9ccb6e0b99da5021c9c110cb96678d3559cd1b274dcedf2c9cee91a41fe |
-| var/main-flow-demo-evidence/product-app-purchaser.png | present | 179840 | 17d9ecc97649b68de34c37b06d7bfa0690d173fb08975dd214185359ff4d20dd |
-| var/main-flow-demo-evidence/product-app-supplier.png | present | 223545 | 1868a071ab384297a8c63d9da14b08564609c461cd9d88e49e5478cecbc4bb86 |
-| var/main-flow-demo-evidence/product-app-finance.png | present | 213276 | 1f998c77ce5310b34cca6480015048819138a9eccd4eeb69a6fce0b07177f8ba |
-| var/main-flow-demo-evidence/product-app-flow-action.png | present | 195544 | e7ed09454d0d6893ffee68ac1e4411682f37fe73b1489e8f697caa5827b4814b |
-| var/main-flow-demo-evidence/product-app-finance-reject-action.png | present | 233543 | 4d230faace93e48e98e484d137baea8dd8988b21540a3a77f94fc96a3c612bad |
-| var/main-flow-demo-evidence/product-app-finance-action.png | present | 238082 | b10922ad5b9c8a64b58653207b82cb06529a718f4e544752507fbee52f5969ff |
-| var/main-flow-demo-evidence/product-app-finance-pending-action.png | present | 290237 | e2d888c418f8dddb048f68f1380b21f04c802e30ff0dbd5c5ef8ee15d0ec4d7c |
-| var/main-flow-demo-evidence/product-app-workflow-refresh-flow-action.png | present | 195941 | 383a1198e90d29e720d61ec563acf786c9c66dab05441c134c3c9823e42284d0 |
-| var/main-flow-demo-evidence/m7-business-flow.png | present | 217180 | 85e35bfc305e40887a9eca22f6150e3e6317d4cd9900ec21c4ca4b3b87e42041 |
-| var/main-flow-demo-evidence/m7-business-flow-mobile.png | present | 492367 | c6cb5d8be0993b23fe8abaf11ef1263aa6cbabcf583cdff4cdab1a6edf22c5e5 |
+| var/main-flow-demo-evidence/interactive-manifest.json | present | 34983 | 654932ddfcb5e5c353d02c58cfd908a50b92652f23f190d9e7beeb095ae93bf7 |
+| var/main-flow-demo-evidence/store-workbench.png | present | 235316 | 0c1554474771da75be99a197d01f91a4d4d407d7d8711e38fadc271c0f98d8ff |
+| var/main-flow-demo-evidence/store-workbench-mobile.png | present | 495951 | 93fae9a2ba3d7aab3ed1577952306840042789152fc06af0f555addeba909b8f |
+| var/main-flow-demo-evidence/purchaser-workbench.png | present | 221823 | 7999bfb006392db55452c1e91a3c2c8587accb127c626c04b1d8b4bc49d24660 |
+| var/main-flow-demo-evidence/purchaser-workbench-mobile.png | present | 451279 | 6bb66d4c898ccfe678c883542b4c888eb376f353fdb0523afc61ca38b2b99c6e |
+| var/main-flow-demo-evidence/supplier-workbench.png | present | 287341 | bf6143b97ae7147c835c96edb11a7b38bfe8e60b1c38c4629834c6b5ba32db2e |
+| var/main-flow-demo-evidence/supplier-workbench-mobile.png | present | 604776 | b285817fb05287d3e24c20f8d9fe5a292c5c800647afcc84150c92f362385aed |
+| var/main-flow-demo-evidence/product-app.png | present | 277662 | 5fc971aee0cd8d4c7a9ae66c29b796043c83a9d9d0acb7e94ebd34c69b4afe7c |
+| var/main-flow-demo-evidence/product-app-mobile.png | present | 600584 | c87280072072e76b7f760beb5387dc0c28fbe4a99ea09a63547dba8e8cf607f1 |
+| var/main-flow-demo-evidence/product-app-store.png | present | 198538 | cb256678abb304f55efd4467ebacde8552cc1d7bd4ae68a864189ab80192e1f9 |
+| var/main-flow-demo-evidence/product-app-purchaser.png | present | 181035 | e4aee5479f334a83e6f73f2844d0c84fea2e46d08e1b1da8838ee13b174a44cb |
+| var/main-flow-demo-evidence/product-app-supplier.png | present | 220598 | 0825a792eb1a462b463128716b392fedf76fbc8e775eb387774569434f84e36a |
+| var/main-flow-demo-evidence/product-app-finance.png | present | 213099 | 6b7951e9574c28f675c66de3826c59f098f735551e77ee2cb4b56681e493e5a3 |
+| var/main-flow-demo-evidence/product-app-flow-action.png | present | 196341 | 709ea4ac6dec5efa896b1d351a0e121fee0154985c5f01786161752be21501ca |
+| var/main-flow-demo-evidence/product-app-finance-reject-action.png | present | 233798 | fb405ed04205c3bfd6bb0d14d3b19e92402a7bdf62d51a715d066d88950d6854 |
+| var/main-flow-demo-evidence/product-app-finance-action.png | present | 238269 | 3de6c4d63a9dd6898079af637b875555af5cbd59b7592fc3acd05743c4fbe53b |
+| var/main-flow-demo-evidence/product-app-finance-pending-action.png | present | 289771 | f17383e0d0c9c67b7f8b9de559b74f4b7658b7bd6c50c2237e08e025b9ada4a7 |
+| var/main-flow-demo-evidence/product-app-workflow-refresh-flow-action.png | present | 195939 | f4bba01c12da289c8cb1992dc7ce02cf07edd807ff374623582b954f2f8529f1 |
+| var/main-flow-demo-evidence/product-app-supplier-discrepancy-action.png | present | 288070 | 5360d83b3d0ebb33ed435bb82781808d028aac82d0b52fcd8410c0eb2605820e |
+| var/main-flow-demo-evidence/product-app-role-mutation-journey.png | present | 288082 | e60d64ac9ac508e9eee4b8699dac83007ddb21f897a9ec459f8f0f1d9c9951af |
+| var/main-flow-demo-evidence/m7-business-flow.png | present | 217248 | 59b1c099a12fe16c7aa8b9bcda16f590b1d01fbbf206f3602b2de8c03f05a9df |
+| var/main-flow-demo-evidence/m7-business-flow-mobile.png | present | 492289 | 409bfccf6ae9a989c5f690ebe67b518fcd627a80a50f610de39c8567be36664b |
 | docs/m6-production-readiness.md | present | 11898 | 37d23fd1a01ebcff1e91357f816b34fa73d31b06e1a69a95c541c54a173b0305 |
 | docs/m6-wechat-device-evidence-guide.md | present | 3506 | 340c17a8fc01c55707ea06a20a3e791a3b1702a4c88c663ecbd97fd6bcee893d |
 | docs/m6-production-runtime-guide.md | present | 2586 | d0092156325942a22878c316a0762e3fc9900fb35db0596e5378055c4e02ea98 |
