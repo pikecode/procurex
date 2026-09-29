@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M7 正式产品 App 供应商收款工作台：扩展 `apps/web/product-app/pages/supplier.js`，把 `#/supplier` 的付款记录从“选择 ID”升级为可读取、确认和驳回的日常处理面板。供应商可读取 `/payment-records/{id}` 查看付款号、状态、金额和版本，再调用 `/payment-records/{id}/confirm` 确认收款或 `/payment-records/{id}/reject` 带原因驳回付款；`web:check` 新增付款详情、确认、驳回端点和“确认收款”动作保护。交互式截图重新验证正式 App 供应商页 `READY`，数据卡 5 个，主流程、异常、财务确认/驳回仍通过。
 - M7 正式产品 App 采购详情工作台：扩展 `apps/web/product-app/pages/purchaser.js`，把 `#/purchaser` 的申请详情从四个摘要格升级为“摘要 + 商品行表格 + 处理结果”结构。采购读取 `/purchase-requests/{id}` 后可看到状态、资金、金额、商品行数和逐行目标供应商/数量/销售额；确认 `/purchase-requests/{id}/confirm` 后展示供应商单结果，改派 `/purchase-requests/{id}/reallocate` 后展示目标供应商和新供应商单。`web:check` 新增商品行表格、处理结果和确认结果保护；交互式截图重新验证正式 App 采购页 `READY`，数据卡从 3 个提升到 4 个，主流程、异常、财务确认/驳回仍通过。
 - M7 正式产品 App 门店收货工作台：扩展 `apps/web/product-app/pages/store.js`，在正式 `#/store` 门店页新增收货处理面板。门店可从待收货提醒选择发货单，读取 `/shipments/{id}` 获取订单版本和收货 revision，再提交 `/shipments/{id}/receipts` 完整收货；页面展示发货单、订单版本、收货 revision、发货数量和收货结果。`web:check` 新增门店发货单详情、收货接口和“完整收货”动作保护；交互式截图重新验证正式 App 门店页 `READY`，数据卡从 4 个提升到 5 个，主流程、异常分支、财务确认/驳回仍通过。
 - M7 正式产品 App 业务总览中控：改造 `apps/web/product-app/pages/overview.js`，把首页从“组件化迁移状态”升级为业务总览，集中展示主流程状态、本地证据/外部缺口、四角色覆盖、五个正式业务入口、今日角色证据、下一步推进和产品化上线状态。`product-app/state.js` 现在额外读取 `m6-readiness.json`，让首页能直接显示 M6 readiness 计数；`web:check` 新增 Overview 业务证据、下一步和上线状态保护。交互式截图脚本重新验证正式 App 桌面/移动总览均 `PASSED`，且主流程、异常、财务驳回、财务确认仍保持通过。

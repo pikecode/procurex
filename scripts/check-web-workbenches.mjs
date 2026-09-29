@@ -236,6 +236,10 @@ assertIncludes(productSupplierPage, '/supplier-orders/${id}', 'product app suppl
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/shipments', 'product app supplier shipment endpoint');
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/reject', 'product app supplier reject endpoint');
 assertIncludes(productSupplierPage, '/discrepancies/${id}/resolve', 'product app supplier discrepancy endpoint');
+assertIncludes(productSupplierPage, '/payment-records/${id}', 'product app supplier payment detail endpoint');
+assertIncludes(productSupplierPage, '/payment-records/${payment.id}/confirm', 'product app supplier payment confirm endpoint');
+assertIncludes(productSupplierPage, '/payment-records/${payment.id}/reject', 'product app supplier payment reject endpoint');
+assertIncludes(productSupplierPage, '确认收款', 'product app supplier payment confirm action');
 assertIncludes(productFinancePage, '/supplier-statements', 'product app finance supplier statements endpoint');
 assertIncludes(productFinancePage, '/store-statements', 'product app finance store statements endpoint');
 assertIncludes(productFinancePage, '/payment-records?direction=COMPANY_TO_SUPPLIER', 'product app finance payment list endpoint');

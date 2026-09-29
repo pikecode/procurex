@@ -30,6 +30,8 @@ Finance rejection evidence is deterministic in the formal App as well. `app.html
 
 The formal App overview has now been upgraded into the first day-to-day command center. `app.html#/overview` reads the main-flow run, role evidence, seed accounts, and `m6-readiness.json`, then shows main-flow status, local evidence, external blockers, role coverage, formal route entries, today’s role evidence, next implementation focus, and productization/launch status. The latest `npm run main-flow:capture-interactive-demo` records desktop and mobile overview as `PASSED` with no horizontal overflow while flow, exception, finance rejection, and finance confirmation actions still pass. Continue M7 by applying the same operator-focused polish to Store/Purchaser/Supplier/Finance route details.
 
+The Store and Purchaser formal routes have now moved beyond passive summaries. `app.html#/store` can select notification-driven shipments, read shipment detail, and submit receipts; `app.html#/purchaser` can read purchase-request summary and item rows, confirm requests, and show reallocation results. The Supplier formal route also now handles payment collection directly: it reads payment detail/version and confirms or rejects the payment from `app.html#/supplier`. Continue M7 by tightening the Finance route detail view and then connecting these role routes into a more guided day-to-day workflow, rather than adding new one-off HTML pages.
+
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
