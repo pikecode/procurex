@@ -17,6 +17,7 @@ var/chrome-m5-ops-evidence/
 var/main-flow-demo-evidence/
 var/chrome-main-flow-demo-evidence/
 var/chrome-main-flow-interactive-demo/
+var/m6-wechat-device-evidence/
 docs/.omc/
 packages/backend/generated/
 *.tsbuildinfo

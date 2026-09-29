@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M6 微信真机证据闭环：新增 `npm run m6:prepare-wechat-evidence` / `m6:check-wechat-evidence`、`scripts/prepare-m6-wechat-device-evidence.mjs`、`scripts/check-m6-wechat-device-evidence.mjs` 和 `scripts/m6-wechat-evidence-lib.mjs`。草稿会写到本地忽略目录 `var/m6-wechat-device-evidence/`；`m6:external-evidence` 与 `m6:readiness` 现在要求真实 AppID、Store/Supplier/Purchaser 测试账号、绑定模式、设备型号、完整真机流程、存在的截图/录屏、订阅消息 PASS 和负责人签字，不能只凭 manifest 文件存在就把微信项判 READY。
 - M6 生产配置防误判：`m6:readiness` 和 `m6:external-evidence` 现在会拒绝 localhost、本地 `var/private-files` 路径和 `example.com` 示例域名，不再因为 `.env.example` 风格占位值存在就把 DEV-603-DEPLOY 判为 READY；DEV-603-STORAGE 也必须等签字版生产存储策略，不能只凭本地 `PRIVATE_FILE_DIR` 变成本地就绪。
 - M6 readiness 可见交接入口：`apps/web/m6-readiness.html` 新增“评审交接”区，把 `docs/m6-local-evidence-handoff.md`、`docs/m6-customer-evidence-request.md`、`docs/m6-evidence-templates/` 和 strict gate 命令直接展示在页面上；`m6:capture-readiness-evidence` 现在断言 4 条 handoff row、客户证据请求、本地交接和 strict 命令在桌面/390px 移动截图中可见且无横向溢出。
 - M6 客户证据请求：新增 `npm run m6:write-customer-evidence-request` / `m6:check-customer-evidence-request` 和 `scripts/write-m6-customer-evidence-request.mjs`，从 `apps/web/m6-external-evidence.json` 与 `apps/web/m6-local-evidence-package.json` 生成 `docs/m6-customer-evidence-request.md`。该文档把微信真机、生产运行环境、对象存储策略、生产恢复演练、客户财务签字、客户试运行/交接签字拆成负责人、目标证据、模板路径和待补清单；`web:check` 同步保护脚本和 npm 命令。

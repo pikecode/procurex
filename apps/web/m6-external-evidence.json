@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-29T00:53:30.976Z",
+  "generatedAt": "2026-09-29T01:08:11.998Z",
   "title": "M6 External Evidence Check",
   "status": "BLOCKED",
   "summary": "External launch evidence is still missing; local readiness remains useful but cannot close M6 production launch.",
@@ -8,7 +8,7 @@
       "id": "WECHAT_DEVICE",
       "title": "WeChat real-device evidence",
       "status": "BLOCKED",
-      "detail": "WECHAT_APP_ID, WECHAT_TEST_ACCOUNT, and real-device evidence manifest are required.",
+      "detail": "WeChat identifiers are present; manifest must pass real-device validation: screenshot or recording file is missing: var/m6-wechat-device-evidence/store-flow.png; screenshot or recording file is missing: var/m6-wechat-device-evidence/supplier-flow.png; screenshot or recording file is missing: var/m6-wechat-device-evidence/purchaser-flow.png; subscriptionMessageResult must be PASS; signedBy must name the WeChat acceptance owner",
       "evidence": [
         "WECHAT_APP_ID",
         "WECHAT_TEST_ACCOUNT",
@@ -70,10 +70,13 @@
       "fields": [
         "appId",
         "testAccounts",
+        "bindingOperationMode",
         "deviceModels",
+        "checkedFlows",
         "screenshotsOrRecording",
-        "subscriptionMessageResult",
-        "signedBy"
+        "subscriptionMessageResult=PASS",
+        "signedBy",
+        "signedAt"
       ]
     },
     "storagePolicy": {

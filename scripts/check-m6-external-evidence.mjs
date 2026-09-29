@@ -1,4 +1,5 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { validateWechatDeviceEvidence } from './m6-wechat-evidence-lib.mjs';
 
 const strict = process.argv.includes('--strict');
 
@@ -47,15 +48,16 @@ const initialization = await readJson('var/m6-initialization-signoff.json');
 const pilot = await readJson('var/m6-pilot-run.json');
 const storagePolicy = await readJson('var/m6-production-storage-policy.json');
 const recoveryDrill = await readJson('var/m6-production-recovery-drill.json');
-const wechatManifestExists = await fileExists('var/m6-wechat-device-evidence/manifest.json');
+const wechatManifest = await readJson('var/m6-wechat-device-evidence/manifest.json');
+const wechatEvidence = await validateWechatDeviceEvidence(wechatManifest, envValue('WECHAT_APP_ID'));
 
 const checks = [
   item(
     'WECHAT_DEVICE',
     'WeChat real-device evidence',
-    present(envValue('WECHAT_APP_ID')) && present(envValue('WECHAT_TEST_ACCOUNT')) && wechatManifestExists,
+    present(envValue('WECHAT_APP_ID')) && present(envValue('WECHAT_TEST_ACCOUNT')) && wechatEvidence.ready,
     present(envValue('WECHAT_APP_ID')) && present(envValue('WECHAT_TEST_ACCOUNT'))
-      ? 'WeChat identifiers are present; real-device manifest is still required unless already attached.'
+      ? `WeChat identifiers are present; manifest must pass real-device validation${wechatEvidence.issues.length ? `: ${wechatEvidence.issues.join('; ')}` : '.'}`
       : 'WECHAT_APP_ID, WECHAT_TEST_ACCOUNT, and real-device evidence manifest are required.',
     ['WECHAT_APP_ID', 'WECHAT_TEST_ACCOUNT', 'var/m6-wechat-device-evidence/manifest.json'],
   ),
@@ -109,7 +111,7 @@ const result = {
     wechatManifest: {
       path: 'var/m6-wechat-device-evidence/manifest.json',
       template: 'docs/m6-evidence-templates/wechat-device-manifest.json',
-      fields: ['appId', 'testAccounts', 'deviceModels', 'screenshotsOrRecording', 'subscriptionMessageResult', 'signedBy'],
+      fields: ['appId', 'testAccounts', 'bindingOperationMode', 'deviceModels', 'checkedFlows', 'screenshotsOrRecording', 'subscriptionMessageResult=PASS', 'signedBy', 'signedAt'],
     },
     storagePolicy: {
       path: 'var/m6-production-storage-policy.json',

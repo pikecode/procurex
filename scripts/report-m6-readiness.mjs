@@ -1,5 +1,6 @@
 import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { validateWechatDeviceEvidence } from './m6-wechat-evidence-lib.mjs';
 
 const strict = process.argv.includes('--strict');
 const checks = [];
@@ -115,12 +116,13 @@ add(
       : 'Mini-program product-client pages have not been created yet.',
   ['apps/miniprogram/app.json', 'scripts/check-miniprogram-surface.mjs', 'scripts/check-miniprogram-flow.mjs', 'apps/miniprogram/mini-flow-check.json'],
 );
+const wechatDeviceEvidence = await validateWechatDeviceEvidence(await readJson('var/m6-wechat-device-evidence/manifest.json'), envValue('WECHAT_APP_ID'));
 add(
   'DEV-602-WECHAT',
   '微信小程序真机与订阅消息',
-  envReady(['WECHAT_APP_ID', 'WECHAT_TEST_ACCOUNT']) && await fileExists('var/m6-wechat-device-evidence/manifest.json') ? 'READY' : 'BLOCKED',
+  envReady(['WECHAT_APP_ID', 'WECHAT_TEST_ACCOUNT']) && wechatDeviceEvidence.ready ? 'READY' : 'BLOCKED',
   envReady(['WECHAT_APP_ID', 'WECHAT_TEST_ACCOUNT'])
-    ? 'WeChat identifiers are configured, but real-device evidence is still required unless the manifest exists.'
+    ? 'WeChat identifiers are configured, but the real-device manifest must include device, flow, screenshot or recording, subscription-message, and sign-off evidence.'
     : 'Missing WECHAT_APP_ID/WECHAT_TEST_ACCOUNT and real-device evidence; do not claim mini-program readiness from Web evidence.',
   ['var/m6-wechat-device-evidence/manifest.json'],
 );
