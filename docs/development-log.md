@@ -3,6 +3,7 @@
 ## 2026-09-30
 
 - M7 供应商差异角色路由端到端证据：交互浏览器脚本通过真实下单、部分发货、少收登记，再在 `app.html#/supplier` 页面逐一点击 ACCEPT/REPLENISH/RETURN；三条结果均通过，补发生成带 gap allocation 的发货单并在 Overview 推荐门店收货。差异待办现在按通知时间倒序并按差异 ID 去重，确保最新任务进入可见列表。证据写入 `var/main-flow-demo-evidence/interactive-manifest.json` 和 `product-app-supplier-discrepancy-action.png`；桌面无横向溢出。
+- M7 独立角色状态交接浏览器证据：正式 App 页面实际执行门店新建采购申请、采购确认、供应商拒单，并验证 Overview 下一处理角色依次为采购、供应商、采购；截图及状态保存到交互证据 manifest，并纳入 M6 本地证据包（60/60）。后续仍需单独覆盖采购拒单改派和供应商发货到门店收货的角色页面变更路径。
 
 ## 2026-09-29
 

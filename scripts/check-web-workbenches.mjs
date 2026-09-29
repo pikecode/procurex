@@ -311,6 +311,8 @@ assertIncludes(mainFlowInteractiveCapture, 'runProductAppFinancePendingAction', 
 assertIncludes(mainFlowInteractiveCapture, 'overviewRecommendsSupplier', 'product app pending payment next action evidence');
 assertIncludes(mainFlowInteractiveCapture, 'runProductAppSupplierDiscrepancyAction', 'product app supplier discrepancy browser action');
 assertIncludes(mainFlowInteractiveCapture, 'productAppSupplierDiscrepancyAction', 'product app supplier discrepancy evidence manifest');
+assertIncludes(mainFlowInteractiveCapture, 'runProductAppRoleMutationJourney', 'product app standalone role mutation journey');
+assertIncludes(mainFlowInteractiveCapture, 'productAppRoleMutationJourney', 'product app role mutation evidence manifest');
 assertIncludes(mainFlowInteractiveCapture, 'overviewRefreshNotice', 'product app workflow API refresh evidence');
 assertIncludes(mainFlowInteractiveCapture, 'productAppWorkflowRefreshFlowAction', 'product app refresh evidence uses current workflow IDs');
 assertIncludes(mainFlowInteractiveCapture, "journey.push('PURCHASER')", 'product app guided purchaser handoff evidence');
