@@ -25,9 +25,10 @@ const requestDetails = {
     'manifest 填写真实设备型号、账号绑定模式、subscriptionMessageResult=PASS 和微信验收负责人签字',
   ],
   PRODUCTION_RUNTIME: [
+    '按 docs/m6-production-runtime-guide.md 准备生产运行时',
     '生产 DATABASE_URL，不允许指向 localhost 或本地 demo 数据库',
     '生产 PRIVATE_FILE_DIR 或对象存储挂载/服务路径',
-    'HTTPS PUBLIC_API_BASE_URL、域名和 TLS 路由说明',
+    'HTTPS PUBLIC_API_BASE_URL、域名、TLS 路由、NODE_ENV=production、HOST/PORT，并运行 npm run m6:check-production-runtime',
   ],
   STORAGE_POLICY: [
     '私有付款凭证保存周期、访问角色、下载审计策略',
@@ -112,6 +113,7 @@ Run after materials are filled:
 npm run m6:external-evidence
 npm run m6:prepare-wechat-evidence
 npm run m6:check-wechat-evidence
+npm run m6:check-production-runtime
 npm run m6:readiness
 npm run m6:package-local-evidence
 npm run m6:write-local-handoff

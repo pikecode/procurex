@@ -46,6 +46,31 @@ const templates = {
     restoreTestReference: 'var/m6-production-recovery-drill.json',
     downloadAuditPolicy: 'payment evidence downloads must be authenticated and audit logged',
   },
+  'production-runtime.json': {
+    status: 'READY',
+    checks: [
+      {
+        id: 'DATABASE_URL',
+        status: 'PASS',
+        detail: 'Production PostgreSQL URL is configured and credentials are masked in reports.',
+      },
+      {
+        id: 'PRIVATE_FILE_DIR',
+        status: 'PASS',
+        detail: 'Production private-file mount or object-storage path is configured.',
+      },
+      {
+        id: 'PUBLIC_API_BASE_URL',
+        status: 'PASS',
+        detail: 'Real HTTPS API domain is configured.',
+      },
+      {
+        id: 'NODE_ENV',
+        status: 'PASS',
+        detail: 'NODE_ENV=production.',
+      },
+    ],
+  },
   'production-recovery-drill.json': {
     signed: true,
     owner: 'release or operations owner',
@@ -123,6 +148,7 @@ These templates define the shape of external launch evidence. They are examples,
 | Template | Target Evidence |
 |---|---|
 | \`${baseDir}/wechat-device-manifest.json\` | \`var/m6-wechat-device-evidence/manifest.json\` |
+| \`${baseDir}/production-runtime.json\` | \`var/m6-production-runtime.json\` |
 | \`${baseDir}/production-storage-policy.json\` | \`var/m6-production-storage-policy.json\` |
 | \`${baseDir}/production-recovery-drill.json\` | \`var/m6-production-recovery-drill.json\` |
 | \`${baseDir}/production-initialization-signoff.json\` | \`var/m6-initialization-signoff.json\` after customer finance sign-off |

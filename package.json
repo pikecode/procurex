@@ -43,6 +43,7 @@
     "m6:pilot-check": "node --env-file-if-exists=.env scripts/check-m6-pilot.mjs",
     "m6:prepare-wechat-evidence": "node --env-file-if-exists=.env scripts/prepare-m6-wechat-device-evidence.mjs",
     "m6:check-wechat-evidence": "node --env-file-if-exists=.env scripts/check-m6-wechat-device-evidence.mjs",
+    "m6:check-production-runtime": "node --env-file-if-exists=.env scripts/check-m6-production-runtime.mjs",
     "m6:external-evidence": "node --env-file-if-exists=.env scripts/check-m6-external-evidence.mjs",
     "m6:external-evidence:strict": "node --env-file-if-exists=.env scripts/check-m6-external-evidence.mjs --strict",
     "m6:write-external-templates": "node scripts/write-m6-external-evidence-templates.mjs",

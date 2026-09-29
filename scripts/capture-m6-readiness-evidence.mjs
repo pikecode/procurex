@@ -207,7 +207,7 @@ async function captureReadiness(cdp, viewport, fileName) {
       await waitFor(() => document.querySelectorAll('#checks article').length >= 10, 'readiness checks');
       await waitFor(() => document.querySelector('#external-status')?.textContent.trim() === 'BLOCKED', 'external evidence status');
       await waitFor(() => document.querySelectorAll('#external-checks article').length >= 6, 'external evidence checks');
-      await waitFor(() => document.querySelectorAll('#handoff-links article').length >= 5, 'handoff links');
+      await waitFor(() => document.querySelectorAll('#handoff-links article').length >= 6, 'handoff links');
       const bodyText = document.body.textContent || '';
       return {
         readinessStatus: document.querySelector('#readiness-status')?.textContent.trim() || '',
@@ -222,6 +222,7 @@ async function captureReadiness(cdp, viewport, fileName) {
         hasProductionRuntimeBlocker: bodyText.includes('PRODUCTION_RUNTIME'),
         hasTemplatePath: bodyText.includes('docs/m6-evidence-templates/'),
         hasWechatGuide: bodyText.includes('docs/m6-wechat-device-evidence-guide.md') && bodyText.includes('m6:check-wechat-evidence'),
+        hasProductionRuntimeGuide: bodyText.includes('docs/m6-production-runtime-guide.md') && bodyText.includes('m6:check-production-runtime'),
         hasCustomerEvidenceRequest: bodyText.includes('docs/m6-customer-evidence-request.md'),
         hasLocalHandoff: bodyText.includes('docs/m6-local-evidence-handoff.md'),
         hasStrictGateCommands: bodyText.includes('m6:external-evidence:strict') && bodyText.includes('m6:readiness:strict'),

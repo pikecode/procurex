@@ -9,7 +9,7 @@ This request lists the external materials still needed before M6 can be reviewed
 | Item | Value |
 |---|---|
 | Local package status | LOCAL_READY |
-| Packaged commit | 23d9d816775487bbc85e9fd5b9f731a5ca917842 |
+| Packaged commit | 901a12ef945f65a69dfcf45c3b14e6ebb6370fbe |
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | Evidence handoff | `docs/m6-local-evidence-handoff.md` |
 | Visible readiness page | `apps/web/m6-readiness.html` |
@@ -19,7 +19,7 @@ This request lists the external materials still needed before M6 can be reviewed
 | Blocker | Owner | Target Evidence | Template |
 |---|---|---|---|
 | WECHAT_DEVICE | 微信/小程序负责人 | var/m6-wechat-device-evidence/manifest.json | docs/m6-evidence-templates/wechat-device-manifest.json |
-| PRODUCTION_RUNTIME | 运维/部署负责人 | DATABASE_URL<br>PRIVATE_FILE_DIR<br>PUBLIC_API_BASE_URL | n/a |
+| PRODUCTION_RUNTIME | 运维/部署负责人 | var/m6-production-runtime.json | docs/m6-evidence-templates/production-runtime.json |
 | STORAGE_POLICY | 运维/安全负责人 | var/m6-production-storage-policy.json | docs/m6-evidence-templates/production-storage-policy.json |
 | PRODUCTION_RECOVERY | 运维/发布负责人 | var/m6-production-recovery-drill.json | docs/m6-evidence-templates/production-recovery-drill.json |
 | FINANCE_SIGNOFF | 客户财务负责人 | var/m6-initialization-signoff.json | docs/m6-evidence-templates/production-initialization-signoff.json |
@@ -47,17 +47,18 @@ Request:
 
 Owner: 运维/部署负责人
 
-Target evidence: `DATABASE_URL, PRIVATE_FILE_DIR, PUBLIC_API_BASE_URL`
+Target evidence: `var/m6-production-runtime.json`
 
-Template: `n/a`
+Template: `docs/m6-evidence-templates/production-runtime.json`
 
 Current status: BLOCKED
 
 Request:
 
+  - [ ] 按 docs/m6-production-runtime-guide.md 准备生产运行时
   - [ ] 生产 DATABASE_URL，不允许指向 localhost 或本地 demo 数据库
   - [ ] 生产 PRIVATE_FILE_DIR 或对象存储挂载/服务路径
-  - [ ] HTTPS PUBLIC_API_BASE_URL、域名和 TLS 路由说明
+  - [ ] HTTPS PUBLIC_API_BASE_URL、域名、TLS 路由、NODE_ENV=production、HOST/PORT，并运行 npm run m6:check-production-runtime
 
 ### STORAGE_POLICY
 
@@ -132,6 +133,7 @@ Run after materials are filled:
 npm run m6:external-evidence
 npm run m6:prepare-wechat-evidence
 npm run m6:check-wechat-evidence
+npm run m6:check-production-runtime
 npm run m6:readiness
 npm run m6:package-local-evidence
 npm run m6:write-local-handoff

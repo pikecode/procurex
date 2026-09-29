@@ -48,6 +48,7 @@ const initialization = await readJson('var/m6-initialization-signoff.json');
 const pilot = await readJson('var/m6-pilot-run.json');
 const storagePolicy = await readJson('var/m6-production-storage-policy.json');
 const recoveryDrill = await readJson('var/m6-production-recovery-drill.json');
+const productionRuntime = await readJson('var/m6-production-runtime.json');
 const wechatManifest = await readJson('var/m6-wechat-device-evidence/manifest.json');
 const wechatEvidence = await validateWechatDeviceEvidence(wechatManifest, envValue('WECHAT_APP_ID'));
 
@@ -64,9 +65,11 @@ const checks = [
   item(
     'PRODUCTION_RUNTIME',
     'Production runtime environment',
-    notLocalDatabase(envValue('DATABASE_URL')) && notLocalFileDir(envValue('PRIVATE_FILE_DIR')) && httpsUrl(envValue('PUBLIC_API_BASE_URL')),
-    'DATABASE_URL must not be local, PRIVATE_FILE_DIR must be a production storage path/service mount, and PUBLIC_API_BASE_URL must be a real HTTPS endpoint, not an example domain.',
-    ['DATABASE_URL', 'PRIVATE_FILE_DIR', 'PUBLIC_API_BASE_URL'],
+    productionRuntime?.status === 'READY' && notLocalDatabase(envValue('DATABASE_URL')) && notLocalFileDir(envValue('PRIVATE_FILE_DIR')) && httpsUrl(envValue('PUBLIC_API_BASE_URL')),
+    productionRuntime?.status === 'READY'
+      ? 'Production runtime preflight is READY and current env vars are shaped for production.'
+      : 'Need npm run m6:check-production-runtime with production DATABASE_URL, PRIVATE_FILE_DIR, PUBLIC_API_BASE_URL, NODE_ENV, HOST, and PORT.',
+    ['DATABASE_URL', 'PRIVATE_FILE_DIR', 'PUBLIC_API_BASE_URL', 'var/m6-production-runtime.json'],
   ),
   item(
     'STORAGE_POLICY',
@@ -112,6 +115,11 @@ const result = {
       path: 'var/m6-wechat-device-evidence/manifest.json',
       template: 'docs/m6-evidence-templates/wechat-device-manifest.json',
       fields: ['appId', 'testAccounts', 'bindingOperationMode', 'deviceModels', 'checkedFlows', 'screenshotsOrRecording', 'subscriptionMessageResult=PASS', 'signedBy', 'signedAt'],
+    },
+    productionRuntime: {
+      path: 'var/m6-production-runtime.json',
+      template: 'docs/m6-evidence-templates/production-runtime.json',
+      fields: ['status=READY', 'DATABASE_URL', 'PRIVATE_FILE_DIR', 'PUBLIC_API_BASE_URL', 'NODE_ENV=production', 'HOST', 'PORT'],
     },
     storagePolicy: {
       path: 'var/m6-production-storage-policy.json',

@@ -18,6 +18,7 @@ npm run m6:initialization-check
 npm run m6:pilot-check
 npm run m6:prepare-wechat-evidence
 npm run m6:check-wechat-evidence
+npm run m6:check-production-runtime
 npm run m6:external-evidence
 npm run m6:check-external-templates
 npm run m6:capture-readiness-evidence
@@ -37,6 +38,8 @@ The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/
 `docs/m6-customer-evidence-request.md` is the customer-facing request generated from the current external blockers. It names each owner, target evidence path, template, and checklist item needed to move M6 from local readiness toward launch review.
 
 `docs/m6-wechat-device-evidence-guide.md` is the operator checklist for completing the WeChat experience-build, real-device screenshots or recordings, subscription-message result, and owner sign-off.
+
+`docs/m6-production-runtime-guide.md` is the operator checklist for turning the missing server/domain/database/storage runtime into a repeatable preflight report.
 
 Use the strict gate only when real production materials exist:
 
@@ -86,12 +89,15 @@ External evidence check:
 ```bash
 npm run m6:prepare-wechat-evidence
 npm run m6:check-wechat-evidence
+npm run m6:check-production-runtime
 npm run m6:external-evidence
 ```
 
 `npm run m6:prepare-wechat-evidence` creates a local draft at `var/m6-wechat-device-evidence/manifest.json` from the configured AppID and role test accounts. `npm run m6:check-wechat-evidence` requires real device models, Store/Supplier/Purchaser screenshots or recordings, subscription-message result `PASS`, and owner sign-off before the WeChat item can become READY. Follow `docs/m6-wechat-device-evidence-guide.md` for the exact capture paths and manifest fields. The real-device evidence directory is local-only and should not be committed.
 
 `npm run m6:external-evidence` writes `var/m6-external-evidence.json` and keeps a machine-readable list of the evidence still required to move from local readiness to launch review. It checks WeChat identifiers and real-device evidence, production `DATABASE_URL`/`PRIVATE_FILE_DIR`/`PUBLIC_API_BASE_URL`, signed private-file storage policy, production recovery drill, customer finance sign-off, and customer pilot/handover sign-off. Use `npm run m6:external-evidence:strict` only when those external materials should already be complete.
+
+`npm run m6:check-production-runtime` writes `var/m6-production-runtime.json` with a sanitized preflight for production database, private-file storage, public HTTPS API URL, production Node environment, and API process binding. Follow `docs/m6-production-runtime-guide.md` before expecting DEV-603-DEPLOY to become READY.
 
 External evidence templates live in `docs/m6-evidence-templates/` and are summarized in `docs/m6-external-evidence-templates.md`. Keep them synchronized with:
 

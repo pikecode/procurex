@@ -1,0 +1,25 @@
+{
+  "status": "READY",
+  "checks": [
+    {
+      "id": "DATABASE_URL",
+      "status": "PASS",
+      "detail": "Production PostgreSQL URL is configured and credentials are masked in reports."
+    },
+    {
+      "id": "PRIVATE_FILE_DIR",
+      "status": "PASS",
+      "detail": "Production private-file mount or object-storage path is configured."
+    },
+    {
+      "id": "PUBLIC_API_BASE_URL",
+      "status": "PASS",
+      "detail": "Real HTTPS API domain is configured."
+    },
+    {
+      "id": "NODE_ENV",
+      "status": "PASS",
+      "detail": "NODE_ENV=production."
+    }
+  ]
+}

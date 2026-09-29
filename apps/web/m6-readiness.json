@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-29T01:44:25.991Z",
+  "generatedAt": "2026-09-29T02:17:48.361Z",
   "status": "NOT_READY",
   "summary": "M6 is not production-ready yet; local product evidence is strong, but external WeChat, production environment, recovery, customer finance sign-off, customer pilot, and handover evidence remain open.",
   "counts": {
@@ -65,8 +65,10 @@
       "id": "DEV-603-DEPLOY",
       "title": "部署配置与生产环境",
       "status": "BLOCKED",
-      "detail": "DATABASE_URL, PRIVATE_FILE_DIR, and PUBLIC_API_BASE_URL must point at production-grade services before launch; localhost, local private-file paths, and example domains do not count.",
+      "detail": "Run npm run m6:check-production-runtime with production DATABASE_URL, PRIVATE_FILE_DIR, PUBLIC_API_BASE_URL, NODE_ENV, HOST, and PORT; localhost, local private-file paths, and example domains do not count.",
       "evidence": [
+        "docs/m6-production-runtime-guide.md",
+        "var/m6-production-runtime.json",
         ".env.example",
         "infra/compose/compose.yaml"
       ]

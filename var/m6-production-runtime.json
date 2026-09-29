@@ -1,0 +1,53 @@
+{
+  "generatedAt": "2026-09-29T02:17:24.826Z",
+  "title": "M6 Production Runtime Check",
+  "status": "BLOCKED",
+  "summary": "Production runtime is not ready; server, domain, database, or private-file storage configuration is still missing.",
+  "checks": [
+    {
+      "id": "DATABASE_URL",
+      "title": "Production database URL",
+      "status": "BLOCKED",
+      "detail": "DATABASE_URL must point at the production PostgreSQL instance, not localhost, 127.0.0.1, or procurex_local_only.",
+      "evidence": "postgresql://***:***@127.0.0.1:55438/procurex?schema=public"
+    },
+    {
+      "id": "PRIVATE_FILE_DIR",
+      "title": "Private file storage path or mount",
+      "status": "BLOCKED",
+      "detail": "PRIVATE_FILE_DIR must be a production private-file mount or object-storage service path.",
+      "evidence": "var/private-files"
+    },
+    {
+      "id": "PUBLIC_API_BASE_URL",
+      "title": "Public HTTPS API base URL",
+      "status": "BLOCKED",
+      "detail": "PUBLIC_API_BASE_URL must be a real HTTPS domain and must not use example.com.",
+      "evidence": "https://api.example.com"
+    },
+    {
+      "id": "NODE_ENV",
+      "title": "Production Node environment",
+      "status": "BLOCKED",
+      "detail": "NODE_ENV should be production for launch rehearsal and production runtime evidence.",
+      "evidence": "development"
+    },
+    {
+      "id": "PROCESS_BINDING",
+      "title": "API process binding",
+      "status": "PASS",
+      "detail": "HOST and PORT are configured for the API process.",
+      "evidence": {
+        "host": "127.0.0.1",
+        "port": "3100"
+      }
+    }
+  ],
+  "requiredOperations": [
+    "Provision production PostgreSQL and set DATABASE_URL.",
+    "Provision private payment-evidence storage and set PRIVATE_FILE_DIR.",
+    "Configure HTTPS domain and set PUBLIC_API_BASE_URL.",
+    "Run API and worker with NODE_ENV=production.",
+    "Run npm run db:migrate from one controlled shell before smoke validation."
+  ]
+}

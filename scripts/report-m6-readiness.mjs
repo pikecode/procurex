@@ -131,17 +131,18 @@ const productionEnvReady =
   notLocalDatabase(envValue('DATABASE_URL')) &&
   notLocalFileDir(envValue('PRIVATE_FILE_DIR')) &&
   productionHttpsUrl(envValue('PUBLIC_API_BASE_URL'));
+const productionRuntime = await readJson('var/m6-production-runtime.json');
 const readinessRunbookExists = await fileExists('docs/m6-production-readiness.md');
 const storagePolicy = await readJson('var/m6-production-storage-policy.json');
 const storagePolicyReady = storagePolicy?.signed === true;
 add(
   'DEV-603-DEPLOY',
   '部署配置与生产环境',
-  productionEnvReady ? 'READY' : 'BLOCKED',
-  productionEnvReady
-    ? 'Required production runtime endpoints are configured in the current environment.'
-    : 'DATABASE_URL, PRIVATE_FILE_DIR, and PUBLIC_API_BASE_URL must point at production-grade services before launch; localhost, local private-file paths, and example domains do not count.',
-  ['.env.example', 'infra/compose/compose.yaml'],
+  productionRuntime?.status === 'READY' && productionEnvReady ? 'READY' : 'BLOCKED',
+  productionRuntime?.status === 'READY' && productionEnvReady
+    ? 'Production runtime preflight and current env vars are ready for launch review.'
+    : 'Run npm run m6:check-production-runtime with production DATABASE_URL, PRIVATE_FILE_DIR, PUBLIC_API_BASE_URL, NODE_ENV, HOST, and PORT; localhost, local private-file paths, and example domains do not count.',
+  ['docs/m6-production-runtime-guide.md', 'var/m6-production-runtime.json', '.env.example', 'infra/compose/compose.yaml'],
 );
 add(
   'DEV-603-STORAGE',
