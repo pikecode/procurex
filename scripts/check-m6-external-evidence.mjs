@@ -36,7 +36,7 @@ function notLocalFileDir(value) {
 }
 
 function httpsUrl(value) {
-  return /^https:\/\/[^/]+/.test(value);
+  return /^https:\/\/[^/]+/.test(value) && !value.includes('example.com');
 }
 
 function item(id, title, ready, detail, evidence) {
@@ -63,7 +63,7 @@ const checks = [
     'PRODUCTION_RUNTIME',
     'Production runtime environment',
     notLocalDatabase(envValue('DATABASE_URL')) && notLocalFileDir(envValue('PRIVATE_FILE_DIR')) && httpsUrl(envValue('PUBLIC_API_BASE_URL')),
-    'DATABASE_URL must not be local, PRIVATE_FILE_DIR must be a production storage path/service mount, and PUBLIC_API_BASE_URL must be HTTPS.',
+    'DATABASE_URL must not be local, PRIVATE_FILE_DIR must be a production storage path/service mount, and PUBLIC_API_BASE_URL must be a real HTTPS endpoint, not an example domain.',
     ['DATABASE_URL', 'PRIVATE_FILE_DIR', 'PUBLIC_API_BASE_URL'],
   ),
   item(

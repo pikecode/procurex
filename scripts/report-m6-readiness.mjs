@@ -34,6 +34,22 @@ function envReady(names) {
   return names.every((name) => Boolean(process.env[name]));
 }
 
+function envValue(name) {
+  return process.env[name] || '';
+}
+
+function notLocalDatabase(value) {
+  return Boolean(value) && !value.includes('127.0.0.1') && !value.includes('localhost') && !value.includes('procurex_local_only');
+}
+
+function notLocalFileDir(value) {
+  return Boolean(value) && !value.startsWith('var/') && !value.includes('/var/private-files');
+}
+
+function productionHttpsUrl(value) {
+  return /^https:\/\/[^/]+/.test(value) && !value.includes('example.com');
+}
+
 function add(id, title, status, detail, evidence = []) {
   checks.push({ id, title, status, detail, evidence });
 }
@@ -109,25 +125,30 @@ add(
   ['var/m6-wechat-device-evidence/manifest.json'],
 );
 
-const productionEnvReady = envReady(['DATABASE_URL', 'PRIVATE_FILE_DIR', 'PUBLIC_API_BASE_URL']);
-const storagePolicyReady = await fileExists('docs/m6-production-readiness.md');
+const productionEnvReady =
+  notLocalDatabase(envValue('DATABASE_URL')) &&
+  notLocalFileDir(envValue('PRIVATE_FILE_DIR')) &&
+  productionHttpsUrl(envValue('PUBLIC_API_BASE_URL'));
+const readinessRunbookExists = await fileExists('docs/m6-production-readiness.md');
+const storagePolicy = await readJson('var/m6-production-storage-policy.json');
+const storagePolicyReady = storagePolicy?.signed === true;
 add(
   'DEV-603-DEPLOY',
   '部署配置与生产环境',
   productionEnvReady ? 'READY' : 'BLOCKED',
   productionEnvReady
     ? 'Required production runtime endpoints are configured in the current environment.'
-    : 'DATABASE_URL, PRIVATE_FILE_DIR, and PUBLIC_API_BASE_URL must point at production-grade services before launch.',
+    : 'DATABASE_URL, PRIVATE_FILE_DIR, and PUBLIC_API_BASE_URL must point at production-grade services before launch; localhost, local private-file paths, and example domains do not count.',
   ['.env.example', 'infra/compose/compose.yaml'],
 );
 add(
   'DEV-603-STORAGE',
   '对象存储与私有凭证策略',
-  envReady(['PRIVATE_FILE_DIR']) && storagePolicyReady ? 'LOCAL_READY' : 'BLOCKED',
-  envReady(['PRIVATE_FILE_DIR'])
-    ? 'Private file path is configured; production object storage retention, access, and backup policy still need sign-off.'
-    : 'PRIVATE_FILE_DIR/object storage policy is not configured for production.',
-  ['docs/m6-production-readiness.md'],
+  storagePolicyReady ? 'READY' : 'BLOCKED',
+  storagePolicyReady
+    ? 'Signed production object storage/private evidence policy is present.'
+    : 'Signed production object storage/private evidence policy is required; a local PRIVATE_FILE_DIR is not enough.',
+  ['docs/m6-production-readiness.md', 'var/m6-production-storage-policy.json'],
 );
 
 const localRestoreEvidence =
@@ -147,10 +168,10 @@ add(
 add(
   'DEV-603-ROLLBACK',
   '发布、迁移与回滚手册',
-  rollbackReady ? 'LOCAL_READY' : storagePolicyReady ? 'PLANNED' : 'BLOCKED',
+  rollbackReady ? 'LOCAL_READY' : readinessRunbookExists ? 'PLANNED' : 'BLOCKED',
   rollbackReady
     ? 'Local migration status, required release scripts, rollback runbook text, and rollback checklist evidence exist; production rehearsal is still required.'
-    : storagePolicyReady
+    : readinessRunbookExists
       ? 'Production readiness document exists; run npm run m6:rollback-check to create local rollback evidence.'
       : 'Create a production readiness runbook before release review.',
   ['docs/m6-production-readiness.md', 'scripts/check-m6-rollback.mjs', 'var/m6-rollback-drill.json'],
