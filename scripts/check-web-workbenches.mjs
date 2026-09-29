@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, purchaserWorkbenchHtml, purchaserWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -50,6 +50,8 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHt
   readProjectFile('apps/web/role-workbenches.js'),
   readProjectFile('apps/web/store-workbench.html'),
   readProjectFile('apps/web/store-workbench.js'),
+  readProjectFile('apps/web/purchaser-workbench.html'),
+  readProjectFile('apps/web/purchaser-workbench.js'),
   readProjectFile('apps/web/m7-business-flow.html'),
   readProjectFile('apps/web/m7-business-flow.js'),
   readProjectFile('scripts/capture-main-flow-interactive-demo.mjs'),
@@ -77,6 +79,8 @@ for (const path of [
   'apps/web/role-workbenches.js',
   'apps/web/store-workbench.html',
   'apps/web/store-workbench.js',
+  'apps/web/purchaser-workbench.html',
+  'apps/web/purchaser-workbench.js',
   'apps/web/m7-business-flow.html',
   'apps/web/m7-business-flow.js',
   'apps/web/ops.html',
@@ -97,6 +101,7 @@ checkSyntax('apps/web/m4-acceptance.js');
 checkSyntax('apps/web/main-flow-demo.js');
 checkSyntax('apps/web/role-workbenches.js');
 checkSyntax('apps/web/store-workbench.js');
+checkSyntax('apps/web/purchaser-workbench.js');
 checkSyntax('apps/web/m7-business-flow.js');
 checkSyntax('apps/web/ops.js');
 checkSyntax('apps/web/m6-readiness.js');
@@ -142,6 +147,7 @@ assertIncludes(billingCss, '@media', 'responsive billing styles');
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');
 assertIncludes(reportHtml, '/ops.html', 'W13 navigation entry');
 assertIncludes(reportHtml, '/store-workbench.html', 'M7 store workbench navigation entry');
+assertIncludes(reportHtml, '/purchaser-workbench.html', 'M7 purchaser workbench navigation entry');
 assertIncludes(reportHtml, '/m7-business-flow.html', 'M7 business flow navigation entry');
 assertIncludes(reportHtml, '/m6-readiness.html', 'M6 readiness navigation entry');
 assertIncludes(reportHtml, 'M5 验收状态', 'M5 acceptance summary');
@@ -329,6 +335,27 @@ assertIncludes(storeWorkbenchJs, '/shipments/${state.shipment.id}/receipts', 'M7
 assertIncludes(storeWorkbenchJs, 'store-workbench-order-', 'M7 store idempotent order key');
 assertIncludes(storeWorkbenchJs, 'store-workbench-receipt-', 'M7 store idempotent receipt key');
 
+assertIncludes(purchaserWorkbenchHtml, '采购日常工作台', 'M7 purchaser workbench page');
+assertIncludes(purchaserWorkbenchHtml, '/purchaser-workbench.js', 'M7 purchaser workbench script');
+assertIncludes(purchaserWorkbenchHtml, 'id="purchaser-summary"', 'M7 purchaser summary');
+assertIncludes(purchaserWorkbenchHtml, 'id="purchase-requests"', 'M7 purchaser request list');
+assertIncludes(purchaserWorkbenchHtml, 'id="rejection-todos"', 'M7 purchaser rejection todos');
+assertIncludes(purchaserWorkbenchHtml, 'id="request-detail"', 'M7 purchaser request detail');
+assertIncludes(purchaserWorkbenchHtml, 'id="reallocate-result"', 'M7 purchaser reallocate result');
+assertIncludes(purchaserWorkbenchHtml, '/store-workbench.html', 'M7 purchaser store navigation');
+assertIncludes(purchaserWorkbenchHtml, '/m7-business-flow.html', 'M7 purchaser business flow navigation');
+assertIncludes(purchaserWorkbenchJs, 'main-flow-demo-seed.json', 'M7 purchaser seed loader');
+assertIncludes(purchaserWorkbenchJs, '/auth/login', 'M7 purchaser login');
+assertIncludes(purchaserWorkbenchJs, '/purchase-requests', 'M7 purchaser request list endpoint');
+assertIncludes(purchaserWorkbenchJs, '/notifications', 'M7 purchaser notification endpoint');
+assertIncludes(purchaserWorkbenchJs, '/purchase-requests/${requestId}', 'M7 purchaser request detail endpoint');
+assertIncludes(purchaserWorkbenchJs, '/purchase-requests/${state.detail.id}/confirm', 'M7 purchaser confirm endpoint');
+assertIncludes(purchaserWorkbenchJs, '/purchase-requests/${state.detail.id}/reallocate', 'M7 purchaser reallocate endpoint');
+assertIncludes(purchaserWorkbenchJs, 'SUPPLIER_ORDER_REJECTED', 'M7 purchaser rejection notification filter');
+assertIncludes(purchaserWorkbenchJs, 'secondarySupplierId', 'M7 purchaser backup supplier');
+assertIncludes(purchaserWorkbenchJs, 'purchaser-workbench-confirm-', 'M7 purchaser idempotent confirm key');
+assertIncludes(purchaserWorkbenchJs, 'purchaser-workbench-reallocate-', 'M7 purchaser idempotent reallocate key');
+
 assertIncludes(businessFlowHtml, '采购协同业务流程', 'M7 business flow page');
 assertIncludes(businessFlowHtml, '/m7-business-flow.js', 'M7 business flow script');
 assertIncludes(businessFlowHtml, 'id="business-board"', 'M7 business flow board');
@@ -342,6 +369,7 @@ assertIncludes(businessFlowJs, '采购确认', 'M7 purchaser stage');
 assertIncludes(businessFlowJs, '供应商履约', 'M7 supplier stage');
 assertIncludes(businessFlowJs, '财务结算', 'M7 finance stage');
 assertIncludes(businessFlowJs, '/store-workbench.html', 'M7 store workbench navigation');
+assertIncludes(businessFlowJs, '/purchaser-workbench.html', 'M7 purchaser workbench navigation');
 assertIncludes(businessFlowJs, '/role-workbenches.html', 'M7 role workbench navigation');
 assertIncludes(businessFlowJs, '/billing.html', 'M7 billing navigation');
 

@@ -52,11 +52,15 @@ const evidenceFiles = [
   'apps/web/m5-gate-status.json',
   'apps/web/store-workbench.html',
   'apps/web/store-workbench.js',
+  'apps/web/purchaser-workbench.html',
+  'apps/web/purchaser-workbench.js',
   'apps/web/m7-business-flow.html',
   'apps/web/m7-business-flow.js',
   'var/main-flow-demo-evidence/interactive-manifest.json',
   'var/main-flow-demo-evidence/store-workbench.png',
   'var/main-flow-demo-evidence/store-workbench-mobile.png',
+  'var/main-flow-demo-evidence/purchaser-workbench.png',
+  'var/main-flow-demo-evidence/purchaser-workbench-mobile.png',
   'var/main-flow-demo-evidence/m7-business-flow.png',
   'var/main-flow-demo-evidence/m7-business-flow-mobile.png',
   'docs/m6-production-readiness.md',
@@ -108,6 +112,8 @@ const requiredStatuses = [
   ['businessFlowMobile', interactiveManifest?.mobileBusinessFlow?.stageRows >= 5 && interactiveManifest?.mobileBusinessFlow?.financeRows >= 4],
   ['storeWorkbenchDesktop', interactiveManifest?.storeWorkbench?.status === 'READY' && interactiveManifest?.storeWorkbench?.summaryRows >= 4 && interactiveManifest?.storeWorkbench?.accountRows >= 4],
   ['storeWorkbenchMobile', interactiveManifest?.mobileStoreWorkbench?.status === 'READY' && interactiveManifest?.mobileStoreWorkbench?.summaryRows >= 4 && interactiveManifest?.mobileStoreWorkbench?.accountRows >= 4],
+  ['purchaserWorkbenchDesktop', interactiveManifest?.purchaserWorkbench?.status === 'READY' && interactiveManifest?.purchaserWorkbench?.summaryRows >= 4 && interactiveManifest?.purchaserWorkbench?.requestRows >= 1],
+  ['purchaserWorkbenchMobile', interactiveManifest?.mobilePurchaserWorkbench?.status === 'READY' && interactiveManifest?.mobilePurchaserWorkbench?.summaryRows >= 4 && interactiveManifest?.mobilePurchaserWorkbench?.requestRows >= 1],
 ];
 const failedStatusChecks = requiredStatuses.filter(([, passed]) => !passed).map(([name]) => name);
 const status = missingFiles.length === 0 && failedStatusChecks.length === 0 ? 'LOCAL_READY' : 'BLOCKED';
