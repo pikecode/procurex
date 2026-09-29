@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M6 微信真机指南：新增 `docs/m6-wechat-device-evidence-guide.md`，把体验成员已添加、无生产服务器/域名、`m6:prepare-wechat-evidence`、三角色真机截图路径、manifest 必填项、`m6:check-wechat-evidence` 验证和后续 handoff 刷新串成操作清单。M6 readiness 页面“评审交接”新增微信真机指南入口；`web:check`、浏览器截图采集、本地证据包和客户证据请求生成器同步纳入该路径。
 - M6 微信真机证据闭环：新增 `npm run m6:prepare-wechat-evidence` / `m6:check-wechat-evidence`、`scripts/prepare-m6-wechat-device-evidence.mjs`、`scripts/check-m6-wechat-device-evidence.mjs` 和 `scripts/m6-wechat-evidence-lib.mjs`。草稿会写到本地忽略目录 `var/m6-wechat-device-evidence/`；`m6:external-evidence` 与 `m6:readiness` 现在要求真实 AppID、Store/Supplier/Purchaser 测试账号、绑定模式、设备型号、完整真机流程、存在的截图/录屏、订阅消息 PASS 和负责人签字，不能只凭 manifest 文件存在就把微信项判 READY。
 - M6 生产配置防误判：`m6:readiness` 和 `m6:external-evidence` 现在会拒绝 localhost、本地 `var/private-files` 路径和 `example.com` 示例域名，不再因为 `.env.example` 风格占位值存在就把 DEV-603-DEPLOY 判为 READY；DEV-603-STORAGE 也必须等签字版生产存储策略，不能只凭本地 `PRIVATE_FILE_DIR` 变成本地就绪。
 - M6 readiness 可见交接入口：`apps/web/m6-readiness.html` 新增“评审交接”区，把 `docs/m6-local-evidence-handoff.md`、`docs/m6-customer-evidence-request.md`、`docs/m6-evidence-templates/` 和 strict gate 命令直接展示在页面上；`m6:capture-readiness-evidence` 现在断言 4 条 handoff row、客户证据请求、本地交接和 strict 命令在桌面/390px 移动截图中可见且无横向溢出。

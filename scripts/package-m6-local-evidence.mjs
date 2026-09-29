@@ -52,6 +52,7 @@ const evidenceFiles = [
   'apps/web/m5-gate-status.json',
   'var/main-flow-demo-evidence/interactive-manifest.json',
   'docs/m6-production-readiness.md',
+  'docs/m6-wechat-device-evidence-guide.md',
   'docs/m6-external-evidence-templates.md',
 ];
 
@@ -112,6 +113,8 @@ const result = {
     'npm run m6:rollback-check',
     'npm run m6:initialization-check',
     'npm run m6:pilot-check',
+    'npm run m6:prepare-wechat-evidence',
+    'npm run m6:check-wechat-evidence',
     'npm run m6:external-evidence',
     'npm run m6:check-external-templates',
     'npm run m6:readiness',

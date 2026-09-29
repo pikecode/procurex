@@ -9,7 +9,7 @@ This request lists the external materials still needed before M6 can be reviewed
 | Item | Value |
 |---|---|
 | Local package status | LOCAL_READY |
-| Packaged commit | 347ee119669b49a36dd37fda3caf54017485bc44 |
+| Packaged commit | 668beefa36543a10bfa58047da8176646f965d8d |
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | Evidence handoff | `docs/m6-local-evidence-handoff.md` |
 | Visible readiness page | `apps/web/m6-readiness.html` |
@@ -39,9 +39,9 @@ Current status: BLOCKED
 
 Request:
 
-  - [ ] 微信主体、AppID、测试账号或体验成员名单
-  - [ ] Store/Supplier/Purchaser 三类角色真机截图或录屏
-  - [ ] 订阅消息、上传行为、账号绑定模式验收结果
+  - [ ] 按 docs/m6-wechat-device-evidence-guide.md 运行真机证据流程
+  - [ ] Store/Supplier/Purchaser 三类角色真机截图或录屏分别放到 var/m6-wechat-device-evidence/store-flow.png、supplier-flow.png、purchaser-flow.png
+  - [ ] manifest 填写真实设备型号、账号绑定模式、subscriptionMessageResult=PASS 和微信验收负责人签字
 
 ### PRODUCTION_RUNTIME
 
@@ -130,6 +130,8 @@ Run after materials are filled:
 
 ```bash
 npm run m6:external-evidence
+npm run m6:prepare-wechat-evidence
+npm run m6:check-wechat-evidence
 npm run m6:readiness
 npm run m6:package-local-evidence
 npm run m6:write-local-handoff

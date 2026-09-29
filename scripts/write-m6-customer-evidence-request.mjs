@@ -20,9 +20,9 @@ const owners = {
 
 const requestDetails = {
   WECHAT_DEVICE: [
-    '微信主体、AppID、测试账号或体验成员名单',
-    'Store/Supplier/Purchaser 三类角色真机截图或录屏',
-    '订阅消息、上传行为、账号绑定模式验收结果',
+    '按 docs/m6-wechat-device-evidence-guide.md 运行真机证据流程',
+    'Store/Supplier/Purchaser 三类角色真机截图或录屏分别放到 var/m6-wechat-device-evidence/store-flow.png、supplier-flow.png、purchaser-flow.png',
+    'manifest 填写真实设备型号、账号绑定模式、subscriptionMessageResult=PASS 和微信验收负责人签字',
   ],
   PRODUCTION_RUNTIME: [
     '生产 DATABASE_URL，不允许指向 localhost 或本地 demo 数据库',
@@ -110,6 +110,8 @@ Run after materials are filled:
 
 \`\`\`bash
 npm run m6:external-evidence
+npm run m6:prepare-wechat-evidence
+npm run m6:check-wechat-evidence
 npm run m6:readiness
 npm run m6:package-local-evidence
 npm run m6:write-local-handoff

@@ -1,20 +1,41 @@
 {
-  "generatedAt": "2026-09-29T01:09:33.673Z",
+  "generatedAt": "2026-09-29T01:45:13.318Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "347ee119669b49a36dd37fda3caf54017485bc44",
+    "commit": "668beefa36543a10bfa58047da8176646f965d8d",
     "remote": "git@github.com:pikecode/procurex.git",
-    "dirty": false,
-    "dirtyStatus": []
+    "dirty": true,
+    "dirtyStatus": [
+      "M apps/web/m6-external-evidence.json",
+      " M apps/web/m6-local-evidence-package.json",
+      " M apps/web/m6-readiness.html",
+      " M apps/web/m6-readiness.json",
+      " M docs/development-log.md",
+      " M docs/m6-customer-evidence-request.md",
+      " M docs/m6-production-readiness.md",
+      " M docs/progress.md",
+      " M scripts/capture-m6-readiness-evidence.mjs",
+      " M scripts/check-web-workbenches.mjs",
+      " M scripts/package-m6-local-evidence.mjs",
+      " M scripts/write-m6-customer-evidence-request.mjs",
+      " M var/m6-external-evidence.json",
+      " M var/m6-local-evidence-package.json",
+      " M var/m6-readiness-evidence/m6-readiness-desktop.png",
+      " M var/m6-readiness-evidence/m6-readiness-mobile.png",
+      " M var/m6-readiness-evidence/manifest.json",
+      "?? docs/m6-wechat-device-evidence-guide.md"
+    ]
   },
   "commands": [
     "npm run m6:performance",
     "npm run m6:rollback-check",
     "npm run m6:initialization-check",
     "npm run m6:pilot-check",
+    "npm run m6:prepare-wechat-evidence",
+    "npm run m6:check-wechat-evidence",
     "npm run m6:external-evidence",
     "npm run m6:check-external-templates",
     "npm run m6:readiness",
@@ -59,19 +80,19 @@
       "path": "apps/web/m6-readiness.json",
       "exists": true,
       "sizeBytes": 4791,
-      "sha256": "a69bfb1009efd6942a8d8e095af7666fd329edd775e148568cb3dba59a752fdb"
+      "sha256": "219b5a610a6e8a765be2f9db6c01987ee9b100e6b2b85fce8eadfa8f78624c47"
     },
     {
       "path": "apps/web/m6-external-evidence.json",
       "exists": true,
       "sizeBytes": 4537,
-      "sha256": "c385c3be0e53a7693d07cd776d114d6cf531b11087cb753ab543bc75d04aa7b1"
+      "sha256": "ef9fc0e2d83f0e5877e722cf6cb648133c025475f51d43915a05fd8310482826"
     },
     {
       "path": "var/m6-external-evidence.json",
       "exists": true,
       "sizeBytes": 4537,
-      "sha256": "c385c3be0e53a7693d07cd776d114d6cf531b11087cb753ab543bc75d04aa7b1"
+      "sha256": "ef9fc0e2d83f0e5877e722cf6cb648133c025475f51d43915a05fd8310482826"
     },
     {
       "path": "var/m6-performance-report.json",
@@ -100,20 +121,20 @@
     {
       "path": "var/m6-readiness-evidence/manifest.json",
       "exists": true,
-      "sizeBytes": 1967,
-      "sha256": "6754cd5c5e26d54e20b5edb5399dbf7ef2d71bccc89779503dacb6ad2964c24f"
+      "sizeBytes": 2027,
+      "sha256": "381292ec9c2408c43ada38f12da43dc277086d3144b36b268c74f67a1d8ea7de"
     },
     {
       "path": "var/m6-readiness-evidence/m6-readiness-desktop.png",
       "exists": true,
-      "sizeBytes": 393489,
-      "sha256": "f4596f745d0e42e04ed3882c8a790bc91ece856605b5401019f0502ab95b0f6e"
+      "sizeBytes": 426104,
+      "sha256": "a38a63f12d9da1261193c45287b3339bf6620b91335f0b53398d3724e9edee75"
     },
     {
       "path": "var/m6-readiness-evidence/m6-readiness-mobile.png",
       "exists": true,
-      "sizeBytes": 1028239,
-      "sha256": "fbdff4e14d9f858d919f1106ee7ef2573303f7337c6632e804828eaa80f7b1e7"
+      "sizeBytes": 1119646,
+      "sha256": "c809dab647700cd09a0f21259341fa3ff0d402fef89c568e42f6d9655273e5ac"
     },
     {
       "path": "apps/miniprogram/mini-flow-check.json",
@@ -136,8 +157,14 @@
     {
       "path": "docs/m6-production-readiness.md",
       "exists": true,
-      "sizeBytes": 10594,
-      "sha256": "7d0ca774ed6a7310a0501aa33ed79f0582ba5efb1f4b621874bf726084cca21e"
+      "sizeBytes": 10893,
+      "sha256": "4315cbe0fbbd0fdc73aab1a65f33744c0dc77318cb8257ca4b82819acd6797fc"
+    },
+    {
+      "path": "docs/m6-wechat-device-evidence-guide.md",
+      "exists": true,
+      "sizeBytes": 3506,
+      "sha256": "340c17a8fc01c55707ea06a20a3e791a3b1702a4c88c663ecbd97fd6bcee893d"
     },
     {
       "path": "docs/m6-external-evidence-templates.md",

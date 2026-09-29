@@ -75,6 +75,7 @@ for (const path of [
   'apps/web/ops.js',
   'apps/web/m6-readiness.html',
   'apps/web/m6-readiness.js',
+  'docs/m6-wechat-device-evidence-guide.md',
 ]) {
   assertExists(path, 'web asset');
 }
@@ -319,6 +320,9 @@ assertIncludes(m6Html, 'id="external-checks"', 'M6 external evidence check list'
 assertIncludes(m6Html, 'id="package-checks"', 'M6 local evidence package list');
 assertIncludes(m6Html, 'id="handoff-links"', 'M6 review handoff list');
 assertIncludes(m6Html, 'docs/m6-local-evidence-handoff.md', 'M6 local handoff visible path');
+assertIncludes(m6Html, 'docs/m6-wechat-device-evidence-guide.md', 'M6 WeChat device guide visible path');
+assertIncludes(m6Html, 'm6:prepare-wechat-evidence', 'M6 WeChat evidence prepare command');
+assertIncludes(m6Html, 'm6:check-wechat-evidence', 'M6 WeChat evidence check command');
 assertIncludes(m6Html, 'docs/m6-customer-evidence-request.md', 'M6 customer evidence request visible path');
 assertIncludes(m6Html, 'm6:external-evidence:strict', 'M6 strict external evidence visible command');
 assertIncludes(m6Js, 'm6-readiness.json', 'M6 readiness output loader');
