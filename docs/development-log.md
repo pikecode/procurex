@@ -2,6 +2,8 @@
 
 ## 2026-09-30
 
+- 小程序登录本地调试修复：登录前先调用 `/health/live` 检查 API 连通性，`wx.request` 增加 10 秒超时、完整请求 URL 错误提示、API 地址去尾斜杠和持久化；登录页显示“连接 API/登录中”状态，并在真机使用 `127.0.0.1` 时给出局域网 IP/HTTPS 域名提示。实测本机 API 未启动时会明确报错；以 `HOST=0.0.0.0 npm run start:api` 启动后，`127.0.0.1:3100` 和 `192.168.2.29:3100` 的 health/login 均返回成功。`apps/miniprogram/project.private.config.json` 作为微信开发者工具本机配置加入忽略。
+
 - M6 readiness evidence refresh after mini-program statistics: reran `m6:readiness`, `m6:external-evidence`, `m6:capture-readiness-evidence`, `m6:package-local-evidence`, `m6:write-local-handoff`, and `m6:write-customer-evidence-request`. M6 remains `NOT_READY` by design with READY 1 / LOCAL_READY 7 / BLOCKED 3 at the internal readiness level and 6 external blockers. Browser evidence now records 11 readiness rows, 6 external rows, 7 handoff rows, and no desktop/mobile overflow.
 - 需求面审计与小程序统计补齐：新增 `docs/requirements-surface-audit.md`，把正式 Web、小程序、本地证据和 M6 外部阻塞分开记录。审计发现 DEV-501 的本地缺口是“小程序各角色统计”未显式落到原生页面；现已在门店/供应商小程序页加入 scoped R01/R02 统计概览，在采购小程序页加入 R01/R02/R03 利润统计。`mini:flow-check` 现在实际调用 `GET /reports/order-amounts`、`GET /reports/product-quantities`、`GET /reports/profit`，并验证供应商访问利润报表返回 403。
 - 报表范围修复：多角色 PXFLOW 主账号包含 ADMIN/PURCHASER/HQ_FINANCE/STORE/SUPPLIER，但没有门店/供应商单一 scope；报表范围判断原先先命中 STORE/SUPPLIER，导致公司授权角色在小程序统计真实流中误报 SCOPE_MISMATCH。`scopedFilters` 现在先放行 ADMIN/HQ_FINANCE/PURCHASER 公司级角色，再处理门店或供应商作用域。验证：`npm run mini:check`、`npm run mini:flow-check`、`npm test`、`npm run web:check` 通过。

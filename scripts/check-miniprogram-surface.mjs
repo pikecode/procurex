@@ -82,6 +82,11 @@ const purchaserWxml = await read('apps/miniprogram/pages/purchaser/index.wxml');
 
 assertIncludes(apiJs, "client: 'MINIPROGRAM'", 'mini-program login client marker');
 assertIncludes(apiJs, 'wx.request', 'mini-program API client');
+assertIncludes(apiJs, 'timeout: options.timeout || 10000', 'mini-program API timeout');
+assertIncludes(apiJs, '/health/live', 'mini-program API health check');
+assertIncludes(apiJs, 'setApiBase', 'mini-program API base persistence');
+assertIncludes(loginJs, 'api.checkHealth()', 'login API connectivity check');
+assertIncludes(loginJs, '真机不能使用 127.0.0.1', 'login local device diagnostic');
 assertIncludes(loginJs, "wx.switchTab({ url: '/pages/store/index' })", 'store role routing');
 assertIncludes(loginJs, "wx.switchTab({ url: '/pages/supplier/index' })", 'supplier role routing');
 assertIncludes(loginJs, "wx.switchTab({ url: '/pages/purchaser/index' })", 'purchaser role routing');

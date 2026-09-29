@@ -6,6 +6,7 @@ Page({
     username: '',
     password: '',
     loading: false,
+    loadingText: '',
     error: ''
   },
 
@@ -26,10 +27,18 @@ Page({
   },
 
   async submit() {
-    this.setData({ loading: true, error: '' });
+    const apiBase = this.data.apiBase.trim();
+    if (!apiBase) {
+      this.setData({ error: '请先填写 API 地址' });
+      return;
+    }
+
+    this.setData({ loading: true, loadingText: '连接 API...', error: '' });
     try {
-      wx.setStorageSync('procurexApiBase', this.data.apiBase);
+      api.setApiBase(apiBase);
       wx.setStorageSync('procurexLastUsername', this.data.username);
+      await api.checkHealth();
+      this.setData({ loadingText: '登录中...' });
       const user = await api.login(this.data.username, this.data.password);
       const roles = user.roles || [];
       if (roles.includes('STORE') || roles.includes('STORE_FINANCE')) {
@@ -42,9 +51,17 @@ Page({
         this.setData({ error: '当前账号没有小程序角色入口' });
       }
     } catch (error) {
-      this.setData({ error: error.message });
+      this.setData({ error: explainError(error.message) });
     } finally {
-      this.setData({ loading: false });
+      this.setData({ loading: false, loadingText: '' });
     }
   }
 });
+
+function explainError(message) {
+  if (message.includes('request:fail') || message.includes('timeout')) {
+    return `${message}。本地测试请确认 API 已启动；真机不能使用 127.0.0.1，需要填写电脑局域网 IP 或 HTTPS 域名。`;
+  }
+
+  return message;
+}

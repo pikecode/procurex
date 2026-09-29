@@ -28,3 +28,4 @@ apps/web/main-flow-demo-seed.json
 apps/web/reports-acceptance-run.json
 apps/web/m5-status.json
 apps/web/m5-gate-status.json
+apps/miniprogram/project.private.config.json

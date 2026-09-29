@@ -23,6 +23,7 @@
       <button class="secondary" bindtap="fillDemo">填入门店演示账号</button>
       <button class="primary" loading="{{loading}}" bindtap="submit">登录</button>
     </view>
+    <view wx:if="{{loadingText}}" class="row"><text class="tag">{{loadingText}}</text></view>
     <view wx:if="{{error}}" class="row"><text class="tag tag-fail">{{error}}</text></view>
   </view>
 
