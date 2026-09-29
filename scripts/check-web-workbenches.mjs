@@ -223,6 +223,9 @@ assertIncludes(productFlowPage, "action: 'RETURN'", 'product app discrepancy ret
 assertIncludes(productStorePage, '/stores/${state.seed.storeId}/account', 'product app store account endpoint');
 assertIncludes(productStorePage, '/purchase-requests/preview', 'product app store order preview endpoint');
 assertIncludes(productStorePage, '/purchase-requests', 'product app store order endpoint');
+assertIncludes(productStorePage, '/shipments/${shipmentId}', 'product app store shipment detail endpoint');
+assertIncludes(productStorePage, '/shipments/${shipment.id}/receipts', 'product app store receipt endpoint');
+assertIncludes(productStorePage, '完整收货', 'product app store receipt action');
 assertIncludes(productPurchaserPage, '/purchase-requests/${requestId}', 'product app purchaser request detail endpoint');
 assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/confirm', 'product app purchaser confirm endpoint');
 assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/reallocate', 'product app purchaser reallocate endpoint');
