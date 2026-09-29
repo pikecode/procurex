@@ -44,6 +44,7 @@ export async function render() {
         <div class="form-actions">
           <button id="app-load-payment" class="secondary">读取付款</button>
           <button id="app-create-confirm-payment" class="primary">登记并确认供应商付款</button>
+          <button id="app-create-reject-payment" class="secondary">登记并驳回供应商付款</button>
           <button id="app-confirm-payment" class="primary">确认收款</button>
           <button id="app-reject-payment" class="secondary">驳回付款</button>
         </div>
@@ -111,6 +112,21 @@ function bindFinance({ financeToken, supplierToken, supplierStatements }) {
       setNotice('');
     } catch (error) { setNotice(error.message); }
   });
+  document.getElementById('app-create-reject-payment').addEventListener('click', async () => {
+    try {
+      const rejected = await createAndRejectPayment({ financeToken, supplierToken, supplierStatements });
+      payment = rejected;
+      document.getElementById('app-finance-payment-id').value = rejected.id;
+      document.getElementById('app-finance-label').textContent = rejected.status || 'REJECTED';
+      show('REJECTED', {
+        付款记录: rejected.paymentNo || rejected.id,
+        付款状态: rejected.status || 'REJECTED',
+        付款金额: money(rejected.amount),
+        当前版本: rejected.version ?? '—',
+      });
+      setNotice('');
+    } catch (error) { setNotice(error.message); }
+  });
   document.getElementById('app-reject-payment').addEventListener('click', async () => {
     try {
       if (!payment) await loadPayment();
@@ -165,7 +181,7 @@ trailer
   return session.id;
 }
 
-async function createAndConfirmPayment({ financeToken, supplierToken, supplierStatements }) {
+async function createPayment({ financeToken, supplierStatements }) {
   const supplierScopedStatements = supplierStatements.filter((item) => item.supplierId === state.seed.supplierId);
   const statement = supplierScopedStatements.find((item) => item.settlementStatus !== 'SETTLED' && item.status !== 'SETTLED') || supplierScopedStatements[0];
   if (!statement?.id) throw new Error('暂无可登记付款的供应商账单');
@@ -194,9 +210,26 @@ async function createAndConfirmPayment({ financeToken, supplierToken, supplierSt
       })),
     }),
   }, financeToken);
+  return payment;
+}
+
+async function createAndConfirmPayment({ financeToken, supplierToken, supplierStatements }) {
+  const payment = await createPayment({ financeToken, supplierStatements });
   return request(`/payment-records/${payment.id}/confirm`, {
     method: 'POST',
     headers: { 'idempotency-key': `product-app-payment-auto-confirm-${crypto.randomUUID()}` },
     body: JSON.stringify({ expectedVersion: payment.version }),
+  }, supplierToken);
+}
+
+async function createAndRejectPayment({ financeToken, supplierToken, supplierStatements }) {
+  const payment = await createPayment({ financeToken, supplierStatements });
+  return request(`/payment-records/${payment.id}/reject`, {
+    method: 'POST',
+    headers: { 'idempotency-key': `product-app-payment-auto-reject-${crypto.randomUUID()}` },
+    body: JSON.stringify({
+      expectedVersion: payment.version,
+      reason: document.getElementById('app-finance-payment-reason').value.trim() || '产品应用驳回付款',
+    }),
   }, supplierToken);
 }

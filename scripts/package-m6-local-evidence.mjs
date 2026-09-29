@@ -82,6 +82,7 @@ const evidenceFiles = [
   'var/main-flow-demo-evidence/product-app-supplier.png',
   'var/main-flow-demo-evidence/product-app-finance.png',
   'var/main-flow-demo-evidence/product-app-flow-action.png',
+  'var/main-flow-demo-evidence/product-app-finance-reject-action.png',
   'var/main-flow-demo-evidence/product-app-finance-action.png',
   'var/main-flow-demo-evidence/m7-business-flow.png',
   'var/main-flow-demo-evidence/m7-business-flow-mobile.png',
@@ -143,6 +144,7 @@ const requiredStatuses = [
   ['productAppRoutes', interactiveManifest?.productAppStore?.status === 'READY' && interactiveManifest?.productAppPurchaser?.status === 'READY' && interactiveManifest?.productAppSupplier?.status === 'READY' && interactiveManifest?.productAppFinance?.status === 'READY'],
   ['productAppFlowAction', interactiveManifest?.productAppFlowAction?.status === 'COMPLETED' && interactiveManifest?.productAppFlowAction?.resultRows >= 4],
   ['productAppExceptionAction', interactiveManifest?.productAppExceptionAction?.status === 'BRANCHES_READY' && interactiveManifest?.productAppExceptionAction?.resultRows >= 4],
+  ['productAppFinanceRejectAction', interactiveManifest?.productAppFinanceRejectAction?.status === 'REJECTED' && interactiveManifest?.productAppFinanceRejectAction?.resultRows >= 4],
   ['productAppFinanceAction', interactiveManifest?.productAppFinanceAction?.status === 'CONFIRMED' && interactiveManifest?.productAppFinanceAction?.resultRows >= 4],
 ];
 const failedStatusChecks = requiredStatuses.filter(([, passed]) => !passed).map(([name]) => name);

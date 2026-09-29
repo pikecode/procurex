@@ -235,6 +235,9 @@ assertIncludes(productFinancePage, "request('/payment-records'", 'product app fi
 assertIncludes(productFinancePage, '/payment-records/${payment.id}/confirm', 'product app finance payment confirm endpoint');
 assertIncludes(productFinancePage, '/payment-records/${payment.id}/reject', 'product app finance payment reject endpoint');
 assertIncludes(productFinancePage, '登记并确认供应商付款', 'product app finance deterministic payment action');
+assertIncludes(productFinancePage, '登记并驳回供应商付款', 'product app finance deterministic rejection action');
+assertIncludes(mainFlowInteractiveCapture, 'product-app-finance-reject-action.png', 'product app finance rejection evidence capture');
+assertIncludes(mainFlowInteractiveCapture, 'productAppFinanceRejectAction', 'product app finance rejection manifest state');
 assertIncludes(appCss, '.app-route-grid', 'product app route grid styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');

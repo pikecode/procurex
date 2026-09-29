@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M7 正式产品 App 财务驳回分支：扩展 `apps/web/product-app/pages/finance.js`，新增“登记并驳回供应商付款”。该动作复用 PXFLOW 供应商账单、付款预览和 PDF 凭证上传链路，登记一笔 `COMPANY_TO_SUPPLIER` 待确认付款后由供应商账号提交 `/payment-records/{id}/reject`。交互式截图脚本新增 `product-app-finance-reject-action.png`，manifest 记录 `productAppFinanceRejectAction=REJECTED`；M6 本地证据包同步要求该拒绝分支通过。
 - M7 正式产品 App 财务动作闭环：扩展 `apps/web/product-app/pages/finance.js`，新增“登记并确认供应商付款”。该动作限定 PXFLOW 供应商账单，读取账单明细、调用 `/payment-records/preview`、生成合法 PDF 凭证并走 `/files/upload-sessions`、`/files/{id}/content`、`/files/{id}/complete`，随后登记 `COMPANY_TO_SUPPLIER` 付款并由供应商账号确认收款。交互式截图脚本新增 `product-app-finance-action.png`，manifest 记录 `productAppFinanceAction=CONFIRMED`。
 - M7 正式产品 App 财务路由：新增 `apps/web/product-app/pages/finance.js` 和 `#/finance` 路由，把供应商账单、门店账单、`COMPANY_TO_SUPPLIER` 付款记录、供应商确认收款/驳回付款入口迁入正式 `app.html`。`web:check` 保护 finance 模块、路由、账单/付款端点和 confirm/reject 动作；交互式截图脚本新增 `product-app-finance.png`，M6 本地证据包同步纳入 finance 源码与截图。
 - M7 正式产品 App 异常分支：扩展 `apps/web/product-app/pages/flow.js` 的 `#/flow` 路由，新增“一键执行异常分支”，在正式 App 内执行供应商拒单、采购改派到备用供应商、少收差异 ACCEPT、REPLENISH 补发并收货、RETURN 退回核对。交互式截图脚本现在同页点击主流程和异常分支，manifest 记录 `productAppFlowAction=COMPLETED` 与 `productAppExceptionAction=BRANCHES_READY`，让正式产品 App 覆盖正常主链路和关键异常链路。
