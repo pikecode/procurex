@@ -537,6 +537,41 @@ async function runProductAppFlow(cdp, viewport, fileName) {
   return { file, state, viewport };
 }
 
+async function runProductAppFinanceAction(cdp, viewport, fileName) {
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/finance`);
+  const state = await evaluate(cdp, `
+    (async () => {
+      const waitFor = async (predicate, label) => {
+        for (let i = 0; i < 180; i += 1) {
+          if (await predicate()) return;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        throw new Error(label + ' did not become ready.');
+      };
+      await waitFor(() => document.querySelector('#app-status')?.textContent.trim() === 'READY', 'product app finance route');
+      await waitFor(() => document.querySelector('#app-create-confirm-payment') && !document.querySelector('#app-create-confirm-payment').disabled, 'product app create payment button');
+      document.querySelector('#app-create-confirm-payment').click();
+      await waitFor(() => document.querySelector('#app-payment-action-label')?.textContent.trim() === 'CONFIRMED', 'product app finance payment confirmation');
+      const bodyText = document.body.textContent || '';
+      return {
+        status: document.querySelector('#app-payment-action-label')?.textContent.trim() || '',
+        route: document.querySelector('#app-route-label')?.textContent.trim() || '',
+        resultRows: document.querySelectorAll('#app-finance-result article').length,
+        hasPaymentRecord: bodyText.includes('付款记录'),
+        hasConfirmedStatus: bodyText.includes('CONFIRMED'),
+        noticeText: document.querySelector('#app-notice')?.textContent.trim() || '',
+        viewportWidth: window.innerWidth,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
+      };
+    })()
+  `);
+  const file = resolve(outputDir, fileName);
+  await rm(file, { force: true });
+  await captureScreenshot(cdp, file);
+  return { file, state, viewport };
+}
+
 async function main() {
   await run('npm', ['run', 'main-flow:seed-demo']);
   await run('npm', ['run', 'main-flow:check-demo']);
@@ -642,6 +677,11 @@ async function main() {
           { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
           'product-app-flow-action.png',
         );
+        const productAppFinanceAction = await runProductAppFinanceAction(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'product-app-finance-action.png',
+        );
         await writeFile(resolve(outputDir, 'interactive-manifest.json'), `${JSON.stringify({
           generatedAt: new Date().toISOString(),
           browser,
@@ -669,6 +709,7 @@ async function main() {
           productAppFinanceScreenshot: productAppFinance.file,
           productAppFlowActionScreenshot: productAppFlowAction.file,
           productAppExceptionActionScreenshot: productAppFlowAction.file,
+          productAppFinanceActionScreenshot: productAppFinanceAction.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
@@ -688,6 +729,7 @@ async function main() {
           productAppSupplier: productAppSupplier.state,
           productAppFinance: productAppFinance.state,
           productAppFlowAction: productAppFlowAction.state,
+          productAppFinanceAction: productAppFinanceAction.state,
           productAppExceptionAction: {
             status: productAppFlowAction.state.exceptionStatus,
             resultRows: productAppFlowAction.state.exceptionRows,
@@ -697,7 +739,7 @@ async function main() {
             hasReplenishReturn: productAppFlowAction.state.hasReplenishReturn,
             horizontalOverflow: productAppFlowAction.state.horizontalOverflow,
           },
-          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFinance, productAppFlowAction },
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFinance, productAppFlowAction, productAppFinanceAction },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -719,6 +761,7 @@ async function main() {
         console.log(`  Mobile product app screenshot: ${mobileProductApp.file}`);
         console.log(`  Product app finance screenshot: ${productAppFinance.file}`);
         console.log(`  Product app flow action screenshot: ${productAppFlowAction.file}`);
+        console.log(`  Product app finance action screenshot: ${productAppFinanceAction.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
         console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText}; ${roleWorkbenchAction.state.discrepancyResultText}; ${roleWorkbenchAction.state.rejectionResultText}; ${roleWorkbenchAction.state.discrepancyBranchesResultText})`);
@@ -730,6 +773,7 @@ async function main() {
         console.log(`  Product app routes: ${productApp.state.status}/${productAppStore.state.status}/${productAppPurchaser.state.status}/${productAppSupplier.state.status}/${productAppFinance.state.status}`);
         console.log(`  Product app flow action: ${productAppFlowAction.state.status}, rows: ${productAppFlowAction.state.resultRows}`);
         console.log(`  Product app exception action: ${productAppFlowAction.state.exceptionStatus}, rows: ${productAppFlowAction.state.exceptionRows}`);
+        console.log(`  Product app finance action: ${productAppFinanceAction.state.status}, rows: ${productAppFinanceAction.state.resultRows}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

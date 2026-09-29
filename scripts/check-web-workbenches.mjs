@@ -229,8 +229,12 @@ assertIncludes(productSupplierPage, '/discrepancies/${id}/resolve', 'product app
 assertIncludes(productFinancePage, '/supplier-statements', 'product app finance supplier statements endpoint');
 assertIncludes(productFinancePage, '/store-statements', 'product app finance store statements endpoint');
 assertIncludes(productFinancePage, '/payment-records?direction=COMPANY_TO_SUPPLIER', 'product app finance payment list endpoint');
+assertIncludes(productFinancePage, '/payment-records/preview', 'product app finance payment preview endpoint');
+assertIncludes(productFinancePage, '/files/upload-sessions', 'product app finance payment evidence upload endpoint');
+assertIncludes(productFinancePage, "request('/payment-records'", 'product app finance payment create endpoint');
 assertIncludes(productFinancePage, '/payment-records/${payment.id}/confirm', 'product app finance payment confirm endpoint');
 assertIncludes(productFinancePage, '/payment-records/${payment.id}/reject', 'product app finance payment reject endpoint');
+assertIncludes(productFinancePage, '登记并确认供应商付款', 'product app finance deterministic payment action');
 assertIncludes(appCss, '.app-route-grid', 'product app route grid styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');

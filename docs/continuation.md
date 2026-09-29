@@ -24,6 +24,8 @@ The exception branches have now also moved into `app.html#/flow`: the route exec
 
 Finance settlement visibility has now moved into `app.html#/finance`: the route reads supplier statements, store statements, `COMPANY_TO_SUPPLIER` payment records, and exposes supplier-side payment confirm/reject actions. The interactive manifest now captures `productAppFinance.status=READY` and `var/main-flow-demo-evidence/product-app-finance.png`. Continue M7 by tightening finance action evidence: create or select a deterministic pending payment in the formal App flow, then confirm/reject it in `#/finance` without relying on accumulated local data.
 
+Finance action evidence is now deterministic too. `app.html#/finance` has “登记并确认供应商付款”, which selects the PXFLOW supplier statement, previews a payable settlement item, uploads a generated PDF payment proof, creates a `COMPANY_TO_SUPPLIER` payment, and confirms it as the Supplier account. `npm run main-flow:capture-interactive-demo` now expects `productAppFinanceAction.status=CONFIRMED` and captures `var/main-flow-demo-evidence/product-app-finance-action.png`. The formal App now covers happy path, exception branches, finance visibility, and supplier payment confirmation.
+
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:

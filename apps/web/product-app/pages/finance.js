@@ -1,4 +1,4 @@
-import { login, request } from '../api.js';
+import { apiBase, login, request } from '../api.js';
 import { state } from '../state.js';
 import { esc, money, metric, resultLine, tableRows, setNotice } from '../ui.js';
 import { setHeader } from '../shell.js';
@@ -43,6 +43,7 @@ export async function render() {
         <label>驳回原因<input id="app-finance-payment-reason" value="产品应用驳回付款"></label>
         <div class="form-actions">
           <button id="app-load-payment" class="secondary">读取付款</button>
+          <button id="app-create-confirm-payment" class="primary">登记并确认供应商付款</button>
           <button id="app-confirm-payment" class="primary">确认收款</button>
           <button id="app-reject-payment" class="secondary">驳回付款</button>
         </div>
@@ -53,10 +54,10 @@ export async function render() {
         ${resultLine('待确认金额', money(pendingAmount))}
       </div>
     </section>`;
-  bindFinance(supplierToken);
+  bindFinance({ financeToken, supplierToken, supplierStatements });
 }
 
-function bindFinance(supplierToken) {
+function bindFinance({ financeToken, supplierToken, supplierStatements }) {
   let payment = null;
   const show = (label, data) => {
     document.getElementById('app-payment-action-label').textContent = label;
@@ -95,6 +96,21 @@ function bindFinance(supplierToken) {
       setNotice('');
     } catch (error) { setNotice(error.message); }
   });
+  document.getElementById('app-create-confirm-payment').addEventListener('click', async () => {
+    try {
+      const confirmed = await createAndConfirmPayment({ financeToken, supplierToken, supplierStatements });
+      payment = confirmed;
+      document.getElementById('app-finance-payment-id').value = confirmed.id;
+      document.getElementById('app-finance-label').textContent = confirmed.status || 'CONFIRMED';
+      show('CONFIRMED', {
+        付款记录: confirmed.paymentNo || confirmed.id,
+        付款状态: confirmed.status || 'CONFIRMED',
+        付款金额: money(confirmed.amount),
+        当前版本: confirmed.version ?? '—',
+      });
+      setNotice('');
+    } catch (error) { setNotice(error.message); }
+  });
   document.getElementById('app-reject-payment').addEventListener('click', async () => {
     try {
       if (!payment) await loadPayment();
@@ -108,4 +124,79 @@ function bindFinance(supplierToken) {
       setNotice('');
     } catch (error) { setNotice(error.message); }
   });
+}
+
+async function uploadPaymentEvidence(token) {
+  const content = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] >>
+endobj
+trailer
+<< /Root 1 0 R >>
+%%EOF
+`;
+  const blob = new Blob([content], { type: 'application/pdf' });
+  const session = await request('/files/upload-sessions', {
+    method: 'POST',
+    body: JSON.stringify({
+      purpose: 'PAYMENT',
+      filename: `product-app-payment-${Date.now()}.pdf`,
+      mimeType: 'application/pdf',
+      sizeBytes: blob.size,
+    }),
+  }, token);
+  const upload = await fetch(`${apiBase}/files/${session.id}/content`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/octet-stream',
+      'x-upload-token': session.uploadToken,
+    },
+    body: blob,
+  });
+  if (!upload.ok) throw new Error('付款凭证上传失败');
+  await request(`/files/${session.id}/complete`, { method: 'POST' }, token);
+  return session.id;
+}
+
+async function createAndConfirmPayment({ financeToken, supplierToken, supplierStatements }) {
+  const supplierScopedStatements = supplierStatements.filter((item) => item.supplierId === state.seed.supplierId);
+  const statement = supplierScopedStatements.find((item) => item.settlementStatus !== 'SETTLED' && item.status !== 'SETTLED') || supplierScopedStatements[0];
+  if (!statement?.id) throw new Error('暂无可登记付款的供应商账单');
+  const detail = await request(`/supplier-statements/${statement.id}`, {}, financeToken);
+  const line = (detail.lines || []).find((item) => Number(item.totalAmount || item.payableAmount || 0) > 0);
+  const settlementItemId = line?.settlementItemId || detail.adjustmentItems?.find((item) => Number(item.amount || 0) > 0)?.settlementItemId;
+  if (!settlementItemId) throw new Error('供应商账单没有可付款结算项');
+  const preview = await request('/payment-records/preview', {
+    method: 'POST',
+    body: JSON.stringify({ settlementItemIds: [settlementItemId] }),
+  }, financeToken);
+  if (preview.blockedItems?.length) throw new Error(preview.blockedItems.map((item) => item.message).join('；'));
+  if (!preview.items?.length) throw new Error('付款预览没有可登记项目');
+  const evidenceFileId = await uploadPaymentEvidence(financeToken);
+  const payment = await request('/payment-records', {
+    method: 'POST',
+    headers: { 'idempotency-key': `product-app-payment-create-${crypto.randomUUID()}` },
+    body: JSON.stringify({
+      direction: preview.direction,
+      businessDate: new Date().toISOString().slice(0, 10),
+      evidenceFileIds: [evidenceFileId],
+      items: preview.items.map((item) => ({
+        settlementItemId: item.settlementItemId,
+        expectedVersion: item.sourceVersion,
+        expectedAmount: item.payableAmount,
+      })),
+    }),
+  }, financeToken);
+  return request(`/payment-records/${payment.id}/confirm`, {
+    method: 'POST',
+    headers: { 'idempotency-key': `product-app-payment-auto-confirm-${crypto.randomUUID()}` },
+    body: JSON.stringify({ expectedVersion: payment.version }),
+  }, supplierToken);
 }

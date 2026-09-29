@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M7 正式产品 App 财务动作闭环：扩展 `apps/web/product-app/pages/finance.js`，新增“登记并确认供应商付款”。该动作限定 PXFLOW 供应商账单，读取账单明细、调用 `/payment-records/preview`、生成合法 PDF 凭证并走 `/files/upload-sessions`、`/files/{id}/content`、`/files/{id}/complete`，随后登记 `COMPANY_TO_SUPPLIER` 付款并由供应商账号确认收款。交互式截图脚本新增 `product-app-finance-action.png`，manifest 记录 `productAppFinanceAction=CONFIRMED`。
 - M7 正式产品 App 财务路由：新增 `apps/web/product-app/pages/finance.js` 和 `#/finance` 路由，把供应商账单、门店账单、`COMPANY_TO_SUPPLIER` 付款记录、供应商确认收款/驳回付款入口迁入正式 `app.html`。`web:check` 保护 finance 模块、路由、账单/付款端点和 confirm/reject 动作；交互式截图脚本新增 `product-app-finance.png`，M6 本地证据包同步纳入 finance 源码与截图。
 - M7 正式产品 App 异常分支：扩展 `apps/web/product-app/pages/flow.js` 的 `#/flow` 路由，新增“一键执行异常分支”，在正式 App 内执行供应商拒单、采购改派到备用供应商、少收差异 ACCEPT、REPLENISH 补发并收货、RETURN 退回核对。交互式截图脚本现在同页点击主流程和异常分支，manifest 记录 `productAppFlowAction=COMPLETED` 与 `productAppExceptionAction=BRANCHES_READY`，让正式产品 App 覆盖正常主链路和关键异常链路。
 - M7 正式产品 App 主流程动作：新增 `apps/web/product-app/pages/flow.js` 和 `#/flow` 路由，把门店下单、采购确认、供应商发货、门店收货集中到 `apps/web/app.html` 内一键执行；该路由使用 PXFLOW Store/Purchaser/Supplier 三类账号调用真实 `/purchase-requests/preview`、`/purchase-requests`、`/purchase-requests/{id}/confirm`、`/supplier-orders/{id}/shipment-preview`、`/supplier-orders/{id}/shipments`、`/shipments/{id}`、`/shipments/{id}/receipts`，并修正收货数量读取为发货详情的 `shippedQuantity`。`main-flow:capture-interactive-demo` 现在会打开正式产品 App 的 `#/flow` 并点击“一键执行业务流转”，manifest 记录 `productAppFlowAction=COMPLETED`、4 个结果行和截图 `product-app-flow-action.png`；M6 本地证据包同步纳入该源码与截图。
