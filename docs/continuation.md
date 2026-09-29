@@ -36,7 +36,7 @@ The Finance formal route detail view is now tightened as well. `app.html#/financ
 
 The first guided day-to-day workflow connection is now in place. `app.html#/flow` saves the latest main-flow handoff to `sessionStorage` via `apps/web/product-app/workflow.js`; Overview displays that handoff, and Store/Purchaser/Supplier/Finance prefill the relevant IDs from it. Continue M7 by making the handoff more actionable after finance registration, for example by surfacing payment status back on Overview and adding route-level refresh actions, not by adding new standalone HTML pages.
 
-The guided formal App journey is browser-verified: Flow creates a current handoff, Overview refreshes all four linked resources, Purchaser/Supplier/Store/Finance open their role routes and refresh details, Finance registers a `PENDING` payment, Supplier confirms it, and the persistent breadcrumb returns the operator to Overview where the process is complete. Independent App role evidence now covers Store order creation -> Purchaser confirmation -> Supplier shipment -> Store receipt, with Overview handoffs through Finance, plus a second order's Supplier rejection back to Purchaser. Dedicated discrepancy browser evidence creates short-receipt orders and executes Supplier ACCEPT/REPLENISH/RETURN through `app.html#/supplier`; all three resolve as expected, REPLENISH creates a gap-allocated shipment, and Overview recommends Store receiving. The discrepancy list deduplicates and sorts by newest notification first. `npm run build`, `npm test` (47), `npm run web:check`, and the full interactive evidence capture pass. Next investigate the Purchaser role-page reallocation action evidence, then perform the focused M7 requirements review and update completion status; M6 external launch blockers remain separate.
+The guided formal App journey is browser-verified: Flow creates a current handoff, Overview refreshes four linked resources, each role route refreshes details, Finance registers a `PENDING` payment, Supplier confirms it, and the breadcrumb returns to Overview with the process complete. Independent App evidence covers Store order -> Purchaser confirmation -> Supplier shipment -> Store receipt and a separate Supplier rejection back to Purchaser. Supplier ACCEPT/REPLENISH/RETURN are exercised from `app.html#/supplier`; REPLENISH creates a gap-allocated shipment and Overview recommends Store receiving. `npm run mini:check` and `npm run mini:flow-check` pass; native API flow reaches Store receipt, Supplier payment confirmation/discrepancy resolution, and Purchaser reallocation over real HTTP APIs. This is not real-device WeChat acceptance. The attempt to add formal App notification-driven Purchaser reallocation to the main browser journey did not pass and has been withdrawn from that script; retain it as an explicit open item and debug it independently. Next audit original requirements across the two clients, close the formal App reallocation interaction, then refresh the evidence package. Keep external M6 gates separate.
 
 ## Latest High-Signal Work
 
@@ -332,10 +332,10 @@ Run `npm run acceptance:m4-close` for the final local M4 close check after brows
 
 Do these in order:
 
-1. Add browser evidence for independent Store order/receipt, Purchaser confirmation/reallocation, and Supplier shipment/rejection transitions that update Overview's next action.
-2. Exercise discrepancy ACCEPT/REPLENISH/RETURN from role routes and verify the workflow presents the correct next role after each outcome.
-3. Review M7 product requirements against the formal App routes and close any remaining local functional gaps.
-4. Keep the existing acceptance baseline green: `npm run acceptance:m5-close`, `npm run mini:check`, `npm run mini:flow-check`, `npm run build`, and `npm test`.
+1. Audit original acceptance requirements against the formal Web App and native mini-program separately; record each as implemented, locally verified, device/production blocked, or genuinely missing.
+2. Close locally actionable gaps in the native role journeys and add deterministic API/browser evidence for any missing handoff, especially Purchaser reallocation from the formal role page.
+3. Refresh and review the M7 evidence package, then update milestone status without conflating Web browser evidence with WeChat device acceptance.
+4. Keep the regression baseline green: `npm run acceptance:m5-close`, `npm run mini:check`, `npm run mini:flow-check`, `npm run build`, and `npm test`.
 5. Complete external M6 launch gates when inputs exist: production host/domain and runtime configuration, signed storage policy, WeChat real-device evidence, customer finance sign-off, and pilot/handover sign-off.
 
 Do not mark production launch complete from local browser evidence alone.

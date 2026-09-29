@@ -1,6 +1,6 @@
 # Main Flow Acceptance
 
-Last updated: 2026-09-27
+Last updated: 2026-09-30
 
 This is the primary product-flow checkpoint. It exists to prevent the project from drifting into isolated details while the core ordering flow remains unclear.
 
@@ -19,25 +19,25 @@ Store order
 → receiver confirmation
 ```
 
-This flow is mostly implemented in the backend and covered by integration tests. It is not yet fully visible as an end-to-end browser or mini-program demo.
+The flow is implemented across backend APIs, the formal Web product app, and a native mini-program product-client slice. The formal Web journey has interactive browser evidence through payment confirmation; the native mini-program journey has real-API flow evidence. These are distinct acceptance claims: local API checks do not prove WeChat Developer Tools or real-device compatibility, and the Web App is not a substitute for the mini-program deliverable.
 
 ## Acceptance Matrix
 
 | Step | Requirement | Implemented Surface | Current Evidence | Visible UI | Gap |
 |---|---|---|---|---|---|
-| 1. Store order preview | O01, DEV-201 | `POST /purchase-requests/preview` | Integration coverage for catalog pricing and stored-value shortfall | Not yet in Web; expected S01/S02/代下单 UI remains future work | Need visible order-entry page or scripted demo |
-| 2. Store order creation | O02, DEV-201/202 | `POST /purchase-requests` | Idempotent creation integration coverage | Not yet in Web | Need visible order creation workflow |
-| 3. Purchase request read | O03 | `GET /purchase-requests`, `GET /purchase-requests/{id}` | Store-scope read hardening covered | Not yet in Web | Need purchaser/order list UI |
-| 4. Procurement edit/assign/confirm | O04-O07, DEV-204/205 | item patch, assign/reassign-preview, confirm | Integration flow splits supplier orders once per idempotency key | Not yet in Web | Need W01/W02 visible workflow |
-| 5. Supplier rejection/reallocation | O09-O10, DEV-305 | supplier reject, purchaser reallocate | Integration coverage for supplier rejection and reallocation | Role workbench now has a supplier rejection handling action | Multi-supplier reallocation branch still needs seeded UI coverage |
-| 6. Supplier order read | F01 | `GET /supplier-orders`, detail | Supplier scope hardening covered | Not yet in Web/S06 | Need supplier order list/detail UI |
-| 7. Shipment preview/create | F02-F03, DEV-301/302 | shipment preview and creation | Integration covers shipment, freight confirmation use, replenishment allocation | Not yet in Web/S06 | Need visible supplier shipment UI |
-| 8. Store receipt | F04, DEV-303 | `POST /shipments/{id}/receipts` | Integration covers receipt revisions, short receipt, replacement | Not yet in Web/S04 | Need visible receipt UI |
-| 9. Discrepancy resolution | F05, DEV-304 | `POST /discrepancies/{id}/resolve` | ACCEPT, REPLENISH, RETURN covered through backend flows | Role workbench now has supplier discrepancy ACCEPT plus REPLENISH/RETURN branch actions | Mobile role-specific coverage remains open |
-| 10. Store/supplier statements | B01-B04, DEV-402/403 | store, supplier total, supplier-store, direct statements | 31 integration tests and statement-specific evidence | W09/S05/S08 in `apps/web/billing.html` | Browser E2E still blocked |
-| 11. Payment registration | B06-B07, DEV-404 | preview/create payment with evidence file | Required PAYMENT evidence and idempotency covered | W09/S05/S08 in `apps/web/billing.html` | Browser E2E still blocked |
-| 12. Receiver confirmation | B08, DEV-404 | payment confirmation | Receiver authorization and direct/company gates covered | W09/S05/S08 in `apps/web/billing.html` | Browser E2E still blocked |
-| 13. Adjustments and difference disposal | B05/B12, DEV-406 | adjustment reads, offline return, offset, receiver confirmation | B05 to B12 HTTP/database flow covered | W10 section in `apps/web/billing.html` | Browser E2E still blocked |
+| 1. Store order preview | O01, DEV-201 | `POST /purchase-requests/preview` | Integration, Web App interactive flow, native mini-program API flow | `app.html#/store`; native Store page | WeChat device acceptance remains open |
+| 2. Store order creation | O02, DEV-201/202 | `POST /purchase-requests` | Idempotent API coverage and real-API actions in both clients | `app.html#/store`; native Store page | Device acceptance remains open |
+| 3. Purchase request read | O03 | list/detail endpoints | Scope tests; formal App and mini-program flow exercise | `app.html#/purchaser`; native Purchaser page | Broader device/role usability review |
+| 4. Procurement assign/confirm | O04-O07, DEV-204/205 | edit/assign/confirm endpoints | API coverage; formal App confirmation evidence; mini flow confirmation | Formal Purchaser route; native Purchaser page | Dedicated formal App reallocation action evidence |
+| 5. Supplier rejection/reallocation | O09-O10, DEV-305 | reject/reallocate endpoints | Formal Web independent rejection; mini-program API-flow reallocation | Purchaser and Supplier role pages in both clients | Formal App reallocation click evidence; WeChat device acceptance |
+| 6. Supplier order read | F01 | list/detail endpoints | Scope tests and real-API role journeys | `app.html#/supplier`; native Supplier page | WeChat device acceptance remains open |
+| 7. Shipment preview/create | F02-F03, DEV-301/302 | preview and shipment endpoints | Formal Web role action and native API flow | Supplier routes in both clients | WeChat device acceptance remains open |
+| 8. Store receipt | F04, DEV-303 | `POST /shipments/{id}/receipts` | Formal Web role action and native API flow, including short receipt | Store routes in both clients | WeChat device acceptance remains open |
+| 9. Discrepancy resolution | F05, DEV-304 | `POST /discrepancies/{id}/resolve` | Web ACCEPT/REPLENISH/RETURN browser evidence; native API flow resolution | Supplier routes in both clients | Real-device and broader exception acceptance |
+| 10. Store/supplier statements | B01-B04, DEV-402/403 | statement endpoints | Database/HTTP acceptance and browser evidence | `apps/web/billing.html`; native Supplier statement view | Native statement-view device acceptance |
+| 11. Payment registration | B06-B07, DEV-404 | preview/create payment with evidence | HTTP acceptance and formal Web App deterministic action | Finance route; billing page | Native customer finance/device sign-off |
+| 12. Receiver confirmation | B08, DEV-404 | payment confirmation | Formal Web browser evidence and native API-flow confirmation | Supplier routes in both clients | WeChat device acceptance remains open |
+| 13. Adjustments and difference disposal | B05/B12, DEV-406 | adjustment reads, offline return, offset, receiver confirmation | HTTP/database and W10 browser evidence | W10 in `apps/web/billing.html` | Native role exposure not evidenced; verify against approved role needs |
 
 ## Scripted Acceptance Runner
 
@@ -124,21 +124,12 @@ This command prepares the PXFLOW seed, refreshes the role evidence, starts API/W
 
 ## What This Means
 
-The backend main flow is broad and largely connected. A narrow Web demo now exists and renders persisted role, notification, and audit evidence, but the full role-specific product flow is still incomplete:
-
-- Mobile/narrow role-specific acceptance beyond the current desktop role-workbench action capture.
-- Production operations policy and launch hardening.
-
-The visible work currently starts mainly at billing and payment.
+The core business flow is no longer backend-only: a formal Web product app and a native mini-program client both exercise real APIs. Local browser/API evidence is strong, but the deliverable is not production complete: WeChat Developer Tools/real-device behavior, customer acceptance, and M6 infrastructure/sign-offs remain distinct gates.
 
 ## Direction Assessment
 
-The project has not abandoned the original demand, but the execution has become backend-heavy and settlement-heavy. That is useful for correctness, but it is not enough for user confidence.
-
-The next visible-product priority is:
-
-The scripted runner, browser-readable result page, narrow operator demo, role evidence checker, role-view tabs, role workbench lanes, real Store role order action, real Purchaser confirmation action, real Supplier shipment action, real Store receipt action, real Supplier discrepancy action, real supplier rejection reallocation action, real discrepancy REPLENISH/RETURN branch action, desktop interactive capture, mobile main-flow capture, and mobile role-workbench capture are now in place. The next product-facing step is WeChat adaptation, broader production-device acceptance, and production-readiness coverage.
+The original dual-client requirement remains represented: the Web App has browser-executed role actions and the native mini-program has a real-API role-flow check. Recent M7 effort has concentrated on Web usability/evidence; this is acceptable as a distinct client track, not as a substitute for the original mini-program acceptance. The concrete local gap is deterministic Purchaser reallocation action evidence in the formal App, followed by an acceptance audit of both clients. Real WeChat device and production checks remain external M6 gates.
 
 ## Recommended Next Step
 
-Keep M5 close evidence green while evolving `role-workbenches.html` from order-to-exception actions into mobile, broader browser, and production-readiness coverage.
+Complete the dual-client requirement audit and close local role-flow gaps; keep WeChat device and production launch evidence explicitly open under M6.
