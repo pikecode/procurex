@@ -1,6 +1,6 @@
 # M6 Production Readiness
 
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 
 This document is the M6 handoff ledger. It separates locally proven product evidence from production-only evidence that cannot be faked with local mocks.
 
@@ -20,6 +20,8 @@ npm run m6:external-evidence
 npm run m6:check-external-templates
 npm run m6:capture-readiness-evidence
 npm run m6:package-local-evidence
+npm run m6:write-local-handoff
+npm run m6:write-customer-evidence-request
 ```
 
 The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/m6-readiness.html`.
@@ -29,6 +31,8 @@ The command writes `apps/web/m6-readiness.json`, which is rendered by `apps/web/
 `npm run m6:package-local-evidence` writes `var/m6-local-evidence-package.json` and `apps/web/m6-local-evidence-package.json` with the current commit, remote, evidence file digests, local M6 statuses, and the commands needed to refresh the package.
 
 `docs/m6-local-evidence-handoff.md` is the human-readable handoff generated from that local evidence package.
+
+`docs/m6-customer-evidence-request.md` is the customer-facing request generated from the current external blockers. It names each owner, target evidence path, template, and checklist item needed to move M6 from local readiness toward launch review.
 
 Use the strict gate only when real production materials exist:
 
@@ -86,6 +90,14 @@ External evidence templates live in `docs/m6-evidence-templates/` and are summar
 ```bash
 npm run m6:check-external-templates
 ```
+
+Customer evidence request:
+
+```bash
+npm run m6:check-customer-evidence-request
+```
+
+This keeps `docs/m6-customer-evidence-request.md` synchronized with the current local package and external-evidence outputs.
 
 ## Release And Rollback Runbook
 

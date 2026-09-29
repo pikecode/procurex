@@ -49,6 +49,8 @@
     "m6:package-local-evidence": "node scripts/package-m6-local-evidence.mjs",
     "m6:write-local-handoff": "node scripts/write-m6-local-handoff.mjs",
     "m6:check-local-handoff": "node scripts/write-m6-local-handoff.mjs --check",
+    "m6:write-customer-evidence-request": "node scripts/write-m6-customer-evidence-request.mjs",
+    "m6:check-customer-evidence-request": "node scripts/write-m6-customer-evidence-request.mjs --check",
     "m6:readiness": "node --env-file-if-exists=.env scripts/report-m6-readiness.mjs",
     "m6:readiness:strict": "node --env-file-if-exists=.env scripts/report-m6-readiness.mjs --strict",
     "acceptance:m5-close": "npm run acceptance:m5-browserless && npm run main-flow:seed-demo && npm run main-flow:check-demo && npm run m5:status && npm run m5:capture-all-evidence && npm run main-flow:capture-demo-evidence && npm run main-flow:capture-interactive-demo && npm run m5:gate-status && npm run m5:status",

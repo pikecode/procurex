@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M6 客户证据请求：新增 `npm run m6:write-customer-evidence-request` / `m6:check-customer-evidence-request` 和 `scripts/write-m6-customer-evidence-request.mjs`，从 `apps/web/m6-external-evidence.json` 与 `apps/web/m6-local-evidence-package.json` 生成 `docs/m6-customer-evidence-request.md`。该文档把微信真机、生产运行环境、对象存储策略、生产恢复演练、客户财务签字、客户试运行/交接签字拆成负责人、目标证据、模板路径和待补清单；`web:check` 同步保护脚本和 npm 命令。
 - M6 本地证据交接文档：新增 `npm run m6:write-local-handoff` / `m6:check-local-handoff` 和 `scripts/write-m6-local-handoff.mjs`，从 `apps/web/m6-local-evidence-package.json` 生成 `docs/m6-local-evidence-handoff.md`，汇总当前 M6 状态、packaged commit、local evidence、external blockers、证据文件 SHA-256、刷新命令和 remote note。
 
 ## 2026-09-28

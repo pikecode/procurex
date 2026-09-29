@@ -95,6 +95,7 @@ checkSyntax('scripts/write-m6-external-evidence-templates.mjs');
 checkSyntax('scripts/capture-m6-readiness-evidence.mjs');
 checkSyntax('scripts/package-m6-local-evidence.mjs');
 checkSyntax('scripts/write-m6-local-handoff.mjs');
+checkSyntax('scripts/write-m6-customer-evidence-request.mjs');
 
 assertIncludes(billingHtml, '账单及付款', 'W09 billing page');
 assertIncludes(billingHtml, '账单调整与差额', 'W10 adjustment page');
@@ -166,6 +167,8 @@ assertIncludes(packageJson.scripts['m6:capture-readiness-evidence'], 'capture-m6
 assertIncludes(packageJson.scripts['m6:package-local-evidence'], 'package-m6-local-evidence.mjs', 'M6 local evidence package');
 assertIncludes(packageJson.scripts['m6:write-local-handoff'], 'write-m6-local-handoff.mjs', 'M6 local handoff writer');
 assertIncludes(packageJson.scripts['m6:check-local-handoff'], '--check', 'M6 local handoff check');
+assertIncludes(packageJson.scripts['m6:write-customer-evidence-request'], 'write-m6-customer-evidence-request.mjs', 'M6 customer evidence request writer');
+assertIncludes(packageJson.scripts['m6:check-customer-evidence-request'], '--check', 'M6 customer evidence request check');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:gate-status', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'main-flow:check-demo', 'M5 close acceptance script');
 assertIncludes(packageJson.scripts['acceptance:m5-close'], 'm5:capture-all-evidence', 'M5 close acceptance script');

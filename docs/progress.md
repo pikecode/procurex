@@ -1,6 +1,6 @@
 # ProcureX Development Progress
 
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 
 ## Current Position
 
@@ -73,6 +73,8 @@ W10 workbench now provides adjustment filtering, original/actual period comparis
 `npm run m6:package-local-evidence` now writes `var/m6-local-evidence-package.json` and `apps/web/m6-local-evidence-package.json`, collecting current commit/remote, evidence file SHA-256 digests, readiness/external statuses, and the command list needed to refresh the M6 local evidence package.
 
 `npm run m6:write-local-handoff` now generates `docs/m6-local-evidence-handoff.md` from the local evidence package. It is the fastest human-readable summary for reviewers: current M6 status, packaged commit, local evidence status, external blockers, evidence file hashes, refresh commands, and remote note.
+
+`npm run m6:write-customer-evidence-request` now generates `docs/m6-customer-evidence-request.md` from the current local evidence package and external blockers. It turns the remaining M6 gaps into an owner-based request list for WeChat real-device evidence, production runtime settings, storage policy, production recovery, customer finance sign-off, and customer pilot/handover sign-off. `npm run m6:check-customer-evidence-request` keeps that request synchronized.
 
 `npm run acceptance:m5-browserless` now covers the M5 reporting/export/reconciliation/notification slice. It builds the project, seeds isolated `PXRPT` data, verifies R01 scoped completed-order amount, R02 product quantity and three-month range rejection, R03 profit excluding direct supplier-term orders with freight separate, R04 export job READY plus CSV download and task listing, DEV-505 export health detection plus recovery of a stale `PROCESSING` export job, failed export retry through `POST /exports/{id}/retry`, I08 notification list/read and owner isolation, R05 account reconciliation mismatches, store-scope enforcement, supplier profit denial, and W11/W13 Web visibility. The latest run passed on 2026-09-28 with 10/10 steps and wrote `apps/web/reports-acceptance-run.json`.
 
