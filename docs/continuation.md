@@ -32,6 +32,8 @@ The formal App overview has now been upgraded into the first day-to-day command 
 
 The Store and Purchaser formal routes have now moved beyond passive summaries. `app.html#/store` can select notification-driven shipments, read shipment detail, and submit receipts; `app.html#/purchaser` can read purchase-request summary and item rows, confirm requests, and show reallocation results. The Supplier formal route also now handles payment collection directly: it reads payment detail/version and confirms or rejects the payment from `app.html#/supplier`. Continue M7 by tightening the Finance route detail view and then connecting these role routes into a more guided day-to-day workflow, rather than adding new one-off HTML pages.
 
+The Finance formal route detail view is now tightened as well. `app.html#/finance` can load supplier statement detail, show statement lines/settlement item IDs/adjustment items, and show payment allocation rows after selecting or creating a payment. Continue M7 by connecting Overview/Flow/Store/Purchaser/Supplier/Finance into a guided day-to-day workflow and making the next visible work reduce operator clicks, rather than creating additional compatibility pages.
+
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:

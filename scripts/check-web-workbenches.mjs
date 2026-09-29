@@ -241,6 +241,7 @@ assertIncludes(productSupplierPage, '/payment-records/${payment.id}/confirm', 'p
 assertIncludes(productSupplierPage, '/payment-records/${payment.id}/reject', 'product app supplier payment reject endpoint');
 assertIncludes(productSupplierPage, '确认收款', 'product app supplier payment confirm action');
 assertIncludes(productFinancePage, '/supplier-statements', 'product app finance supplier statements endpoint');
+assertIncludes(productFinancePage, '/supplier-statements/${statementId}', 'product app finance supplier statement detail endpoint');
 assertIncludes(productFinancePage, '/store-statements', 'product app finance store statements endpoint');
 assertIncludes(productFinancePage, '/payment-records?direction=COMPANY_TO_SUPPLIER', 'product app finance payment list endpoint');
 assertIncludes(productFinancePage, '/payment-records/preview', 'product app finance payment preview endpoint');
@@ -250,6 +251,9 @@ assertIncludes(productFinancePage, '/payment-records/${payment.id}/confirm', 'pr
 assertIncludes(productFinancePage, '/payment-records/${payment.id}/reject', 'product app finance payment reject endpoint');
 assertIncludes(productFinancePage, '登记并确认供应商付款', 'product app finance deterministic payment action');
 assertIncludes(productFinancePage, '登记并驳回供应商付款', 'product app finance deterministic rejection action');
+assertIncludes(productFinancePage, '读取账单', 'product app finance statement detail action');
+assertIncludes(productFinancePage, 'app-statement-lines', 'product app finance statement lines table');
+assertIncludes(productFinancePage, 'app-payment-allocations', 'product app finance payment allocations table');
 assertIncludes(mainFlowInteractiveCapture, 'product-app-finance-reject-action.png', 'product app finance rejection evidence capture');
 assertIncludes(mainFlowInteractiveCapture, 'productAppFinanceRejectAction', 'product app finance rejection manifest state');
 assertIncludes(appCss, '.app-route-grid', 'product app route grid styles');
