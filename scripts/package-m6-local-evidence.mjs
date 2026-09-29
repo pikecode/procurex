@@ -54,6 +54,7 @@ const evidenceFiles = [
   'apps/web/product-app/main.js',
   'apps/web/product-app/api.js',
   'apps/web/product-app/shell.js',
+  'apps/web/product-app/workflow.js',
   'apps/web/product-app/pages/overview.js',
   'apps/web/product-app/pages/flow.js',
   'apps/web/product-app/pages/store.js',

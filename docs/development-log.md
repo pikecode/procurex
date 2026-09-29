@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M7 正式产品 App 工作流串联：新增 `apps/web/product-app/workflow.js`，用 sessionStorage 记录最近一次正式 App 主流程上下文。`#/flow` 主流程完成后会保存采购申请、供应商单、发货单、收货单和后续财务状态，并显示“流程交接”面板；`#/overview` 展示最近流程交接；`#/store`、`#/purchaser`、`#/supplier`、`#/finance` 会自动带入发货单、采购申请、供应商单和付款 ID，减少跨角色复核时手工复制 ID。`web:check` 新增 workflow 模块、Flow 交接面板和各角色预填保护；交互式截图重新验证正式 App Overview `PASSED`、Store/Purchaser/Supplier/Finance `READY`，主流程、异常、财务确认/驳回仍通过。
 - M7 正式产品 App 财务详情工作台：扩展 `apps/web/product-app/pages/finance.js`，把 `#/finance` 从账单/付款列表和动作按钮升级为可读明细的财务结算页。财务可从供应商账单列表读取 `/supplier-statements/{id}`，查看周期、应付、待确认/已确认付款、账单行、结算项和调整项；选择或登记付款后展示付款方向、通道、业务日期、凭证数量和 allocation 分配行。`web:check` 新增供应商账单详情、读取账单、账单行表格和付款分配表保护；交互式截图重新验证正式 App 财务页 `READY`，数据卡 5 个，主流程、异常、财务确认/驳回仍通过。
 - M7 正式产品 App 供应商收款工作台：扩展 `apps/web/product-app/pages/supplier.js`，把 `#/supplier` 的付款记录从“选择 ID”升级为可读取、确认和驳回的日常处理面板。供应商可读取 `/payment-records/{id}` 查看付款号、状态、金额和版本，再调用 `/payment-records/{id}/confirm` 确认收款或 `/payment-records/{id}/reject` 带原因驳回付款；`web:check` 新增付款详情、确认、驳回端点和“确认收款”动作保护。交互式截图重新验证正式 App 供应商页 `READY`，数据卡 5 个，主流程、异常、财务确认/驳回仍通过。
 - M7 正式产品 App 采购详情工作台：扩展 `apps/web/product-app/pages/purchaser.js`，把 `#/purchaser` 的申请详情从四个摘要格升级为“摘要 + 商品行表格 + 处理结果”结构。采购读取 `/purchase-requests/{id}` 后可看到状态、资金、金额、商品行数和逐行目标供应商/数量/销售额；确认 `/purchase-requests/{id}/confirm` 后展示供应商单结果，改派 `/purchase-requests/{id}/reallocate` 后展示目标供应商和新供应商单。`web:check` 新增商品行表格、处理结果和确认结果保护；交互式截图重新验证正式 App 采购页 `READY`，数据卡从 3 个提升到 4 个，主流程、异常、财务确认/驳回仍通过。

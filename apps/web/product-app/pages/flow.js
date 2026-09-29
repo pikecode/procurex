@@ -2,6 +2,7 @@ import { login, request } from '../api.js';
 import { state } from '../state.js';
 import { esc, money, metric, resultLine, setNotice } from '../ui.js';
 import { setHeader } from '../shell.js';
+import { clearWorkflowContext, loadWorkflowContext, saveWorkflowContext } from '../workflow.js';
 
 const flowState = {
   purchaseRequest: null,
@@ -12,6 +13,7 @@ const flowState = {
 };
 
 export async function render() {
+  const workflow = loadWorkflowContext();
   setHeader({
     title: '业务流转',
     subtitle: '在正式产品应用内执行门店下单、采购确认、供应商发货和门店收货。',
@@ -55,6 +57,15 @@ export async function render() {
         ${stepLine('补发退回', '等待执行', '调用 REPLENISH 与 RETURN 分支')}
       </div>
     </section>
+    <section class="data-card acceptance-card">
+      <div class="data-head"><div><h3>流程交接</h3><p>主流程执行后，后续角色页会自动带入这些业务 ID。</p></div><span id="app-workflow-label" class="tag">${workflow?.status || '等待流程'}</span></div>
+      <div id="app-workflow-handoff" class="finance-panel">
+        ${handoffCard('采购申请', workflow?.purchaseRequestNo || workflow?.purchaseRequestId || '待生成', '#/purchaser')}
+        ${handoffCard('供应商单', workflow?.supplierOrderId || '待生成', '#/supplier')}
+        ${handoffCard('发货单', workflow?.shipmentNo || workflow?.shipmentId || '待生成', '#/store')}
+        ${handoffCard('财务结算', workflow?.paymentId || '待登记', '#/finance')}
+      </div>
+    </section>
     <section class="app-route-grid">
       <article><strong>门店工作台</strong><p>查看新订单进度、账户和待收货提醒。</p><a class="primary" href="#/store">打开门店</a></article>
       <article><strong>采购工作台</strong><p>查看采购申请详情和供应商执行单。</p><a class="primary" href="#/purchaser">打开采购</a></article>
@@ -65,6 +76,20 @@ export async function render() {
 
 function stepLine(label, status, detail) {
   return `<article data-flow-step="${esc(label)}"><span>${esc(label)}</span><strong>${esc(status)}</strong><small>${esc(detail)}</small></article>`;
+}
+
+function handoffCard(title, value, href) {
+  return `<article><strong>${esc(title)}</strong><span>${esc(value)}</span><small><a href="${esc(href)}">继续处理</a></small></article>`;
+}
+
+function renderWorkflowHandoff(workflow) {
+  document.getElementById('app-workflow-label').textContent = workflow.status || '已交接';
+  document.getElementById('app-workflow-handoff').innerHTML = [
+    handoffCard('采购申请', workflow.purchaseRequestNo || workflow.purchaseRequestId || '待生成', '#/purchaser'),
+    handoffCard('供应商单', workflow.supplierOrderId || '待生成', '#/supplier'),
+    handoffCard('发货单', workflow.shipmentNo || workflow.shipmentId || '待生成', '#/store'),
+    handoffCard('财务结算', workflow.paymentId || '待登记', '#/finance'),
+  ].join('');
 }
 
 function updateStatus(status) {
@@ -170,6 +195,17 @@ async function runFlow() {
   }, tokens.store);
   lines.push(resultLine('门店收货', `${flowState.receipt.receiptNo || flowState.receipt.id} / ${flowState.receipt.status || 'COMPLETED'}`));
   renderResult(lines);
+  const workflow = saveWorkflowContext({
+    status: 'COMPLETED',
+    purchaseRequestId: flowState.purchaseRequest.id,
+    purchaseRequestNo: flowState.purchaseRequest.requestNo,
+    supplierOrderId: flowState.supplierOrder.id,
+    shipmentId: flowState.shipment.id,
+    shipmentNo: flowState.shipment.shipmentNo,
+    receiptId: flowState.receipt.id,
+    receiptNo: flowState.receipt.receiptNo,
+  });
+  renderWorkflowHandoff(workflow);
   updateStatus('COMPLETED');
 }
 
@@ -326,6 +362,7 @@ function bindFlow() {
     flowState.shipment = null;
     flowState.receipt = null;
     updateStatus('READY');
+    clearWorkflowContext();
     setNotice('');
     renderResult([
       stepLine('门店下单', '等待执行', '调用 /purchase-requests/preview 与 /purchase-requests'),
@@ -333,6 +370,7 @@ function bindFlow() {
       stepLine('供应商发货', '等待执行', '调用 /supplier-orders/{id}/shipment-preview 与 /shipments'),
       stepLine('门店收货', '等待执行', '调用 /shipments/{id}/receipts'),
     ]);
+    renderWorkflowHandoff({ status: '等待流程' });
   });
   document.getElementById('app-exception-run').addEventListener('click', async () => {
     try {

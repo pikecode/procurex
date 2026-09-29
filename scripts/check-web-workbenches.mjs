@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, productAppHtml, productAppMain, productAppApi, productAppShell, productAppState, productAppUi, productOverviewPage, productFlowPage, productStorePage, productPurchaserPage, productSupplierPage, productFinancePage, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, purchaserWorkbenchHtml, purchaserWorkbenchJs, supplierWorkbenchHtml, supplierWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, productAppHtml, productAppMain, productAppApi, productAppShell, productAppState, productAppUi, productAppWorkflow, productOverviewPage, productFlowPage, productStorePage, productPurchaserPage, productSupplierPage, productFinancePage, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, purchaserWorkbenchHtml, purchaserWorkbenchJs, supplierWorkbenchHtml, supplierWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -43,6 +43,7 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, productAppHtml, produc
   readProjectFile('apps/web/product-app/shell.js'),
   readProjectFile('apps/web/product-app/state.js'),
   readProjectFile('apps/web/product-app/ui.js'),
+  readProjectFile('apps/web/product-app/workflow.js'),
   readProjectFile('apps/web/product-app/pages/overview.js'),
   readProjectFile('apps/web/product-app/pages/flow.js'),
   readProjectFile('apps/web/product-app/pages/store.js'),
@@ -85,6 +86,7 @@ for (const path of [
   'apps/web/product-app/shell.js',
   'apps/web/product-app/state.js',
   'apps/web/product-app/ui.js',
+  'apps/web/product-app/workflow.js',
   'apps/web/product-app/pages/overview.js',
   'apps/web/product-app/pages/flow.js',
   'apps/web/product-app/pages/store.js',
@@ -129,6 +131,7 @@ checkSyntax('apps/web/product-app/api.js');
 checkSyntax('apps/web/product-app/shell.js');
 checkSyntax('apps/web/product-app/state.js');
 checkSyntax('apps/web/product-app/ui.js');
+checkSyntax('apps/web/product-app/workflow.js');
 checkSyntax('apps/web/product-app/pages/overview.js');
 checkSyntax('apps/web/product-app/pages/flow.js');
 checkSyntax('apps/web/product-app/pages/store.js');
@@ -202,6 +205,9 @@ assertIncludes(productAppShell, "['finance', '财务']", 'product app finance ro
 assertIncludes(productAppShell, '/store-workbench.html', 'product app legacy store link');
 assertIncludes(productAppState, 'main-flow-demo-seed.json', 'product app seed state loader');
 assertIncludes(productAppState, 'm6-readiness.json', 'product app readiness state loader');
+assertIncludes(productAppWorkflow, 'procurex-product-app-workflow', 'product app workflow storage key');
+assertIncludes(productAppWorkflow, 'saveWorkflowContext', 'product app workflow save helper');
+assertIncludes(productOverviewPage, '流程交接', 'product app overview workflow handoff');
 assertIncludes(productOverviewPage, '组件化迁移状态', 'product app migration status');
 assertIncludes(productOverviewPage, '今日角色证据', 'product app role evidence overview');
 assertIncludes(productOverviewPage, '下一步推进', 'product app next-step overview');
@@ -209,6 +215,8 @@ assertIncludes(productOverviewPage, '产品化与上线状态', 'product app lau
 assertIncludes(productOverviewPage, '#/flow', 'product app flow route card');
 assertIncludes(productOverviewPage, '#/finance', 'product app finance route card');
 assertIncludes(productFlowPage, '一键执行业务流转', 'product app flow run action');
+assertIncludes(productFlowPage, 'saveWorkflowContext', 'product app flow workflow handoff save');
+assertIncludes(productFlowPage, 'app-workflow-handoff', 'product app flow workflow handoff panel');
 assertIncludes(productFlowPage, '/purchase-requests/preview', 'product app flow preview endpoint');
 assertIncludes(productFlowPage, '/purchase-requests/${requestDetail.id}/confirm', 'product app flow confirm endpoint');
 assertIncludes(productFlowPage, '/supplier-orders/${supplierDetail.id}/shipments', 'product app flow shipment endpoint');
@@ -224,15 +232,18 @@ assertIncludes(productStorePage, '/stores/${state.seed.storeId}/account', 'produ
 assertIncludes(productStorePage, '/purchase-requests/preview', 'product app store order preview endpoint');
 assertIncludes(productStorePage, '/purchase-requests', 'product app store order endpoint');
 assertIncludes(productStorePage, '/shipments/${shipmentId}', 'product app store shipment detail endpoint');
+assertIncludes(productStorePage, 'workflow?.shipmentId', 'product app store workflow shipment prefill');
 assertIncludes(productStorePage, '/shipments/${shipment.id}/receipts', 'product app store receipt endpoint');
 assertIncludes(productStorePage, '完整收货', 'product app store receipt action');
 assertIncludes(productPurchaserPage, '/purchase-requests/${requestId}', 'product app purchaser request detail endpoint');
+assertIncludes(productPurchaserPage, 'workflow?.purchaseRequestId', 'product app purchaser workflow request prefill');
 assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/confirm', 'product app purchaser confirm endpoint');
 assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/reallocate', 'product app purchaser reallocate endpoint');
 assertIncludes(productPurchaserPage, 'app-request-items', 'product app purchaser request item table');
 assertIncludes(productPurchaserPage, '处理结果', 'product app purchaser action result panel');
 assertIncludes(productPurchaserPage, '供应商单', 'product app purchaser confirm result');
 assertIncludes(productSupplierPage, '/supplier-orders/${id}', 'product app supplier detail endpoint');
+assertIncludes(productSupplierPage, 'workflow?.supplierOrderId', 'product app supplier workflow order prefill');
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/shipments', 'product app supplier shipment endpoint');
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/reject', 'product app supplier reject endpoint');
 assertIncludes(productSupplierPage, '/discrepancies/${id}/resolve', 'product app supplier discrepancy endpoint');
@@ -244,6 +255,8 @@ assertIncludes(productFinancePage, '/supplier-statements', 'product app finance 
 assertIncludes(productFinancePage, '/supplier-statements/${statementId}', 'product app finance supplier statement detail endpoint');
 assertIncludes(productFinancePage, '/store-statements', 'product app finance store statements endpoint');
 assertIncludes(productFinancePage, '/payment-records?direction=COMPANY_TO_SUPPLIER', 'product app finance payment list endpoint');
+assertIncludes(productFinancePage, 'workflow?.paymentId', 'product app finance workflow payment prefill');
+assertIncludes(productFinancePage, 'saveWorkflowContext', 'product app finance workflow payment save');
 assertIncludes(productFinancePage, '/payment-records/preview', 'product app finance payment preview endpoint');
 assertIncludes(productFinancePage, '/files/upload-sessions', 'product app finance payment evidence upload endpoint');
 assertIncludes(productFinancePage, "request('/payment-records'", 'product app finance payment create endpoint');

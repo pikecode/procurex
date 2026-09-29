@@ -2,6 +2,7 @@ import { apiBase, login, request } from '../api.js';
 import { state } from '../state.js';
 import { esc, money, metric, resultLine, tableRows, setNotice } from '../ui.js';
 import { setHeader } from '../shell.js';
+import { loadWorkflowContext, saveWorkflowContext } from '../workflow.js';
 
 export async function render() {
   setHeader({ title: '财务结算', subtitle: '供应商账单、付款记录、结算状态和收款确认。', routeLabel: '财务', status: '加载中' });
@@ -17,6 +18,7 @@ export async function render() {
   const openSupplierStatements = supplierStatements.filter((item) => item.settlementStatus !== 'SETTLED' && item.status !== 'SETTLED');
   const pendingPayments = payments.filter((item) => item.status === 'PENDING');
   const confirmedPayments = payments.filter((item) => item.status === 'CONFIRMED');
+  const workflow = loadWorkflowContext();
   const pendingAmount = pendingPayments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   setHeader({ title: '财务结算', subtitle: '供应商账单、付款记录、结算状态和收款确认。', routeLabel: '财务', status: 'READY' });
   document.getElementById('app-view').innerHTML = `
@@ -40,7 +42,7 @@ export async function render() {
       <div class="data-head"><div><h3>收款处理</h3><p>读取付款 version 后由供应商确认或驳回。</p></div><span id="app-payment-action-label" class="tag">READY</span></div>
       <div class="receipt-panel">
         <label>账单 ID<input id="app-finance-statement-id" value="${esc(openSupplierStatements[0]?.id || supplierStatements[0]?.id || '')}"></label>
-        <label>付款 ID<input id="app-finance-payment-id" value="${esc(pendingPayments[0]?.id || payments[0]?.id || '')}"></label>
+        <label>付款 ID<input id="app-finance-payment-id" value="${esc(workflow?.paymentId || pendingPayments[0]?.id || payments[0]?.id || '')}"></label>
         <label>驳回原因<input id="app-finance-payment-reason" value="产品应用驳回付款"></label>
         <div class="form-actions">
           <button id="app-load-statement" class="secondary">读取账单</button>
@@ -150,6 +152,7 @@ function bindFinance({ financeToken, supplierToken, supplierStatements }) {
         body: JSON.stringify({ expectedVersion: payment.version }),
       }, supplierToken);
       payment = confirmed;
+      saveWorkflowContext({ paymentId: confirmed.id, paymentNo: confirmed.paymentNo, paymentStatus: confirmed.status || 'CONFIRMED' });
       renderPaymentDetail(confirmed);
       show('CONFIRMED', { 付款记录: confirmed.paymentNo || confirmed.id, 付款状态: confirmed.status || 'CONFIRMED', 付款金额: money(confirmed.amount), 当前版本: confirmed.version ?? '—' });
       setNotice('');
@@ -161,6 +164,7 @@ function bindFinance({ financeToken, supplierToken, supplierStatements }) {
       payment = confirmed;
       document.getElementById('app-finance-payment-id').value = confirmed.id;
       document.getElementById('app-finance-label').textContent = confirmed.status || 'CONFIRMED';
+      saveWorkflowContext({ paymentId: confirmed.id, paymentNo: confirmed.paymentNo, paymentStatus: confirmed.status || 'CONFIRMED' });
       renderPaymentDetail(confirmed);
       show('CONFIRMED', {
         付款记录: confirmed.paymentNo || confirmed.id,
@@ -177,6 +181,7 @@ function bindFinance({ financeToken, supplierToken, supplierStatements }) {
       payment = rejected;
       document.getElementById('app-finance-payment-id').value = rejected.id;
       document.getElementById('app-finance-label').textContent = rejected.status || 'REJECTED';
+      saveWorkflowContext({ paymentId: rejected.id, paymentNo: rejected.paymentNo, paymentStatus: rejected.status || 'REJECTED' });
       renderPaymentDetail(rejected);
       show('REJECTED', {
         付款记录: rejected.paymentNo || rejected.id,
@@ -196,6 +201,7 @@ function bindFinance({ financeToken, supplierToken, supplierStatements }) {
         body: JSON.stringify({ expectedVersion: payment.version, reason: document.getElementById('app-finance-payment-reason').value.trim() || '产品应用驳回付款' }),
       }, supplierToken);
       payment = rejected;
+      saveWorkflowContext({ paymentId: rejected.id, paymentNo: rejected.paymentNo, paymentStatus: rejected.status || 'REJECTED' });
       renderPaymentDetail(rejected);
       show('REJECTED', { 付款记录: rejected.paymentNo || rejected.id, 付款状态: rejected.status || 'REJECTED', 付款金额: money(rejected.amount), 当前版本: rejected.version ?? '—' });
       setNotice('');

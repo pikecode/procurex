@@ -1,11 +1,13 @@
 import { state } from '../state.js';
 import { metric, esc } from '../ui.js';
 import { setHeader } from '../shell.js';
+import { loadWorkflowContext } from '../workflow.js';
 
 export async function render() {
   const seed = state.seed;
   const run = state.run;
   const readiness = state.readiness;
+  const workflow = loadWorkflowContext();
   const readinessCounts = readiness?.counts || {};
   const roleEvidence = run?.roleEvidence || [];
   setHeader({
@@ -37,13 +39,21 @@ export async function render() {
         </div>
       </section>
       <section class="data-card">
-        <div class="data-head"><div><h3>下一步推进</h3><p>当前正式 App 的开发焦点。</p></div><span class="tag">M7</span></div>
+        <div class="data-head"><div><h3>流程交接</h3><p>最近一次正式 App 主流程上下文。</p></div><span class="tag">${esc(workflow?.status || '等待流程')}</span></div>
         <div class="overview-next-list">
-          ${nextItem('正式工作台体验', '把已跑通的动作整理成日常业务人员可连续使用的页面。', '#/store')}
-          ${nextItem('财务结算可读性', '把付款确认/驳回、凭证和账单关系显示得更清楚。', '#/finance')}
-          ${nextItem('小程序真机证据', '生产服务器和域名准备好后，补微信真机流程截图/录屏。', '/m6-readiness.html')}
+          ${nextItem('采购申请', workflow?.purchaseRequestNo || workflow?.purchaseRequestId || '运行主流程后生成', '#/purchaser')}
+          ${nextItem('供应商单', workflow?.supplierOrderId || '运行主流程后生成', '#/supplier')}
+          ${nextItem('发货 / 收货', workflow?.shipmentNo || workflow?.shipmentId || '运行主流程后生成', '#/store')}
         </div>
       </section>
+    </section>
+    <section class="data-card acceptance-card">
+      <div class="data-head"><div><h3>下一步推进</h3><p>当前正式 App 的开发焦点。</p></div><span class="tag">M7</span></div>
+      <div class="overview-next-list">
+        ${nextItem('正式工作流串联', '从业务流转保存上下文，并在角色页自动带入关键 ID。', '#/flow')}
+        ${nextItem('财务结算处理', '从交接上下文继续查看账单、付款凭证和收款状态。', '#/finance')}
+        ${nextItem('小程序真机证据', '生产服务器和域名准备好后，补微信真机流程截图/录屏。', '/m6-readiness.html')}
+      </div>
     </section>
     <section class="data-card acceptance-card">
       <div class="data-head"><div><h3>产品化与上线状态</h3><p>组件化迁移状态、正式 App 闭环和外部上线材料。</p></div><span class="tag tag-ok">M7 APP</span></div>

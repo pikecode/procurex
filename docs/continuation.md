@@ -34,6 +34,8 @@ The Store and Purchaser formal routes have now moved beyond passive summaries. `
 
 The Finance formal route detail view is now tightened as well. `app.html#/finance` can load supplier statement detail, show statement lines/settlement item IDs/adjustment items, and show payment allocation rows after selecting or creating a payment. Continue M7 by connecting Overview/Flow/Store/Purchaser/Supplier/Finance into a guided day-to-day workflow and making the next visible work reduce operator clicks, rather than creating additional compatibility pages.
 
+The first guided day-to-day workflow connection is now in place. `app.html#/flow` saves the latest main-flow handoff to `sessionStorage` via `apps/web/product-app/workflow.js`; Overview displays that handoff, and Store/Purchaser/Supplier/Finance prefill the relevant IDs from it. Continue M7 by making the handoff more actionable after finance registration, for example by surfacing payment status back on Overview and adding route-level refresh actions, not by adding new standalone HTML pages.
+
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
