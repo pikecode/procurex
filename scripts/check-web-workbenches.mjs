@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, productAppHtml, productAppMain, productAppApi, productAppShell, productAppState, productAppUi, productOverviewPage, productFlowPage, productStorePage, productPurchaserPage, productSupplierPage, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, purchaserWorkbenchHtml, purchaserWorkbenchJs, supplierWorkbenchHtml, supplierWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, productAppHtml, productAppMain, productAppApi, productAppShell, productAppState, productAppUi, productOverviewPage, productFlowPage, productStorePage, productPurchaserPage, productSupplierPage, productFinancePage, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, purchaserWorkbenchHtml, purchaserWorkbenchJs, supplierWorkbenchHtml, supplierWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -48,6 +48,7 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, productAppHtml, produc
   readProjectFile('apps/web/product-app/pages/store.js'),
   readProjectFile('apps/web/product-app/pages/purchaser.js'),
   readProjectFile('apps/web/product-app/pages/supplier.js'),
+  readProjectFile('apps/web/product-app/pages/finance.js'),
   readProjectFile('apps/web/index.html'),
   readProjectFile('apps/web/main-flow.html'),
   readProjectFile('apps/web/main-flow.js'),
@@ -89,6 +90,7 @@ for (const path of [
   'apps/web/product-app/pages/store.js',
   'apps/web/product-app/pages/purchaser.js',
   'apps/web/product-app/pages/supplier.js',
+  'apps/web/product-app/pages/finance.js',
   'apps/web/billing.js',
   'apps/web/app.js',
   'apps/web/main-flow.html',
@@ -132,6 +134,7 @@ checkSyntax('apps/web/product-app/pages/flow.js');
 checkSyntax('apps/web/product-app/pages/store.js');
 checkSyntax('apps/web/product-app/pages/purchaser.js');
 checkSyntax('apps/web/product-app/pages/supplier.js');
+checkSyntax('apps/web/product-app/pages/finance.js');
 checkSyntax('apps/web/main-flow.js');
 checkSyntax('apps/web/m4-acceptance.js');
 checkSyntax('apps/web/main-flow-demo.js');
@@ -187,6 +190,7 @@ assertIncludes(productAppMain, "import * as store", 'product app store module im
 assertIncludes(productAppMain, "import * as flow", 'product app flow module import');
 assertIncludes(productAppMain, "import * as purchaser", 'product app purchaser module import');
 assertIncludes(productAppMain, "import * as supplier", 'product app supplier module import');
+assertIncludes(productAppMain, "import * as finance", 'product app finance module import');
 assertIncludes(productAppMain, 'hashchange', 'product app client route listener');
 assertIncludes(productAppApi, 'apiBase', 'product app shared api base');
 assertIncludes(productAppApi, '/auth/login', 'product app shared login');
@@ -194,10 +198,12 @@ assertIncludes(productAppShell, "['store', '门店']", 'product app store route'
 assertIncludes(productAppShell, "['flow', '业务流转']", 'product app flow route');
 assertIncludes(productAppShell, "['purchaser', '采购']", 'product app purchaser route');
 assertIncludes(productAppShell, "['supplier', '供应商']", 'product app supplier route');
+assertIncludes(productAppShell, "['finance', '财务']", 'product app finance route');
 assertIncludes(productAppShell, '/store-workbench.html', 'product app legacy store link');
 assertIncludes(productAppState, 'main-flow-demo-seed.json', 'product app seed state loader');
 assertIncludes(productOverviewPage, '组件化迁移状态', 'product app migration status');
 assertIncludes(productOverviewPage, '#/flow', 'product app flow route card');
+assertIncludes(productOverviewPage, '#/finance', 'product app finance route card');
 assertIncludes(productFlowPage, '一键执行业务流转', 'product app flow run action');
 assertIncludes(productFlowPage, '/purchase-requests/preview', 'product app flow preview endpoint');
 assertIncludes(productFlowPage, '/purchase-requests/${requestDetail.id}/confirm', 'product app flow confirm endpoint');
@@ -220,6 +226,11 @@ assertIncludes(productSupplierPage, '/supplier-orders/${id}', 'product app suppl
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/shipments', 'product app supplier shipment endpoint');
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/reject', 'product app supplier reject endpoint');
 assertIncludes(productSupplierPage, '/discrepancies/${id}/resolve', 'product app supplier discrepancy endpoint');
+assertIncludes(productFinancePage, '/supplier-statements', 'product app finance supplier statements endpoint');
+assertIncludes(productFinancePage, '/store-statements', 'product app finance store statements endpoint');
+assertIncludes(productFinancePage, '/payment-records?direction=COMPANY_TO_SUPPLIER', 'product app finance payment list endpoint');
+assertIncludes(productFinancePage, '/payment-records/${payment.id}/confirm', 'product app finance payment confirm endpoint');
+assertIncludes(productFinancePage, '/payment-records/${payment.id}/reject', 'product app finance payment reject endpoint');
 assertIncludes(appCss, '.app-route-grid', 'product app route grid styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');

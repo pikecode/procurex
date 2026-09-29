@@ -631,6 +631,12 @@ async function main() {
           'supplier',
           'product-app-supplier.png',
         );
+        const productAppFinance = await captureProductApp(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'finance',
+          'product-app-finance.png',
+        );
         const productAppFlowAction = await runProductAppFlow(
           cdp,
           { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
@@ -660,6 +666,7 @@ async function main() {
           productAppStoreScreenshot: productAppStore.file,
           productAppPurchaserScreenshot: productAppPurchaser.file,
           productAppSupplierScreenshot: productAppSupplier.file,
+          productAppFinanceScreenshot: productAppFinance.file,
           productAppFlowActionScreenshot: productAppFlowAction.file,
           productAppExceptionActionScreenshot: productAppFlowAction.file,
           services: { startedApi, startedWeb },
@@ -679,6 +686,7 @@ async function main() {
           productAppStore: productAppStore.state,
           productAppPurchaser: productAppPurchaser.state,
           productAppSupplier: productAppSupplier.state,
+          productAppFinance: productAppFinance.state,
           productAppFlowAction: productAppFlowAction.state,
           productAppExceptionAction: {
             status: productAppFlowAction.state.exceptionStatus,
@@ -689,7 +697,7 @@ async function main() {
             hasReplenishReturn: productAppFlowAction.state.hasReplenishReturn,
             horizontalOverflow: productAppFlowAction.state.horizontalOverflow,
           },
-          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFlowAction },
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFinance, productAppFlowAction },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -709,6 +717,7 @@ async function main() {
         console.log(`  Mobile supplier workbench screenshot: ${mobileSupplierWorkbench.file}`);
         console.log(`  Product app screenshot: ${productApp.file}`);
         console.log(`  Mobile product app screenshot: ${mobileProductApp.file}`);
+        console.log(`  Product app finance screenshot: ${productAppFinance.file}`);
         console.log(`  Product app flow action screenshot: ${productAppFlowAction.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
@@ -718,7 +727,7 @@ async function main() {
         console.log(`  Store workbench status: ${storeWorkbench.state.status}, orders: ${storeWorkbench.state.orderRows}, account cards: ${storeWorkbench.state.accountRows}`);
         console.log(`  Purchaser workbench status: ${purchaserWorkbench.state.status}, requests: ${purchaserWorkbench.state.requestRows}, rejections: ${purchaserWorkbench.state.rejectionCards}`);
         console.log(`  Supplier workbench status: ${supplierWorkbench.state.status}, orders: ${supplierWorkbench.state.orderRows}, discrepancies: ${supplierWorkbench.state.discrepancyCards}`);
-        console.log(`  Product app routes: ${productApp.state.status}/${productAppStore.state.status}/${productAppPurchaser.state.status}/${productAppSupplier.state.status}`);
+        console.log(`  Product app routes: ${productApp.state.status}/${productAppStore.state.status}/${productAppPurchaser.state.status}/${productAppSupplier.state.status}/${productAppFinance.state.status}`);
         console.log(`  Product app flow action: ${productAppFlowAction.state.status}, rows: ${productAppFlowAction.state.resultRows}`);
         console.log(`  Product app exception action: ${productAppFlowAction.state.exceptionStatus}, rows: ${productAppFlowAction.state.exceptionRows}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);

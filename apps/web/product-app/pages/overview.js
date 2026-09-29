@@ -24,6 +24,7 @@ export async function render() {
       ${routeCard('门店工作台', '门店订货、账户流水、待收货和收货登记。', '#/store')}
       ${routeCard('采购工作台', '采购申请详情、确认拆单和供应商拒单改派。', '#/purchaser')}
       ${routeCard('供应商工作台', '执行单发货、拒单、差异处理、账单和收款。', '#/supplier')}
+      ${routeCard('财务结算', '供应商账单、付款记录、结算状态和收款确认。', '#/finance')}
     </section>
     <section class="data-card acceptance-card"><div class="data-head"><div><h3>组件化迁移状态</h3><p>当前入口由 ES modules 渲染，不再新增孤立业务 HTML 页面</p></div><span class="tag tag-ok">M7 APP</span></div><div class="finance-panel"><article><strong>入口</strong><span>app.html</span><small>单页产品应用壳</small></article><article><strong>模块</strong><span>product-app/</span><small>共享 API、状态、页面模块</small></article><article><strong>兼容</strong><span>保留</span><small>旧工作台仍可作为回归入口</small></article><article><strong>下一步</strong><span>交互证据</span><small>把页面动作纳入 app 级证据</small></article></div></section>`;
 }

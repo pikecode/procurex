@@ -6,8 +6,9 @@ import * as flow from './pages/flow.js';
 import * as store from './pages/store.js';
 import * as purchaser from './pages/purchaser.js';
 import * as supplier from './pages/supplier.js';
+import * as finance from './pages/finance.js';
 
-const pages = { overview, flow, store, purchaser, supplier };
+const pages = { overview, flow, store, purchaser, supplier, finance };
 
 async function renderApp() {
   const route = routeFromHash();

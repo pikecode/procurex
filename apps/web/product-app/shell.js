@@ -6,6 +6,7 @@ const routes = [
   ['store', '门店'],
   ['purchaser', '采购'],
   ['supplier', '供应商'],
+  ['finance', '财务'],
 ];
 
 export function routeFromHash() {

@@ -22,6 +22,8 @@ Latest M7 continuation point: `apps/web/product-app/pages/flow.js` adds `app.htm
 
 The exception branches have now also moved into `app.html#/flow`: the route executes supplier rejection, purchaser reallocation, discrepancy ACCEPT, REPLENISH with replenishment shipment/receipt, and RETURN. The interactive manifest now expects `productAppExceptionAction.status=BRANCHES_READY` with four exception result rows. The remaining product-app migration target is supplier payment confirmation/rejection and finance settlement visibility inside the formal App rather than only in `supplier-workbench.html` / `billing.html`.
 
+Finance settlement visibility has now moved into `app.html#/finance`: the route reads supplier statements, store statements, `COMPANY_TO_SUPPLIER` payment records, and exposes supplier-side payment confirm/reject actions. The interactive manifest now captures `productAppFinance.status=READY` and `var/main-flow-demo-evidence/product-app-finance.png`. Continue M7 by tightening finance action evidence: create or select a deterministic pending payment in the formal App flow, then confirm/reject it in `#/finance` without relying on accumulated local data.
+
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
