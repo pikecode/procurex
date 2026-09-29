@@ -8,6 +8,14 @@ Page({
     discrepancies: [],
     statements: [],
     payments: [],
+    reportRange: {
+      from: '2026-09-01',
+      to: '2026-09-30'
+    },
+    reports: {
+      orderAmount: null,
+      productQuantity: null
+    },
     supplierOrderId: '',
     shipQuantity: '10',
     discrepancyId: '',
@@ -56,7 +64,8 @@ Page({
         this.loadOrders(false),
         this.loadDiscrepancies(false),
         this.loadStatements(false),
-        this.loadPayments(false)
+        this.loadPayments(false),
+        this.loadReports(false)
       ]);
     } finally {
       this.setData({ loading: false });
@@ -118,6 +127,22 @@ Page({
     try {
       const payments = await api.request('/payment-records?direction=COMPANY_TO_SUPPLIER');
       this.setData({ payments: Array.isArray(payments) ? payments.slice(0, 20) : [] });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      if (toggleLoading) this.setData({ loading: false });
+    }
+  },
+
+  async loadReports(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
+    try {
+      const range = `from=${this.data.reportRange.from}&to=${this.data.reportRange.to}`;
+      const [orderAmount, productQuantity] = await Promise.all([
+        api.request(`/reports/order-amounts?${range}`),
+        api.request(`/reports/product-quantities?${range}`)
+      ]);
+      this.setData({ reports: { orderAmount, productQuantity } });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {

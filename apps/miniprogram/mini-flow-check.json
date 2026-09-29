@@ -1,27 +1,35 @@
 {
-  "generatedAt": "2026-09-29T21:55:04.341Z",
+  "generatedAt": "2026-09-29T22:01:53.976Z",
   "title": "Mini-program Flow Check",
   "status": "PASSED",
   "summary": "Native mini-program role APIs are reachable through Store, Purchaser, and Supplier flows.",
   "evidence": {
     "store": {
-      "accountStoreId": "9a088de6-4626-4ea4-a303-26e2003752e5",
-      "purchaseRequestId": "14c6ad63-bd7c-497a-8c28-618f5df66464",
+      "accountStoreId": "8e05629a-b834-4bd2-ba54-84aa342f5aaf",
+      "purchaseRequestId": "22caff36-1666-4dc5-b29f-5f679c5433d4",
       "shipmentNotification": "待收货提醒",
-      "receiptNo": "RC20260929215503865926"
+      "receiptNo": "RC20260929220153414583",
+      "reportOrderRows": 1,
+      "reportProductRows": 1
     },
     "purchaser": {
-      "confirmedRequestId": "14c6ad63-bd7c-497a-8c28-618f5df66464",
+      "confirmedRequestId": "22caff36-1666-4dc5-b29f-5f679c5433d4",
       "rejectionNotification": "供应商拒单待处理",
       "reallocatedRequestStatus": "CONFIRMED",
-      "secondarySupplierId": "20228302-37ec-415f-97b0-6d23ddc00b00"
+      "secondarySupplierId": "213c7a54-5fd8-4ecc-846e-f7006c6141d3",
+      "reportOrderRows": 11,
+      "reportProductRows": 4,
+      "profitRows": 8
     },
     "supplier": {
-      "supplierOrderId": "695dee7c-b7b4-4dfc-87ad-bebf1c18ce8c",
-      "shipmentNo": "SH20260929215503740958",
-      "statementId": "eyJzdXBwbGllcklkIjoiYjExZDAxMjQtNWUxYy00OTZhLWE2NjYtZmI5MDhiZmUxY2M3IiwiY3ljbGUiOiJNT05USExZIiwicGVyaW9kU3RhcnQiOiIyMDI2LTA5LTAxIiwicGVyaW9kRW5kRXhjbHVzaXZlIjoiMjAyNi0xMC0wMSJ9",
+      "supplierOrderId": "0396193f-716c-4824-967a-52ece130c80c",
+      "shipmentNo": "SH20260929220153792989",
+      "statementId": "eyJzdXBwbGllcklkIjoiMzFkMjZiODYtMTI3Ny00YTM5LWJjOWMtNDlkMjM5MGQ0ZWZmIiwiY3ljbGUiOiJNT05USExZIiwicGVyaW9kU3RhcnQiOiIyMDI2LTA5LTAxIiwicGVyaW9kRW5kRXhjbHVzaXZlIjoiMjAyNi0xMC0wMSJ9",
       "paymentStatus": "CONFIRMED",
-      "discrepancyStatus": "RESOLVED"
+      "discrepancyStatus": "RESOLVED",
+      "reportOrderRows": 1,
+      "reportProductRows": 1,
+      "profitDeniedStatus": 403
     }
   },
   "coveredEndpoints": [
@@ -50,6 +58,9 @@
     "GET /payment-records/{id}",
     "POST /payment-records/preview",
     "POST /payment-records",
-    "POST /payment-records/{id}/confirm"
+    "POST /payment-records/{id}/confirm",
+    "GET /reports/order-amounts",
+    "GET /reports/product-quantities",
+    "GET /reports/profit"
   ]
 }

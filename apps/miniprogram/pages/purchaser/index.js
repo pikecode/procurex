@@ -11,6 +11,15 @@ Page({
     rejectedOrderId: '',
     targetSupplierId: '',
     reallocateReason: '供应商拒单后改派',
+    reportRange: {
+      from: '2026-09-01',
+      to: '2026-09-30'
+    },
+    reports: {
+      orderAmount: null,
+      productQuantity: null,
+      profit: null
+    },
     loading: false,
     detailing: false,
     confirming: false,
@@ -49,7 +58,7 @@ Page({
   async loadWork() {
     this.setData({ loading: true, error: '' });
     try {
-      await Promise.all([this.loadRequests(false), this.loadRejections(false)]);
+      await Promise.all([this.loadRequests(false), this.loadRejections(false), this.loadReports(false)]);
     } finally {
       this.setData({ loading: false });
     }
@@ -106,6 +115,23 @@ Page({
       this.setData({ error: error.message });
     } finally {
       this.setData({ detailing: false });
+    }
+  },
+
+  async loadReports(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
+    try {
+      const range = `from=${this.data.reportRange.from}&to=${this.data.reportRange.to}`;
+      const [orderAmount, productQuantity, profit] = await Promise.all([
+        api.request(`/reports/order-amounts?${range}`),
+        api.request(`/reports/product-quantities?${range}`),
+        api.request(`/reports/profit?${range}`)
+      ]);
+      this.setData({ reports: { orderAmount, productQuantity, profit } });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      if (toggleLoading) this.setData({ loading: false });
     }
   },
 

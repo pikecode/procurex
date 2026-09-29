@@ -9,7 +9,7 @@ This request lists the external materials still needed before M6 can be reviewed
 | Item | Value |
 |---|---|
 | Local package status | LOCAL_READY |
-| Packaged commit | b238eceaee29e9bb09ab449c8a93b1acb19d2964 |
+| Packaged commit | ba06827eb693df681289e83e92191fcb10d9dc4b |
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | Evidence handoff | `docs/m6-local-evidence-handoff.md` |
 | Visible readiness page | `apps/web/m6-readiness.html` |
@@ -150,4 +150,4 @@ npm run m6:readiness:strict
 
 ## Remote Note
 
-The current packaged remote is `git@github.com:pikecode/procurex.git`. A proposed remote change must be verified with `git ls-remote --heads <repo>` before switching `origin`.
+The current packaged remote is `git@github.com-pikecode:pikecode/procurex.git`. A proposed remote change must be verified with `git ls-remote --heads <repo>` before switching `origin`.

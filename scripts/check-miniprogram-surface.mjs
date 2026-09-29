@@ -93,6 +93,8 @@ assertIncludes(storeJs, '/ledgers', 'store ledger endpoint');
 assertIncludes(storeJs, '/notifications', 'store shipment notification list');
 assertIncludes(storeJs, '/shipments/${this.data.shipmentId}', 'store shipment detail');
 assertIncludes(storeJs, '/receipts', 'store receipt creation');
+assertIncludes(storeJs, '/reports/order-amounts', 'store order amount report');
+assertIncludes(storeJs, '/reports/product-quantities', 'store product quantity report');
 assertIncludes(storeJs, 'expectedOrderVersion', 'store receipt order version guard');
 assertIncludes(storeJs, 'expectedReceiptRevision', 'store receipt revision guard');
 assertIncludes(storeWxml, '快速订货', 'store order screen');
@@ -103,6 +105,8 @@ assertIncludes(storeWxml, '订单进度', 'store order progress screen');
 assertIncludes(storeWxml, '待收货通知', 'store shipment notification screen');
 assertIncludes(storeWxml, '确认收货', 'store full receipt action');
 assertIncludes(storeWxml, '提交收货差异', 'store short receipt action');
+assertIncludes(storeWxml, '统计概览', 'store statistics screen');
+assertIncludes(storeWxml, '仅显示当前门店范围', 'store scoped statistics copy');
 
 assertIncludes(supplierJs, '/supplier-orders', 'supplier order list');
 assertIncludes(supplierJs, '/shipment-preview', 'supplier shipment preview');
@@ -115,6 +119,8 @@ assertIncludes(supplierJs, '/supplier-statements', 'supplier statement list');
 assertIncludes(supplierJs, '/payment-records?direction=COMPANY_TO_SUPPLIER', 'supplier payment record list');
 assertIncludes(supplierJs, '/payment-records/${this.data.paymentId}', 'supplier payment detail');
 assertIncludes(supplierJs, '/${action}', 'supplier payment confirm reject action');
+assertIncludes(supplierJs, '/reports/order-amounts', 'supplier order amount report');
+assertIncludes(supplierJs, '/reports/product-quantities', 'supplier product quantity report');
 assertIncludes(supplierJs, 'orderItemId', 'supplier shipment item binding');
 assertIncludes(supplierJs, 'expectedVersion', 'supplier version guard');
 assertIncludes(supplierWxml, '发货', 'supplier shipment screen');
@@ -126,6 +132,8 @@ assertIncludes(supplierWxml, '供应商账单', 'supplier statement screen');
 assertIncludes(supplierWxml, '收款确认', 'supplier payment confirmation screen');
 assertIncludes(supplierWxml, '确认收款', 'supplier payment confirm action');
 assertIncludes(supplierWxml, '驳回付款', 'supplier payment reject action');
+assertIncludes(supplierWxml, '统计概览', 'supplier statistics screen');
+assertIncludes(supplierWxml, '不展示公司利润', 'supplier profit visibility guard');
 
 assertIncludes(purchaserJs, '/purchase-requests', 'purchaser request list');
 assertIncludes(purchaserJs, '/notifications', 'purchaser rejection notification list');
@@ -136,6 +144,9 @@ assertIncludes(purchaserJs, 'expectedVersion', 'purchaser version guard');
 assertIncludes(purchaserJs, 'rejectedOrderId', 'purchaser rejection reallocation guard');
 assertIncludes(purchaserJs, 'reallocateReason', 'purchaser rejection reallocation reason');
 assertIncludes(purchaserJs, 'SUPPLIER_ORDER_REJECTED', 'purchaser supplier rejection notification filter');
+assertIncludes(purchaserJs, '/reports/order-amounts', 'purchaser order amount report');
+assertIncludes(purchaserJs, '/reports/product-quantities', 'purchaser product quantity report');
+assertIncludes(purchaserJs, '/reports/profit', 'purchaser profit report');
 assertIncludes(purchaserWxml, '确认并推送', 'purchaser confirmation screen');
 assertIncludes(purchaserWxml, '读取详情', 'purchaser request detail action');
 assertIncludes(purchaserWxml, '申请详情', 'purchaser request detail screen');
@@ -143,6 +154,8 @@ assertIncludes(purchaserWxml, '缺口金额', 'purchaser shortfall signal');
 assertIncludes(purchaserWxml, '拒单通知', 'purchaser rejection notification screen');
 assertIncludes(purchaserWxml, '改派原因', 'purchaser reallocation reason screen');
 assertIncludes(purchaserWxml, '改派供应商', 'purchaser reallocation screen');
+assertIncludes(purchaserWxml, '统计概览', 'purchaser statistics screen');
+assertIncludes(purchaserWxml, '公司差额', 'purchaser profit statistics screen');
 
 const miniFlowCheck = await read('scripts/check-miniprogram-flow.mjs');
 for (const endpoint of [
@@ -156,6 +169,9 @@ for (const endpoint of [
   '/payment-records?direction=COMPANY_TO_SUPPLIER',
   '/payment-records/${payment.id}/confirm',
   '/purchase-requests/${rejectionRequest.id}/reallocate',
+  '/reports/order-amounts?${reportRange}',
+  '/reports/product-quantities?${reportRange}',
+  '/reports/profit?${reportRange}',
 ]) {
   assertIncludes(miniFlowCheck, endpoint, 'mini-program flow check endpoint coverage');
 }

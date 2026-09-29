@@ -2,6 +2,8 @@
 
 ## 2026-09-30
 
+- 需求面审计与小程序统计补齐：新增 `docs/requirements-surface-audit.md`，把正式 Web、小程序、本地证据和 M6 外部阻塞分开记录。审计发现 DEV-501 的本地缺口是“小程序各角色统计”未显式落到原生页面；现已在门店/供应商小程序页加入 scoped R01/R02 统计概览，在采购小程序页加入 R01/R02/R03 利润统计。`mini:flow-check` 现在实际调用 `GET /reports/order-amounts`、`GET /reports/product-quantities`、`GET /reports/profit`，并验证供应商访问利润报表返回 403。
+- 报表范围修复：多角色 PXFLOW 主账号包含 ADMIN/PURCHASER/HQ_FINANCE/STORE/SUPPLIER，但没有门店/供应商单一 scope；报表范围判断原先先命中 STORE/SUPPLIER，导致公司授权角色在小程序统计真实流中误报 SCOPE_MISMATCH。`scopedFilters` 现在先放行 ADMIN/HQ_FINANCE/PURCHASER 公司级角色，再处理门店或供应商作用域。验证：`npm run mini:check`、`npm run mini:flow-check`、`npm test`、`npm run web:check` 通过。
 - 修复并闭合正式采购页拒单改派：后端要求只提交被拒供应商单关联的申请商品行，页面原先将整张申请所有商品行一并提交；现在先读取拒单供应商单明细，按商品行过滤后改派。改派响应中旧拒单单排在新单之前，页面现按目标供应商选择非拒单的新单作为交接对象。另将服务端采购申请状态 `CONFIRMED` 与本次动作结果 `REALLOCATED` 分开展示。浏览器实际点击“拒单待办 → 改派”通过，断言新单 ID 不同于旧拒单 ID，Overview 下一步切换为供应商；桌面和 390px 窄屏完整交互采集通过，并纳入 M6 本地证据包。
 - 验证：`npm run build`、`npm run web:check`、`npm run main-flow:capture-interactive-demo` 通过；采集覆盖主流程、异常、财务、Supplier ACCEPT/REPLENISH/RETURN、独立角色交接和 Purchaser 改派。
 - 方向与进度复核：按原始计划拆分正式 Web App、原生微信小程序本地 API 验证、M6 真机/生产验收三类证据；修正主流程文档中过时的“没有可见 UI”及旧 workbench 下一步描述。`npm run mini:check` 与 `npm run mini:flow-check` 实测通过，覆盖门店收货、供应商付款确认和差异处理、采购拒单改派。本地 API 结果不作为真机验收结论。

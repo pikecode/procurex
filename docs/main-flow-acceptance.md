@@ -128,8 +128,8 @@ The core business flow is no longer backend-only: a formal Web product app and a
 
 ## Direction Assessment
 
-The original dual-client requirement remains represented: the Web App has browser-executed role actions and the native mini-program has a real-API role-flow check. Recent M7 effort has concentrated on Web usability/evidence; this is a distinct client track, not a substitute for mini-program acceptance. Formal App reallocation now has click-level browser evidence, including rejected-item filtering and the next Supplier handoff. The next local work is a requirements audit of both clients. Real WeChat device and production checks remain external M6 gates.
+The original dual-client requirement remains represented: the Web App has browser-executed role actions and the native mini-program has a real-API role-flow check. Recent M7 effort has concentrated on Web usability/evidence; this is a distinct client track, not a substitute for mini-program acceptance. Formal App reallocation now has click-level browser evidence, including rejected-item filtering and the next Supplier handoff. The dual-client audit is recorded in `docs/requirements-surface-audit.md`; its local DEV-501 mini-program statistics gap is closed with Store/Supplier scoped R01/R02 panels, Purchaser R01/R02/R03 profit statistics, and real API evidence including Supplier profit denial. Real WeChat device and production checks remain external M6 gates.
 
 ## Recommended Next Step
 
-Complete the dual-client requirement audit and close local role-flow gaps; keep WeChat device and production launch evidence explicitly open under M6.
+Refresh the M6 local evidence package and stronger acceptance baselines after the mini-program statistics update; keep WeChat device and production launch evidence explicitly open under M6.

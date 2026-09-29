@@ -40,6 +40,7 @@ function parseFilters(query: Record<string, unknown>, requiredRange = false): Re
 
 function scopedFilters(filters: ReportFilters, request: AuthenticatedRequest): ReportFilters {
   const roles = request.auth?.user.roles ?? [];
+  if (roles.some((role) => ['ADMIN', 'HQ_FINANCE', 'PURCHASER'].includes(role))) return filters;
   if (roles.includes('STORE') || roles.includes('STORE_FINANCE')) {
     const storeId = request.auth?.user.scope?.storeId;
     if (!storeId || (filters.storeId && filters.storeId !== storeId)) throw new BadRequestException({ code: 'SCOPE_MISMATCH', message: 'Report is outside the current store scope' });

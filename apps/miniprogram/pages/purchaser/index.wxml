@@ -74,6 +74,26 @@
     </view>
   </view>
 
+  <view class="card">
+    <view class="section-head">
+      <text class="card-title">统计概览</text>
+      <button class="ghost" loading="{{loading}}" bindtap="loadReports">刷新</button>
+    </view>
+    <view class="muted">区间 {{reportRange.from}} 至 {{reportRange.to}}，采购可查看订货、商品数量和公司差额。</view>
+    <view class="metric-grid" wx:if="{{reports.orderAmount}}">
+      <view class="metric"><text class="metric-label">订货金额</text><text class="metric-value">{{reports.orderAmount.months[0].totalAmount || '0.00'}}</text></view>
+      <view class="metric"><text class="metric-label">完成单数</text><text class="metric-value">{{reports.orderAmount.months[0].orderCount || 0}}</text></view>
+      <view class="metric"><text class="metric-label">商品种数</text><text class="metric-value">{{reports.productQuantity.products.length || 0}}</text></view>
+      <view class="metric"><text class="metric-label">商品差额</text><text class="metric-value">{{reports.profit.totals.profit || '0.00'}}</text></view>
+    </view>
+    <view class="list" wx:if="{{reports.profit.rows.length}}">
+      <view class="row" wx:for="{{reports.profit.rows}}" wx:key="supplierOrderId">
+        <view class="row-title"><text>{{item.productName}}</text><text class="tag">{{item.profit}}</text></view>
+        <view class="muted">销售 {{item.salesGoodsAmount}}，供货 {{item.supplyGoodsAmount}}</view>
+      </view>
+    </view>
+  </view>
+
   <view class="card" wx:if="{{result}}">
     <text class="card-title">处理结果</text>
     <view class="row"><view class="row-title"><text>{{result.title}}</text><text class="tag">{{result.status}}</text></view><view class="muted">{{result.detail}}</view></view>

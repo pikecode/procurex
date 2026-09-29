@@ -53,6 +53,17 @@ function idempotencyKey(prefix) {
   return `mini-flow-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+async function loadRoleReports(baseUrl, token, role) {
+  const reportRange = 'from=2026-09-01&to=2026-09-30';
+  const [orderAmount, productQuantity] = await Promise.all([
+    request(`${baseUrl}/reports/order-amounts?${reportRange}`, { headers: authHeaders(token) }),
+    request(`${baseUrl}/reports/product-quantities?${reportRange}`, { headers: authHeaders(token) }),
+  ]);
+  assert.ok(Array.isArray(orderAmount.months), `${role} order report must return months`);
+  assert.ok(Array.isArray(productQuantity.products), `${role} product report must return products`);
+  return { orderAmount, productQuantity };
+}
+
 async function createPurchaseRequest(baseUrl, storeToken, label, quantity = seed.quantity) {
   const preview = await request(`${baseUrl}/purchase-requests/preview`, {
     method: 'POST',
@@ -248,6 +259,22 @@ async function run() {
     });
     assert.equal(confirmedPayment.status, 'CONFIRMED');
 
+    const [storeReports, supplierReports, purchaserReportsBase] = await Promise.all([
+      loadRoleReports(baseUrl, store.token, 'Store'),
+      loadRoleReports(baseUrl, supplier.token, 'Supplier'),
+      loadRoleReports(baseUrl, purchaser.token, 'Purchaser'),
+    ]);
+    const reportRange = 'from=2026-09-01&to=2026-09-30';
+    const purchaserProfit = await request(`${baseUrl}/reports/profit?${reportRange}`, {
+      headers: authHeaders(purchaser.token),
+    });
+    assert.ok(purchaserProfit.totals);
+    assert.ok(Array.isArray(purchaserProfit.rows));
+    const supplierProfit = await fetch(`${baseUrl}/reports/profit?${reportRange}`, {
+      headers: authHeaders(supplier.token),
+    });
+    assert.equal(supplierProfit.status, 403);
+
     const discrepancyRequest = await createPurchaseRequest(baseUrl, store.token, 'discrepancy');
     const discrepancySupplierOrderId = await confirmPurchaseRequest(baseUrl, purchaser.token, discrepancyRequest.id, 'discrepancy');
     const discrepancyShipment = await shipSupplierOrder(baseUrl, supplier.token, discrepancySupplierOrderId, 'discrepancy');
@@ -321,12 +348,17 @@ async function run() {
           purchaseRequestId: normalRequest.id,
           shipmentNotification: shipmentNotification.title,
           receiptNo: receipt.receiptNo,
+          reportOrderRows: storeReports.orderAmount.orders.length,
+          reportProductRows: storeReports.productQuantity.products.length,
         },
         purchaser: {
           confirmedRequestId: normalRequest.id,
           rejectionNotification: rejectionNotification.title,
           reallocatedRequestStatus: reallocated.status,
           secondarySupplierId: seed.secondarySupplierId,
+          reportOrderRows: purchaserReportsBase.orderAmount.orders.length,
+          reportProductRows: purchaserReportsBase.productQuantity.products.length,
+          profitRows: purchaserProfit.rows.length,
         },
         supplier: {
           supplierOrderId,
@@ -334,6 +366,9 @@ async function run() {
           statementId: statement.id,
           paymentStatus: confirmedPayment.status,
           discrepancyStatus: resolved.status,
+          reportOrderRows: supplierReports.orderAmount.orders.length,
+          reportProductRows: supplierReports.productQuantity.products.length,
+          profitDeniedStatus: supplierProfit.status,
         },
       },
       coveredEndpoints: [
@@ -363,6 +398,9 @@ async function run() {
         'POST /payment-records/preview',
         'POST /payment-records',
         'POST /payment-records/{id}/confirm',
+        'GET /reports/order-amounts',
+        'GET /reports/product-quantities',
+        'GET /reports/profit',
       ],
     };
     await mkdir('apps/miniprogram', { recursive: true });

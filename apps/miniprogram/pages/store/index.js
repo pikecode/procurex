@@ -13,6 +13,14 @@ Page({
     shipmentId: '',
     shortReceivedQuantity: '0',
     shipmentTodos: [],
+    reportRange: {
+      from: '2026-09-01',
+      to: '2026-09-30'
+    },
+    reports: {
+      orderAmount: null,
+      productQuantity: null
+    },
     preview: null,
     created: null,
     receiptResult: null,
@@ -61,7 +69,7 @@ Page({
   async loadWork() {
     this.setData({ loading: true, error: '' });
     try {
-      const tasks = [this.loadRequests(false), this.loadShipments(false)];
+      const tasks = [this.loadRequests(false), this.loadShipments(false), this.loadReports(false)];
       if (this.data.storeId) tasks.push(this.loadAccount(false));
       await Promise.all(tasks);
     } finally {
@@ -123,6 +131,22 @@ Page({
       this.setData({ error: error.message });
     } finally {
       if (toggleLoading) this.setData({ accounting: false });
+    }
+  },
+
+  async loadReports(toggleLoading = true) {
+    if (toggleLoading) this.setData({ loading: true, error: '' });
+    try {
+      const range = `from=${this.data.reportRange.from}&to=${this.data.reportRange.to}`;
+      const [orderAmount, productQuantity] = await Promise.all([
+        api.request(`/reports/order-amounts?${range}`),
+        api.request(`/reports/product-quantities?${range}`)
+      ]);
+      this.setData({ reports: { orderAmount, productQuantity } });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      if (toggleLoading) this.setData({ loading: false });
     }
   },
 

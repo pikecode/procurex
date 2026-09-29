@@ -75,6 +75,26 @@
 
   <view class="card">
     <view class="section-head">
+      <text class="card-title">统计概览</text>
+      <button class="ghost" loading="{{loading}}" bindtap="loadReports">刷新</button>
+    </view>
+    <view class="muted">区间 {{reportRange.from}} 至 {{reportRange.to}}，仅显示当前供应商范围，不展示公司利润。</view>
+    <view class="metric-grid" wx:if="{{reports.orderAmount}}">
+      <view class="metric"><text class="metric-label">完成月份</text><text class="metric-value">{{reports.orderAmount.months[0].month || '-'}}</text></view>
+      <view class="metric"><text class="metric-label">完成金额</text><text class="metric-value">{{reports.orderAmount.months[0].totalAmount || '0.00'}}</text></view>
+      <view class="metric"><text class="metric-label">完成单数</text><text class="metric-value">{{reports.orderAmount.months[0].orderCount || 0}}</text></view>
+      <view class="metric"><text class="metric-label">商品种数</text><text class="metric-value">{{reports.productQuantity.products.length || 0}}</text></view>
+    </view>
+    <view class="list" wx:if="{{reports.productQuantity.products.length}}">
+      <view class="row" wx:for="{{reports.productQuantity.products}}" wx:key="productId">
+        <view class="row-title"><text>{{item.productName}}</text><text class="tag">{{item.quantity}}</text></view>
+        <view class="muted">单位 {{item.unit}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
       <text class="card-title">收款确认</text>
       <button class="ghost" loading="{{loading}}" bindtap="loadPayments">刷新</button>
     </view>
