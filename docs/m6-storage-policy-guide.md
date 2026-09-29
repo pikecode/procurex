@@ -6,7 +6,7 @@ This guide is the operator checklist for the `STORAGE_POLICY` blocker. It covers
 
 ## Current Position
 
-The application has local private-file behavior and download authorization checks, but production object storage or production private-file service policy has not been signed. M6 must stay `NOT_READY` until this policy is complete.
+The application has local private-file behavior and download authorization checks. The intended production attachment bucket is now recorded as Alibaba Cloud OSS `moshuo-attachment-2026`, but the production private-file policy has not been signed. M6 must stay `NOT_READY` until the policy is complete.
 
 ## Required Evidence
 

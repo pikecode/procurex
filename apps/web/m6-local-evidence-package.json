@@ -1,17 +1,19 @@
 {
-  "generatedAt": "2026-09-29T22:13:59.262Z",
+  "generatedAt": "2026-09-29T22:27:54.261Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "1bd60e43aaf443f61e7a02aeb67066bcb30cc773",
+    "commit": "dc9da797bfb0fae9561717809c224f30b170a8b7",
     "remote": "git@github.com-pikecode:pikecode/procurex.git",
     "dirty": true,
     "dirtyStatus": [
-      "M docs/acceptance-dashboard.md",
-      " M docs/continuation.md",
-      " M docs/progress.md"
+      "M apps/web/m6-external-evidence.json",
+      " M apps/web/m6-readiness.json",
+      " M docs/m6-storage-policy-guide.md",
+      " M var/m6-external-evidence.json",
+      " M var/m6-production-storage-policy.json"
     ]
   },
   "commands": [
@@ -68,19 +70,19 @@
       "path": "apps/web/m6-readiness.json",
       "exists": true,
       "sizeBytes": 4956,
-      "sha256": "d85388db932176ef535d39e4f8e7751fa3fe023ab44ae8f0b7ed53272065d519"
+      "sha256": "f1d32408fef5e0c5369c071b2467006a5e813acc276507cc2760d6d992ae58fc"
     },
     {
       "path": "apps/web/m6-external-evidence.json",
       "exists": true,
       "sizeBytes": 5044,
-      "sha256": "2dc37b094ddf19ec1fc1ec7fd98cae803713e2b3ce3826d96cdddf42f0a8b7c7"
+      "sha256": "b4507891888b120eb19c832db5005e467bee4cdb8eca426f3f9326ccf1e857b8"
     },
     {
       "path": "var/m6-external-evidence.json",
       "exists": true,
       "sizeBytes": 5044,
-      "sha256": "2dc37b094ddf19ec1fc1ec7fd98cae803713e2b3ce3826d96cdddf42f0a8b7c7"
+      "sha256": "b4507891888b120eb19c832db5005e467bee4cdb8eca426f3f9326ccf1e857b8"
     },
     {
       "path": "var/m6-performance-report.json",
@@ -409,8 +411,8 @@
     {
       "path": "docs/m6-storage-policy-guide.md",
       "exists": true,
-      "sizeBytes": 2160,
-      "sha256": "3cdc50a7efe026f76d5aa58a33f36080d6d079c8444deb99fd720416d59e2544"
+      "sizeBytes": 2231,
+      "sha256": "cd5b4e0e8f00ea2e8abdd82befe81c3977b662225b28d2e07be487f9cee3bec7"
     },
     {
       "path": "docs/m6-external-evidence-templates.md",
@@ -427,8 +429,8 @@
     {
       "path": "var/m6-production-storage-policy.json",
       "exists": true,
-      "sizeBytes": 1113,
-      "sha256": "4aec7851ec937558cf2dd9d91ee8a6bf2ad6dd7481d997d938a1c31149a386a7"
+      "sizeBytes": 964,
+      "sha256": "a3cfa53fbba6ee6c9bcaaae34d11c778053ab3479fb026883d2e9964aebf0c1b"
     }
   ],
   "missingFiles": [],

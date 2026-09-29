@@ -13,7 +13,7 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | External evidence status | BLOCKED |
 | Git branch | main |
-| Packaged commit | 1bd60e43aaf443f61e7a02aeb67066bcb30cc773 |
+| Packaged commit | dc9da797bfb0fae9561717809c224f30b170a8b7 |
 | Remote | git@github.com-pikecode:pikecode/procurex.git |
 | Dirty at packaging | yes |
 
@@ -43,9 +43,9 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 
 | Path | State | Bytes | SHA-256 |
 |---|---|---|---|
-| apps/web/m6-readiness.json | present | 4956 | d85388db932176ef535d39e4f8e7751fa3fe023ab44ae8f0b7ed53272065d519 |
-| apps/web/m6-external-evidence.json | present | 5044 | 2dc37b094ddf19ec1fc1ec7fd98cae803713e2b3ce3826d96cdddf42f0a8b7c7 |
-| var/m6-external-evidence.json | present | 5044 | 2dc37b094ddf19ec1fc1ec7fd98cae803713e2b3ce3826d96cdddf42f0a8b7c7 |
+| apps/web/m6-readiness.json | present | 4956 | f1d32408fef5e0c5369c071b2467006a5e813acc276507cc2760d6d992ae58fc |
+| apps/web/m6-external-evidence.json | present | 5044 | b4507891888b120eb19c832db5005e467bee4cdb8eca426f3f9326ccf1e857b8 |
+| var/m6-external-evidence.json | present | 5044 | b4507891888b120eb19c832db5005e467bee4cdb8eca426f3f9326ccf1e857b8 |
 | var/m6-performance-report.json | present | 2502 | ef810f1d3c8971f25c81655682576cf9f1408dc33b3c8c1af7fb87bbd4c92838 |
 | var/m6-rollback-drill.json | present | 4421 | 6d5028efb0082f04e1473b200e973e5d97758bf23a906d5fb44d0c15fb5d3296 |
 | var/m6-initialization-signoff.json | present | 4806 | 95f3ba32a422fdaad43a0b7f7a171b6b31bd3f6b83addc293f100e60bea2ce28 |
@@ -100,10 +100,10 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | docs/m6-production-readiness.md | present | 11898 | 37d23fd1a01ebcff1e91357f816b34fa73d31b06e1a69a95c541c54a173b0305 |
 | docs/m6-wechat-device-evidence-guide.md | present | 3506 | 340c17a8fc01c55707ea06a20a3e791a3b1702a4c88c663ecbd97fd6bcee893d |
 | docs/m6-production-runtime-guide.md | present | 2586 | d0092156325942a22878c316a0762e3fc9900fb35db0596e5378055c4e02ea98 |
-| docs/m6-storage-policy-guide.md | present | 2160 | 3cdc50a7efe026f76d5aa58a33f36080d6d079c8444deb99fd720416d59e2544 |
+| docs/m6-storage-policy-guide.md | present | 2231 | cd5b4e0e8f00ea2e8abdd82befe81c3977b662225b28d2e07be487f9cee3bec7 |
 | docs/m6-external-evidence-templates.md | present | 1155 | 121ffa87b542061489b4fc078e013538c6aa370aba9279017b31eff718a233f6 |
 | var/m6-production-runtime.json | present | 1974 | f8998157202763f0bf2b8a4163bb735633af71f176f8618d5db89598b5aa4f75 |
-| var/m6-production-storage-policy.json | present | 1113 | 4aec7851ec937558cf2dd9d91ee8a6bf2ad6dd7481d997d938a1c31149a386a7 |
+| var/m6-production-storage-policy.json | present | 964 | a3cfa53fbba6ee6c9bcaaae34d11c778053ab3479fb026883d2e9964aebf0c1b |
 
 ## Refresh Commands
 
