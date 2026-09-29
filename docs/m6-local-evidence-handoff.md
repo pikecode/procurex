@@ -13,7 +13,7 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | External evidence status | BLOCKED |
 | Git branch | main |
-| Packaged commit | 077f956627b7ee4c8b9643c647b61b42896e423a |
+| Packaged commit | 62efcfff9684a06b01356cbd69988a5088ef572c |
 | Remote | git@github.com:pikecode/procurex.git |
 | Dirty at packaging | no |
 
@@ -43,9 +43,9 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 
 | Path | State | Bytes | SHA-256 |
 |---|---|---|---|
-| apps/web/m6-readiness.json | present | 4596 | 79644dd5e7154e2a38c854fe4bda9ab7a295ad9ebe9f3c9eab06a1c17fd33025 |
-| apps/web/m6-external-evidence.json | present | 4071 | d9f885d9e417f389693bb92a6e05df822e8c98222027601e1dc4637793f8f47c |
-| var/m6-external-evidence.json | present | 4071 | d9f885d9e417f389693bb92a6e05df822e8c98222027601e1dc4637793f8f47c |
+| apps/web/m6-readiness.json | present | 4753 | 392dc9e73db6a2b3a395cd37566afd63c3c878ac9f73abc16895eeb50cb25a4d |
+| apps/web/m6-external-evidence.json | present | 4110 | e594b367fc2e0c60dc614be5f82b9b61bdc0230b342e1da2507a405a5b8d1ef6 |
+| var/m6-external-evidence.json | present | 4110 | e594b367fc2e0c60dc614be5f82b9b61bdc0230b342e1da2507a405a5b8d1ef6 |
 | var/m6-performance-report.json | present | 2502 | ef810f1d3c8971f25c81655682576cf9f1408dc33b3c8c1af7fb87bbd4c92838 |
 | var/m6-rollback-drill.json | present | 4421 | 6d5028efb0082f04e1473b200e973e5d97758bf23a906d5fb44d0c15fb5d3296 |
 | var/m6-initialization-signoff.json | present | 4806 | 95f3ba32a422fdaad43a0b7f7a171b6b31bd3f6b83addc293f100e60bea2ce28 |
