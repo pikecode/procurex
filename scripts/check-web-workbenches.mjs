@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -48,6 +48,8 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHt
   readProjectFile('apps/web/main-flow-demo.js'),
   readProjectFile('apps/web/role-workbenches.html'),
   readProjectFile('apps/web/role-workbenches.js'),
+  readProjectFile('apps/web/m7-business-flow.html'),
+  readProjectFile('apps/web/m7-business-flow.js'),
   readProjectFile('scripts/capture-main-flow-interactive-demo.mjs'),
   readProjectFile('apps/web/ops.html'),
   readProjectFile('apps/web/ops.js'),
@@ -71,6 +73,8 @@ for (const path of [
   'apps/web/main-flow-demo.js',
   'apps/web/role-workbenches.html',
   'apps/web/role-workbenches.js',
+  'apps/web/m7-business-flow.html',
+  'apps/web/m7-business-flow.js',
   'apps/web/ops.html',
   'apps/web/ops.js',
   'apps/web/m6-readiness.html',
@@ -88,6 +92,7 @@ checkSyntax('apps/web/main-flow.js');
 checkSyntax('apps/web/m4-acceptance.js');
 checkSyntax('apps/web/main-flow-demo.js');
 checkSyntax('apps/web/role-workbenches.js');
+checkSyntax('apps/web/m7-business-flow.js');
 checkSyntax('apps/web/ops.js');
 checkSyntax('apps/web/m6-readiness.js');
 checkSyntax('scripts/report-m6-readiness.mjs');
@@ -131,6 +136,7 @@ assertIncludes(billingCss, '@media', 'responsive billing styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');
 assertIncludes(reportHtml, '/ops.html', 'W13 navigation entry');
+assertIncludes(reportHtml, '/m7-business-flow.html', 'M7 business flow navigation entry');
 assertIncludes(reportHtml, '/m6-readiness.html', 'M6 readiness navigation entry');
 assertIncludes(reportHtml, 'M5 验收状态', 'M5 acceptance summary');
 assertIncludes(reportHtml, 'id="m5-acceptance"', 'M5 acceptance summary');
@@ -208,6 +214,9 @@ assertIncludes(packageJson.scripts['main-flow:check-demo'], 'check-main-flow-dem
 assertIncludes(packageJson.scripts['main-flow:capture-demo-evidence'], 'capture-main-flow-demo-evidence.mjs', 'main-flow demo browser evidence capture script');
 assertIncludes(packageJson.scripts['main-flow:capture-interactive-demo'], 'capture-main-flow-interactive-demo.mjs', 'main-flow interactive browser evidence capture script');
 assertIncludes(mainFlowInteractiveCapture, 'main-flow-demo-interactive-mobile.png', 'main-flow mobile interactive evidence capture');
+assertIncludes(mainFlowInteractiveCapture, 'm7-business-flow.png', 'M7 business flow desktop evidence capture');
+assertIncludes(mainFlowInteractiveCapture, 'm7-business-flow-mobile.png', 'M7 business flow mobile evidence capture');
+assertIncludes(mainFlowInteractiveCapture, 'businessFlow', 'M7 business flow manifest state');
 assertIncludes(mainFlowInteractiveCapture, 'Emulation.setDeviceMetricsOverride', 'main-flow mobile viewport evidence capture');
 assertIncludes(packageJson.scripts['acceptance:m4-browserless'], 'main-flow:check-demo', 'M4 browserless acceptance script');
 
@@ -292,6 +301,21 @@ assertIncludes(roleWorkbenchesJs, '采购工作台', 'role workbenches purchaser
 assertIncludes(roleWorkbenchesJs, '供应商工作台', 'role workbenches supplier lane');
 assertIncludes(roleWorkbenchesJs, '下一步页面边界', 'role workbenches next page boundary');
 assertIncludes(roleWorkbenchesJs, 'roleEvidence', 'role workbenches role evidence mapping');
+
+assertIncludes(businessFlowHtml, '采购协同业务流程', 'M7 business flow page');
+assertIncludes(businessFlowHtml, '/m7-business-flow.js', 'M7 business flow script');
+assertIncludes(businessFlowHtml, 'id="business-board"', 'M7 business flow board');
+assertIncludes(businessFlowHtml, 'id="todo-list"', 'M7 business todo list');
+assertIncludes(businessFlowHtml, 'id="timeline"', 'M7 business timeline');
+assertIncludes(businessFlowHtml, 'id="finance-panel"', 'M7 business finance panel');
+assertIncludes(businessFlowJs, 'main-flow-demo-seed.json', 'M7 business seed loader');
+assertIncludes(businessFlowJs, 'main-flow-demo-run.json', 'M7 business evidence loader');
+assertIncludes(businessFlowJs, '门店下单', 'M7 store stage');
+assertIncludes(businessFlowJs, '采购确认', 'M7 purchaser stage');
+assertIncludes(businessFlowJs, '供应商履约', 'M7 supplier stage');
+assertIncludes(businessFlowJs, '财务结算', 'M7 finance stage');
+assertIncludes(businessFlowJs, '/role-workbenches.html', 'M7 role workbench navigation');
+assertIncludes(businessFlowJs, '/billing.html', 'M7 billing navigation');
 
 assertIncludes(opsHtml, '运营与对账', 'W13 ops page');
 assertIncludes(opsHtml, '/ops.js', 'W13 ops script');

@@ -311,6 +311,43 @@ async function runRoleWorkbenchStoreOrder(cdp, viewport, fileName) {
   return { file, state, viewport };
 }
 
+async function captureBusinessFlow(cdp, viewport, fileName) {
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${webBaseUrl}/m7-business-flow.html`);
+  const state = await evaluate(cdp, `
+    (async () => {
+      const waitFor = async (predicate, label) => {
+        for (let i = 0; i < 80; i += 1) {
+          if (await predicate()) return;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        throw new Error(label + ' did not become ready.');
+      };
+      await waitFor(() => document.querySelector('#flow-status')?.textContent.trim() === 'PASSED', 'business flow status');
+      await waitFor(() => document.querySelectorAll('#business-board article').length >= 5, 'business board stages');
+      const bodyText = document.body.textContent || '';
+      return {
+        status: document.querySelector('#flow-status')?.textContent.trim() || '',
+        stageRows: document.querySelectorAll('#business-board article').length,
+        todoRows: document.querySelectorAll('#todo-list article').length,
+        timelineRows: document.querySelectorAll('#timeline article').length,
+        financeRows: document.querySelectorAll('#finance-panel article').length,
+        hasStoreStage: bodyText.includes('门店下单'),
+        hasPurchaserStage: bodyText.includes('采购确认'),
+        hasSupplierStage: bodyText.includes('供应商履约'),
+        hasFinanceStage: bodyText.includes('财务结算'),
+        hasRoleNavigation: bodyText.includes('去门店工作台') && bodyText.includes('去财务结算'),
+        viewportWidth: window.innerWidth,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
+      };
+    })()
+  `);
+  const file = resolve(outputDir, fileName);
+  await rm(file, { force: true });
+  await captureScreenshot(cdp, file);
+  return { file, state, viewport };
+}
+
 async function main() {
   await run('npm', ['run', 'main-flow:seed-demo']);
   await run('npm', ['run', 'main-flow:check-demo']);
@@ -335,6 +372,16 @@ async function main() {
           { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
           'role-workbenches-interactive-mobile.png',
         );
+        const businessFlow = await captureBusinessFlow(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'm7-business-flow.png',
+        );
+        const mobileBusinessFlow = await captureBusinessFlow(
+          cdp,
+          { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
+          'm7-business-flow-mobile.png',
+        );
         await writeFile(resolve(outputDir, 'interactive-manifest.json'), `${JSON.stringify({
           generatedAt: new Date().toISOString(),
           browser,
@@ -346,11 +393,15 @@ async function main() {
           mobileScreenshot: mobile.file,
           roleWorkbenchActionScreenshot: roleWorkbenchAction.file,
           mobileRoleWorkbenchActionScreenshot: mobileRoleWorkbenchAction.file,
+          businessFlowScreenshot: businessFlow.file,
+          mobileBusinessFlowScreenshot: mobileBusinessFlow.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
           mobileRoleWorkbenchAction: mobileRoleWorkbenchAction.state,
-          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction },
+          businessFlow: businessFlow.state,
+          mobileBusinessFlow: mobileBusinessFlow.state,
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -360,10 +411,13 @@ async function main() {
         console.log(`  Mobile screenshot: ${mobile.file}`);
         console.log(`  Role workbench screenshot: ${roleWorkbenchAction.file}`);
         console.log(`  Mobile role workbench screenshot: ${mobileRoleWorkbenchAction.file}`);
+        console.log(`  Business flow screenshot: ${businessFlow.file}`);
+        console.log(`  Mobile business flow screenshot: ${mobileBusinessFlow.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
         console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText}; ${roleWorkbenchAction.state.discrepancyResultText}; ${roleWorkbenchAction.state.rejectionResultText}; ${roleWorkbenchAction.state.discrepancyBranchesResultText})`);
         console.log(`  Mobile role workbench flow: ${mobileRoleWorkbenchAction.state.status} (${mobileRoleWorkbenchAction.state.storeResultText}; ${mobileRoleWorkbenchAction.state.purchaserResultText}; ${mobileRoleWorkbenchAction.state.shipmentResultText}; ${mobileRoleWorkbenchAction.state.receiptResultText}; ${mobileRoleWorkbenchAction.state.discrepancyResultText}; ${mobileRoleWorkbenchAction.state.rejectionResultText}; ${mobileRoleWorkbenchAction.state.discrepancyBranchesResultText})`);
+        console.log(`  Business flow stages: ${businessFlow.state.stageRows}, todos: ${businessFlow.state.todoRows}, finance cards: ${businessFlow.state.financeRows}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

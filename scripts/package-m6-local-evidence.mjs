@@ -50,7 +50,11 @@ const evidenceFiles = [
   'var/m6-readiness-evidence/m6-readiness-mobile.png',
   'apps/miniprogram/mini-flow-check.json',
   'apps/web/m5-gate-status.json',
+  'apps/web/m7-business-flow.html',
+  'apps/web/m7-business-flow.js',
   'var/main-flow-demo-evidence/interactive-manifest.json',
+  'var/main-flow-demo-evidence/m7-business-flow.png',
+  'var/main-flow-demo-evidence/m7-business-flow-mobile.png',
   'docs/m6-production-readiness.md',
   'docs/m6-wechat-device-evidence-guide.md',
   'docs/m6-production-runtime-guide.md',
@@ -68,6 +72,7 @@ const [
   initialization,
   pilot,
   browserManifest,
+  interactiveManifest,
 ] = await Promise.all([
   readJson('apps/web/m6-readiness.json'),
   readJson('apps/web/m6-external-evidence.json'),
@@ -76,6 +81,7 @@ const [
   readJson('var/m6-initialization-signoff.json'),
   readJson('var/m6-pilot-run.json'),
   readJson('var/m6-readiness-evidence/manifest.json'),
+  readJson('var/main-flow-demo-evidence/interactive-manifest.json'),
 ]);
 
 const files = await Promise.all(evidenceFiles.map((path) => fileDigest(path)));
@@ -94,6 +100,8 @@ const requiredStatuses = [
   ['pilot', pilot?.status === 'LOCAL_READY'],
   ['browserEvidenceDesktop', browserManifest?.desktop?.state?.readinessRows >= 11 && browserManifest?.desktop?.state?.externalRows >= 6],
   ['browserEvidenceMobile', browserManifest?.mobile?.state?.readinessRows >= 11 && browserManifest?.mobile?.state?.externalRows >= 6],
+  ['businessFlowDesktop', interactiveManifest?.businessFlow?.stageRows >= 5 && interactiveManifest?.businessFlow?.financeRows >= 4],
+  ['businessFlowMobile', interactiveManifest?.mobileBusinessFlow?.stageRows >= 5 && interactiveManifest?.mobileBusinessFlow?.financeRows >= 4],
 ];
 const failedStatusChecks = requiredStatuses.filter(([, passed]) => !passed).map(([name]) => name);
 const status = missingFiles.length === 0 && failedStatusChecks.length === 0 ? 'LOCAL_READY' : 'BLOCKED';
@@ -124,6 +132,7 @@ const result = {
     'npm run m6:external-evidence',
     'npm run m6:check-external-templates',
     'npm run m6:readiness',
+    'npm run main-flow:capture-interactive-demo',
     'npm run m6:capture-readiness-evidence',
   ],
   readiness: {

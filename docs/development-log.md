@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M7 业务流程产品化起步：新增 `apps/web/m7-business-flow.html` / `m7-business-flow.js`，读取 `main-flow-demo-seed.json` 和 `main-flow-demo-run.json`，把门店下单、采购确认、供应商履约、门店收货、财务结算展示成业务流转台，包含角色导航、业务待办、流程时间线和经营财务摘要。现有 Web 工作台侧边栏加入“业务流程”入口；`web:check` 纳入 M7 页面、脚本、业务阶段和跳转保护。
 - M6 存储策略预检：新增 `npm run m6:check-storage-policy`、`scripts/check-m6-storage-policy.mjs` 和 `docs/m6-storage-policy-guide.md`，把私有付款凭证的生产存储服务、私有根路径、保存期、访问角色复核、备份保留、恢复引用、下载审计策略和负责人签字写入 `var/m6-production-storage-policy.json`。`m6:readiness` 与 `m6:external-evidence` 现在要求该报告 `status=READY` 且已签字后才可能把 DEV-603-STORAGE / STORAGE_POLICY 判 READY；M6 页面、客户证据请求、外部模板和本地证据包同步加入存储策略指南。
 - M6 生产运行时预检：新增 `npm run m6:check-production-runtime`、`scripts/check-m6-production-runtime.mjs` 和 `docs/m6-production-runtime-guide.md`，把生产数据库、私有文件存储、HTTPS API 域名、`NODE_ENV=production`、HOST/PORT 和单点迁移责任拆成可复查报告 `var/m6-production-runtime.json`。`m6:readiness` 与 `m6:external-evidence` 现在要求该报告 READY 后才可能把 DEV-603-DEPLOY / PRODUCTION_RUNTIME 判 READY；M6 页面、客户证据请求、外部模板和本地证据包同步加入生产环境指南。
 - M6 微信真机指南：新增 `docs/m6-wechat-device-evidence-guide.md`，把体验成员已添加、无生产服务器/域名、`m6:prepare-wechat-evidence`、三角色真机截图路径、manifest 必填项、`m6:check-wechat-evidence` 验证和后续 handoff 刷新串成操作清单。M6 readiness 页面“评审交接”新增微信真机指南入口；`web:check`、浏览器截图采集、本地证据包和客户证据请求生成器同步纳入该路径。

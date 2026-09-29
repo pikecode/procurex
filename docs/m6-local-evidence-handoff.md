@@ -13,9 +13,9 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | External evidence status | BLOCKED |
 | Git branch | main |
-| Packaged commit | ce3fbdf06f8987a1c8bd6e68ab1eccf03db5fb7d |
+| Packaged commit | d5235ac1ce524eb1c1de96798a204f9f80456c51 |
 | Remote | git@github.com:pikecode/procurex.git |
-| Dirty at packaging | no |
+| Dirty at packaging | yes |
 
 ## Local Evidence
 
@@ -55,7 +55,11 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | var/m6-readiness-evidence/m6-readiness-mobile.png | present | 1179247 | 33d785116ddceb1c934b05d376125d0e2f1574d460316b88d4a307a98f1869de |
 | apps/miniprogram/mini-flow-check.json | present | 2097 | 03357d581baa087de537c1c844fb55c460da619a738b1acef7a9387f942682d1 |
 | apps/web/m5-gate-status.json | present | 2122 | 52708240ad461741a37aa4f9bc0865bfa2f1660288d7b1b3d1ebaf66f156631e |
-| var/main-flow-demo-evidence/interactive-manifest.json | present | 8880 | b6639f0e33ec4e1a1350f8d8bd11d526e28d108c206b8d440f9d61623cb4d42c |
+| apps/web/m7-business-flow.html | present | 2889 | 19a30bd7ba50ac5e4a486d475ebed3b91a3df70033716bdbef322b6b01b39707 |
+| apps/web/m7-business-flow.js | present | 8180 | 84b6822dadbc0baf1791e91365ac1580cb2cf9b3ec38076397f7f9df3a55ed1c |
+| var/main-flow-demo-evidence/interactive-manifest.json | present | 11154 | 4089d2c03c495961b0a0c19f1f0fa7c48ce9daa2096c71103d20a709b016cac1 |
+| var/main-flow-demo-evidence/m7-business-flow.png | present | 216291 | 065fe9aed4e96c65b862fb740f3e8a09fdc0dccb92aa7b58c9b45c76a33e6538 |
+| var/main-flow-demo-evidence/m7-business-flow-mobile.png | present | 490947 | e20bf8ca45f6b5db0c1bbcdafefe3c0365ee9f52bae5fd981555a1c04973ea10 |
 | docs/m6-production-readiness.md | present | 11898 | 37d23fd1a01ebcff1e91357f816b34fa73d31b06e1a69a95c541c54a173b0305 |
 | docs/m6-wechat-device-evidence-guide.md | present | 3506 | 340c17a8fc01c55707ea06a20a3e791a3b1702a4c88c663ecbd97fd6bcee893d |
 | docs/m6-production-runtime-guide.md | present | 2586 | d0092156325942a22878c316a0762e3fc9900fb35db0596e5378055c4e02ea98 |
@@ -78,6 +82,7 @@ npm run m6:check-storage-policy
 npm run m6:external-evidence
 npm run m6:check-external-templates
 npm run m6:readiness
+npm run main-flow:capture-interactive-demo
 npm run m6:capture-readiness-evidence
 npm run m6:package-local-evidence
 npm run m6:write-local-handoff

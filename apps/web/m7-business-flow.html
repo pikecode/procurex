@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProcureX · 业务流程</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <aside class="sidebar"><div class="brand"><span class="mark">P</span><span>ProcureX<small>采购协同平台</small></span></div><div class="nav-label">工作台</div><a class="nav-item" href="/m4-acceptance.html">M4 验收</a><a class="nav-item" href="/main-flow-demo.html">主流程操作台</a><a class="nav-item" href="/role-workbenches.html">角色工作台</a><a class="nav-item active" href="/m7-business-flow.html">业务流程</a><a class="nav-item" href="/main-flow.html">主流程验收</a><a class="nav-item" href="/billing.html">财务结算</a><a class="nav-item" href="/">报表与分析</a><a class="nav-item" href="/ops.html">运营与对账</a><a class="nav-item" href="/m6-readiness.html">M6 上线准备</a><div class="side-foot"><span class="pulse"></span>产品化主流程</div></aside>
+  <main class="main">
+    <header class="topbar"><div class="crumb">工作台 <span>/</span> 业务流程</div><div class="profile"><span id="flow-status">等待业务数据</span><span class="avatar">P</span></div></header>
+    <section class="page-head"><div><div class="eyebrow">Business Flow</div><h1>采购协同业务流程</h1><p>按门店、采购、供应商、财务的日常视角组织主流程，不再只展示验收结果。</p></div><div class="updated"><span class="pulse"></span><span id="flow-updated">等待刷新</span></div></section>
+    <div id="notice" class="notice hidden"></div>
+    <section class="summary-grid" id="summary"></section>
+    <section class="business-board" id="business-board"></section>
+    <section class="data-card acceptance-card"><div class="data-head"><div><h3>业务待办</h3><p>按当前流程状态生成下一步处理入口</p></div><span id="todo-label" class="tag">等待数据</span></div><div id="todo-list" class="task-list"></div></section>
+    <section class="data-card acceptance-card"><div class="data-head"><div><h3>流程时间线</h3><p>从门店提交到财务付款预览的关键节点</p></div><span id="timeline-label" class="tag">等待证据</span></div><div id="timeline" class="flow-timeline"></div></section>
+    <section class="data-card acceptance-card"><div class="data-head"><div><h3>经营与财务视图</h3><p>把下单金额、供应商应付、付款预览和对账入口集中展示</p></div><span id="finance-label" class="tag">本地数据</span></div><div id="finance-panel" class="finance-panel"></div></section>
+    <footer>M7 业务流程页读取现有主流程种子与证据；真实处理动作继续由角色工作台、财务结算和后端 API 承接。</footer>
+  </main>
+  <script src="/m7-business-flow.js"></script>
+</body>
+</html>

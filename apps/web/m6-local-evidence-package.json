@@ -1,14 +1,31 @@
 {
-  "generatedAt": "2026-09-29T02:31:55.867Z",
+  "generatedAt": "2026-09-29T02:57:14.388Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "ce3fbdf06f8987a1c8bd6e68ab1eccf03db5fb7d",
+    "commit": "d5235ac1ce524eb1c1de96798a204f9f80456c51",
     "remote": "git@github.com:pikecode/procurex.git",
-    "dirty": false,
-    "dirtyStatus": []
+    "dirty": true,
+    "dirtyStatus": [
+      "M apps/web/billing.html",
+      " M apps/web/index.html",
+      " M apps/web/m4-acceptance.html",
+      " M apps/web/m6-readiness.html",
+      " M apps/web/main-flow-demo.html",
+      " M apps/web/main-flow.html",
+      " M apps/web/ops.html",
+      " M apps/web/role-workbenches.html",
+      " M apps/web/style.css",
+      " M docs/development-log.md",
+      " M docs/progress.md",
+      " M scripts/capture-main-flow-interactive-demo.mjs",
+      " M scripts/check-web-workbenches.mjs",
+      " M scripts/package-m6-local-evidence.mjs",
+      "?? apps/web/m7-business-flow.html",
+      "?? apps/web/m7-business-flow.js"
+    ]
   },
   "commands": [
     "npm run m6:performance",
@@ -22,6 +39,7 @@
     "npm run m6:external-evidence",
     "npm run m6:check-external-templates",
     "npm run m6:readiness",
+    "npm run main-flow:capture-interactive-demo",
     "npm run m6:capture-readiness-evidence"
   ],
   "readiness": {
@@ -132,10 +150,34 @@
       "sha256": "52708240ad461741a37aa4f9bc0865bfa2f1660288d7b1b3d1ebaf66f156631e"
     },
     {
+      "path": "apps/web/m7-business-flow.html",
+      "exists": true,
+      "sizeBytes": 2889,
+      "sha256": "19a30bd7ba50ac5e4a486d475ebed3b91a3df70033716bdbef322b6b01b39707"
+    },
+    {
+      "path": "apps/web/m7-business-flow.js",
+      "exists": true,
+      "sizeBytes": 8180,
+      "sha256": "84b6822dadbc0baf1791e91365ac1580cb2cf9b3ec38076397f7f9df3a55ed1c"
+    },
+    {
       "path": "var/main-flow-demo-evidence/interactive-manifest.json",
       "exists": true,
-      "sizeBytes": 8880,
-      "sha256": "b6639f0e33ec4e1a1350f8d8bd11d526e28d108c206b8d440f9d61623cb4d42c"
+      "sizeBytes": 11154,
+      "sha256": "4089d2c03c495961b0a0c19f1f0fa7c48ce9daa2096c71103d20a709b016cac1"
+    },
+    {
+      "path": "var/main-flow-demo-evidence/m7-business-flow.png",
+      "exists": true,
+      "sizeBytes": 216291,
+      "sha256": "065fe9aed4e96c65b862fb740f3e8a09fdc0dccb92aa7b58c9b45c76a33e6538"
+    },
+    {
+      "path": "var/main-flow-demo-evidence/m7-business-flow-mobile.png",
+      "exists": true,
+      "sizeBytes": 490947,
+      "sha256": "e20bf8ca45f6b5db0c1bbcdafefe3c0365ee9f52bae5fd981555a1c04973ea10"
     },
     {
       "path": "docs/m6-production-readiness.md",
