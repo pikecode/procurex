@@ -36,7 +36,7 @@ The Finance formal route detail view is now tightened as well. `app.html#/financ
 
 The first guided day-to-day workflow connection is now in place. `app.html#/flow` saves the latest main-flow handoff to `sessionStorage` via `apps/web/product-app/workflow.js`; Overview displays that handoff, and Store/Purchaser/Supplier/Finance prefill the relevant IDs from it. Continue M7 by making the handoff more actionable after finance registration, for example by surfacing payment status back on Overview and adding route-level refresh actions, not by adding new standalone HTML pages.
 
-Workflow status is now more actionable: `workflowNextAction` drives the Overview “下一步处理” panel, Overview shows receipt/payment status, Supplier confirmation/rejection writes `paymentStatus` back into the same workflow context, and Finance can register a payment as `PENDING` for Supplier to confirm from its route. Continue M7 by adding route-level refresh actions so Overview and role pages can reconcile saved workflow IDs against current API state, then capture the pending-payment handoff in the interactive evidence manifest.
+Workflow status is now actionable and refreshable: `workflowNextAction` drives the Overview “下一步处理” panel; Finance can hand a `PENDING` payment to Supplier; Overview can refresh saved request/order/shipment/payment IDs from API details; and each role detail refresh writes current status/version back into workflow. Continue M7 by adding a unified guided handoff through the role pages, including a clear route back to Overview after each status change, then validate a full Flow -> Purchaser -> Supplier -> Store -> Finance -> Supplier journey in the interactive browser evidence.
 
 ## Latest High-Signal Work
 

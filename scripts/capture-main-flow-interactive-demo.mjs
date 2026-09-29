@@ -607,6 +607,16 @@ async function runProductAppFinancePendingAction(cdp, viewport, fileName) {
       location.hash = '#/overview';
       await waitFor(() => document.querySelector('#app-view')?.textContent.includes('供应商确认收款'), 'product app supplier next action');
       financeState.overviewRecommendsSupplier = document.querySelector('#app-view')?.textContent.includes('供应商确认收款') || false;
+      document.querySelector('#app-refresh-workflow').click();
+      await waitFor(() => document.querySelector('#app-notice')?.textContent.includes('API 刷新') || document.querySelector('#app-notice')?.textContent.includes('已更新可读取项'), 'product app workflow API refresh');
+      const refreshedWorkflow = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}');
+      financeState.overviewRefreshNotice = document.querySelector('#app-notice')?.textContent.trim() || '';
+      financeState.refreshedPurchaseRequestStatus = refreshedWorkflow.purchaseRequestStatus || '';
+      financeState.refreshedSupplierOrderStatus = refreshedWorkflow.supplierOrderStatus || '';
+      financeState.refreshedShipmentStatus = refreshedWorkflow.shipmentStatus || '';
+      financeState.refreshedReceiptStatus = refreshedWorkflow.receiptStatus || '';
+      financeState.refreshedPaymentVersion = refreshedWorkflow.paymentVersion ?? null;
+      financeState.refreshedReceiptRevision = refreshedWorkflow.receiptRevision ?? null;
       return financeState;
     })()
   `);
@@ -768,6 +778,11 @@ async function main() {
         );
         await run('npm', ['run', 'main-flow:seed-demo']);
         await run('npm', ['run', 'main-flow:check-demo']);
+        const productAppWorkflowRefreshFlowAction = await runProductAppFlow(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'product-app-workflow-refresh-flow-action.png',
+        );
         const productAppFinancePendingAction = await runProductAppFinancePendingAction(
           cdp,
           { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
@@ -803,6 +818,7 @@ async function main() {
           productAppFinanceRejectActionScreenshot: productAppFinanceRejectAction.file,
           productAppFinanceActionScreenshot: productAppFinanceAction.file,
           productAppFinancePendingActionScreenshot: productAppFinancePendingAction.file,
+          productAppWorkflowRefreshFlowActionScreenshot: productAppWorkflowRefreshFlowAction.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
@@ -825,6 +841,7 @@ async function main() {
           productAppFinanceRejectAction: productAppFinanceRejectAction.state,
           productAppFinanceAction: productAppFinanceAction.state,
           productAppFinancePendingAction: productAppFinancePendingAction.state,
+          productAppWorkflowRefreshFlowAction: productAppWorkflowRefreshFlowAction.state,
           productAppExceptionAction: {
             status: productAppFlowAction.state.exceptionStatus,
             resultRows: productAppFlowAction.state.exceptionRows,
@@ -834,7 +851,7 @@ async function main() {
             hasReplenishReturn: productAppFlowAction.state.hasReplenishReturn,
             horizontalOverflow: productAppFlowAction.state.horizontalOverflow,
           },
-          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFinance, productAppFlowAction, productAppFinanceRejectAction, productAppFinanceAction, productAppFinancePendingAction },
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFinance, productAppFlowAction, productAppFinanceRejectAction, productAppFinanceAction, productAppFinancePendingAction, productAppWorkflowRefreshFlowAction },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -872,6 +889,7 @@ async function main() {
         console.log(`  Product app finance reject action: ${productAppFinanceRejectAction.state.status}, rows: ${productAppFinanceRejectAction.state.resultRows}`);
         console.log(`  Product app finance action: ${productAppFinanceAction.state.status}, rows: ${productAppFinanceAction.state.resultRows}`);
         console.log(`  Product app pending handoff: ${productAppFinancePendingAction.state.status}, next: ${productAppFinancePendingAction.state.workflowNextAction}`);
+        console.log(`  Product app API refresh: ${productAppFinancePendingAction.state.overviewRefreshNotice}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

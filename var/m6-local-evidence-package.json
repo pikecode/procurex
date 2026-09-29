@@ -1,14 +1,29 @@
 {
-  "generatedAt": "2026-09-29T15:01:16.243Z",
+  "generatedAt": "2026-09-29T15:12:45.401Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "290c8df215d9b8c76f993aa5c5f7b0266ccb49ae",
+    "commit": "0073eabfb9bdb7bb12e41ae19cd85faf3b60b819",
     "remote": "git@github.com-pikecode:pikecode/procurex.git",
-    "dirty": false,
-    "dirtyStatus": []
+    "dirty": true,
+    "dirtyStatus": [
+      "M apps/web/m6-local-evidence-package.json",
+      " M apps/web/product-app/pages/finance.js",
+      " M apps/web/product-app/pages/overview.js",
+      " M apps/web/product-app/pages/purchaser.js",
+      " M apps/web/product-app/pages/store.js",
+      " M apps/web/product-app/pages/supplier.js",
+      " M apps/web/product-app/workflow.js",
+      " M docs/continuation.md",
+      " M docs/development-log.md",
+      " M docs/progress.md",
+      " M scripts/capture-main-flow-interactive-demo.mjs",
+      " M scripts/check-web-workbenches.mjs",
+      " M scripts/package-m6-local-evidence.mjs",
+      " M var/m6-local-evidence-package.json"
+    ]
   },
   "commands": [
     "npm run m6:performance",
@@ -159,14 +174,14 @@
     {
       "path": "apps/web/product-app/workflow.js",
       "exists": true,
-      "sizeBytes": 1441,
-      "sha256": "b95867c8dd40771e0339fa2ce7d3402eba782b090bca804bf0d5953169b722bf"
+      "sizeBytes": 2255,
+      "sha256": "47374d76f7f6a12537762c312b8423ee693977598a50dd441bd6facba96e9fea"
     },
     {
       "path": "apps/web/product-app/pages/overview.js",
       "exists": true,
-      "sizeBytes": 6683,
-      "sha256": "26f2115df46e5be45b03aabd65be93d16a04a2ab711ac649d4d45ae3d1ef369b"
+      "sizeBytes": 10199,
+      "sha256": "21dd1950d97b1c3a7ea479d8cf8c1a0fb5b606ed709ea4111963dce86b42eac0"
     },
     {
       "path": "apps/web/product-app/pages/flow.js",
@@ -177,26 +192,26 @@
     {
       "path": "apps/web/product-app/pages/store.js",
       "exists": true,
-      "sizeBytes": 9503,
-      "sha256": "48529a404d1f08d7521c61c99a9967ef866dce956596db6e40b6718f5268be2a"
+      "sizeBytes": 9817,
+      "sha256": "68de9a55fd598925497b7df41062d26361172046b39c8be31112111d54a76d8d"
     },
     {
       "path": "apps/web/product-app/pages/purchaser.js",
       "exists": true,
-      "sizeBytes": 9256,
-      "sha256": "25c05c4689d488b3b170af1179367b89da46aed70bb3ee63aed817e1b1858f0a"
+      "sizeBytes": 9457,
+      "sha256": "13bfba8908465812e912fd06f751b5337e9763996777dea9bf74b426921dc138"
     },
     {
       "path": "apps/web/product-app/pages/supplier.js",
       "exists": true,
-      "sizeBytes": 12057,
-      "sha256": "8cee0321e0f694b6f46ed435c2a251ef5fa18b17a69547e8ae1b544ac883ec00"
+      "sizeBytes": 12381,
+      "sha256": "4a5d1496175414a32cbda472e8c20ca41d30c7dce16c842ab3424cc740c138e3"
     },
     {
       "path": "apps/web/product-app/pages/finance.js",
       "exists": true,
-      "sizeBytes": 20210,
-      "sha256": "15146417353ccdef6e8343e0fe6a3d29926fe83351790bf4a174c351bbf68d3b"
+      "sizeBytes": 20356,
+      "sha256": "0e115389dd6d01a795b39e4b8b2102674bececedda92fcbc8684c089d3e79d43"
     },
     {
       "path": "apps/web/store-workbench.html",
@@ -249,116 +264,122 @@
     {
       "path": "var/main-flow-demo-evidence/interactive-manifest.json",
       "exists": true,
-      "sizeBytes": 28943,
-      "sha256": "f0f6d4486225c6df77024e94644c9e8e48891c268dac5a3a65e1c214f56d74ba"
+      "sizeBytes": 31213,
+      "sha256": "3623b956497f23d2361a5ba667e470a6b3420fcd201cd51af811c6754dde799e"
     },
     {
       "path": "var/main-flow-demo-evidence/store-workbench.png",
       "exists": true,
-      "sizeBytes": 238077,
-      "sha256": "c9d8fce9c58f41be452cf9c9422079a7a10cb709b28c20f5ba89dd12e2ee1f6d"
+      "sizeBytes": 233533,
+      "sha256": "9d935a989bcae5652284fea82259d6cd392999727cfe5cc16df51793ef5233aa"
     },
     {
       "path": "var/main-flow-demo-evidence/store-workbench-mobile.png",
       "exists": true,
-      "sizeBytes": 503185,
-      "sha256": "59561b16393b1aca8e2ca645fb137b9d25e6b009a1c2e54d3449ddef64c81264"
+      "sizeBytes": 492889,
+      "sha256": "ff3e1786200d62069613c32bb72d6a97c51a0dfcf1f3abe64ecf8998de2c992d"
     },
     {
       "path": "var/main-flow-demo-evidence/purchaser-workbench.png",
       "exists": true,
-      "sizeBytes": 224740,
-      "sha256": "fef7b6e07e103a76d90cbc763a8da967608d4fc5c49b69bc36224398c0d750ca"
+      "sizeBytes": 222077,
+      "sha256": "83f3faef8cd22037beccd5cb758e360a2bf9c1de079b3946afac2dd38714bade"
     },
     {
       "path": "var/main-flow-demo-evidence/purchaser-workbench-mobile.png",
       "exists": true,
-      "sizeBytes": 455314,
-      "sha256": "5b611064ad33d82d68d5f780d8a45dbda5d99237a62cbdb91b3b15fd25d6220b"
+      "sizeBytes": 447751,
+      "sha256": "1352f715ac6dcd5d218bdb2e1387265e8c79a93571a68fc58bd408836bc34d8e"
     },
     {
       "path": "var/main-flow-demo-evidence/supplier-workbench.png",
       "exists": true,
-      "sizeBytes": 290790,
-      "sha256": "dbc2dfb13014a416053d97515092c29e11b253edbc8679b5bb5d129370525100"
+      "sizeBytes": 287245,
+      "sha256": "b3b5e1b1595a1b69a6f2b4ed3e05c1fb3b9348eee1e8e5908730b0af8561c7e4"
     },
     {
       "path": "var/main-flow-demo-evidence/supplier-workbench-mobile.png",
       "exists": true,
-      "sizeBytes": 611823,
-      "sha256": "c4f295eadc40ca90d5b6d3f4d333f80288812f85f45db13c9b60b6e6319134db"
+      "sizeBytes": 604322,
+      "sha256": "73ff63a3e46c7a2637017406f21808c4469d6cf09059ea8a2d6e2f3862ee4a80"
     },
     {
       "path": "var/main-flow-demo-evidence/product-app.png",
       "exists": true,
-      "sizeBytes": 269767,
-      "sha256": "958c59d9b18169657e8fe849155447b473dfd751c23c2d70c4e98e341008fcf2"
+      "sizeBytes": 277297,
+      "sha256": "980ae8df8e197ec6bacff6b27b78a322a2a2ffea02b5d947d28344c866687d29"
     },
     {
       "path": "var/main-flow-demo-evidence/product-app-mobile.png",
       "exists": true,
-      "sizeBytes": 581714,
-      "sha256": "0750119c88ae5b5c31e5124d49bf6ffcd4cf86930f5a1b376e5653516c007b82"
+      "sizeBytes": 599788,
+      "sha256": "51e1063a3c83cfa9b87130138c208fbbec223ec0c52d4e7f961bcc304435e9f2"
     },
     {
       "path": "var/main-flow-demo-evidence/product-app-store.png",
       "exists": true,
-      "sizeBytes": 199341,
-      "sha256": "80faf833017c262b9164a6c5defc4ee9fadb9ba3ef17d9ef900f4a0149f2fb12"
+      "sizeBytes": 195452,
+      "sha256": "222014c7754c40aa59cc75a1d909c5e6106382b9733a51d4f91d4da6a461a68e"
     },
     {
       "path": "var/main-flow-demo-evidence/product-app-purchaser.png",
       "exists": true,
-      "sizeBytes": 180616,
-      "sha256": "b462ff188da8994ba17a10961f5723a9be26d8fddf2d7c3650451fc6325442a1"
+      "sizeBytes": 179710,
+      "sha256": "a017676a7e3b147c9a4fff48be69734b7ee98dff2214c1b45642a8b7188a34a4"
     },
     {
       "path": "var/main-flow-demo-evidence/product-app-supplier.png",
       "exists": true,
-      "sizeBytes": 213800,
-      "sha256": "172fefd1544b049157220af457b1b1313e9e66a424749b8aeb3cceeda4e3d52c"
+      "sizeBytes": 213707,
+      "sha256": "b45986f24b7f0c4a17bcc8d06c48a2599e768b013830a0f66b49cbefc3254460"
     },
     {
       "path": "var/main-flow-demo-evidence/product-app-finance.png",
       "exists": true,
-      "sizeBytes": 211926,
-      "sha256": "7ba25fecd2800b2d8447badf82cc2694d4a68ddfe96057f16e55d5ef98abd0a6"
+      "sizeBytes": 212176,
+      "sha256": "066cfb80d7014057019074bad6f4bf4c1518d2fababf34a9bec88a687681645b"
     },
     {
       "path": "var/main-flow-demo-evidence/product-app-flow-action.png",
       "exists": true,
-      "sizeBytes": 195188,
-      "sha256": "e0693e41fd0792527360cb46089737bb5830cccc97affec0b609091647f4bffc"
+      "sizeBytes": 193996,
+      "sha256": "06930d0e5e4e1d4381ca1353962fb6359075e144abc6344872062bdadae60c12"
     },
     {
       "path": "var/main-flow-demo-evidence/product-app-finance-reject-action.png",
       "exists": true,
-      "sizeBytes": 231520,
-      "sha256": "c8648589f4dc08b2872da61ea0db738a00c86988476e6603426a7ed8f8315a9e"
+      "sizeBytes": 231486,
+      "sha256": "a98b6eae1f713d203b0a963bac714cca0edf0b0b47d6787601446d90042a1372"
     },
     {
       "path": "var/main-flow-demo-evidence/product-app-finance-action.png",
       "exists": true,
-      "sizeBytes": 235613,
-      "sha256": "df4f4fc8bf83f100be2a28206748d6c342fceb774307448f6231f19b74f0406c"
+      "sizeBytes": 236087,
+      "sha256": "b43c6bc99ef52e846ddc9460ce6e03be6601ca39a8579086a3d8271d923fc536"
     },
     {
       "path": "var/main-flow-demo-evidence/product-app-finance-pending-action.png",
       "exists": true,
-      "sizeBytes": 282782,
-      "sha256": "583652a10ea5565d08cd135d9384cb3edd39a17ffa91d963c6062a41a3f18d1b"
+      "sizeBytes": 296056,
+      "sha256": "040465a84b92a909b91f1991d79ddb83f4e065f33b5bf8bbcb02793eaa8aa155"
+    },
+    {
+      "path": "var/main-flow-demo-evidence/product-app-workflow-refresh-flow-action.png",
+      "exists": true,
+      "sizeBytes": 197297,
+      "sha256": "58d1856b13c97c534e0e664e018e2c5695cd7a5fe9bdf7b7a2db82d53cb97582"
     },
     {
       "path": "var/main-flow-demo-evidence/m7-business-flow.png",
       "exists": true,
-      "sizeBytes": 216971,
-      "sha256": "c8caf8671d3d749bf9caf3a2faba7d93ecfce2e316d80368c560bfd9cd548644"
+      "sizeBytes": 216888,
+      "sha256": "61c90af0d8e30fcbf33020d21b64a9ecc13748328d709471582934496584b63e"
     },
     {
       "path": "var/main-flow-demo-evidence/m7-business-flow-mobile.png",
       "exists": true,
-      "sizeBytes": 492120,
-      "sha256": "1026046346edfa1c89be8b65cabae3b11a88a4597bf19ad5059692a841bfddb6"
+      "sizeBytes": 492089,
+      "sha256": "2175e613417fdd103fec5d3de21985f1c24aed7a9857cc6cd2bae9b2f1ace3e8"
     },
     {
       "path": "docs/m6-production-readiness.md",

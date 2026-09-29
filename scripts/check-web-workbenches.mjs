@@ -207,8 +207,14 @@ assertIncludes(productAppState, 'main-flow-demo-seed.json', 'product app seed st
 assertIncludes(productAppState, 'm6-readiness.json', 'product app readiness state loader');
 assertIncludes(productAppWorkflow, 'procurex-product-app-workflow', 'product app workflow storage key');
 assertIncludes(productAppWorkflow, 'saveWorkflowContext', 'product app workflow save helper');
+assertIncludes(productAppWorkflow, 'refreshWorkflowContext', 'product app workflow API refresh helper');
 assertIncludes(productAppWorkflow, 'workflowNextAction', 'product app workflow next action helper');
 assertIncludes(productOverviewPage, '流程交接', 'product app overview workflow handoff');
+assertIncludes(productOverviewPage, '刷新交接状态', 'product app overview workflow refresh action');
+assertIncludes(productOverviewPage, '/purchase-requests/${workflow.purchaseRequestId}', 'product app overview refresh purchase request');
+assertIncludes(productOverviewPage, '/supplier-orders/${workflow.supplierOrderId}', 'product app overview refresh supplier order');
+assertIncludes(productOverviewPage, '/shipments/${workflow.shipmentId}', 'product app overview refresh shipment');
+assertIncludes(productOverviewPage, '/payment-records/${workflow.paymentId}', 'product app overview refresh payment');
 assertIncludes(productOverviewPage, '下一步处理', 'product app overview workflow next action');
 assertIncludes(productOverviewPage, '付款状态', 'product app overview payment status');
 assertIncludes(productOverviewPage, '组件化迁移状态', 'product app migration status');
@@ -236,10 +242,14 @@ assertIncludes(productStorePage, '/purchase-requests/preview', 'product app stor
 assertIncludes(productStorePage, '/purchase-requests', 'product app store order endpoint');
 assertIncludes(productStorePage, '/shipments/${shipmentId}', 'product app store shipment detail endpoint');
 assertIncludes(productStorePage, 'workflow?.shipmentId', 'product app store workflow shipment prefill');
+assertIncludes(productStorePage, 'receiptStatus: receiptRevision > 0 ?', 'product app store refresh receipt status handoff');
+assertIncludes(productStorePage, '刷新发货单', 'product app store route refresh action');
 assertIncludes(productStorePage, '/shipments/${shipment.id}/receipts', 'product app store receipt endpoint');
 assertIncludes(productStorePage, '完整收货', 'product app store receipt action');
 assertIncludes(productPurchaserPage, '/purchase-requests/${requestId}', 'product app purchaser request detail endpoint');
 assertIncludes(productPurchaserPage, 'workflow?.purchaseRequestId', 'product app purchaser workflow request prefill');
+assertIncludes(productPurchaserPage, 'purchaseRequestStatus: detail.status', 'product app purchaser refresh status handoff');
+assertIncludes(productPurchaserPage, '刷新采购申请', 'product app purchaser route refresh action');
 assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/confirm', 'product app purchaser confirm endpoint');
 assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/reallocate', 'product app purchaser reallocate endpoint');
 assertIncludes(productPurchaserPage, 'app-request-items', 'product app purchaser request item table');
@@ -255,12 +265,17 @@ assertIncludes(productSupplierPage, '/payment-records/${payment.id}/confirm', 'p
 assertIncludes(productSupplierPage, '/payment-records/${payment.id}/reject', 'product app supplier payment reject endpoint');
 assertIncludes(productSupplierPage, '确认收款', 'product app supplier payment confirm action');
 assertIncludes(productSupplierPage, 'paymentStatus', 'product app supplier workflow payment status save');
+assertIncludes(productSupplierPage, 'supplierOrderStatus: order.status', 'product app supplier order refresh status handoff');
+assertIncludes(productSupplierPage, '刷新供应商单', 'product app supplier route refresh action');
+assertIncludes(productSupplierPage, '刷新付款', 'product app supplier payment refresh action');
 assertIncludes(productFinancePage, '/supplier-statements', 'product app finance supplier statements endpoint');
 assertIncludes(productFinancePage, '/supplier-statements/${statementId}', 'product app finance supplier statement detail endpoint');
 assertIncludes(productFinancePage, '/store-statements', 'product app finance store statements endpoint');
 assertIncludes(productFinancePage, '/payment-records?direction=COMPANY_TO_SUPPLIER', 'product app finance payment list endpoint');
 assertIncludes(productFinancePage, 'workflow?.paymentId', 'product app finance workflow payment prefill');
 assertIncludes(productFinancePage, 'saveWorkflowContext', 'product app finance workflow payment save');
+assertIncludes(productFinancePage, 'paymentStatus: payment.status', 'product app finance payment refresh status handoff');
+assertIncludes(productFinancePage, '刷新付款', 'product app finance route refresh action');
 assertIncludes(productFinancePage, '/payment-records/preview', 'product app finance payment preview endpoint');
 assertIncludes(productFinancePage, '/files/upload-sessions', 'product app finance payment evidence upload endpoint');
 assertIncludes(productFinancePage, "request('/payment-records'", 'product app finance payment create endpoint');
@@ -277,6 +292,8 @@ assertIncludes(mainFlowInteractiveCapture, 'product-app-finance-reject-action.pn
 assertIncludes(mainFlowInteractiveCapture, 'productAppFinanceRejectAction', 'product app finance rejection manifest state');
 assertIncludes(mainFlowInteractiveCapture, 'runProductAppFinancePendingAction', 'product app pending payment handoff browser evidence');
 assertIncludes(mainFlowInteractiveCapture, 'overviewRecommendsSupplier', 'product app pending payment next action evidence');
+assertIncludes(mainFlowInteractiveCapture, 'overviewRefreshNotice', 'product app workflow API refresh evidence');
+assertIncludes(mainFlowInteractiveCapture, 'productAppWorkflowRefreshFlowAction', 'product app refresh evidence uses current workflow IDs');
 assertIncludes(appCss, '.app-route-grid', 'product app route grid styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');

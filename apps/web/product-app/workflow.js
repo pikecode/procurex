@@ -18,6 +18,25 @@ export function clearWorkflowContext() {
   sessionStorage.removeItem(workflowKey);
 }
 
+export async function refreshWorkflowContext(refreshers) {
+  const current = loadWorkflowContext();
+  if (!current) throw new Error('没有可刷新的流程交接');
+  const results = await Promise.all(Object.entries(refreshers).map(async ([name, refresh]) => {
+    try {
+      return { name, updates: await refresh(current) };
+    } catch (error) {
+      return { name, error: error.message };
+    }
+  }));
+  const updates = Object.assign({}, ...results.filter((item) => item.updates).map((item) => item.updates));
+  if (Object.keys(updates).length) saveWorkflowContext({ ...updates, refreshedAt: new Date().toISOString() });
+  return {
+    workflow: loadWorkflowContext(),
+    refreshed: results.filter((item) => item.updates).map((item) => item.name),
+    errors: results.filter((item) => item.error),
+  };
+}
+
 export function workflowNextAction(workflow) {
   if (!workflow?.purchaseRequestId) return { title: '先执行业务流转', detail: '运行主流程后生成可交接的业务上下文。', href: '#/flow' };
   if (!workflow.shipmentId) return { title: '供应商继续发货', detail: workflow.supplierOrderId || '等待供应商执行单', href: '#/supplier' };

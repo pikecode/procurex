@@ -1,7 +1,8 @@
 import { state } from '../state.js';
-import { metric, esc } from '../ui.js';
+import { metric, esc, setNotice } from '../ui.js';
 import { setHeader } from '../shell.js';
-import { loadWorkflowContext, workflowNextAction } from '../workflow.js';
+import { login, request } from '../api.js';
+import { loadWorkflowContext, refreshWorkflowContext, workflowNextAction } from '../workflow.js';
 
 export async function render() {
   const seed = state.seed;
@@ -40,10 +41,11 @@ export async function render() {
         </div>
       </section>
       <section class="data-card">
-        <div class="data-head"><div><h3>流程交接</h3><p>最近一次正式 App 主流程上下文。</p></div><span class="tag">${esc(workflow?.paymentStatus || workflow?.status || '等待流程')}</span></div>
+        <div class="data-head"><div><h3>流程交接</h3><p>最近一次正式 App 主流程上下文。</p></div><div class="form-actions"><span class="tag">${esc(workflow?.paymentStatus || workflow?.status || '等待流程')}</span><button id="app-refresh-workflow" class="secondary" ${workflow ? '' : 'disabled'}>刷新交接状态</button></div></div>
         <div class="overview-next-list">
-          ${nextItem('采购申请', workflow?.purchaseRequestNo || workflow?.purchaseRequestId || '运行主流程后生成', '#/purchaser')}
-          ${nextItem('收货状态', workflow?.receiptNo || workflow?.receiptId || '等待收货', '#/store')}
+          ${nextItem('采购申请', `${workflow?.purchaseRequestStatus || '未读取'} · ${workflow?.purchaseRequestNo || workflow?.purchaseRequestId || '运行主流程后生成'}`, '#/purchaser')}
+          ${nextItem('供应商单', `${workflow?.supplierOrderStatus || '未读取'} · ${workflow?.supplierOrderId || '等待采购确认'}`, '#/supplier')}
+          ${nextItem('收货状态', `${workflow?.receiptStatus || workflow?.shipmentStatus || '未读取'} · ${workflow?.receiptNo || workflow?.receiptId || workflow?.shipmentNo || workflow?.shipmentId || '等待收货'}`, '#/store')}
           ${nextItem('付款状态', workflow?.paymentStatus ? `${workflow.paymentStatus} · ${workflow.paymentNo || workflow.paymentId || ''}` : '等待财务登记', '#/finance')}
         </div>
       </section>
@@ -77,6 +79,58 @@ export async function render() {
         ${statusCard('上线缺口', readinessCounts.blocked ?? '—', '生产环境、微信真机、客户签字')}
       </div>
     </section>`;
+  bindWorkflowRefresh();
+}
+
+function bindWorkflowRefresh() {
+  document.getElementById('app-refresh-workflow')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = '刷新中';
+    try {
+      const result = await refreshWorkflowContext({
+        purchaseRequest: async (workflow) => {
+          if (!workflow.purchaseRequestId) return null;
+          const token = state.tokens.purchaser || await login(state.seed.username, state.seed.password, 'product-app-overview-refresh-purchaser');
+          state.tokens.purchaser = token;
+          const detail = await request(`/purchase-requests/${workflow.purchaseRequestId}`, {}, token);
+          return { purchaseRequestStatus: detail.status, purchaseRequestVersion: detail.version };
+        },
+        supplierOrder: async (workflow) => {
+          if (!workflow.supplierOrderId) return null;
+          const token = state.tokens.supplier || await login(state.seed.supplierUsername, state.seed.password, 'product-app-overview-refresh-supplier');
+          state.tokens.supplier = token;
+          const detail = await request(`/supplier-orders/${workflow.supplierOrderId}`, {}, token);
+          return { supplierOrderStatus: detail.status, supplierOrderVersion: detail.version, fulfillmentStatus: detail.fulfillmentStatus };
+        },
+        shipment: async (workflow) => {
+          if (!workflow.shipmentId) return null;
+          const token = state.tokens.store || await login(state.seed.storeUsername, state.seed.password, 'product-app-overview-refresh-store');
+          state.tokens.store = token;
+          const detail = await request(`/shipments/${workflow.shipmentId}`, {}, token);
+          return {
+            shipmentStatus: detail.status || 'SHIPPED',
+            receiptRevision: detail.currentReceiptRevision ?? detail.receiptRevision ?? 0,
+            receiptStatus: (detail.currentReceiptRevision ?? detail.receiptRevision ?? 0) > 0 ? 'COMPLETED' : 'PENDING',
+          };
+        },
+        payment: async (workflow) => {
+          if (!workflow.paymentId) return null;
+          const token = state.tokens.supplier || await login(state.seed.supplierUsername, state.seed.password, 'product-app-overview-refresh-payment');
+          state.tokens.supplier = token;
+          const detail = await request(`/payment-records/${workflow.paymentId}`, {}, token);
+          return { paymentStatus: detail.status, paymentNo: detail.paymentNo, paymentVersion: detail.version };
+        },
+      });
+      const errors = result.errors.map((item) => `${item.name}: ${item.error}`).join('；');
+      await render();
+      setNotice(errors ? `已更新可读取项；未完成：${errors}` : `已从 API 刷新 ${result.refreshed.length} 项流程状态。`);
+    } catch (error) {
+      setNotice(error.message);
+      button.disabled = false;
+      button.textContent = '刷新交接状态';
+    }
+  });
 }
 
 function routeCard(title, detail, href, badge) {

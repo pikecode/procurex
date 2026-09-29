@@ -46,7 +46,7 @@ export async function render() {
         <label>驳回原因<input id="app-finance-payment-reason" value="产品应用驳回付款"></label>
         <div class="form-actions">
           <button id="app-load-statement" class="secondary">读取账单</button>
-          <button id="app-load-payment" class="secondary">读取付款</button>
+          <button id="app-load-payment" class="secondary">刷新付款</button>
           <button id="app-create-pending-payment" class="primary">登记付款待确认</button>
           <button id="app-create-confirm-payment" class="primary">登记并确认供应商付款</button>
           <button id="app-create-reject-payment" class="secondary">登记并驳回供应商付款</button>
@@ -120,6 +120,7 @@ function bindFinance({ financeToken, supplierToken, supplierStatements }) {
     const paymentId = document.getElementById('app-finance-payment-id').value.trim();
     if (!paymentId) throw new Error('请先选择付款记录');
     payment = await request(`/payment-records/${paymentId}`, {}, supplierToken);
+    saveWorkflowContext({ paymentId: payment.id, paymentNo: payment.paymentNo, paymentStatus: payment.status, paymentVersion: payment.version });
     document.getElementById('app-finance-label').textContent = payment.status || '已读取';
     renderPaymentDetail(payment);
     show(payment.status || '已读取', {
