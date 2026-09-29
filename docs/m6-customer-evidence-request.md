@@ -9,7 +9,7 @@ This request lists the external materials still needed before M6 can be reviewed
 | Item | Value |
 |---|---|
 | Local package status | LOCAL_READY |
-| Packaged commit | fb5a4b7f51542a2fcbbcc0115be40105aea9464a |
+| Packaged commit | ce3fbdf06f8987a1c8bd6e68ab1eccf03db5fb7d |
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | Evidence handoff | `docs/m6-local-evidence-handoff.md` |
 | Visible readiness page | `apps/web/m6-readiness.html` |
