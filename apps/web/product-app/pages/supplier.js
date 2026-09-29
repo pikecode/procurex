@@ -14,10 +14,13 @@ export async function render() {
     request('/supplier-statements', {}, token),
     request('/payment-records?direction=COMPANY_TO_SUPPLIER', {}, token),
   ]);
-  const discrepancies = [];
+  const discrepancyMap = new Map();
   for (const item of messages.notifications || []) {
-    for (const id of item.payload?.discrepancyIds || []) discrepancies.push({ id, title: item.title, receiptId: item.payload.receiptId });
+    for (const id of item.payload?.discrepancyIds || []) {
+      if (!discrepancyMap.has(id)) discrepancyMap.set(id, { id, title: item.title, receiptId: item.payload.receiptId, createdAt: item.createdAt || '' });
+    }
   }
+  const discrepancies = [...discrepancyMap.values()].sort((left, right) => Date.parse(right.createdAt || 0) - Date.parse(left.createdAt || 0));
   const workflow = loadWorkflowContext();
   setHeader({ title: '供应商工作台', subtitle: '供应商执行单、发货、差异和收款。', routeLabel: '供应商', status: 'READY' });
   document.getElementById('app-view').innerHTML = `

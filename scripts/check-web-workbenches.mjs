@@ -309,6 +309,8 @@ assertIncludes(mainFlowInteractiveCapture, 'product-app-finance-reject-action.pn
 assertIncludes(mainFlowInteractiveCapture, 'productAppFinanceRejectAction', 'product app finance rejection manifest state');
 assertIncludes(mainFlowInteractiveCapture, 'runProductAppFinancePendingAction', 'product app pending payment handoff browser evidence');
 assertIncludes(mainFlowInteractiveCapture, 'overviewRecommendsSupplier', 'product app pending payment next action evidence');
+assertIncludes(mainFlowInteractiveCapture, 'runProductAppSupplierDiscrepancyAction', 'product app supplier discrepancy browser action');
+assertIncludes(mainFlowInteractiveCapture, 'productAppSupplierDiscrepancyAction', 'product app supplier discrepancy evidence manifest');
 assertIncludes(mainFlowInteractiveCapture, 'overviewRefreshNotice', 'product app workflow API refresh evidence');
 assertIncludes(mainFlowInteractiveCapture, 'productAppWorkflowRefreshFlowAction', 'product app refresh evidence uses current workflow IDs');
 assertIncludes(mainFlowInteractiveCapture, "journey.push('PURCHASER')", 'product app guided purchaser handoff evidence');

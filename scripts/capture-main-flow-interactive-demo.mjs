@@ -537,6 +537,109 @@ async function runProductAppFlow(cdp, viewport, fileName) {
   return { file, state, viewport };
 }
 
+async function runProductAppSupplierDiscrepancyAction(cdp, viewport, fileName) {
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/supplier`);
+  const state = await evaluate(cdp, `
+    (async () => {
+      const waitFor = async (predicate, label) => {
+        for (let i = 0; i < 200; i += 1) {
+          if (await predicate()) return;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        throw new Error(label + ' did not become ready.');
+      };
+      await waitFor(() => document.querySelector('#app-status')?.textContent.trim() === 'READY', 'product app supplier discrepancy route');
+      const seed = await (await fetch('/main-flow-demo-seed.json?ts=' + Date.now())).json();
+      const apiBase = location.protocol + '//' + location.hostname + ':3100/api/v1';
+      const call = async (path, token, options = {}) => {
+        const response = await fetch(apiBase + path, { ...options, headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: 'Bearer ' + token } : {}), ...options.headers } });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.message || 'API ' + path + ' failed: ' + response.status);
+        return body.data ?? body;
+      };
+      const auth = async (username, client) => (await call('/auth/login', null, { method: 'POST', body: JSON.stringify({ username, password: seed.password, client }) })).accessToken;
+      const [storeToken, purchaserToken, supplierToken] = await Promise.all([
+        auth(seed.storeUsername, 'product-app-discrepancy-store'),
+        auth(seed.username, 'product-app-discrepancy-purchaser'),
+        auth(seed.supplierUsername, 'product-app-discrepancy-supplier'),
+      ]);
+      const createRoleDiscrepancy = async (prefix) => {
+        const input = { storeId: seed.storeId, items: [{ productId: seed.productId, quantity: seed.quantity }] };
+        const created = await call('/purchase-requests', storeToken, { method: 'POST', headers: { 'idempotency-key': prefix + '-order-' + crypto.randomUUID() }, body: JSON.stringify(input) });
+        const requestDetail = await call('/purchase-requests/' + created.id, purchaserToken);
+        const confirmed = await call('/purchase-requests/' + created.id + '/confirm', purchaserToken, { method: 'POST', headers: { 'idempotency-key': prefix + '-confirm-' + crypto.randomUUID() }, body: JSON.stringify({ expectedVersion: requestDetail.version }) });
+        const orderId = confirmed.supplierOrderIds?.[0] || confirmed.supplierOrders?.[0]?.id || confirmed.orders?.[0]?.id;
+        if (!orderId) throw new Error('Supplier order was not created for role discrepancy evidence.');
+        const order = await call('/supplier-orders/' + orderId, supplierToken);
+        const shipInput = { expectedVersion: order.version, items: order.items.map((item) => ({ orderItemId: item.id, shipQuantity: (Number(item.quantity) - 2).toFixed(6), permanentlyReduceQuantity: '0' })), freight: '0.00', trackingNo: 'APP-ROLE-DISCREPANCY-' + Date.now() };
+        await call('/supplier-orders/' + orderId + '/shipment-preview', supplierToken, { method: 'POST', body: JSON.stringify(shipInput) });
+        const shipment = await call('/supplier-orders/' + orderId + '/shipments', supplierToken, { method: 'POST', headers: { 'idempotency-key': prefix + '-ship-' + crypto.randomUUID() }, body: JSON.stringify(shipInput) });
+        const afterShip = await call('/supplier-orders/' + orderId, supplierToken);
+        const receipt = await call('/shipments/' + shipment.id + '/receipts', storeToken, { method: 'POST', headers: { 'idempotency-key': prefix + '-receipt-' + crypto.randomUUID() }, body: JSON.stringify({ expectedOrderVersion: afterShip.version, expectedReceiptRevision: 0, items: shipment.items.map((item) => ({ shipmentItemId: item.id, receivedQuantity: (Number(item.quantity) - 2).toFixed(6) })) }) });
+        const notifications = await call('/notifications', supplierToken);
+        const message = (notifications.notifications || []).find((item) => item.payload?.receiptId === receipt.id);
+        const discrepancyId = message?.payload?.discrepancyIds?.[0];
+        if (!discrepancyId) throw new Error('Supplier discrepancy notification was not created.');
+        return { discrepancyId, workflow: { purchaseRequestId: created.id, purchaseRequestNo: created.requestNo, purchaseRequestStatus: confirmed.status, supplierOrderId: orderId, supplierOrderStatus: afterShip.status, shipmentId: shipment.id, shipmentNo: shipment.shipmentNo, shipmentStatus: shipment.status || 'SHIPPED', receiptId: receipt.id, receiptStatus: receipt.status, updatedAt: new Date().toISOString() } };
+      };
+      const replenishCase = await createRoleDiscrepancy('product-app-role-replenish');
+      const discrepancyId = replenishCase.discrepancyId;
+      sessionStorage.setItem('procurex-product-app-workflow', JSON.stringify(replenishCase.workflow));
+      location.hash = '#/overview';
+      await waitFor(() => document.querySelector('#app-route-label')?.textContent.trim() === '业务总览', 'overview before supplier refresh');
+      location.hash = '#/supplier';
+      await waitFor(() => document.querySelector('#app-route-label')?.textContent.trim() === '供应商' && document.querySelector('#app-status')?.textContent.trim() === 'READY' && document.querySelector('#app-resolve-discrepancy'), 'refreshed supplier discrepancy route');
+      await waitFor(() => [...document.querySelectorAll('[data-app-discrepancy]')].some((button) => button.dataset.appDiscrepancy === discrepancyId), 'supplier discrepancy notification row');
+      document.querySelector('[data-app-discrepancy="' + discrepancyId + '"]').click();
+      await waitFor(() => document.querySelector('#app-supplier-result')?.textContent.includes(discrepancyId), 'supplier discrepancy detail');
+      document.querySelector('#app-discrepancy-action').value = 'REPLENISH';
+      document.querySelector('#app-resolve-discrepancy').click();
+      await waitFor(() => document.querySelector('#app-supplier-label')?.textContent.includes('补发已发出') || document.querySelector('#app-notice')?.textContent.trim(), 'supplier replenishment shipment');
+      if (!document.querySelector('#app-supplier-label')?.textContent.includes('补发已发出')) throw new Error('Supplier role replenishment failed: ' + document.querySelector('#app-notice')?.textContent.trim());
+      const workflow = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}');
+      const supplierLabel = document.querySelector('#app-supplier-label')?.textContent.trim() || '';
+      location.hash = '#/overview';
+      await waitFor(() => document.querySelector('#app-view')?.textContent.includes('门店继续收货'), 'store receiving next action');
+      const roleActions = [{ action: 'REPLENISH', status: workflow.discrepancyStatus || '' }];
+      for (const action of ['ACCEPT', 'RETURN']) {
+        const nextCase = await createRoleDiscrepancy('product-app-role-' + action.toLowerCase());
+        location.hash = '#/overview';
+        await waitFor(() => document.querySelector('#app-route-label')?.textContent.trim() === '业务总览', 'overview before ' + action);
+        location.hash = '#/supplier';
+        await waitFor(() => document.querySelector('#app-route-label')?.textContent.trim() === '供应商' && document.querySelector('#app-status')?.textContent.trim() === 'READY' && document.querySelector('#app-resolve-discrepancy'), 'supplier route for ' + action);
+        await waitFor(() => [...document.querySelectorAll('[data-app-discrepancy]')].some((button) => button.dataset.appDiscrepancy === nextCase.discrepancyId), action + ' discrepancy notification');
+        document.querySelector('[data-app-discrepancy="' + nextCase.discrepancyId + '"]').click();
+        await waitFor(() => document.querySelector('#app-supplier-result')?.textContent.includes(nextCase.discrepancyId), action + ' discrepancy detail');
+        document.querySelector('#app-discrepancy-action').value = action;
+        document.querySelector('#app-resolve-discrepancy').click();
+        await waitFor(() => document.querySelector('#app-supplier-label')?.textContent.trim() === 'RESOLVED' || document.querySelector('#app-notice')?.textContent.trim(), action + ' resolution result');
+        if (document.querySelector('#app-supplier-label')?.textContent.trim() !== 'RESOLVED') throw new Error('Supplier role ' + action + ' failed: ' + document.querySelector('#app-notice')?.textContent.trim());
+        const actionWorkflow = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}');
+        roleActions.push({ action, status: actionWorkflow.discrepancyStatus || '', discrepancyId: actionWorkflow.discrepancyId || '' });
+      }
+      if (roleActions.map((item) => item.action).join(',') !== 'REPLENISH,ACCEPT,RETURN' || roleActions.some((item) => !item.status)) throw new Error('Supplier role discrepancy actions did not all reach a resolved state.');
+      sessionStorage.setItem('procurex-product-app-workflow', JSON.stringify(workflow));
+      location.hash = '#/overview';
+      await waitFor(() => document.querySelector('#app-view')?.textContent.includes('门店继续收货'), 'overview after discrepancy role actions');
+      return {
+        status: supplierLabel,
+        action: workflow.discrepancyAction || '',
+        discrepancyStatus: workflow.discrepancyStatus || '',
+        hasGapAllocation: Boolean(workflow.replenishmentGapId),
+        shipmentId: workflow.shipmentId || '',
+        nextAction: '门店继续收货',
+        roleActions,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      };
+    })()
+  `);
+  const file = resolve(outputDir, fileName);
+  await rm(file, { force: true });
+  await captureScreenshot(cdp, file);
+  return { file, state, viewport };
+}
+
 async function runProductAppFinanceAction(cdp, viewport, fileName) {
   await setViewport(cdp, viewport);
   await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/finance`);
@@ -821,6 +924,11 @@ async function main() {
         );
         await run('npm', ['run', 'main-flow:seed-demo']);
         await run('npm', ['run', 'main-flow:check-demo']);
+        const productAppSupplierDiscrepancyAction = await runProductAppSupplierDiscrepancyAction(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'product-app-supplier-discrepancy-action.png',
+        );
         const productAppWorkflowRefreshFlowAction = await runProductAppFlow(
           cdp,
           { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
@@ -862,6 +970,7 @@ async function main() {
           productAppFinanceActionScreenshot: productAppFinanceAction.file,
           productAppFinancePendingActionScreenshot: productAppFinancePendingAction.file,
           productAppWorkflowRefreshFlowActionScreenshot: productAppWorkflowRefreshFlowAction.file,
+          productAppSupplierDiscrepancyActionScreenshot: productAppSupplierDiscrepancyAction.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
@@ -885,6 +994,7 @@ async function main() {
           productAppFinanceAction: productAppFinanceAction.state,
           productAppFinancePendingAction: productAppFinancePendingAction.state,
           productAppWorkflowRefreshFlowAction: productAppWorkflowRefreshFlowAction.state,
+          productAppSupplierDiscrepancyAction: productAppSupplierDiscrepancyAction.state,
           productAppExceptionAction: {
             status: productAppFlowAction.state.exceptionStatus,
             resultRows: productAppFlowAction.state.exceptionRows,
@@ -894,7 +1004,7 @@ async function main() {
             hasReplenishReturn: productAppFlowAction.state.hasReplenishReturn,
             horizontalOverflow: productAppFlowAction.state.horizontalOverflow,
           },
-          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFinance, productAppFlowAction, productAppFinanceRejectAction, productAppFinanceAction, productAppFinancePendingAction, productAppWorkflowRefreshFlowAction },
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFinance, productAppFlowAction, productAppFinanceRejectAction, productAppFinanceAction, productAppFinancePendingAction, productAppWorkflowRefreshFlowAction, productAppSupplierDiscrepancyAction },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -932,6 +1042,7 @@ async function main() {
         console.log(`  Product app finance reject action: ${productAppFinanceRejectAction.state.status}, rows: ${productAppFinanceRejectAction.state.resultRows}`);
         console.log(`  Product app finance action: ${productAppFinanceAction.state.status}, rows: ${productAppFinanceAction.state.resultRows}`);
         console.log(`  Product app pending handoff: ${productAppFinancePendingAction.state.status}, next: ${productAppFinancePendingAction.state.workflowNextAction}`);
+        console.log(`  Product app supplier discrepancy: ${productAppSupplierDiscrepancyAction.state.action}/${productAppSupplierDiscrepancyAction.state.discrepancyStatus}, next: ${productAppSupplierDiscrepancyAction.state.nextAction}`);
         console.log(`  Product app API refresh: ${productAppFinancePendingAction.state.overviewRefreshNotice}`);
         console.log(`  Product app guided journey: ${productAppFinancePendingAction.state.guidedJourney.join(' -> ')} -> ${productAppFinancePendingAction.state.finalPaymentStatus}, overview: ${productAppFinancePendingAction.state.finalOverviewShowsCompleted}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);

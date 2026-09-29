@@ -1,5 +1,9 @@
 # 开发日志
 
+## 2026-09-30
+
+- M7 供应商差异角色路由端到端证据：交互浏览器脚本通过真实下单、部分发货、少收登记，再在 `app.html#/supplier` 页面逐一点击 ACCEPT/REPLENISH/RETURN；三条结果均通过，补发生成带 gap allocation 的发货单并在 Overview 推荐门店收货。差异待办现在按通知时间倒序并按差异 ID 去重，确保最新任务进入可见列表。证据写入 `var/main-flow-demo-evidence/interactive-manifest.json` 和 `product-app-supplier-discrepancy-action.png`；桌面无横向溢出。
+
 ## 2026-09-29
 
 - M7 供应商正式角色页差异闭环：`app.html#/supplier` 从单一“同意少收”升级为 ACCEPT/REPLENISH/RETURN 选择，并读取差异状态、数量和版本；补发时定位差异所属订单行，创建关联 `gapAllocations` 的补发发货单，清空旧收货/付款交接并推荐门店收货；其余处理结果也写回流程交接。`web:check` 加入差异动作、补发额度和状态回写防回退断言。验证：`npm run build`、`npm test`（47）、`npm run web:check` 和完整 `npm run main-flow:capture-interactive-demo` 通过。下一步补正式角色页动作的独立浏览器证据，再做 M7 需求复核。

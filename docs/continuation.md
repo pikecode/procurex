@@ -1,6 +1,6 @@
 # ProcureX Continuation Handoff
 
-Last updated: 2026-09-29
+Last updated: 2026-09-30
 
 Use this as the first document when continuing development in a new window.
 
@@ -36,7 +36,7 @@ The Finance formal route detail view is now tightened as well. `app.html#/financ
 
 The first guided day-to-day workflow connection is now in place. `app.html#/flow` saves the latest main-flow handoff to `sessionStorage` via `apps/web/product-app/workflow.js`; Overview displays that handoff, and Store/Purchaser/Supplier/Finance prefill the relevant IDs from it. Continue M7 by making the handoff more actionable after finance registration, for example by surfacing payment status back on Overview and adding route-level refresh actions, not by adding new standalone HTML pages.
 
-The guided formal App journey is browser-verified: Flow creates a current handoff, Overview refreshes all four linked resources, Purchaser/Supplier/Store/Finance open their role routes and refresh details, Finance registers a `PENDING` payment, Supplier confirms it, and the persistent breadcrumb returns the operator to Overview where the process is complete. Independent Store order/receipt, Purchaser confirmation/reallocation, and Supplier shipment/rejection actions advance or reset workflow IDs and status. The Supplier route now supports discrepancy ACCEPT/REPLENISH/RETURN; REPLENISH resolves the gap, creates a gap-allocated shipment against the matching supplier-order item, clears stale receipt/payment context, and hands off to Store receiving. `npm run build`, `npm test` (47), `npm run web:check`, and the full interactive evidence capture pass. Next add dedicated browser evidence for the role-route discrepancy action and next-role transitions, then perform the focused M7 requirements review and update completion status; M6 external launch blockers remain separate.
+The guided formal App journey is browser-verified: Flow creates a current handoff, Overview refreshes all four linked resources, Purchaser/Supplier/Store/Finance open their role routes and refresh details, Finance registers a `PENDING` payment, Supplier confirms it, and the persistent breadcrumb returns the operator to Overview where the process is complete. Independent Store order/receipt, Purchaser confirmation/reallocation, and Supplier shipment/rejection actions advance or reset workflow IDs and status. Dedicated browser evidence now creates separate short-receipt orders and executes Supplier ACCEPT/REPLENISH/RETURN through `app.html#/supplier`; all three resolve as expected, REPLENISH creates a gap-allocated shipment, and Overview recommends Store receiving. The discrepancy list deduplicates and sorts by newest notification first. `npm run build`, `npm test` (47), `npm run web:check`, and the full interactive evidence capture pass. Next add dedicated browser evidence for standalone Store/Purchaser mutations, then perform the focused M7 requirements review and update completion status; M6 external launch blockers remain separate.
 
 ## Latest High-Signal Work
 
