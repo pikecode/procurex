@@ -201,7 +201,11 @@ assertIncludes(productAppShell, "['supplier', '供应商']", 'product app suppli
 assertIncludes(productAppShell, "['finance', '财务']", 'product app finance route');
 assertIncludes(productAppShell, '/store-workbench.html', 'product app legacy store link');
 assertIncludes(productAppState, 'main-flow-demo-seed.json', 'product app seed state loader');
+assertIncludes(productAppState, 'm6-readiness.json', 'product app readiness state loader');
 assertIncludes(productOverviewPage, '组件化迁移状态', 'product app migration status');
+assertIncludes(productOverviewPage, '今日角色证据', 'product app role evidence overview');
+assertIncludes(productOverviewPage, '下一步推进', 'product app next-step overview');
+assertIncludes(productOverviewPage, '产品化与上线状态', 'product app launch status overview');
 assertIncludes(productOverviewPage, '#/flow', 'product app flow route card');
 assertIncludes(productOverviewPage, '#/finance', 'product app finance route card');
 assertIncludes(productFlowPage, '一键执行业务流转', 'product app flow run action');

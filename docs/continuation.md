@@ -28,6 +28,8 @@ Finance action evidence is now deterministic too. `app.html#/finance` has “登
 
 Finance rejection evidence is deterministic in the formal App as well. `app.html#/finance` has “登记并驳回供应商付款”, which creates a fresh supplier payment through the same preview/evidence-upload chain and rejects it with the Supplier account. `npm run main-flow:capture-interactive-demo` now expects `productAppFinanceRejectAction.status=REJECTED` and captures `var/main-flow-demo-evidence/product-app-finance-reject-action.png`. Continue M7 by improving the formal App's day-to-day operator UX around these already-real flows, not by adding more one-off HTML workbenches.
 
+The formal App overview has now been upgraded into the first day-to-day command center. `app.html#/overview` reads the main-flow run, role evidence, seed accounts, and `m6-readiness.json`, then shows main-flow status, local evidence, external blockers, role coverage, formal route entries, today’s role evidence, next implementation focus, and productization/launch status. The latest `npm run main-flow:capture-interactive-demo` records desktop and mobile overview as `PASSED` with no horizontal overflow while flow, exception, finance rejection, and finance confirmation actions still pass. Continue M7 by applying the same operator-focused polish to Store/Purchaser/Supplier/Finance route details.
+
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:

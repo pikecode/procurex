@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M7 正式产品 App 业务总览中控：改造 `apps/web/product-app/pages/overview.js`，把首页从“组件化迁移状态”升级为业务总览，集中展示主流程状态、本地证据/外部缺口、四角色覆盖、五个正式业务入口、今日角色证据、下一步推进和产品化上线状态。`product-app/state.js` 现在额外读取 `m6-readiness.json`，让首页能直接显示 M6 readiness 计数；`web:check` 新增 Overview 业务证据、下一步和上线状态保护。交互式截图脚本重新验证正式 App 桌面/移动总览均 `PASSED`，且主流程、异常、财务驳回、财务确认仍保持通过。
 - M7 正式产品 App 财务驳回分支：扩展 `apps/web/product-app/pages/finance.js`，新增“登记并驳回供应商付款”。该动作复用 PXFLOW 供应商账单、付款预览和 PDF 凭证上传链路，登记一笔 `COMPANY_TO_SUPPLIER` 待确认付款后由供应商账号提交 `/payment-records/{id}/reject`。交互式截图脚本新增 `product-app-finance-reject-action.png`，manifest 记录 `productAppFinanceRejectAction=REJECTED`；M6 本地证据包同步要求该拒绝分支通过。
 - M7 正式产品 App 财务动作闭环：扩展 `apps/web/product-app/pages/finance.js`，新增“登记并确认供应商付款”。该动作限定 PXFLOW 供应商账单，读取账单明细、调用 `/payment-records/preview`、生成合法 PDF 凭证并走 `/files/upload-sessions`、`/files/{id}/content`、`/files/{id}/complete`，随后登记 `COMPANY_TO_SUPPLIER` 付款并由供应商账号确认收款。交互式截图脚本新增 `product-app-finance-action.png`，manifest 记录 `productAppFinanceAction=CONFIRMED`。
 - M7 正式产品 App 财务路由：新增 `apps/web/product-app/pages/finance.js` 和 `#/finance` 路由，把供应商账单、门店账单、`COMPANY_TO_SUPPLIER` 付款记录、供应商确认收款/驳回付款入口迁入正式 `app.html`。`web:check` 保护 finance 模块、路由、账单/付款端点和 confirm/reject 动作；交互式截图脚本新增 `product-app-finance.png`，M6 本地证据包同步纳入 finance 源码与截图。

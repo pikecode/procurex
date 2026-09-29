@@ -5,9 +5,12 @@ import { setHeader } from '../shell.js';
 export async function render() {
   const seed = state.seed;
   const run = state.run;
+  const readiness = state.readiness;
+  const readinessCounts = readiness?.counts || {};
+  const roleEvidence = run?.roleEvidence || [];
   setHeader({
     title: '采购协同产品应用',
-    subtitle: '从业务总览进入门店、采购、供应商三个日常工作台。',
+    subtitle: '主流程、角色待办、异常处理和财务结算集中在正式产品入口。',
     routeLabel: '业务总览',
     status: run?.status || 'READY',
     updated: run?.generatedAt ? new Date(run.generatedAt).toLocaleString('zh-CN') : '',
@@ -15,20 +18,56 @@ export async function render() {
   document.getElementById('app-view').innerHTML = `
     <section class="summary-grid">
       ${metric('主流程状态', run?.status || '未生成', '来自 main-flow-demo-run.json', run?.status === 'PASSED')}
-      ${metric('门店账号', seed?.storeUsername || '未生成', '门店下单 / 收货')}
-      ${metric('采购账号', seed?.username || '未生成', '确认 / 改派')}
-      ${metric('供应商账号', seed?.supplierUsername || '未生成', '发货 / 差异 / 收款')}
+      ${metric('本地证据', `${readinessCounts.ready || 0}+${readinessCounts.localReady || 0}`, 'READY + LOCAL_READY')}
+      ${metric('外部缺口', readinessCounts.blocked ?? '—', '生产/微信/客户材料')}
+      ${metric('角色覆盖', `${roleEvidence.length || 0}/4`, '门店 / 采购 / 供应商 / 财务', roleEvidence.length >= 4)}
     </section>
     <section class="app-route-grid">
-      ${routeCard('业务流转', '在正式 App 内一键跑通门店下单、采购确认、供应商发货和门店收货。', '#/flow')}
-      ${routeCard('门店工作台', '门店订货、账户流水、待收货和收货登记。', '#/store')}
-      ${routeCard('采购工作台', '采购申请详情、确认拆单和供应商拒单改派。', '#/purchaser')}
-      ${routeCard('供应商工作台', '执行单发货、拒单、差异处理、账单和收款。', '#/supplier')}
-      ${routeCard('财务结算', '供应商账单、付款记录、结算状态和收款确认。', '#/finance')}
+      ${routeCard('业务流转', '一键执行主流程和异常分支，覆盖门店下单、采购确认、供应商履约、门店收货。', '#/flow', 'COMPLETED')}
+      ${routeCard('门店工作台', '门店订货、账户流水、订单进度、待收货提醒和收货登记。', '#/store', seed?.storeUsername || 'STORE')}
+      ${routeCard('采购工作台', '采购申请详情、确认拆单、拒单通知和备用供应商改派。', '#/purchaser', seed?.username || 'PURCHASER')}
+      ${routeCard('供应商工作台', '执行单发货、拒单、差异处理、供应商账单和收款处理。', '#/supplier', seed?.supplierUsername || 'SUPPLIER')}
+      ${routeCard('财务结算', '供应商账单、付款记录、付款凭证、确认收款和驳回付款。', '#/finance', 'CONFIRM/REJECT')}
     </section>
-    <section class="data-card acceptance-card"><div class="data-head"><div><h3>组件化迁移状态</h3><p>当前入口由 ES modules 渲染，不再新增孤立业务 HTML 页面</p></div><span class="tag tag-ok">M7 APP</span></div><div class="finance-panel"><article><strong>入口</strong><span>app.html</span><small>单页产品应用壳</small></article><article><strong>模块</strong><span>product-app/</span><small>共享 API、状态、页面模块</small></article><article><strong>兼容</strong><span>保留</span><small>旧工作台仍可作为回归入口</small></article><article><strong>下一步</strong><span>交互证据</span><small>把页面动作纳入 app 级证据</small></article></div></section>`;
+    <section class="store-layout">
+      <section class="data-card">
+        <div class="data-head"><div><h3>今日角色证据</h3><p>来自主流程验收输出，帮助判断角色链路是否跑通。</p></div><span class="tag tag-ok">业务闭环</span></div>
+        <div class="overview-role-list">
+          ${roleEvidence.length ? roleEvidence.map((item) => roleCard(item)).join('') : '<div class="empty"><strong>暂无角色证据</strong><small>运行 main-flow:check-demo 后生成</small></div>'}
+        </div>
+      </section>
+      <section class="data-card">
+        <div class="data-head"><div><h3>下一步推进</h3><p>当前正式 App 的开发焦点。</p></div><span class="tag">M7</span></div>
+        <div class="overview-next-list">
+          ${nextItem('正式工作台体验', '把已跑通的动作整理成日常业务人员可连续使用的页面。', '#/store')}
+          ${nextItem('财务结算可读性', '把付款确认/驳回、凭证和账单关系显示得更清楚。', '#/finance')}
+          ${nextItem('小程序真机证据', '生产服务器和域名准备好后，补微信真机流程截图/录屏。', '/m6-readiness.html')}
+        </div>
+      </section>
+    </section>
+    <section class="data-card acceptance-card">
+      <div class="data-head"><div><h3>产品化与上线状态</h3><p>组件化迁移状态、正式 App 闭环和外部上线材料。</p></div><span class="tag tag-ok">M7 APP</span></div>
+      <div class="finance-panel">
+        ${statusCard('正式入口', 'app.html', 'ES modules 产品应用壳')}
+        ${statusCard('业务闭环', '已跑通', '主流程、异常、财务确认和驳回')}
+        ${statusCard('本地证据', `${readinessCounts.ready || 0}+${readinessCounts.localReady || 0}`, 'M6 local evidence package')}
+        ${statusCard('上线缺口', readinessCounts.blocked ?? '—', '生产环境、微信真机、客户签字')}
+      </div>
+    </section>`;
 }
 
-function routeCard(title, detail, href) {
-  return `<article><strong>${esc(title)}</strong><p>${esc(detail)}</p><a class="primary" href="${esc(href)}">打开</a></article>`;
+function routeCard(title, detail, href, badge) {
+  return `<article><div class="route-title"><strong>${esc(title)}</strong><span class="tag">${esc(badge)}</span></div><p>${esc(detail)}</p><a class="primary" href="${esc(href)}">打开</a></article>`;
+}
+
+function roleCard(item) {
+  return `<article><div><strong>${esc(item.role)}</strong><small>${esc(item.account)}</small></div><span class="tag tag-ok">${esc(item.status)}</span><p>${esc(item.surface)}</p><small>${esc(item.evidence)}</small></article>`;
+}
+
+function nextItem(title, detail, href) {
+  return `<article><div><strong>${esc(title)}</strong><small>${esc(detail)}</small></div><a class="secondary" href="${esc(href)}">查看</a></article>`;
+}
+
+function statusCard(title, value, detail) {
+  return `<article><strong>${esc(title)}</strong><span>${esc(value)}</span><small>${esc(detail)}</small></article>`;
 }
