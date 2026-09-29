@@ -313,6 +313,8 @@ assertIncludes(mainFlowInteractiveCapture, 'runProductAppSupplierDiscrepancyActi
 assertIncludes(mainFlowInteractiveCapture, 'productAppSupplierDiscrepancyAction', 'product app supplier discrepancy evidence manifest');
 assertIncludes(mainFlowInteractiveCapture, 'runProductAppRoleMutationJourney', 'product app standalone role mutation journey');
 assertIncludes(mainFlowInteractiveCapture, 'productAppRoleMutationJourney', 'product app role mutation evidence manifest');
+assertIncludes(mainFlowInteractiveCapture, 'completedReceiptStatus', 'product app standalone Store receipt evidence');
+assertIncludes(mainFlowInteractiveCapture, '采购处理供应商拒单', 'product app standalone supplier rejection handoff');
 assertIncludes(mainFlowInteractiveCapture, 'overviewRefreshNotice', 'product app workflow API refresh evidence');
 assertIncludes(mainFlowInteractiveCapture, 'productAppWorkflowRefreshFlowAction', 'product app refresh evidence uses current workflow IDs');
 assertIncludes(mainFlowInteractiveCapture, "journey.push('PURCHASER')", 'product app guided purchaser handoff evidence');

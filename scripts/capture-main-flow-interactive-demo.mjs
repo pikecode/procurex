@@ -676,11 +676,35 @@ async function runProductAppRoleMutationJourney(cdp, viewport, fileName) {
       nextActions.push(await handoff('供应商继续发货'));
 
       await route('#/supplier', '供应商');
+      document.querySelector('#app-ship-order').click();
+      await waitFor(() => document.querySelector('#app-supplier-label')?.textContent === 'SHIPPED', 'Supplier shipment action');
+      nextActions.push(await handoff('门店继续收货'));
+
+      await route('#/store', '门店');
+      document.querySelector('#app-receive-shipment').click();
+      await waitFor(() => document.querySelector('#app-store-receipt-label')?.textContent === 'COMPLETED', 'Store receipt action');
+      nextActions.push(await handoff('财务登记付款'));
+      const completedWorkflow = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}');
+
+      await route('#/store', '门店');
+      document.querySelector('#app-store-order-form button[type="submit"]').click();
+      await waitFor(() => document.querySelector('#app-store-order-label')?.textContent.trim() === '已提交', 'Store order create for rejection branch');
+      const rejectedRequestId = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}').purchaseRequestId;
+      nextActions.push(await handoff('采购确认并分配供应商'));
+      await route('#/purchaser', '采购');
+      await waitFor(() => document.querySelector('#app-request-id')?.value === rejectedRequestId, 'Purchaser rejection-branch request prefill');
+      document.querySelector('#app-load-request').click();
+      await waitFor(() => document.querySelector('#app-purchaser-label')?.textContent === 'PENDING_PROCUREMENT', 'Purchaser rejection-branch request detail');
+      document.querySelector('#app-confirm-request').click();
+      await waitFor(() => document.querySelector('#app-purchaser-action-label')?.textContent === 'CONFIRMED', 'Purchaser rejection-branch confirmation');
+      nextActions.push(await handoff('供应商继续发货'));
+
+      await route('#/supplier', '供应商');
       document.querySelector('#app-reject-order').click();
       await waitFor(() => document.querySelector('#app-supplier-label')?.textContent === 'REJECTED', 'Supplier reject action');
       nextActions.push(await handoff('采购处理供应商拒单'));
       const workflow = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}');
-      return { requestId, nextActions, supplierOrderId: workflow.supplierOrderId || '', supplierOrderStatus: workflow.supplierOrderStatus || '', purchaseRequestStatus: workflow.purchaseRequestStatus || '', horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
+      return { requestId, nextActions, supplierOrderId: workflow.supplierOrderId || '', supplierOrderStatus: workflow.supplierOrderStatus || '', purchaseRequestStatus: workflow.purchaseRequestStatus || '', completedShipmentId: completedWorkflow.shipmentId || '', completedReceiptId: completedWorkflow.receiptId || '', completedReceiptStatus: completedWorkflow.receiptStatus || '', horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
     })()
   `);
   const file = resolve(outputDir, fileName);
