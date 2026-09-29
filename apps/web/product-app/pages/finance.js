@@ -47,6 +47,7 @@ export async function render() {
         <div class="form-actions">
           <button id="app-load-statement" class="secondary">读取账单</button>
           <button id="app-load-payment" class="secondary">读取付款</button>
+          <button id="app-create-pending-payment" class="primary">登记付款待确认</button>
           <button id="app-create-confirm-payment" class="primary">登记并确认供应商付款</button>
           <button id="app-create-reject-payment" class="secondary">登记并驳回供应商付款</button>
           <button id="app-confirm-payment" class="primary">确认收款</button>
@@ -142,6 +143,22 @@ function bindFinance({ financeToken, supplierToken, supplierStatements }) {
   });
   document.getElementById('app-load-payment').addEventListener('click', async () => {
     try { await loadPayment(); setNotice(''); } catch (error) { setNotice(error.message); }
+  });
+  document.getElementById('app-create-pending-payment').addEventListener('click', async () => {
+    try {
+      payment = await createPayment({ financeToken, supplierStatements });
+      document.getElementById('app-finance-payment-id').value = payment.id;
+      document.getElementById('app-finance-label').textContent = payment.status || 'PENDING';
+      saveWorkflowContext({ paymentId: payment.id, paymentNo: payment.paymentNo, paymentStatus: payment.status || 'PENDING' });
+      renderPaymentDetail(payment);
+      show('PENDING', {
+        付款记录: payment.paymentNo || payment.id,
+        付款状态: payment.status || 'PENDING',
+        付款金额: money(payment.amount),
+        当前版本: payment.version ?? '—',
+      });
+      setNotice('');
+    } catch (error) { setNotice(error.message); }
   });
   document.getElementById('app-confirm-payment').addEventListener('click', async () => {
     try {

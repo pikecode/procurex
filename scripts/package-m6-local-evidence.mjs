@@ -85,6 +85,7 @@ const evidenceFiles = [
   'var/main-flow-demo-evidence/product-app-flow-action.png',
   'var/main-flow-demo-evidence/product-app-finance-reject-action.png',
   'var/main-flow-demo-evidence/product-app-finance-action.png',
+  'var/main-flow-demo-evidence/product-app-finance-pending-action.png',
   'var/main-flow-demo-evidence/m7-business-flow.png',
   'var/main-flow-demo-evidence/m7-business-flow-mobile.png',
   'docs/m6-production-readiness.md',
@@ -147,6 +148,7 @@ const requiredStatuses = [
   ['productAppExceptionAction', interactiveManifest?.productAppExceptionAction?.status === 'BRANCHES_READY' && interactiveManifest?.productAppExceptionAction?.resultRows >= 4],
   ['productAppFinanceRejectAction', interactiveManifest?.productAppFinanceRejectAction?.status === 'REJECTED' && interactiveManifest?.productAppFinanceRejectAction?.resultRows >= 4],
   ['productAppFinanceAction', interactiveManifest?.productAppFinanceAction?.status === 'CONFIRMED' && interactiveManifest?.productAppFinanceAction?.resultRows >= 4],
+  ['productAppFinancePendingAction', interactiveManifest?.productAppFinancePendingAction?.status === 'PENDING' && interactiveManifest?.productAppFinancePendingAction?.workflowPaymentStatus === 'PENDING' && interactiveManifest?.productAppFinancePendingAction?.overviewRecommendsSupplier],
 ];
 const failedStatusChecks = requiredStatuses.filter(([, passed]) => !passed).map(([name]) => name);
 const status = missingFiles.length === 0 && failedStatusChecks.length === 0 ? 'LOCAL_READY' : 'BLOCKED';

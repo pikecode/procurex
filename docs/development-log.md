@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M7 正式产品 App 财务待确认交接：`#/finance` 新增“登记付款待确认”，复用账单预览、凭证上传和付款登记 API 创建付款后，将付款 ID/编号及 `PENDING` 状态写入跨页面 workflow，并展示付款详情；Overview 因此会推荐供应商确认收款，`#/supplier` 可直接带入该付款继续确认或驳回。`web:check` 增加待确认入口及状态回写保护。
 - M7 正式产品 App 工作流状态引导：扩展 `apps/web/product-app/workflow.js`，新增 `workflowNextAction` 判断最近流程交接的下一处理角色；`#/overview` 现在展示收货状态、付款状态、建议动作、供应商单、发货单和付款单，不再只显示 ID。`#/supplier` 在确认或驳回收款后也会回写 workflow paymentStatus，使 Overview/Finance/Supplier 的付款状态保持一致。`web:check` 新增下一步处理、付款状态和供应商付款状态回写保护；交互式截图重新验证 Overview `PASSED` 且数据卡 5 个，Finance `READY`，主流程、异常、财务确认/驳回仍通过。
 - M7 正式产品 App 工作流串联：新增 `apps/web/product-app/workflow.js`，用 sessionStorage 记录最近一次正式 App 主流程上下文。`#/flow` 主流程完成后会保存采购申请、供应商单、发货单、收货单和后续财务状态，并显示“流程交接”面板；`#/overview` 展示最近流程交接；`#/store`、`#/purchaser`、`#/supplier`、`#/finance` 会自动带入发货单、采购申请、供应商单和付款 ID，减少跨角色复核时手工复制 ID。`web:check` 新增 workflow 模块、Flow 交接面板和各角色预填保护；交互式截图重新验证正式 App Overview `PASSED`、Store/Purchaser/Supplier/Finance `READY`，主流程、异常、财务确认/驳回仍通过。
 - M7 正式产品 App 财务详情工作台：扩展 `apps/web/product-app/pages/finance.js`，把 `#/finance` 从账单/付款列表和动作按钮升级为可读明细的财务结算页。财务可从供应商账单列表读取 `/supplier-statements/{id}`，查看周期、应付、待确认/已确认付款、账单行、结算项和调整项；选择或登记付款后展示付款方向、通道、业务日期、凭证数量和 allocation 分配行。`web:check` 新增供应商账单详情、读取账单、账单行表格和付款分配表保护；交互式截图重新验证正式 App 财务页 `READY`，数据卡 5 个，主流程、异常、财务确认/驳回仍通过。

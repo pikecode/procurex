@@ -266,6 +266,8 @@ assertIncludes(productFinancePage, '/files/upload-sessions', 'product app financ
 assertIncludes(productFinancePage, "request('/payment-records'", 'product app finance payment create endpoint');
 assertIncludes(productFinancePage, '/payment-records/${payment.id}/confirm', 'product app finance payment confirm endpoint');
 assertIncludes(productFinancePage, '/payment-records/${payment.id}/reject', 'product app finance payment reject endpoint');
+assertIncludes(productFinancePage, '登记付款待确认', 'product app finance pending payment action');
+assertIncludes(productFinancePage, "paymentStatus: payment.status || 'PENDING'", 'product app finance pending payment workflow handoff');
 assertIncludes(productFinancePage, '登记并确认供应商付款', 'product app finance deterministic payment action');
 assertIncludes(productFinancePage, '登记并驳回供应商付款', 'product app finance deterministic rejection action');
 assertIncludes(productFinancePage, '读取账单', 'product app finance statement detail action');
@@ -273,6 +275,8 @@ assertIncludes(productFinancePage, 'app-statement-lines', 'product app finance s
 assertIncludes(productFinancePage, 'app-payment-allocations', 'product app finance payment allocations table');
 assertIncludes(mainFlowInteractiveCapture, 'product-app-finance-reject-action.png', 'product app finance rejection evidence capture');
 assertIncludes(mainFlowInteractiveCapture, 'productAppFinanceRejectAction', 'product app finance rejection manifest state');
+assertIncludes(mainFlowInteractiveCapture, 'runProductAppFinancePendingAction', 'product app pending payment handoff browser evidence');
+assertIncludes(mainFlowInteractiveCapture, 'overviewRecommendsSupplier', 'product app pending payment next action evidence');
 assertIncludes(appCss, '.app-route-grid', 'product app route grid styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');
