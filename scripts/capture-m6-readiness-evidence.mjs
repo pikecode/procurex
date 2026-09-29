@@ -207,6 +207,7 @@ async function captureReadiness(cdp, viewport, fileName) {
       await waitFor(() => document.querySelectorAll('#checks article').length >= 10, 'readiness checks');
       await waitFor(() => document.querySelector('#external-status')?.textContent.trim() === 'BLOCKED', 'external evidence status');
       await waitFor(() => document.querySelectorAll('#external-checks article').length >= 6, 'external evidence checks');
+      await waitFor(() => document.querySelectorAll('#handoff-links article').length >= 4, 'handoff links');
       const bodyText = document.body.textContent || '';
       return {
         readinessStatus: document.querySelector('#readiness-status')?.textContent.trim() || '',
@@ -214,11 +215,15 @@ async function captureReadiness(cdp, viewport, fileName) {
         readyMetric: [...document.querySelectorAll('.metric')].find((item) => item.textContent.includes('READY'))?.textContent.trim() || '',
         readinessRows: document.querySelectorAll('#checks article').length,
         externalRows: document.querySelectorAll('#external-checks article').length,
+        handoffRows: document.querySelectorAll('#handoff-links article').length,
         hasDev604: bodyText.includes('DEV-604') && bodyText.includes('数据初始化'),
         hasDev605: bodyText.includes('DEV-605') && bodyText.includes('试运行'),
         hasWechatBlocker: bodyText.includes('WECHAT_DEVICE'),
         hasProductionRuntimeBlocker: bodyText.includes('PRODUCTION_RUNTIME'),
         hasTemplatePath: bodyText.includes('docs/m6-evidence-templates/'),
+        hasCustomerEvidenceRequest: bodyText.includes('docs/m6-customer-evidence-request.md'),
+        hasLocalHandoff: bodyText.includes('docs/m6-local-evidence-handoff.md'),
+        hasStrictGateCommands: bodyText.includes('m6:external-evidence:strict') && bodyText.includes('m6:readiness:strict'),
         viewportWidth: window.innerWidth,
         horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
       };
@@ -248,7 +253,7 @@ await withWebServer(async () => {
       browser,
       webBaseUrl,
       evidenceType: 'm6-readiness-browser-screenshot',
-      note: 'Shows the M6 internal readiness ledger and external launch-material blockers on desktop and 390px mobile viewports.',
+      note: 'Shows the M6 internal readiness ledger, external launch-material blockers, and review handoff links on desktop and 390px mobile viewports.',
       desktop,
       mobile,
     };
@@ -258,6 +263,7 @@ await withWebServer(async () => {
     console.log(`  Mobile: ${mobile.file}`);
     console.log(`  Readiness rows: ${desktop.state.readinessRows}`);
     console.log(`  External rows: ${desktop.state.externalRows}`);
+    console.log(`  Handoff rows: ${desktop.state.handoffRows}`);
     console.log(`  Manifest: ${resolve(outputDir, 'manifest.json')}`);
   } finally {
     chrome.kill('SIGTERM');
