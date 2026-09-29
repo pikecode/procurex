@@ -18,6 +18,8 @@ M7 is the current productization track while M6 external launch materials remain
 
 The formal Web product app now starts at `apps/web/app.html` with ES modules in `apps/web/product-app/`. This is the preferred target for new Web product work: `product-app/api.js` holds the shared API client, `state.js` loads the PXFLOW seed/run files, `shell.js` owns navigation and route chrome, and `pages/overview.js`, `pages/store.js`, `pages/purchaser.js`, and `pages/supplier.js` render the role routes. The old `store-workbench.html`, `purchaser-workbench.html`, and `supplier-workbench.html` remain as compatibility/evidence pages, not the preferred place to keep adding new product UX.
 
+Latest M7 continuation point: `apps/web/product-app/pages/flow.js` adds `app.html#/flow`, the formal App-level business-flow action route. It logs in with PXFLOW Store/Purchaser/Supplier accounts and executes Store order preview/create, Purchaser confirmation, Supplier shipment preview/create, and Store receipt through real APIs. `npm run main-flow:capture-interactive-demo` now clicks this route and expects `productAppFlowAction.status=COMPLETED` with four result rows and `var/main-flow-demo-evidence/product-app-flow-action.png`. Continue M7 by moving the exception branches (supplier rejection reallocation, discrepancy ACCEPT/REPLENISH/RETURN, supplier payment confirmation) from compatibility workbenches into the same formal product-app route family.
+
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:

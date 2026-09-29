@@ -20,6 +20,7 @@ export async function render() {
       ${metric('供应商账号', seed?.supplierUsername || '未生成', '发货 / 差异 / 收款')}
     </section>
     <section class="app-route-grid">
+      ${routeCard('业务流转', '在正式 App 内一键跑通门店下单、采购确认、供应商发货和门店收货。', '#/flow')}
       ${routeCard('门店工作台', '门店订货、账户流水、待收货和收货登记。', '#/store')}
       ${routeCard('采购工作台', '采购申请详情、确认拆单和供应商拒单改派。', '#/purchaser')}
       ${routeCard('供应商工作台', '执行单发货、拒单、差异处理、账单和收款。', '#/supplier')}

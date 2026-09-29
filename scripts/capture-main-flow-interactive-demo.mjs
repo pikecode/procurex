@@ -491,6 +491,43 @@ async function captureProductApp(cdp, viewport, route, fileName) {
   return { file, state, viewport };
 }
 
+async function runProductAppFlow(cdp, viewport, fileName) {
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/flow`);
+  const state = await evaluate(cdp, `
+    (async () => {
+      const waitFor = async (predicate, label) => {
+        for (let i = 0; i < 160; i += 1) {
+          if (await predicate()) return;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        throw new Error(label + ' did not become ready.');
+      };
+      await waitFor(() => document.querySelector('#app-status')?.textContent.trim() === 'READY', 'product app flow route');
+      await waitFor(() => document.querySelector('#app-flow-run') && !document.querySelector('#app-flow-run').disabled, 'product app flow action button');
+      document.querySelector('#app-flow-run').click();
+      await waitFor(() => document.querySelector('#app-flow-status')?.textContent.trim() === 'COMPLETED', 'product app flow completion');
+      const bodyText = document.body.textContent || '';
+      return {
+        status: document.querySelector('#app-flow-status')?.textContent.trim() || '',
+        route: document.querySelector('#app-route-label')?.textContent.trim() || '',
+        resultRows: document.querySelectorAll('#app-flow-result article').length,
+        hasStoreOrder: bodyText.includes('门店下单'),
+        hasPurchaserConfirm: bodyText.includes('采购确认'),
+        hasSupplierShipment: bodyText.includes('供应商发货'),
+        hasStoreReceipt: bodyText.includes('门店收货'),
+        noticeText: document.querySelector('#app-notice')?.textContent.trim() || '',
+        viewportWidth: window.innerWidth,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
+      };
+    })()
+  `);
+  const file = resolve(outputDir, fileName);
+  await rm(file, { force: true });
+  await captureScreenshot(cdp, file);
+  return { file, state, viewport };
+}
+
 async function main() {
   await run('npm', ['run', 'main-flow:seed-demo']);
   await run('npm', ['run', 'main-flow:check-demo']);
@@ -585,6 +622,11 @@ async function main() {
           'supplier',
           'product-app-supplier.png',
         );
+        const productAppFlowAction = await runProductAppFlow(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'product-app-flow-action.png',
+        );
         await writeFile(resolve(outputDir, 'interactive-manifest.json'), `${JSON.stringify({
           generatedAt: new Date().toISOString(),
           browser,
@@ -609,6 +651,7 @@ async function main() {
           productAppStoreScreenshot: productAppStore.file,
           productAppPurchaserScreenshot: productAppPurchaser.file,
           productAppSupplierScreenshot: productAppSupplier.file,
+          productAppFlowActionScreenshot: productAppFlowAction.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
@@ -626,7 +669,8 @@ async function main() {
           productAppStore: productAppStore.state,
           productAppPurchaser: productAppPurchaser.state,
           productAppSupplier: productAppSupplier.state,
-          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier },
+          productAppFlowAction: productAppFlowAction.state,
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFlowAction },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -646,6 +690,7 @@ async function main() {
         console.log(`  Mobile supplier workbench screenshot: ${mobileSupplierWorkbench.file}`);
         console.log(`  Product app screenshot: ${productApp.file}`);
         console.log(`  Mobile product app screenshot: ${mobileProductApp.file}`);
+        console.log(`  Product app flow action screenshot: ${productAppFlowAction.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
         console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText}; ${roleWorkbenchAction.state.discrepancyResultText}; ${roleWorkbenchAction.state.rejectionResultText}; ${roleWorkbenchAction.state.discrepancyBranchesResultText})`);
@@ -655,6 +700,7 @@ async function main() {
         console.log(`  Purchaser workbench status: ${purchaserWorkbench.state.status}, requests: ${purchaserWorkbench.state.requestRows}, rejections: ${purchaserWorkbench.state.rejectionCards}`);
         console.log(`  Supplier workbench status: ${supplierWorkbench.state.status}, orders: ${supplierWorkbench.state.orderRows}, discrepancies: ${supplierWorkbench.state.discrepancyCards}`);
         console.log(`  Product app routes: ${productApp.state.status}/${productAppStore.state.status}/${productAppPurchaser.state.status}/${productAppSupplier.state.status}`);
+        console.log(`  Product app flow action: ${productAppFlowAction.state.status}, rows: ${productAppFlowAction.state.resultRows}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

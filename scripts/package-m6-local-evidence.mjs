@@ -55,6 +55,7 @@ const evidenceFiles = [
   'apps/web/product-app/api.js',
   'apps/web/product-app/shell.js',
   'apps/web/product-app/pages/overview.js',
+  'apps/web/product-app/pages/flow.js',
   'apps/web/product-app/pages/store.js',
   'apps/web/product-app/pages/purchaser.js',
   'apps/web/product-app/pages/supplier.js',
@@ -78,6 +79,7 @@ const evidenceFiles = [
   'var/main-flow-demo-evidence/product-app-store.png',
   'var/main-flow-demo-evidence/product-app-purchaser.png',
   'var/main-flow-demo-evidence/product-app-supplier.png',
+  'var/main-flow-demo-evidence/product-app-flow-action.png',
   'var/main-flow-demo-evidence/m7-business-flow.png',
   'var/main-flow-demo-evidence/m7-business-flow-mobile.png',
   'docs/m6-production-readiness.md',
@@ -136,6 +138,7 @@ const requiredStatuses = [
   ['productAppDesktop', ['READY', 'PASSED'].includes(interactiveManifest?.productApp?.status) && interactiveManifest?.productApp?.metricRows >= 4],
   ['productAppMobile', ['READY', 'PASSED'].includes(interactiveManifest?.mobileProductApp?.status) && interactiveManifest?.mobileProductApp?.metricRows >= 4],
   ['productAppRoutes', interactiveManifest?.productAppStore?.status === 'READY' && interactiveManifest?.productAppPurchaser?.status === 'READY' && interactiveManifest?.productAppSupplier?.status === 'READY'],
+  ['productAppFlowAction', interactiveManifest?.productAppFlowAction?.status === 'COMPLETED' && interactiveManifest?.productAppFlowAction?.resultRows >= 4],
 ];
 const failedStatusChecks = requiredStatuses.filter(([, passed]) => !passed).map(([name]) => name);
 const status = missingFiles.length === 0 && failedStatusChecks.length === 0 ? 'LOCAL_READY' : 'BLOCKED';

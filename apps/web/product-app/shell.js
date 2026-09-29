@@ -2,6 +2,7 @@ import { esc } from './ui.js';
 
 const routes = [
   ['overview', '业务总览'],
+  ['flow', '业务流转'],
   ['store', '门店'],
   ['purchaser', '采购'],
   ['supplier', '供应商'],

@@ -2,11 +2,12 @@ import { loadSeedState } from './state.js';
 import { routeFromHash, renderShell } from './shell.js';
 import { setNotice } from './ui.js';
 import * as overview from './pages/overview.js';
+import * as flow from './pages/flow.js';
 import * as store from './pages/store.js';
 import * as purchaser from './pages/purchaser.js';
 import * as supplier from './pages/supplier.js';
 
-const pages = { overview, store, purchaser, supplier };
+const pages = { overview, flow, store, purchaser, supplier };
 
 async function renderApp() {
   const route = routeFromHash();
