@@ -139,7 +139,7 @@ Use these checks for visible workbench confidence:
 ## Next Work Order
 
 1. Audit the original acceptance matrix against the formal Web App and native mini-program as separate clients; distinguish local API/browser evidence from WeChat device evidence.
-2. Close locally actionable role-flow gaps, especially the currently failing formal App notification-driven Purchaser reallocation interaction/evidence (native mini-program API reallocation already passes).
+2. Close locally actionable role-flow gaps found by the dual-client requirements audit; formal App notification-driven Purchaser reallocation now passes on desktop and narrow browser capture.
 3. Keep the local baselines green: `npm run acceptance:m5-close`, `npm run mini:check`, `npm run mini:flow-check`, `npm run build`, and `npm test`.
 4. Track production host/domain, storage policy, WeChat real-device run, customer finance sign-off, and pilot/handover under M6 external gates; do not represent local readiness as production launch readiness.
 5. Run `npm run acceptance:m4-close` after any M4-domain code change.

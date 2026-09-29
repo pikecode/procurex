@@ -84,15 +84,25 @@ function bindPurchaser(token) {
       if (!detail) await load();
       const targetSupplierId = document.getElementById('app-target-supplier-id').value.trim();
       const rejectedOrderId = document.getElementById('app-rejected-order-id').value.trim();
-      const reallocated = await request(`/purchase-requests/${detail.id}/reallocate`, { method: 'POST', headers: { 'idempotency-key': `product-app-reallocate-${crypto.randomUUID()}` }, body: JSON.stringify({ expectedVersion: detail.version, rejectedOrderId, reason: '产品应用改派供应商', assignments: (detail.items || []).map((item) => ({ requestItemId: item.id, supplierId: targetSupplierId })) }) }, token);
-      const supplierOrderId = reallocated.supplierOrders?.[0]?.id || '';
+      if (!rejectedOrderId) throw new Error('请从拒单待办选择被拒供应商单');
+      if (!targetSupplierId) throw new Error('请填写改派目标供应商');
+      const rejectedOrder = await request(`/supplier-orders/${rejectedOrderId}`, {}, token);
+      const rejectedProducts = new Set((rejectedOrder.items || []).map((item) => item.productId));
+      const assignments = (detail.items || [])
+        .filter((item) => rejectedProducts.has(item.productId))
+        .map((item) => ({ requestItemId: item.id, supplierId: targetSupplierId }));
+      if (!assignments.length) throw new Error('被拒供应商单没有关联到当前采购申请的商品行，请刷新拒单待办');
+      const reallocated = await request(`/purchase-requests/${detail.id}/reallocate`, { method: 'POST', headers: { 'idempotency-key': `product-app-reallocate-${crypto.randomUUID()}` }, body: JSON.stringify({ expectedVersion: detail.version, rejectedOrderId, reason: '产品应用改派供应商', assignments }) }, token);
+      const replacementOrder = (reallocated.supplierOrders || []).find((order) => order.supplierId === targetSupplierId && order.status !== 'REJECTED');
+      if (!replacementOrder) throw new Error('改派已处理，但服务端未返回目标供应商的新供应商单');
+      const supplierOrderId = replacementOrder.id;
       saveWorkflowContext({
         purchaseRequestId: reallocated.id || detail.id,
         purchaseRequestNo: reallocated.requestNo || detail.requestNo,
         purchaseRequestStatus: reallocated.status || 'REALLOCATED',
         purchaseRequestVersion: reallocated.version,
         supplierOrderId,
-        supplierOrderStatus: supplierOrderId ? 'PENDING' : null,
+        supplierOrderStatus: replacementOrder.status,
         shipmentId: null,
         shipmentNo: null,
         shipmentStatus: null,
@@ -104,11 +114,13 @@ function bindPurchaser(token) {
         paymentStatus: null,
       });
       document.getElementById('app-purchaser-label').textContent = reallocated.status || 'REALLOCATED';
-      renderAction(reallocated.status || 'REALLOCATED', {
+      renderAction('REALLOCATED', {
         采购申请: reallocated.requestNo || reallocated.id || detail.requestNo || detail.id,
-        处理状态: reallocated.status || 'REALLOCATED',
+        申请状态: reallocated.status || '—',
+        处理状态: 'REALLOCATED',
         目标供应商: targetSupplierId || '—',
-        新供应商单: (reallocated.supplierOrders || []).map((order) => order.id).join(', ') || '已生成',
+        改派商品行: assignments.length,
+        新供应商单: supplierOrderId,
       });
       setNotice('');
     } catch (error) { setNotice(error.message); }

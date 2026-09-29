@@ -89,6 +89,7 @@ const evidenceFiles = [
   'var/main-flow-demo-evidence/product-app-workflow-refresh-flow-action.png',
   'var/main-flow-demo-evidence/product-app-supplier-discrepancy-action.png',
   'var/main-flow-demo-evidence/product-app-role-mutation-journey.png',
+  'var/main-flow-demo-evidence/product-app-role-mutation-journey-mobile.png',
   'var/main-flow-demo-evidence/m7-business-flow.png',
   'var/main-flow-demo-evidence/m7-business-flow-mobile.png',
   'docs/m6-production-readiness.md',

@@ -1,25 +1,25 @@
 {
-  "generatedAt": "2026-09-29T21:26:59.276Z",
+  "generatedAt": "2026-09-29T21:55:04.341Z",
   "title": "Mini-program Flow Check",
   "status": "PASSED",
   "summary": "Native mini-program role APIs are reachable through Store, Purchaser, and Supplier flows.",
   "evidence": {
     "store": {
-      "accountStoreId": "3c26035d-adbd-4d28-8207-a9a30b0d21f6",
-      "purchaseRequestId": "9c77f37c-50fc-4053-8edd-5f8c3a2953d4",
+      "accountStoreId": "9a088de6-4626-4ea4-a303-26e2003752e5",
+      "purchaseRequestId": "14c6ad63-bd7c-497a-8c28-618f5df66464",
       "shipmentNotification": "待收货提醒",
-      "receiptNo": "RC20260929212658798797"
+      "receiptNo": "RC20260929215503865926"
     },
     "purchaser": {
-      "confirmedRequestId": "9c77f37c-50fc-4053-8edd-5f8c3a2953d4",
+      "confirmedRequestId": "14c6ad63-bd7c-497a-8c28-618f5df66464",
       "rejectionNotification": "供应商拒单待处理",
       "reallocatedRequestStatus": "CONFIRMED",
-      "secondarySupplierId": "bd2268ed-d71f-477a-a0a1-1a07ef7f9ad6"
+      "secondarySupplierId": "20228302-37ec-415f-97b0-6d23ddc00b00"
     },
     "supplier": {
-      "supplierOrderId": "66c5eae8-db3e-4800-9063-3f1c177c2a81",
-      "shipmentNo": "SH20260929212658965847",
-      "statementId": "eyJzdXBwbGllcklkIjoiYjFhNDI2ZDctNzQxYi00NjFlLTkzYzQtYzBkNGMyNzQxYWYwIiwiY3ljbGUiOiJNT05USExZIiwicGVyaW9kU3RhcnQiOiIyMDI2LTA5LTAxIiwicGVyaW9kRW5kRXhjbHVzaXZlIjoiMjAyNi0xMC0wMSJ9",
+      "supplierOrderId": "695dee7c-b7b4-4dfc-87ad-bebf1c18ce8c",
+      "shipmentNo": "SH20260929215503740958",
+      "statementId": "eyJzdXBwbGllcklkIjoiYjExZDAxMjQtNWUxYy00OTZhLWE2NjYtZmI5MDhiZmUxY2M3IiwiY3ljbGUiOiJNT05USExZIiwicGVyaW9kU3RhcnQiOiIyMDI2LTA5LTAxIiwicGVyaW9kRW5kRXhjbHVzaXZlIjoiMjAyNi0xMC0wMSJ9",
       "paymentStatus": "CONFIRMED",
       "discrepancyStatus": "RESOLVED"
     }

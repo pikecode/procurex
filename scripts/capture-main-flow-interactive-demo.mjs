@@ -703,8 +703,23 @@ async function runProductAppRoleMutationJourney(cdp, viewport, fileName) {
       document.querySelector('#app-reject-order').click();
       await waitFor(() => document.querySelector('#app-supplier-label')?.textContent === 'REJECTED', 'Supplier reject action');
       nextActions.push(await handoff('采购处理供应商拒单'));
+      await route('#/purchaser', '采购');
+      await waitFor(() => [...document.querySelectorAll('[data-app-reject-request]')].some((button) => button.dataset.appRejectRequest === rejectedRequestId), 'Purchaser rejection task');
+      const rejectionTask = [...document.querySelectorAll('[data-app-reject-request]')].find((button) => button.dataset.appRejectRequest === rejectedRequestId);
+      rejectionTask.click();
+      await waitFor(() => document.querySelectorAll('#app-request-detail article').length > 0, 'Purchaser rejection task detail');
+      document.querySelector('#app-reallocate-request').click();
+      await waitFor(() => document.querySelector('#app-purchaser-action-label')?.textContent === 'REALLOCATED' || document.querySelector('#app-notice')?.textContent.trim(), 'Purchaser reallocation action');
+      if (document.querySelector('#app-purchaser-action-label')?.textContent !== 'REALLOCATED') throw new Error('Purchaser reallocation failed: ' + document.querySelector('#app-notice')?.textContent.trim());
+      const reallocationWorkflow = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}');
+      const reallocationNextAction = await handoff('供应商继续发货');
+      nextActions.push(reallocationNextAction);
+      const rejectedSupplierOrderId = rejectionTask.dataset.appRejectOrder;
+      if (!reallocationWorkflow.supplierOrderId || reallocationWorkflow.supplierOrderId === rejectedSupplierOrderId || reallocationWorkflow.purchaseRequestStatus !== 'CONFIRMED' || reallocationNextAction !== '供应商继续发货') {
+        throw new Error('Purchaser reallocation did not create a replacement supplier handoff: ' + JSON.stringify({ rejectedSupplierOrderId, reallocationWorkflow, reallocationNextAction }));
+      }
       const workflow = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}');
-      return { requestId, nextActions, supplierOrderId: workflow.supplierOrderId || '', supplierOrderStatus: workflow.supplierOrderStatus || '', purchaseRequestStatus: workflow.purchaseRequestStatus || '', completedShipmentId: completedWorkflow.shipmentId || '', completedReceiptId: completedWorkflow.receiptId || '', completedReceiptStatus: completedWorkflow.receiptStatus || '', horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
+      return { requestId, nextActions, supplierOrderId: workflow.supplierOrderId || '', supplierOrderStatus: workflow.supplierOrderStatus || '', purchaseRequestStatus: workflow.purchaseRequestStatus || '', rejectedSupplierOrderId, reallocatedSupplierOrderId: reallocationWorkflow.supplierOrderId || '', reallocatedPurchaseRequestStatus: reallocationWorkflow.purchaseRequestStatus || '', completedShipmentId: completedWorkflow.shipmentId || '', completedReceiptId: completedWorkflow.receiptId || '', completedReceiptStatus: completedWorkflow.receiptStatus || '', horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
     })()
   `);
   const file = resolve(outputDir, fileName);
@@ -1007,6 +1022,11 @@ async function main() {
           { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
           'product-app-role-mutation-journey.png',
         );
+        const mobileProductAppRoleMutationJourney = await runProductAppRoleMutationJourney(
+          cdp,
+          { width: 390, height: 844, deviceScaleFactor: 1, mobile: true },
+          'product-app-role-mutation-journey-mobile.png',
+        );
         const productAppWorkflowRefreshFlowAction = await runProductAppFlow(
           cdp,
           { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
@@ -1050,6 +1070,7 @@ async function main() {
           productAppWorkflowRefreshFlowActionScreenshot: productAppWorkflowRefreshFlowAction.file,
           productAppSupplierDiscrepancyActionScreenshot: productAppSupplierDiscrepancyAction.file,
           productAppRoleMutationJourneyScreenshot: productAppRoleMutationJourney.file,
+          mobileProductAppRoleMutationJourneyScreenshot: mobileProductAppRoleMutationJourney.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
@@ -1075,6 +1096,7 @@ async function main() {
           productAppWorkflowRefreshFlowAction: productAppWorkflowRefreshFlowAction.state,
           productAppSupplierDiscrepancyAction: productAppSupplierDiscrepancyAction.state,
           productAppRoleMutationJourney: productAppRoleMutationJourney.state,
+          mobileProductAppRoleMutationJourney: mobileProductAppRoleMutationJourney.state,
           productAppExceptionAction: {
             status: productAppFlowAction.state.exceptionStatus,
             resultRows: productAppFlowAction.state.exceptionRows,
@@ -1084,7 +1106,7 @@ async function main() {
             hasReplenishReturn: productAppFlowAction.state.hasReplenishReturn,
             horizontalOverflow: productAppFlowAction.state.horizontalOverflow,
           },
-          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFinance, productAppFlowAction, productAppFinanceRejectAction, productAppFinanceAction, productAppFinancePendingAction, productAppWorkflowRefreshFlowAction, productAppSupplierDiscrepancyAction, productAppRoleMutationJourney },
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFinance, productAppFlowAction, productAppFinanceRejectAction, productAppFinanceAction, productAppFinancePendingAction, productAppWorkflowRefreshFlowAction, productAppSupplierDiscrepancyAction, productAppRoleMutationJourney, mobileProductAppRoleMutationJourney },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -1124,6 +1146,7 @@ async function main() {
         console.log(`  Product app pending handoff: ${productAppFinancePendingAction.state.status}, next: ${productAppFinancePendingAction.state.workflowNextAction}`);
         console.log(`  Product app supplier discrepancy: ${productAppSupplierDiscrepancyAction.state.action}/${productAppSupplierDiscrepancyAction.state.discrepancyStatus}, next: ${productAppSupplierDiscrepancyAction.state.nextAction}`);
         console.log(`  Product app role mutation journey: ${productAppRoleMutationJourney.state.nextActions.join(' -> ')}`);
+        console.log(`  Mobile product app role mutation journey: ${mobileProductAppRoleMutationJourney.state.nextActions.join(' -> ')}`);
         console.log(`  Product app API refresh: ${productAppFinancePendingAction.state.overviewRefreshNotice}`);
         console.log(`  Product app guided journey: ${productAppFinancePendingAction.state.guidedJourney.join(' -> ')} -> ${productAppFinancePendingAction.state.finalPaymentStatus}, overview: ${productAppFinancePendingAction.state.finalOverviewShowsCompleted}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);

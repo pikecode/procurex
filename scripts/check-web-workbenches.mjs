@@ -259,11 +259,18 @@ assertIncludes(productPurchaserPage, 'purchaseRequestStatus: detail.status', 'pr
 assertIncludes(productPurchaserPage, '刷新采购申请', 'product app purchaser route refresh action');
 assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/confirm', 'product app purchaser confirm endpoint');
 assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/reallocate', 'product app purchaser reallocate endpoint');
+assertIncludes(productPurchaserPage, '/supplier-orders/${rejectedOrderId}', 'product app purchaser rejected order detail');
+assertIncludes(productPurchaserPage, 'rejectedProducts.has(item.productId)', 'product app purchaser rejected item filtering');
+assertIncludes(productPurchaserPage, 'order.supplierId === targetSupplierId && order.status !== \'REJECTED\'', 'product app purchaser replacement order selection');
+assertIncludes(productPurchaserPage, 'supplierOrderStatus: replacementOrder.status', 'product app purchaser replacement order status');
+assertIncludes(productPurchaserPage, '改派商品行', 'product app purchaser reallocation item count');
 assertIncludes(productPurchaserPage, 'app-request-items', 'product app purchaser request item table');
 assertIncludes(productPurchaserPage, '处理结果', 'product app purchaser action result panel');
 assertIncludes(productPurchaserPage, '供应商单', 'product app purchaser confirm result');
 assertIncludes(productPurchaserPage, 'supplierOrderId,', 'product app purchaser confirmation workflow handoff');
 assertIncludes(productPurchaserPage, 'reallocated.status || \'REALLOCATED\'', 'product app purchaser reallocation workflow handoff');
+assertIncludes(productPurchaserPage, "renderAction('REALLOCATED'", 'product app purchaser reallocation action outcome');
+assertIncludes(productPurchaserPage, '申请状态: reallocated.status', 'product app purchaser server request state');
 assertIncludes(productSupplierPage, '/supplier-orders/${id}', 'product app supplier detail endpoint');
 assertIncludes(productSupplierPage, 'workflow?.supplierOrderId', 'product app supplier workflow order prefill');
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/shipments', 'product app supplier shipment endpoint');
@@ -313,6 +320,9 @@ assertIncludes(mainFlowInteractiveCapture, 'runProductAppSupplierDiscrepancyActi
 assertIncludes(mainFlowInteractiveCapture, 'productAppSupplierDiscrepancyAction', 'product app supplier discrepancy evidence manifest');
 assertIncludes(mainFlowInteractiveCapture, 'runProductAppRoleMutationJourney', 'product app standalone role mutation journey');
 assertIncludes(mainFlowInteractiveCapture, 'productAppRoleMutationJourney', 'product app role mutation evidence manifest');
+assertIncludes(mainFlowInteractiveCapture, 'mobileProductAppRoleMutationJourney', 'mobile product app role mutation evidence');
+assertIncludes(mainFlowInteractiveCapture, 'reallocatedSupplierOrderId', 'product app replacement supplier order assertion');
+assertIncludes(mainFlowInteractiveCapture, 'reallocationNextAction !== \'供应商继续发货\'', 'product app reallocation next-role assertion');
 assertIncludes(mainFlowInteractiveCapture, 'completedReceiptStatus', 'product app standalone Store receipt evidence');
 assertIncludes(mainFlowInteractiveCapture, '采购处理供应商拒单', 'product app standalone supplier rejection handoff');
 assertIncludes(mainFlowInteractiveCapture, 'overviewRefreshNotice', 'product app workflow API refresh evidence');

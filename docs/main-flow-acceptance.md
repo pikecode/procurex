@@ -28,8 +28,8 @@ The flow is implemented across backend APIs, the formal Web product app, and a n
 | 1. Store order preview | O01, DEV-201 | `POST /purchase-requests/preview` | Integration, Web App interactive flow, native mini-program API flow | `app.html#/store`; native Store page | WeChat device acceptance remains open |
 | 2. Store order creation | O02, DEV-201/202 | `POST /purchase-requests` | Idempotent API coverage and real-API actions in both clients | `app.html#/store`; native Store page | Device acceptance remains open |
 | 3. Purchase request read | O03 | list/detail endpoints | Scope tests; formal App and mini-program flow exercise | `app.html#/purchaser`; native Purchaser page | Broader device/role usability review |
-| 4. Procurement assign/confirm | O04-O07, DEV-204/205 | edit/assign/confirm endpoints | API coverage; formal App confirmation evidence; mini flow confirmation | Formal Purchaser route; native Purchaser page | Dedicated formal App reallocation action evidence |
-| 5. Supplier rejection/reallocation | O09-O10, DEV-305 | reject/reallocate endpoints | Formal Web independent rejection; mini-program API-flow reallocation | Purchaser and Supplier role pages in both clients | Formal App reallocation click evidence; WeChat device acceptance |
+| 4. Procurement assign/confirm | O04-O07, DEV-204/205 | edit/assign/confirm endpoints | API coverage; formal App confirmation and reallocation evidence; mini flow confirmation | Formal Purchaser route; native Purchaser page | WeChat device acceptance |
+| 5. Supplier rejection/reallocation | O09-O10, DEV-305 | reject/reallocate endpoints | Formal Web rejection notification -> detail -> reallocation -> Supplier handoff; mini-program API-flow reallocation | Purchaser and Supplier role pages in both clients | WeChat device acceptance |
 | 6. Supplier order read | F01 | list/detail endpoints | Scope tests and real-API role journeys | `app.html#/supplier`; native Supplier page | WeChat device acceptance remains open |
 | 7. Shipment preview/create | F02-F03, DEV-301/302 | preview and shipment endpoints | Formal Web role action and native API flow | Supplier routes in both clients | WeChat device acceptance remains open |
 | 8. Store receipt | F04, DEV-303 | `POST /shipments/{id}/receipts` | Formal Web role action and native API flow, including short receipt | Store routes in both clients | WeChat device acceptance remains open |
@@ -128,7 +128,7 @@ The core business flow is no longer backend-only: a formal Web product app and a
 
 ## Direction Assessment
 
-The original dual-client requirement remains represented: the Web App has browser-executed role actions and the native mini-program has a real-API role-flow check. Recent M7 effort has concentrated on Web usability/evidence; this is acceptable as a distinct client track, not as a substitute for the original mini-program acceptance. The concrete local gap is deterministic Purchaser reallocation action evidence in the formal App, followed by an acceptance audit of both clients. Real WeChat device and production checks remain external M6 gates.
+The original dual-client requirement remains represented: the Web App has browser-executed role actions and the native mini-program has a real-API role-flow check. Recent M7 effort has concentrated on Web usability/evidence; this is a distinct client track, not a substitute for mini-program acceptance. Formal App reallocation now has click-level browser evidence, including rejected-item filtering and the next Supplier handoff. The next local work is a requirements audit of both clients. Real WeChat device and production checks remain external M6 gates.
 
 ## Recommended Next Step
 
