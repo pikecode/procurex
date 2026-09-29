@@ -269,6 +269,12 @@ assertIncludes(productSupplierPage, 'workflow?.supplierOrderId', 'product app su
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/shipments', 'product app supplier shipment endpoint');
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/reject', 'product app supplier reject endpoint');
 assertIncludes(productSupplierPage, '/discrepancies/${id}/resolve', 'product app supplier discrepancy endpoint');
+assertIncludes(productSupplierPage, 'app-discrepancy-action', 'product app supplier discrepancy action selector');
+assertIncludes(productSupplierPage, "value=\"REPLENISH\"", 'product app supplier replenishment action');
+assertIncludes(productSupplierPage, "value=\"RETURN\"", 'product app supplier return action');
+assertIncludes(productSupplierPage, 'replenishmentGap', 'product app supplier replenishment gap handoff');
+assertIncludes(productSupplierPage, 'gapAllocations', 'product app supplier replenishment shipment allocation');
+assertIncludes(productSupplierPage, "discrepancyAction: action", 'product app supplier discrepancy workflow state');
 assertIncludes(productSupplierPage, '/payment-records/${id}', 'product app supplier payment detail endpoint');
 assertIncludes(productSupplierPage, '/payment-records/${payment.id}/confirm', 'product app supplier payment confirm endpoint');
 assertIncludes(productSupplierPage, '/payment-records/${payment.id}/reject', 'product app supplier payment reject endpoint');
