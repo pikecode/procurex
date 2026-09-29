@@ -1,21 +1,14 @@
 {
-  "generatedAt": "2026-09-29T21:37:11.934Z",
+  "generatedAt": "2026-09-29T21:37:46.217Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "f0ae0e77770b9f9e70c6009d7b5626a80730418b",
+    "commit": "11f3f002204009200f5fb50e40e850425d34086e",
     "remote": "git@github.com-pikecode:pikecode/procurex.git",
-    "dirty": true,
-    "dirtyStatus": [
-      "M apps/miniprogram/mini-flow-check.json",
-      " M docs/acceptance-dashboard.md",
-      " M docs/continuation.md",
-      " M docs/development-log.md",
-      " M docs/main-flow-acceptance.md",
-      " M docs/progress.md"
-    ]
+    "dirty": false,
+    "dirtyStatus": []
   },
   "commands": [
     "npm run m6:performance",
