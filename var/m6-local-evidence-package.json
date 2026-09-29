@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-09-29T02:58:01.987Z",
+  "generatedAt": "2026-09-29T03:08:01.680Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "b238eceaee29e9bb09ab449c8a93b1acb19d2964",
+    "commit": "a335d98e239bae016952300762fa3eae7e9f394c",
     "remote": "git@github.com:pikecode/procurex.git",
     "dirty": false,
     "dirtyStatus": []
@@ -133,6 +133,18 @@
       "sha256": "52708240ad461741a37aa4f9bc0865bfa2f1660288d7b1b3d1ebaf66f156631e"
     },
     {
+      "path": "apps/web/store-workbench.html",
+      "exists": true,
+      "sizeBytes": 4888,
+      "sha256": "095eea50be4042f5cd553cc03323aefa0061720fd53256ab7f1472db87ab80cb"
+    },
+    {
+      "path": "apps/web/store-workbench.js",
+      "exists": true,
+      "sizeBytes": 12781,
+      "sha256": "f080b77ef468843c8a5d5d826f2498d912744b26bc650060c0825f773fe30373"
+    },
+    {
       "path": "apps/web/m7-business-flow.html",
       "exists": true,
       "sizeBytes": 2889,
@@ -141,26 +153,38 @@
     {
       "path": "apps/web/m7-business-flow.js",
       "exists": true,
-      "sizeBytes": 8180,
-      "sha256": "84b6822dadbc0baf1791e91365ac1580cb2cf9b3ec38076397f7f9df3a55ed1c"
+      "sizeBytes": 8177,
+      "sha256": "7941d8461d844a6049f914ff7e8e1557409e21bddeed5fc4f46ffce5e4eeea5c"
     },
     {
       "path": "var/main-flow-demo-evidence/interactive-manifest.json",
       "exists": true,
-      "sizeBytes": 11154,
-      "sha256": "4089d2c03c495961b0a0c19f1f0fa7c48ce9daa2096c71103d20a709b016cac1"
+      "sizeBytes": 13227,
+      "sha256": "3690101b5b046d5dd48ecfad1311c2d03ee96907434c31e6aa3127635e86e432"
+    },
+    {
+      "path": "var/main-flow-demo-evidence/store-workbench.png",
+      "exists": true,
+      "sizeBytes": 231810,
+      "sha256": "229da77d58e54d0431c061c10fcc009ce00e745c6a80f5df072c381fddafde9a"
+    },
+    {
+      "path": "var/main-flow-demo-evidence/store-workbench-mobile.png",
+      "exists": true,
+      "sizeBytes": 487194,
+      "sha256": "bb927a08bef03775d7051e582d8faa7010e2554f528698af605f1d2a0c02443d"
     },
     {
       "path": "var/main-flow-demo-evidence/m7-business-flow.png",
       "exists": true,
-      "sizeBytes": 216291,
-      "sha256": "065fe9aed4e96c65b862fb740f3e8a09fdc0dccb92aa7b58c9b45c76a33e6538"
+      "sizeBytes": 215756,
+      "sha256": "199f5c90ab39880f86d8380c7f47d1f0bf740e0f5a89f25a5ade7fa5b7ea916c"
     },
     {
       "path": "var/main-flow-demo-evidence/m7-business-flow-mobile.png",
       "exists": true,
-      "sizeBytes": 490947,
-      "sha256": "e20bf8ca45f6b5db0c1bbcdafefe3c0365ee9f52bae5fd981555a1c04973ea10"
+      "sizeBytes": 489069,
+      "sha256": "ffd1e1f71aac27d0febf2bcbb08364ca72ae0604498df1ae45a7e88a7c0bad5c"
     },
     {
       "path": "docs/m6-production-readiness.md",
