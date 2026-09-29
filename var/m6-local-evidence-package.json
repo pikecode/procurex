@@ -1,33 +1,14 @@
 {
-  "generatedAt": "2026-09-29T01:45:13.318Z",
+  "generatedAt": "2026-09-29T01:46:34.679Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "668beefa36543a10bfa58047da8176646f965d8d",
+    "commit": "23d9d816775487bbc85e9fd5b9f731a5ca917842",
     "remote": "git@github.com:pikecode/procurex.git",
-    "dirty": true,
-    "dirtyStatus": [
-      "M apps/web/m6-external-evidence.json",
-      " M apps/web/m6-local-evidence-package.json",
-      " M apps/web/m6-readiness.html",
-      " M apps/web/m6-readiness.json",
-      " M docs/development-log.md",
-      " M docs/m6-customer-evidence-request.md",
-      " M docs/m6-production-readiness.md",
-      " M docs/progress.md",
-      " M scripts/capture-m6-readiness-evidence.mjs",
-      " M scripts/check-web-workbenches.mjs",
-      " M scripts/package-m6-local-evidence.mjs",
-      " M scripts/write-m6-customer-evidence-request.mjs",
-      " M var/m6-external-evidence.json",
-      " M var/m6-local-evidence-package.json",
-      " M var/m6-readiness-evidence/m6-readiness-desktop.png",
-      " M var/m6-readiness-evidence/m6-readiness-mobile.png",
-      " M var/m6-readiness-evidence/manifest.json",
-      "?? docs/m6-wechat-device-evidence-guide.md"
-    ]
+    "dirty": false,
+    "dirtyStatus": []
   },
   "commands": [
     "npm run m6:performance",
