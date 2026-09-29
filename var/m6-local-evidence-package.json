@@ -1,30 +1,17 @@
 {
-  "generatedAt": "2026-09-29T22:10:08.976Z",
+  "generatedAt": "2026-09-29T22:13:59.262Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "641f825c2d5ef0b8461a2651bf198835a665ffd5",
+    "commit": "1bd60e43aaf443f61e7a02aeb67066bcb30cc773",
     "remote": "git@github.com-pikecode:pikecode/procurex.git",
     "dirty": true,
     "dirtyStatus": [
-      "M apps/web/m6-external-evidence.json",
-      " M apps/web/m6-local-evidence-package.json",
-      " M apps/web/m6-readiness.json",
-      " M docs/acceptance-dashboard.md",
+      "M docs/acceptance-dashboard.md",
       " M docs/continuation.md",
-      " M docs/development-log.md",
-      " M docs/m6-customer-evidence-request.md",
-      " M docs/m6-local-evidence-handoff.md",
-      " M docs/main-flow-acceptance.md",
-      " M docs/progress.md",
-      " M docs/requirements-surface-audit.md",
-      " M var/m6-external-evidence.json",
-      " M var/m6-local-evidence-package.json",
-      " M var/m6-readiness-evidence/m6-readiness-desktop.png",
-      " M var/m6-readiness-evidence/m6-readiness-mobile.png",
-      " M var/m6-readiness-evidence/manifest.json"
+      " M docs/progress.md"
     ]
   },
   "commands": [
