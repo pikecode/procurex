@@ -50,6 +50,25 @@ function bindPurchaser(token) {
     try {
       if (!detail) await load();
       const confirmed = await request(`/purchase-requests/${detail.id}/confirm`, { method: 'POST', headers: { 'idempotency-key': `product-app-confirm-${crypto.randomUUID()}` }, body: JSON.stringify({ expectedVersion: detail.version }) }, token);
+      const supplierOrders = confirmed.supplierOrders || confirmed.supplierOrderIds || [];
+      const supplierOrderId = supplierOrders[0]?.id || supplierOrders[0] || '';
+      saveWorkflowContext({
+        purchaseRequestId: confirmed.id || detail.id,
+        purchaseRequestNo: confirmed.requestNo || detail.requestNo,
+        purchaseRequestStatus: confirmed.status || 'CONFIRMED',
+        purchaseRequestVersion: confirmed.version,
+        supplierOrderId,
+        supplierOrderStatus: supplierOrderId ? 'PENDING' : null,
+        shipmentId: null,
+        shipmentNo: null,
+        shipmentStatus: null,
+        receiptId: null,
+        receiptNo: null,
+        receiptStatus: null,
+        paymentId: null,
+        paymentNo: null,
+        paymentStatus: null,
+      });
       document.getElementById('app-purchaser-label').textContent = confirmed.status || 'CONFIRMED';
       renderAction(confirmed.status || 'CONFIRMED', {
         采购申请: confirmed.requestNo || confirmed.id || detail.requestNo || detail.id,
@@ -66,6 +85,24 @@ function bindPurchaser(token) {
       const targetSupplierId = document.getElementById('app-target-supplier-id').value.trim();
       const rejectedOrderId = document.getElementById('app-rejected-order-id').value.trim();
       const reallocated = await request(`/purchase-requests/${detail.id}/reallocate`, { method: 'POST', headers: { 'idempotency-key': `product-app-reallocate-${crypto.randomUUID()}` }, body: JSON.stringify({ expectedVersion: detail.version, rejectedOrderId, reason: '产品应用改派供应商', assignments: (detail.items || []).map((item) => ({ requestItemId: item.id, supplierId: targetSupplierId })) }) }, token);
+      const supplierOrderId = reallocated.supplierOrders?.[0]?.id || '';
+      saveWorkflowContext({
+        purchaseRequestId: reallocated.id || detail.id,
+        purchaseRequestNo: reallocated.requestNo || detail.requestNo,
+        purchaseRequestStatus: reallocated.status || 'REALLOCATED',
+        purchaseRequestVersion: reallocated.version,
+        supplierOrderId,
+        supplierOrderStatus: supplierOrderId ? 'PENDING' : null,
+        shipmentId: null,
+        shipmentNo: null,
+        shipmentStatus: null,
+        receiptId: null,
+        receiptNo: null,
+        receiptStatus: null,
+        paymentId: null,
+        paymentNo: null,
+        paymentStatus: null,
+      });
       document.getElementById('app-purchaser-label').textContent = reallocated.status || 'REALLOCATED';
       renderAction(reallocated.status || 'REALLOCATED', {
         采购申请: reallocated.requestNo || reallocated.id || detail.requestNo || detail.id,

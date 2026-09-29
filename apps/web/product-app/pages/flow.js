@@ -199,11 +199,19 @@ async function runFlow() {
     status: 'COMPLETED',
     purchaseRequestId: flowState.purchaseRequest.id,
     purchaseRequestNo: flowState.purchaseRequest.requestNo,
+    purchaseRequestStatus: confirmed.status || 'CONFIRMED',
+    purchaseRequestVersion: confirmed.version,
     supplierOrderId: flowState.supplierOrder.id,
+    supplierOrderStatus: supplierDetailAfterShipment.status,
+    supplierOrderVersion: supplierDetailAfterShipment.version,
+    fulfillmentStatus: supplierDetailAfterShipment.fulfillmentStatus,
     shipmentId: flowState.shipment.id,
     shipmentNo: flowState.shipment.shipmentNo,
+    shipmentStatus: flowState.shipment.status || 'SHIPPED',
     receiptId: flowState.receipt.id,
     receiptNo: flowState.receipt.receiptNo,
+    receiptStatus: flowState.receipt.status || 'COMPLETED',
+    receiptRevision: flowState.receipt.revision,
   });
   renderWorkflowHandoff(workflow);
   updateStatus('COMPLETED');

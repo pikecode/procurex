@@ -56,7 +56,27 @@ function bindOrder(token) {
   document.getElementById('app-store-order-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
-      show(await request('/purchase-requests', { method: 'POST', headers: { 'idempotency-key': `product-app-store-order-${crypto.randomUUID()}` }, body: JSON.stringify(input()) }, token), '已提交');
+      const created = await request('/purchase-requests', { method: 'POST', headers: { 'idempotency-key': `product-app-store-order-${crypto.randomUUID()}` }, body: JSON.stringify(input()) }, token);
+      saveWorkflowContext({
+        status: created.status || 'PENDING_PROCUREMENT',
+        purchaseRequestId: created.id,
+        purchaseRequestNo: created.requestNo,
+        purchaseRequestStatus: created.status || 'PENDING_PROCUREMENT',
+        purchaseRequestVersion: created.version,
+        supplierOrderId: null,
+        supplierOrderStatus: null,
+        shipmentId: null,
+        shipmentNo: null,
+        shipmentStatus: null,
+        receiptId: null,
+        receiptNo: null,
+        receiptStatus: null,
+        receiptRevision: null,
+        paymentId: null,
+        paymentNo: null,
+        paymentStatus: null,
+      });
+      show(created, '已提交');
       setNotice('');
     } catch (error) {
       setNotice(error.message);
@@ -103,6 +123,15 @@ function bindOrder(token) {
           })),
         }),
       }, token);
+      saveWorkflowContext({
+        shipmentId: shipment.id,
+        shipmentNo: shipment.shipmentNo,
+        shipmentStatus: shipment.status || 'SHIPPED',
+        receiptId: receipt.id,
+        receiptNo: receipt.receiptNo,
+        receiptStatus: receipt.status || 'COMPLETED',
+        receiptRevision: receipt.revision,
+      });
       document.getElementById('app-store-receipt-label').textContent = receipt.status || 'COMPLETED';
       document.getElementById('app-store-receipt-result').innerHTML = [
         resultLine('收货单', receipt.receiptNo || receipt.id),

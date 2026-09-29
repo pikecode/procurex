@@ -39,6 +39,9 @@ export async function refreshWorkflowContext(refreshers) {
 
 export function workflowNextAction(workflow) {
   if (!workflow?.purchaseRequestId) return { title: '先执行业务流转', detail: '运行主流程后生成可交接的业务上下文。', href: '#/flow' };
+  if (!workflow.supplierOrderId || workflow.purchaseRequestStatus === 'PENDING_PROCUREMENT' || workflow.supplierOrderStatus === 'REJECTED') {
+    return { title: workflow.supplierOrderStatus === 'REJECTED' ? '采购处理供应商拒单' : '采购确认并分配供应商', detail: workflow.purchaseRequestNo || workflow.purchaseRequestId, href: '#/purchaser' };
+  }
   if (!workflow.shipmentId) return { title: '供应商继续发货', detail: workflow.supplierOrderId || '等待供应商执行单', href: '#/supplier' };
   if (!workflow.receiptId) return { title: '门店继续收货', detail: workflow.shipmentNo || workflow.shipmentId, href: '#/store' };
   if (!workflow.paymentId) return { title: '财务登记付款', detail: workflow.receiptNo || workflow.receiptId, href: '#/finance' };

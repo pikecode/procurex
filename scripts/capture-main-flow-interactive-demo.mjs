@@ -617,6 +617,49 @@ async function runProductAppFinancePendingAction(cdp, viewport, fileName) {
       financeState.refreshedReceiptStatus = refreshedWorkflow.receiptStatus || '';
       financeState.refreshedPaymentVersion = refreshedWorkflow.paymentVersion ?? null;
       financeState.refreshedReceiptRevision = refreshedWorkflow.receiptRevision ?? null;
+
+      const journey = [];
+      location.hash = '#/purchaser';
+      await waitFor(() => document.querySelector('#app-load-request'), 'purchaser route refresh control');
+      let refreshStamp = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}').updatedAt;
+      document.querySelector('#app-load-request').click();
+      await waitFor(() => { const current = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}'); return current.purchaseRequestStatus && current.updatedAt !== refreshStamp; }, 'purchaser request refresh');
+      journey.push('PURCHASER');
+
+      location.hash = '#/supplier';
+      await waitFor(() => document.querySelector('#app-load-supplier-order'), 'supplier route refresh control');
+      refreshStamp = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}').updatedAt;
+      document.querySelector('#app-load-supplier-order').click();
+      await waitFor(() => { const current = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}'); return current.supplierOrderStatus && current.updatedAt !== refreshStamp; }, 'supplier order refresh');
+      journey.push('SUPPLIER_ORDER');
+
+      location.hash = '#/store';
+      await waitFor(() => document.querySelector('#app-load-shipment'), 'store route refresh control');
+      refreshStamp = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}').updatedAt;
+      document.querySelector('#app-load-shipment').click();
+      await waitFor(() => { const current = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}'); return current.receiptRevision === 1 && current.updatedAt !== refreshStamp; }, 'store shipment and receipt refresh');
+      journey.push('STORE');
+
+      location.hash = '#/finance';
+      await waitFor(() => document.querySelector('#app-load-payment'), 'finance route refresh control');
+      refreshStamp = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}').updatedAt;
+      document.querySelector('#app-load-payment').click();
+      await waitFor(() => { const current = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}'); return current.paymentVersion && current.updatedAt !== refreshStamp; }, 'finance payment refresh');
+      journey.push('FINANCE');
+
+      location.hash = '#/supplier';
+      await waitFor(() => document.querySelector('#app-supplier-order-id') && document.querySelector('#app-load-payment'), 'supplier payment route refresh control');
+      document.querySelector('#app-load-payment').click();
+      await waitFor(() => document.querySelector('#app-supplier-label')?.textContent.trim() === 'PENDING', 'supplier pending payment detail');
+      document.querySelector('#app-confirm-payment').click();
+      await waitFor(() => JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}').paymentStatus === 'CONFIRMED', 'supplier confirms payment');
+      journey.push('SUPPLIER_PAYMENT');
+      financeState.guidedJourney = journey;
+      financeState.finalPaymentStatus = JSON.parse(sessionStorage.getItem('procurex-product-app-workflow') || '{}').paymentStatus;
+
+      location.hash = '#/overview';
+      await waitFor(() => document.querySelector('#app-view')?.textContent.includes('流程复核完成'), 'guided journey returns to overview');
+      financeState.finalOverviewShowsCompleted = document.querySelector('#app-view')?.textContent.includes('流程复核完成') || false;
       return financeState;
     })()
   `);
@@ -890,6 +933,7 @@ async function main() {
         console.log(`  Product app finance action: ${productAppFinanceAction.state.status}, rows: ${productAppFinanceAction.state.resultRows}`);
         console.log(`  Product app pending handoff: ${productAppFinancePendingAction.state.status}, next: ${productAppFinancePendingAction.state.workflowNextAction}`);
         console.log(`  Product app API refresh: ${productAppFinancePendingAction.state.overviewRefreshNotice}`);
+        console.log(`  Product app guided journey: ${productAppFinancePendingAction.state.guidedJourney.join(' -> ')} -> ${productAppFinancePendingAction.state.finalPaymentStatus}, overview: ${productAppFinancePendingAction.state.finalOverviewShowsCompleted}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

@@ -74,6 +74,23 @@ function bindSupplier(token) {
       const input = { expectedVersion: order.version, items: (order.items || []).map((item, index) => ({ orderItemId: item.id, shipQuantity: index === 0 && quantity ? quantity : item.quantity, permanentlyReduceQuantity: '0' })), freight: '0.00', trackingNo: `APP-${Date.now()}` };
       await request(`/supplier-orders/${order.id}/shipment-preview`, { method: 'POST', body: JSON.stringify(input) }, token);
       const shipment = await request(`/supplier-orders/${order.id}/shipments`, { method: 'POST', headers: { 'idempotency-key': `product-app-ship-${crypto.randomUUID()}` }, body: JSON.stringify(input) }, token);
+      const updatedOrder = await request(`/supplier-orders/${order.id}`, {}, token);
+      saveWorkflowContext({
+        supplierOrderId: order.id,
+        supplierOrderStatus: updatedOrder.status,
+        supplierOrderVersion: updatedOrder.version,
+        fulfillmentStatus: updatedOrder.fulfillmentStatus,
+        shipmentId: shipment.id,
+        shipmentNo: shipment.shipmentNo,
+        shipmentStatus: shipment.status || 'SHIPPED',
+        receiptId: null,
+        receiptNo: null,
+        receiptStatus: null,
+        receiptRevision: 0,
+        paymentId: null,
+        paymentNo: null,
+        paymentStatus: null,
+      });
       show('SHIPPED', { 发货单: shipment.shipmentNo || shipment.id, 状态: shipment.status || 'SHIPPED' });
       setNotice('');
     } catch (error) { setNotice(error.message); }
@@ -82,6 +99,7 @@ function bindSupplier(token) {
     try {
       if (!order) await loadOrder();
       const rejected = await request(`/supplier-orders/${order.id}/reject`, { method: 'POST', headers: { 'idempotency-key': `product-app-reject-${crypto.randomUUID()}` }, body: JSON.stringify({ expectedVersion: order.version, reason: '产品应用供应商拒单' }) }, token);
+      saveWorkflowContext({ supplierOrderId: order.id, supplierOrderStatus: 'REJECTED', supplierOrderVersion: rejected.version, shipmentId: null, shipmentNo: null, shipmentStatus: null, receiptId: null, receiptNo: null, receiptStatus: null, paymentId: null, paymentNo: null, paymentStatus: null });
       show('REJECTED', { 供应商单: rejected.supplierOrderId || order.id, 状态: rejected.status || 'REJECTED' });
       setNotice('');
     } catch (error) { setNotice(error.message); }

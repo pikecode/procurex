@@ -36,7 +36,7 @@ The Finance formal route detail view is now tightened as well. `app.html#/financ
 
 The first guided day-to-day workflow connection is now in place. `app.html#/flow` saves the latest main-flow handoff to `sessionStorage` via `apps/web/product-app/workflow.js`; Overview displays that handoff, and Store/Purchaser/Supplier/Finance prefill the relevant IDs from it. Continue M7 by making the handoff more actionable after finance registration, for example by surfacing payment status back on Overview and adding route-level refresh actions, not by adding new standalone HTML pages.
 
-Workflow status is now actionable and refreshable: `workflowNextAction` drives the Overview “下一步处理” panel; Finance can hand a `PENDING` payment to Supplier; Overview can refresh saved request/order/shipment/payment IDs from API details; and each role detail refresh writes current status/version back into workflow. Continue M7 by adding a unified guided handoff through the role pages, including a clear route back to Overview after each status change, then validate a full Flow -> Purchaser -> Supplier -> Store -> Finance -> Supplier journey in the interactive browser evidence.
+The guided formal App journey is browser-verified: Flow creates a current handoff, Overview refreshes all four linked resources, Purchaser/Supplier/Store/Finance open their role routes and refresh details, Finance registers a `PENDING` payment, Supplier confirms it, and the persistent breadcrumb returns the operator to Overview where the process is complete. Independent Store order/receipt, Purchaser confirmation/reallocation, and Supplier shipment/rejection actions now also advance or reset workflow IDs and status so the next-action panel follows role mutations. Continue by exercising these mutation-driven transitions and discrepancy exception branches through the role routes, then review final M7 completion against the product requirements and separate any external launch blockers clearly.
 
 ## Latest High-Signal Work
 
@@ -332,8 +332,10 @@ Run `npm run acceptance:m4-close` for the final local M4 close check after brows
 
 Do these in order:
 
-1. Keep `npm run acceptance:m5-browserless`, `npm run m5:capture-browser-evidence`, and `npm run m5:capture-ops-evidence` green after M5 changes.
-2. Continue M5 in plan order: deepen DEV-503 by adding the next business notification trigger, or continue DEV-504 audit expansion if operations evidence is more urgent.
-3. Run `npm run acceptance:m4-close` after any billing, payment, settlement, or adjustment change.
+1. Add browser evidence for independent Store order/receipt, Purchaser confirmation/reallocation, and Supplier shipment/rejection transitions that update Overview's next action.
+2. Exercise discrepancy ACCEPT/REPLENISH/RETURN from role routes and verify the workflow presents the correct next role after each outcome.
+3. Review M7 product requirements against the formal App routes and close any remaining local functional gaps.
+4. Keep the existing acceptance baseline green: `npm run acceptance:m5-close`, `npm run mini:check`, `npm run mini:flow-check`, `npm run build`, and `npm test`.
+5. Complete external M6 launch gates when inputs exist: production host/domain and runtime configuration, signed storage policy, WeChat real-device evidence, customer finance sign-off, and pilot/handover sign-off.
 
-Do not reopen M4 unless a regression appears in `acceptance:m4-close` or a reviewer rejects the collected browser evidence.
+Do not mark production launch complete from local browser evidence alone.

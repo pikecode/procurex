@@ -202,6 +202,7 @@ assertIncludes(productAppShell, "['flow', '业务流转']", 'product app flow ro
 assertIncludes(productAppShell, "['purchaser', '采购']", 'product app purchaser route');
 assertIncludes(productAppShell, "['supplier', '供应商']", 'product app supplier route');
 assertIncludes(productAppShell, "['finance', '财务']", 'product app finance route');
+assertIncludes(productAppShell, '返回业务总览', 'product app role route return navigation');
 assertIncludes(productAppShell, '/store-workbench.html', 'product app legacy store link');
 assertIncludes(productAppState, 'main-flow-demo-seed.json', 'product app seed state loader');
 assertIncludes(productAppState, 'm6-readiness.json', 'product app readiness state loader');
@@ -209,6 +210,8 @@ assertIncludes(productAppWorkflow, 'procurex-product-app-workflow', 'product app
 assertIncludes(productAppWorkflow, 'saveWorkflowContext', 'product app workflow save helper');
 assertIncludes(productAppWorkflow, 'refreshWorkflowContext', 'product app workflow API refresh helper');
 assertIncludes(productAppWorkflow, 'workflowNextAction', 'product app workflow next action helper');
+assertIncludes(productAppWorkflow, 'PENDING_PROCUREMENT', 'product app purchaser next action state');
+assertIncludes(productAppWorkflow, '采购处理供应商拒单', 'product app supplier rejection next action');
 assertIncludes(productOverviewPage, '流程交接', 'product app overview workflow handoff');
 assertIncludes(productOverviewPage, '刷新交接状态', 'product app overview workflow refresh action');
 assertIncludes(productOverviewPage, '/purchase-requests/${workflow.purchaseRequestId}', 'product app overview refresh purchase request');
@@ -225,6 +228,8 @@ assertIncludes(productOverviewPage, '#/flow', 'product app flow route card');
 assertIncludes(productOverviewPage, '#/finance', 'product app finance route card');
 assertIncludes(productFlowPage, '一键执行业务流转', 'product app flow run action');
 assertIncludes(productFlowPage, 'saveWorkflowContext', 'product app flow workflow handoff save');
+assertIncludes(productFlowPage, 'purchaseRequestStatus: confirmed.status', 'product app flow request state handoff');
+assertIncludes(productFlowPage, 'receiptRevision: flowState.receipt.revision', 'product app flow receipt revision handoff');
 assertIncludes(productFlowPage, 'app-workflow-handoff', 'product app flow workflow handoff panel');
 assertIncludes(productFlowPage, '/purchase-requests/preview', 'product app flow preview endpoint');
 assertIncludes(productFlowPage, '/purchase-requests/${requestDetail.id}/confirm', 'product app flow confirm endpoint');
@@ -246,6 +251,8 @@ assertIncludes(productStorePage, 'receiptStatus: receiptRevision > 0 ?', 'produc
 assertIncludes(productStorePage, '刷新发货单', 'product app store route refresh action');
 assertIncludes(productStorePage, '/shipments/${shipment.id}/receipts', 'product app store receipt endpoint');
 assertIncludes(productStorePage, '完整收货', 'product app store receipt action');
+assertIncludes(productStorePage, "purchaseRequestStatus: created.status || 'PENDING_PROCUREMENT'", 'product app store order workflow handoff');
+assertIncludes(productStorePage, 'receiptId: receipt.id', 'product app store receipt workflow handoff');
 assertIncludes(productPurchaserPage, '/purchase-requests/${requestId}', 'product app purchaser request detail endpoint');
 assertIncludes(productPurchaserPage, 'workflow?.purchaseRequestId', 'product app purchaser workflow request prefill');
 assertIncludes(productPurchaserPage, 'purchaseRequestStatus: detail.status', 'product app purchaser refresh status handoff');
@@ -255,6 +262,8 @@ assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/reallocate
 assertIncludes(productPurchaserPage, 'app-request-items', 'product app purchaser request item table');
 assertIncludes(productPurchaserPage, '处理结果', 'product app purchaser action result panel');
 assertIncludes(productPurchaserPage, '供应商单', 'product app purchaser confirm result');
+assertIncludes(productPurchaserPage, 'supplierOrderId,', 'product app purchaser confirmation workflow handoff');
+assertIncludes(productPurchaserPage, 'reallocated.status || \'REALLOCATED\'', 'product app purchaser reallocation workflow handoff');
 assertIncludes(productSupplierPage, '/supplier-orders/${id}', 'product app supplier detail endpoint');
 assertIncludes(productSupplierPage, 'workflow?.supplierOrderId', 'product app supplier workflow order prefill');
 assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/shipments', 'product app supplier shipment endpoint');
@@ -268,6 +277,8 @@ assertIncludes(productSupplierPage, 'paymentStatus', 'product app supplier workf
 assertIncludes(productSupplierPage, 'supplierOrderStatus: order.status', 'product app supplier order refresh status handoff');
 assertIncludes(productSupplierPage, '刷新供应商单', 'product app supplier route refresh action');
 assertIncludes(productSupplierPage, '刷新付款', 'product app supplier payment refresh action');
+assertIncludes(productSupplierPage, 'shipmentId: shipment.id', 'product app supplier shipment workflow handoff');
+assertIncludes(productSupplierPage, "supplierOrderStatus: 'REJECTED'", 'product app supplier rejection workflow handoff');
 assertIncludes(productFinancePage, '/supplier-statements', 'product app finance supplier statements endpoint');
 assertIncludes(productFinancePage, '/supplier-statements/${statementId}', 'product app finance supplier statement detail endpoint');
 assertIncludes(productFinancePage, '/store-statements', 'product app finance store statements endpoint');
@@ -294,6 +305,10 @@ assertIncludes(mainFlowInteractiveCapture, 'runProductAppFinancePendingAction', 
 assertIncludes(mainFlowInteractiveCapture, 'overviewRecommendsSupplier', 'product app pending payment next action evidence');
 assertIncludes(mainFlowInteractiveCapture, 'overviewRefreshNotice', 'product app workflow API refresh evidence');
 assertIncludes(mainFlowInteractiveCapture, 'productAppWorkflowRefreshFlowAction', 'product app refresh evidence uses current workflow IDs');
+assertIncludes(mainFlowInteractiveCapture, "journey.push('PURCHASER')", 'product app guided purchaser handoff evidence');
+assertIncludes(mainFlowInteractiveCapture, "journey.push('SUPPLIER_PAYMENT')", 'product app guided supplier payment evidence');
+assertIncludes(mainFlowInteractiveCapture, "finalOverviewShowsCompleted", 'product app guided journey completion on overview');
+assertIncludes(mainFlowInteractiveCapture, "productAppFinancePendingActionScreenshot", 'product app guided journey screenshot manifest');
 assertIncludes(appCss, '.app-route-grid', 'product app route grid styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');

@@ -2,6 +2,8 @@
 
 ## 2026-09-29
 
+- M7 正式产品 App 全角色交接闭环：产品壳在角色路由顶部提供“返回业务总览”面包屑；交互浏览器证据现会沿正式 App 页面完成采购申请刷新、供应商执行单刷新、门店发货/收货刷新、财务待确认付款登记/刷新、供应商确认收款，再返回 Overview。证据验证 Overview 刷新 4/4 API 状态成功，供应商确认后 workflow 变为 `CONFIRMED` 且建议动作变为“流程复核完成”；`web:check` 和 M6 本地证据包均覆盖该角色序列。
+- M7 正式产品 App 角色动作状态推进：Store 新建订单会替换交接中的采购申请并清空旧供应商单/发货/收货/付款字段；Purchaser 确认或改派会保存新供应商单并清理过期下游 IDs；Supplier 发货会读取服务端更新后的订单版本并交接新发货单，拒单则清除履约及付款字段；Store 收货保存收货 ID、状态和 revision。`workflowNextAction` 根据采购待确认、供应商拒单、待发货、待收货和待付款决定下一角色。
 - M7 正式产品 App 交接状态刷新：`#/overview` 新增“刷新交接状态”，按已保存的申请、供应商单、发货单、付款 ID 调用各角色详情 API，并把状态、版本和收货 revision 回写 workflow；单项失败时保留成功结果并显示失败项。门店、采购、供应商和财务详情读取动作也同步更新各自 workflow 状态，按钮名称标明刷新用途。`web:check` 覆盖刷新入口、四类详情端点和角色状态回写；交互浏览器证据验证 4/4 资源刷新成功，状态分别为申请 `CONFIRMED`、供应商单 `COMPLETED`、发货 `SHIPPED`、收货 `COMPLETED`，并保留付款版本。
 - M7 正式产品 App 财务待确认交接：`#/finance` 新增“登记付款待确认”，复用账单预览、凭证上传和付款登记 API 创建付款后，将付款 ID/编号及 `PENDING` 状态写入跨页面 workflow，并展示付款详情；Overview 因此会推荐供应商确认收款，`#/supplier` 可直接带入该付款继续确认或驳回。`web:check` 增加待确认入口及状态回写保护。
 - M7 正式产品 App 工作流状态引导：扩展 `apps/web/product-app/workflow.js`，新增 `workflowNextAction` 判断最近流程交接的下一处理角色；`#/overview` 现在展示收货状态、付款状态、建议动作、供应商单、发货单和付款单，不再只显示 ID。`#/supplier` 在确认或驳回收款后也会回写 workflow paymentStatus，使 Overview/Finance/Supplier 的付款状态保持一致。`web:check` 新增下一步处理、付款状态和供应商付款状态回写保护；交互式截图重新验证 Overview `PASSED` 且数据卡 5 个，Finance `READY`，主流程、异常、财务确认/驳回仍通过。
