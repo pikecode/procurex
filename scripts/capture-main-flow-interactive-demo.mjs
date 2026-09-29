@@ -418,6 +418,44 @@ async function capturePurchaserWorkbench(cdp, viewport, fileName) {
   return { file, state, viewport };
 }
 
+async function captureSupplierWorkbench(cdp, viewport, fileName) {
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${webBaseUrl}/supplier-workbench.html`);
+  const state = await evaluate(cdp, `
+    (async () => {
+      const waitFor = async (predicate, label) => {
+        for (let i = 0; i < 100; i += 1) {
+          if (await predicate()) return;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        throw new Error(label + ' did not become ready.');
+      };
+      await waitFor(() => document.querySelector('#supplier-page-status')?.textContent.trim() === 'READY', 'supplier workbench status');
+      await waitFor(() => document.querySelectorAll('#supplier-summary .metric').length >= 4, 'supplier summary metrics');
+      const bodyText = document.body.textContent || '';
+      return {
+        status: document.querySelector('#supplier-page-status')?.textContent.trim() || '',
+        summaryRows: document.querySelectorAll('#supplier-summary .metric').length,
+        orderRows: document.querySelectorAll('#supplier-orders tr').length,
+        discrepancyCards: document.querySelectorAll('#supplier-discrepancies article').length,
+        statementRows: document.querySelectorAll('#supplier-statements tr').length,
+        paymentRows: document.querySelectorAll('#supplier-payments tr').length,
+        hasShipmentPanel: Boolean(document.querySelector('#supplier-order-detail')),
+        hasDiscrepancyPanel: Boolean(document.querySelector('#discrepancy-result')),
+        hasPaymentPanel: Boolean(document.querySelector('#payment-result')),
+        hasShipmentCopy: bodyText.includes('创建发货') && bodyText.includes('拒单'),
+        hasDiscrepancyCopy: bodyText.includes('同意少收') && bodyText.includes('安排补发') && bodyText.includes('退回核对'),
+        viewportWidth: window.innerWidth,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
+      };
+    })()
+  `);
+  const file = resolve(outputDir, fileName);
+  await rm(file, { force: true });
+  await captureScreenshot(cdp, file);
+  return { file, state, viewport };
+}
+
 async function main() {
   await run('npm', ['run', 'main-flow:seed-demo']);
   await run('npm', ['run', 'main-flow:check-demo']);
@@ -472,6 +510,16 @@ async function main() {
           { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
           'purchaser-workbench-mobile.png',
         );
+        const supplierWorkbench = await captureSupplierWorkbench(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'supplier-workbench.png',
+        );
+        const mobileSupplierWorkbench = await captureSupplierWorkbench(
+          cdp,
+          { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
+          'supplier-workbench-mobile.png',
+        );
         await writeFile(resolve(outputDir, 'interactive-manifest.json'), `${JSON.stringify({
           generatedAt: new Date().toISOString(),
           browser,
@@ -489,6 +537,8 @@ async function main() {
           mobileStoreWorkbenchScreenshot: mobileStoreWorkbench.file,
           purchaserWorkbenchScreenshot: purchaserWorkbench.file,
           mobilePurchaserWorkbenchScreenshot: mobilePurchaserWorkbench.file,
+          supplierWorkbenchScreenshot: supplierWorkbench.file,
+          mobileSupplierWorkbenchScreenshot: mobileSupplierWorkbench.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
@@ -499,7 +549,9 @@ async function main() {
           mobileStoreWorkbench: mobileStoreWorkbench.state,
           purchaserWorkbench: purchaserWorkbench.state,
           mobilePurchaserWorkbench: mobilePurchaserWorkbench.state,
-          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench },
+          supplierWorkbench: supplierWorkbench.state,
+          mobileSupplierWorkbench: mobileSupplierWorkbench.state,
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -515,6 +567,8 @@ async function main() {
         console.log(`  Mobile store workbench screenshot: ${mobileStoreWorkbench.file}`);
         console.log(`  Purchaser workbench screenshot: ${purchaserWorkbench.file}`);
         console.log(`  Mobile purchaser workbench screenshot: ${mobilePurchaserWorkbench.file}`);
+        console.log(`  Supplier workbench screenshot: ${supplierWorkbench.file}`);
+        console.log(`  Mobile supplier workbench screenshot: ${mobileSupplierWorkbench.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
         console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText}; ${roleWorkbenchAction.state.discrepancyResultText}; ${roleWorkbenchAction.state.rejectionResultText}; ${roleWorkbenchAction.state.discrepancyBranchesResultText})`);
@@ -522,6 +576,7 @@ async function main() {
         console.log(`  Business flow stages: ${businessFlow.state.stageRows}, todos: ${businessFlow.state.todoRows}, finance cards: ${businessFlow.state.financeRows}`);
         console.log(`  Store workbench status: ${storeWorkbench.state.status}, orders: ${storeWorkbench.state.orderRows}, account cards: ${storeWorkbench.state.accountRows}`);
         console.log(`  Purchaser workbench status: ${purchaserWorkbench.state.status}, requests: ${purchaserWorkbench.state.requestRows}, rejections: ${purchaserWorkbench.state.rejectionCards}`);
+        console.log(`  Supplier workbench status: ${supplierWorkbench.state.status}, orders: ${supplierWorkbench.state.orderRows}, discrepancies: ${supplierWorkbench.state.discrepancyCards}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

@@ -2,6 +2,7 @@
 
 ## 2026-09-29
 
+- M7 供应商工作台产品化：新增 `apps/web/supplier-workbench.html` / `supplier-workbench.js`，使用 PXFLOW 供应商账号登录真实 API，集中展示供应商执行单、差异待办、供应商账单和付款记录，并支持 `/supplier-orders/{id}/shipment-preview`、`/supplier-orders/{id}/shipments`、`/supplier-orders/{id}/reject`、`/discrepancies/{id}/resolve` 的 ACCEPT/REPLENISH/RETURN，以及 `/payment-records/{id}/confirm|reject`。业务流程页的供应商入口改到该页面；所有 Web 侧边栏加入“供应商工作台”；`web:check`、交互式截图脚本和 M6 本地证据包同步纳入供应商页面、端点和桌面/移动证据。
 - M7 采购工作台产品化：新增 `apps/web/purchaser-workbench.html` / `purchaser-workbench.js`，使用 PXFLOW 采购账号登录真实 API，集中展示采购申请、拒单待办、申请详情和商品行，并支持 `/purchase-requests/{id}/confirm` 采购确认拆单与 `/purchase-requests/{id}/reallocate` 拒单改派到备用供应商。业务流程页的采购入口改到该页面；所有 Web 侧边栏加入“采购工作台”；`web:check`、交互式截图脚本和 M6 本地证据包同步纳入采购页面、端点和桌面/移动证据。
 - M7 门店工作台产品化：新增 `apps/web/store-workbench.html` / `store-workbench.js`，使用 PXFLOW 门店账号登录真实 API，集中展示门店账户、流水、订货单进度、待收货通知，并支持 `/purchase-requests/preview`、`/purchase-requests`、`/shipments/{id}`、`/shipments/{id}/receipts` 完成门店订货和收货登记。业务流程页的门店下单/收货入口改到该页面；所有 Web 侧边栏加入“门店工作台”；`web:check` 和交互式截图脚本同步纳入页面、端点和桌面/移动证据。
 - M7 业务流程产品化起步：新增 `apps/web/m7-business-flow.html` / `m7-business-flow.js`，读取 `main-flow-demo-seed.json` 和 `main-flow-demo-run.json`，把门店下单、采购确认、供应商履约、门店收货、财务结算展示成业务流转台，包含角色导航、业务待办、流程时间线和经营财务摘要。现有 Web 工作台侧边栏加入“业务流程”入口；`web:check` 纳入 M7 页面、脚本、业务阶段和跳转保护。

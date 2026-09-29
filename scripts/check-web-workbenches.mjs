@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, purchaserWorkbenchHtml, purchaserWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, purchaserWorkbenchHtml, purchaserWorkbenchJs, supplierWorkbenchHtml, supplierWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -52,6 +52,8 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHt
   readProjectFile('apps/web/store-workbench.js'),
   readProjectFile('apps/web/purchaser-workbench.html'),
   readProjectFile('apps/web/purchaser-workbench.js'),
+  readProjectFile('apps/web/supplier-workbench.html'),
+  readProjectFile('apps/web/supplier-workbench.js'),
   readProjectFile('apps/web/m7-business-flow.html'),
   readProjectFile('apps/web/m7-business-flow.js'),
   readProjectFile('scripts/capture-main-flow-interactive-demo.mjs'),
@@ -81,6 +83,8 @@ for (const path of [
   'apps/web/store-workbench.js',
   'apps/web/purchaser-workbench.html',
   'apps/web/purchaser-workbench.js',
+  'apps/web/supplier-workbench.html',
+  'apps/web/supplier-workbench.js',
   'apps/web/m7-business-flow.html',
   'apps/web/m7-business-flow.js',
   'apps/web/ops.html',
@@ -102,6 +106,7 @@ checkSyntax('apps/web/main-flow-demo.js');
 checkSyntax('apps/web/role-workbenches.js');
 checkSyntax('apps/web/store-workbench.js');
 checkSyntax('apps/web/purchaser-workbench.js');
+checkSyntax('apps/web/supplier-workbench.js');
 checkSyntax('apps/web/m7-business-flow.js');
 checkSyntax('apps/web/ops.js');
 checkSyntax('apps/web/m6-readiness.js');
@@ -148,6 +153,7 @@ assertIncludes(reportHtml, '报表与分析', 'W11 report page');
 assertIncludes(reportHtml, '/ops.html', 'W13 navigation entry');
 assertIncludes(reportHtml, '/store-workbench.html', 'M7 store workbench navigation entry');
 assertIncludes(reportHtml, '/purchaser-workbench.html', 'M7 purchaser workbench navigation entry');
+assertIncludes(reportHtml, '/supplier-workbench.html', 'M7 supplier workbench navigation entry');
 assertIncludes(reportHtml, '/m7-business-flow.html', 'M7 business flow navigation entry');
 assertIncludes(reportHtml, '/m6-readiness.html', 'M6 readiness navigation entry');
 assertIncludes(reportHtml, 'M5 验收状态', 'M5 acceptance summary');
@@ -356,6 +362,39 @@ assertIncludes(purchaserWorkbenchJs, 'secondarySupplierId', 'M7 purchaser backup
 assertIncludes(purchaserWorkbenchJs, 'purchaser-workbench-confirm-', 'M7 purchaser idempotent confirm key');
 assertIncludes(purchaserWorkbenchJs, 'purchaser-workbench-reallocate-', 'M7 purchaser idempotent reallocate key');
 
+assertIncludes(supplierWorkbenchHtml, '供应商日常工作台', 'M7 supplier workbench page');
+assertIncludes(supplierWorkbenchHtml, '/supplier-workbench.js', 'M7 supplier workbench script');
+assertIncludes(supplierWorkbenchHtml, 'id="supplier-summary"', 'M7 supplier summary');
+assertIncludes(supplierWorkbenchHtml, 'id="supplier-orders"', 'M7 supplier order list');
+assertIncludes(supplierWorkbenchHtml, 'id="supplier-discrepancies"', 'M7 supplier discrepancy list');
+assertIncludes(supplierWorkbenchHtml, 'id="supplier-order-detail"', 'M7 supplier order detail');
+assertIncludes(supplierWorkbenchHtml, 'id="discrepancy-result"', 'M7 supplier discrepancy result');
+assertIncludes(supplierWorkbenchHtml, 'id="supplier-statements"', 'M7 supplier statements');
+assertIncludes(supplierWorkbenchHtml, 'id="supplier-payments"', 'M7 supplier payments');
+assertIncludes(supplierWorkbenchHtml, 'id="payment-result"', 'M7 supplier payment result');
+assertIncludes(supplierWorkbenchHtml, '/purchaser-workbench.html', 'M7 supplier purchaser navigation');
+assertIncludes(supplierWorkbenchHtml, '/m7-business-flow.html', 'M7 supplier business flow navigation');
+assertIncludes(supplierWorkbenchJs, 'main-flow-demo-seed.json', 'M7 supplier seed loader');
+assertIncludes(supplierWorkbenchJs, '/auth/login', 'M7 supplier login');
+assertIncludes(supplierWorkbenchJs, '/supplier-orders', 'M7 supplier order endpoint');
+assertIncludes(supplierWorkbenchJs, '/notifications', 'M7 supplier notifications endpoint');
+assertIncludes(supplierWorkbenchJs, '/supplier-statements', 'M7 supplier statement endpoint');
+assertIncludes(supplierWorkbenchJs, '/payment-records?direction=COMPANY_TO_SUPPLIER', 'M7 supplier payment list endpoint');
+assertIncludes(supplierWorkbenchJs, '/supplier-orders/${supplierOrderId}', 'M7 supplier order detail endpoint');
+assertIncludes(supplierWorkbenchJs, '/supplier-orders/${state.order.id}/shipment-preview', 'M7 supplier shipment preview endpoint');
+assertIncludes(supplierWorkbenchJs, '/supplier-orders/${state.order.id}/shipments', 'M7 supplier shipment endpoint');
+assertIncludes(supplierWorkbenchJs, '/supplier-orders/${state.order.id}/reject', 'M7 supplier rejection endpoint');
+assertIncludes(supplierWorkbenchJs, '/discrepancies/${discrepancyId}', 'M7 supplier discrepancy detail endpoint');
+assertIncludes(supplierWorkbenchJs, '/discrepancies/${discrepancyId}/resolve', 'M7 supplier discrepancy resolve endpoint');
+assertIncludes(supplierWorkbenchJs, '/payment-records/${paymentId}/${action}', 'M7 supplier payment action endpoint');
+assertIncludes(supplierWorkbenchJs, "resolveDiscrepancy('ACCEPT')", 'M7 supplier accept discrepancy action');
+assertIncludes(supplierWorkbenchJs, "resolveDiscrepancy('REPLENISH')", 'M7 supplier replenish discrepancy action');
+assertIncludes(supplierWorkbenchJs, "resolveDiscrepancy('RETURN')", 'M7 supplier return discrepancy action');
+assertIncludes(supplierWorkbenchJs, 'supplier-workbench-ship-', 'M7 supplier idempotent shipment key');
+assertIncludes(supplierWorkbenchJs, 'supplier-workbench-reject-', 'M7 supplier idempotent rejection key');
+assertIncludes(supplierWorkbenchJs, 'supplier-workbench-discrepancy-', 'M7 supplier idempotent discrepancy key');
+assertIncludes(supplierWorkbenchJs, 'supplier-workbench-payment-', 'M7 supplier idempotent payment key');
+
 assertIncludes(businessFlowHtml, '采购协同业务流程', 'M7 business flow page');
 assertIncludes(businessFlowHtml, '/m7-business-flow.js', 'M7 business flow script');
 assertIncludes(businessFlowHtml, 'id="business-board"', 'M7 business flow board');
@@ -370,7 +409,7 @@ assertIncludes(businessFlowJs, '供应商履约', 'M7 supplier stage');
 assertIncludes(businessFlowJs, '财务结算', 'M7 finance stage');
 assertIncludes(businessFlowJs, '/store-workbench.html', 'M7 store workbench navigation');
 assertIncludes(businessFlowJs, '/purchaser-workbench.html', 'M7 purchaser workbench navigation');
-assertIncludes(businessFlowJs, '/role-workbenches.html', 'M7 role workbench navigation');
+assertIncludes(businessFlowJs, '/supplier-workbench.html', 'M7 supplier workbench navigation');
 assertIncludes(businessFlowJs, '/billing.html', 'M7 billing navigation');
 
 assertIncludes(opsHtml, '运营与对账', 'W13 ops page');

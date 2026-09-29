@@ -54,6 +54,8 @@ const evidenceFiles = [
   'apps/web/store-workbench.js',
   'apps/web/purchaser-workbench.html',
   'apps/web/purchaser-workbench.js',
+  'apps/web/supplier-workbench.html',
+  'apps/web/supplier-workbench.js',
   'apps/web/m7-business-flow.html',
   'apps/web/m7-business-flow.js',
   'var/main-flow-demo-evidence/interactive-manifest.json',
@@ -61,6 +63,8 @@ const evidenceFiles = [
   'var/main-flow-demo-evidence/store-workbench-mobile.png',
   'var/main-flow-demo-evidence/purchaser-workbench.png',
   'var/main-flow-demo-evidence/purchaser-workbench-mobile.png',
+  'var/main-flow-demo-evidence/supplier-workbench.png',
+  'var/main-flow-demo-evidence/supplier-workbench-mobile.png',
   'var/main-flow-demo-evidence/m7-business-flow.png',
   'var/main-flow-demo-evidence/m7-business-flow-mobile.png',
   'docs/m6-production-readiness.md',
@@ -114,6 +118,8 @@ const requiredStatuses = [
   ['storeWorkbenchMobile', interactiveManifest?.mobileStoreWorkbench?.status === 'READY' && interactiveManifest?.mobileStoreWorkbench?.summaryRows >= 4 && interactiveManifest?.mobileStoreWorkbench?.accountRows >= 4],
   ['purchaserWorkbenchDesktop', interactiveManifest?.purchaserWorkbench?.status === 'READY' && interactiveManifest?.purchaserWorkbench?.summaryRows >= 4 && interactiveManifest?.purchaserWorkbench?.requestRows >= 1],
   ['purchaserWorkbenchMobile', interactiveManifest?.mobilePurchaserWorkbench?.status === 'READY' && interactiveManifest?.mobilePurchaserWorkbench?.summaryRows >= 4 && interactiveManifest?.mobilePurchaserWorkbench?.requestRows >= 1],
+  ['supplierWorkbenchDesktop', interactiveManifest?.supplierWorkbench?.status === 'READY' && interactiveManifest?.supplierWorkbench?.summaryRows >= 4 && interactiveManifest?.supplierWorkbench?.orderRows >= 1],
+  ['supplierWorkbenchMobile', interactiveManifest?.mobileSupplierWorkbench?.status === 'READY' && interactiveManifest?.mobileSupplierWorkbench?.summaryRows >= 4 && interactiveManifest?.mobileSupplierWorkbench?.orderRows >= 1],
 ];
 const failedStatusChecks = requiredStatuses.filter(([, passed]) => !passed).map(([name]) => name);
 const status = missingFiles.length === 0 && failedStatusChecks.length === 0 ? 'LOCAL_READY' : 'BLOCKED';
