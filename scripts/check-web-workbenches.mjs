@@ -31,12 +31,22 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, purchaserWorkbenchHtml, purchaserWorkbenchJs, supplierWorkbenchHtml, supplierWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, productAppHtml, productAppMain, productAppApi, productAppShell, productAppState, productAppUi, productOverviewPage, productStorePage, productPurchaserPage, productSupplierPage, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, purchaserWorkbenchHtml, purchaserWorkbenchJs, supplierWorkbenchHtml, supplierWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
   readProjectFile('apps/web/app.js'),
   readProjectFile('apps/web/style.css'),
+  readProjectFile('apps/web/app.html'),
+  readProjectFile('apps/web/product-app/main.js'),
+  readProjectFile('apps/web/product-app/api.js'),
+  readProjectFile('apps/web/product-app/shell.js'),
+  readProjectFile('apps/web/product-app/state.js'),
+  readProjectFile('apps/web/product-app/ui.js'),
+  readProjectFile('apps/web/product-app/pages/overview.js'),
+  readProjectFile('apps/web/product-app/pages/store.js'),
+  readProjectFile('apps/web/product-app/pages/purchaser.js'),
+  readProjectFile('apps/web/product-app/pages/supplier.js'),
   readProjectFile('apps/web/index.html'),
   readProjectFile('apps/web/main-flow.html'),
   readProjectFile('apps/web/main-flow.js'),
@@ -67,6 +77,16 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHt
 for (const path of [
   'apps/web/style.css',
   'apps/web/billing.css',
+  'apps/web/app.html',
+  'apps/web/product-app/main.js',
+  'apps/web/product-app/api.js',
+  'apps/web/product-app/shell.js',
+  'apps/web/product-app/state.js',
+  'apps/web/product-app/ui.js',
+  'apps/web/product-app/pages/overview.js',
+  'apps/web/product-app/pages/store.js',
+  'apps/web/product-app/pages/purchaser.js',
+  'apps/web/product-app/pages/supplier.js',
   'apps/web/billing.js',
   'apps/web/app.js',
   'apps/web/main-flow.html',
@@ -100,6 +120,15 @@ for (const path of [
 
 checkSyntax('apps/web/billing.js');
 checkSyntax('apps/web/app.js');
+checkSyntax('apps/web/product-app/main.js');
+checkSyntax('apps/web/product-app/api.js');
+checkSyntax('apps/web/product-app/shell.js');
+checkSyntax('apps/web/product-app/state.js');
+checkSyntax('apps/web/product-app/ui.js');
+checkSyntax('apps/web/product-app/pages/overview.js');
+checkSyntax('apps/web/product-app/pages/store.js');
+checkSyntax('apps/web/product-app/pages/purchaser.js');
+checkSyntax('apps/web/product-app/pages/supplier.js');
 checkSyntax('apps/web/main-flow.js');
 checkSyntax('apps/web/m4-acceptance.js');
 checkSyntax('apps/web/main-flow-demo.js');
@@ -149,7 +178,34 @@ assertIncludes(billingCss, '.bill-tabs', 'billing styles');
 assertIncludes(billingCss, '.adjustment-detail', 'adjustment styles');
 assertIncludes(billingCss, '@media', 'responsive billing styles');
 
+assertIncludes(productAppHtml, 'product-app/main.js', 'product app module entry');
+assertIncludes(productAppHtml, 'id="product-app"', 'product app mount point');
+assertIncludes(productAppMain, "import * as store", 'product app store module import');
+assertIncludes(productAppMain, "import * as purchaser", 'product app purchaser module import');
+assertIncludes(productAppMain, "import * as supplier", 'product app supplier module import');
+assertIncludes(productAppMain, 'hashchange', 'product app client route listener');
+assertIncludes(productAppApi, 'apiBase', 'product app shared api base');
+assertIncludes(productAppApi, '/auth/login', 'product app shared login');
+assertIncludes(productAppShell, "['store', '门店']", 'product app store route');
+assertIncludes(productAppShell, "['purchaser', '采购']", 'product app purchaser route');
+assertIncludes(productAppShell, "['supplier', '供应商']", 'product app supplier route');
+assertIncludes(productAppShell, '/store-workbench.html', 'product app legacy store link');
+assertIncludes(productAppState, 'main-flow-demo-seed.json', 'product app seed state loader');
+assertIncludes(productOverviewPage, '组件化迁移状态', 'product app migration status');
+assertIncludes(productStorePage, '/stores/${state.seed.storeId}/account', 'product app store account endpoint');
+assertIncludes(productStorePage, '/purchase-requests/preview', 'product app store order preview endpoint');
+assertIncludes(productStorePage, '/purchase-requests', 'product app store order endpoint');
+assertIncludes(productPurchaserPage, '/purchase-requests/${requestId}', 'product app purchaser request detail endpoint');
+assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/confirm', 'product app purchaser confirm endpoint');
+assertIncludes(productPurchaserPage, '/purchase-requests/${detail.id}/reallocate', 'product app purchaser reallocate endpoint');
+assertIncludes(productSupplierPage, '/supplier-orders/${id}', 'product app supplier detail endpoint');
+assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/shipments', 'product app supplier shipment endpoint');
+assertIncludes(productSupplierPage, '/supplier-orders/${order.id}/reject', 'product app supplier reject endpoint');
+assertIncludes(productSupplierPage, '/discrepancies/${id}/resolve', 'product app supplier discrepancy endpoint');
+assertIncludes(appCss, '.app-route-grid', 'product app route grid styles');
+
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');
+assertIncludes(reportHtml, '/app.html', 'product app navigation entry');
 assertIncludes(reportHtml, '/ops.html', 'W13 navigation entry');
 assertIncludes(reportHtml, '/store-workbench.html', 'M7 store workbench navigation entry');
 assertIncludes(reportHtml, '/purchaser-workbench.html', 'M7 purchaser workbench navigation entry');

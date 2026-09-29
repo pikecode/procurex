@@ -456,6 +456,41 @@ async function captureSupplierWorkbench(cdp, viewport, fileName) {
   return { file, state, viewport };
 }
 
+async function captureProductApp(cdp, viewport, route, fileName) {
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/${route}`);
+  const state = await evaluate(cdp, `
+    (async () => {
+      const waitFor = async (predicate, label) => {
+        for (let i = 0; i < 100; i += 1) {
+          if (await predicate()) return;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        throw new Error(label + ' did not become ready.');
+      };
+      await waitFor(() => document.querySelector('#app-status')?.textContent.trim() === 'READY' || document.querySelector('#app-status')?.textContent.trim() === 'PASSED', 'product app status');
+      await waitFor(() => document.querySelectorAll('#app-view .metric').length >= 4, 'product app metrics');
+      const bodyText = document.body.textContent || '';
+      return {
+        status: document.querySelector('#app-status')?.textContent.trim() || '',
+        route: document.querySelector('#app-route-label')?.textContent.trim() || '',
+        metricRows: document.querySelectorAll('#app-view .metric').length,
+        dataCards: document.querySelectorAll('#app-view .data-card').length,
+        routeCards: document.querySelectorAll('.app-route-grid article').length,
+        hasStoreLink: bodyText.includes('门店工作台'),
+        hasPurchaserLink: bodyText.includes('采购工作台'),
+        hasSupplierLink: bodyText.includes('供应商工作台'),
+        viewportWidth: window.innerWidth,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
+      };
+    })()
+  `);
+  const file = resolve(outputDir, fileName);
+  await rm(file, { force: true });
+  await captureScreenshot(cdp, file);
+  return { file, state, viewport };
+}
+
 async function main() {
   await run('npm', ['run', 'main-flow:seed-demo']);
   await run('npm', ['run', 'main-flow:check-demo']);
@@ -520,6 +555,36 @@ async function main() {
           { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
           'supplier-workbench-mobile.png',
         );
+        const productApp = await captureProductApp(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'overview',
+          'product-app.png',
+        );
+        const mobileProductApp = await captureProductApp(
+          cdp,
+          { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
+          'overview',
+          'product-app-mobile.png',
+        );
+        const productAppStore = await captureProductApp(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'store',
+          'product-app-store.png',
+        );
+        const productAppPurchaser = await captureProductApp(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'purchaser',
+          'product-app-purchaser.png',
+        );
+        const productAppSupplier = await captureProductApp(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'supplier',
+          'product-app-supplier.png',
+        );
         await writeFile(resolve(outputDir, 'interactive-manifest.json'), `${JSON.stringify({
           generatedAt: new Date().toISOString(),
           browser,
@@ -539,6 +604,11 @@ async function main() {
           mobilePurchaserWorkbenchScreenshot: mobilePurchaserWorkbench.file,
           supplierWorkbenchScreenshot: supplierWorkbench.file,
           mobileSupplierWorkbenchScreenshot: mobileSupplierWorkbench.file,
+          productAppScreenshot: productApp.file,
+          mobileProductAppScreenshot: mobileProductApp.file,
+          productAppStoreScreenshot: productAppStore.file,
+          productAppPurchaserScreenshot: productAppPurchaser.file,
+          productAppSupplierScreenshot: productAppSupplier.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
@@ -551,7 +621,12 @@ async function main() {
           mobilePurchaserWorkbench: mobilePurchaserWorkbench.state,
           supplierWorkbench: supplierWorkbench.state,
           mobileSupplierWorkbench: mobileSupplierWorkbench.state,
-          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench },
+          productApp: productApp.state,
+          mobileProductApp: mobileProductApp.state,
+          productAppStore: productAppStore.state,
+          productAppPurchaser: productAppPurchaser.state,
+          productAppSupplier: productAppSupplier.state,
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -569,6 +644,8 @@ async function main() {
         console.log(`  Mobile purchaser workbench screenshot: ${mobilePurchaserWorkbench.file}`);
         console.log(`  Supplier workbench screenshot: ${supplierWorkbench.file}`);
         console.log(`  Mobile supplier workbench screenshot: ${mobileSupplierWorkbench.file}`);
+        console.log(`  Product app screenshot: ${productApp.file}`);
+        console.log(`  Mobile product app screenshot: ${mobileProductApp.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
         console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText}; ${roleWorkbenchAction.state.discrepancyResultText}; ${roleWorkbenchAction.state.rejectionResultText}; ${roleWorkbenchAction.state.discrepancyBranchesResultText})`);
@@ -577,6 +654,7 @@ async function main() {
         console.log(`  Store workbench status: ${storeWorkbench.state.status}, orders: ${storeWorkbench.state.orderRows}, account cards: ${storeWorkbench.state.accountRows}`);
         console.log(`  Purchaser workbench status: ${purchaserWorkbench.state.status}, requests: ${purchaserWorkbench.state.requestRows}, rejections: ${purchaserWorkbench.state.rejectionCards}`);
         console.log(`  Supplier workbench status: ${supplierWorkbench.state.status}, orders: ${supplierWorkbench.state.orderRows}, discrepancies: ${supplierWorkbench.state.discrepancyCards}`);
+        console.log(`  Product app routes: ${productApp.state.status}/${productAppStore.state.status}/${productAppPurchaser.state.status}/${productAppSupplier.state.status}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');
