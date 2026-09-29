@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-09-29T00:28:44.588Z",
+  "generatedAt": "2026-09-29T00:47:07.972Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "77c70c7c64b3c822b9403c9fdf97a665c6af39ed",
+    "commit": "077f956627b7ee4c8b9643c647b61b42896e423a",
     "remote": "git@github.com:pikecode/procurex.git",
     "dirty": false,
     "dirtyStatus": []
@@ -59,19 +59,19 @@
       "path": "apps/web/m6-readiness.json",
       "exists": true,
       "sizeBytes": 4596,
-      "sha256": "9cb0dadf1427f5ec6237314fadd2dd2b849bc1ef07ecc89450a2e38d0ac9f78f"
+      "sha256": "79644dd5e7154e2a38c854fe4bda9ab7a295ad9ebe9f3c9eab06a1c17fd33025"
     },
     {
       "path": "apps/web/m6-external-evidence.json",
       "exists": true,
       "sizeBytes": 4071,
-      "sha256": "7e062aaa0efe632339ba9fcce78f8e2f83d18d7248de1b723cb3f84337dcf1c4"
+      "sha256": "d9f885d9e417f389693bb92a6e05df822e8c98222027601e1dc4637793f8f47c"
     },
     {
       "path": "var/m6-external-evidence.json",
       "exists": true,
       "sizeBytes": 4071,
-      "sha256": "7e062aaa0efe632339ba9fcce78f8e2f83d18d7248de1b723cb3f84337dcf1c4"
+      "sha256": "d9f885d9e417f389693bb92a6e05df822e8c98222027601e1dc4637793f8f47c"
     },
     {
       "path": "var/m6-performance-report.json",
@@ -100,20 +100,20 @@
     {
       "path": "var/m6-readiness-evidence/manifest.json",
       "exists": true,
-      "sizeBytes": 1676,
-      "sha256": "5af793c2c5b265402946ba7ad30d9e1c53f0ca60fc49258cfa99e93e8196f528"
+      "sizeBytes": 1967,
+      "sha256": "6754cd5c5e26d54e20b5edb5399dbf7ef2d71bccc89779503dacb6ad2964c24f"
     },
     {
       "path": "var/m6-readiness-evidence/m6-readiness-desktop.png",
       "exists": true,
-      "sizeBytes": 308001,
-      "sha256": "0c55435319fa5a536c358b2d1de56ef6c8cefae29a1ae1abfc2dd4ff6cbbe022"
+      "sizeBytes": 393489,
+      "sha256": "f4596f745d0e42e04ed3882c8a790bc91ece856605b5401019f0502ab95b0f6e"
     },
     {
       "path": "var/m6-readiness-evidence/m6-readiness-mobile.png",
       "exists": true,
-      "sizeBytes": 830974,
-      "sha256": "a23aed30c7ea479a227d9506272ceadc361ea79a52398991d8ba9a096024f9ba"
+      "sizeBytes": 1028239,
+      "sha256": "fbdff4e14d9f858d919f1106ee7ef2573303f7337c6632e804828eaa80f7b1e7"
     },
     {
       "path": "apps/miniprogram/mini-flow-check.json",
