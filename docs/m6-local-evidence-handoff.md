@@ -13,9 +13,9 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | External evidence status | BLOCKED |
 | Git branch | main |
-| Packaged commit | 30dc1bffe802c37860f463e1f54caa11f96a16d3 |
+| Packaged commit | ce03d1ef3eae04cd8f63f124d991d328b47aec5b |
 | Remote | git@github.com:pikecode/procurex.git |
-| Dirty at packaging | yes |
+| Dirty at packaging | no |
 
 ## Local Evidence
 
