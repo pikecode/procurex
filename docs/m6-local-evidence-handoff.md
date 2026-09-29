@@ -13,7 +13,7 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | External evidence status | BLOCKED |
 | Git branch | main |
-| Packaged commit | 62efcfff9684a06b01356cbd69988a5088ef572c |
+| Packaged commit | 347ee119669b49a36dd37fda3caf54017485bc44 |
 | Remote | git@github.com:pikecode/procurex.git |
 | Dirty at packaging | no |
 
@@ -43,9 +43,9 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 
 | Path | State | Bytes | SHA-256 |
 |---|---|---|---|
-| apps/web/m6-readiness.json | present | 4753 | 392dc9e73db6a2b3a395cd37566afd63c3c878ac9f73abc16895eeb50cb25a4d |
-| apps/web/m6-external-evidence.json | present | 4110 | e594b367fc2e0c60dc614be5f82b9b61bdc0230b342e1da2507a405a5b8d1ef6 |
-| var/m6-external-evidence.json | present | 4110 | e594b367fc2e0c60dc614be5f82b9b61bdc0230b342e1da2507a405a5b8d1ef6 |
+| apps/web/m6-readiness.json | present | 4791 | a69bfb1009efd6942a8d8e095af7666fd329edd775e148568cb3dba59a752fdb |
+| apps/web/m6-external-evidence.json | present | 4537 | c385c3be0e53a7693d07cd776d114d6cf531b11087cb753ab543bc75d04aa7b1 |
+| var/m6-external-evidence.json | present | 4537 | c385c3be0e53a7693d07cd776d114d6cf531b11087cb753ab543bc75d04aa7b1 |
 | var/m6-performance-report.json | present | 2502 | ef810f1d3c8971f25c81655682576cf9f1408dc33b3c8c1af7fb87bbd4c92838 |
 | var/m6-rollback-drill.json | present | 4421 | 6d5028efb0082f04e1473b200e973e5d97758bf23a906d5fb44d0c15fb5d3296 |
 | var/m6-initialization-signoff.json | present | 4806 | 95f3ba32a422fdaad43a0b7f7a171b6b31bd3f6b83addc293f100e60bea2ce28 |
@@ -56,7 +56,7 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | apps/miniprogram/mini-flow-check.json | present | 2097 | 03357d581baa087de537c1c844fb55c460da619a738b1acef7a9387f942682d1 |
 | apps/web/m5-gate-status.json | present | 2122 | 52708240ad461741a37aa4f9bc0865bfa2f1660288d7b1b3d1ebaf66f156631e |
 | var/main-flow-demo-evidence/interactive-manifest.json | present | 8880 | b6639f0e33ec4e1a1350f8d8bd11d526e28d108c206b8d440f9d61623cb4d42c |
-| docs/m6-production-readiness.md | present | 9990 | 2120f52647eade58826ea1c65da868d672d19af4a54120683820aa9c67fff4a4 |
+| docs/m6-production-readiness.md | present | 10594 | 7d0ca774ed6a7310a0501aa33ed79f0582ba5efb1f4b621874bf726084cca21e |
 | docs/m6-external-evidence-templates.md | present | 1031 | 54b07a540d31876d8996f9fbd24549c2791035d14198d4ab7ad27cc820d9ec1b |
 
 ## Refresh Commands
