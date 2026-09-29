@@ -204,6 +204,12 @@ assertIncludes(productFlowPage, '/purchase-requests/${requestDetail.id}/confirm'
 assertIncludes(productFlowPage, '/supplier-orders/${supplierDetail.id}/shipments', 'product app flow shipment endpoint');
 assertIncludes(productFlowPage, '/shipments/${shipmentDetail.id}/receipts', 'product app flow receipt endpoint');
 assertIncludes(productFlowPage, 'expectedOrderVersion', 'product app flow receipt version guard');
+assertIncludes(productFlowPage, '一键执行异常分支', 'product app exception action');
+assertIncludes(productFlowPage, '/supplier-orders/${rejectedFlow.supplierOrderId}/reject', 'product app supplier rejection endpoint');
+assertIncludes(productFlowPage, '/purchase-requests/${rejectedFlow.requestId}/reallocate', 'product app purchaser reallocation endpoint');
+assertIncludes(productFlowPage, "action: 'ACCEPT'", 'product app discrepancy accept branch');
+assertIncludes(productFlowPage, "action: 'REPLENISH'", 'product app discrepancy replenish branch');
+assertIncludes(productFlowPage, "action: 'RETURN'", 'product app discrepancy return branch');
 assertIncludes(productStorePage, '/stores/${state.seed.storeId}/account', 'product app store account endpoint');
 assertIncludes(productStorePage, '/purchase-requests/preview', 'product app store order preview endpoint');
 assertIncludes(productStorePage, '/purchase-requests', 'product app store order endpoint');

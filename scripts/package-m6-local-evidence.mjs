@@ -139,6 +139,7 @@ const requiredStatuses = [
   ['productAppMobile', ['READY', 'PASSED'].includes(interactiveManifest?.mobileProductApp?.status) && interactiveManifest?.mobileProductApp?.metricRows >= 4],
   ['productAppRoutes', interactiveManifest?.productAppStore?.status === 'READY' && interactiveManifest?.productAppPurchaser?.status === 'READY' && interactiveManifest?.productAppSupplier?.status === 'READY'],
   ['productAppFlowAction', interactiveManifest?.productAppFlowAction?.status === 'COMPLETED' && interactiveManifest?.productAppFlowAction?.resultRows >= 4],
+  ['productAppExceptionAction', interactiveManifest?.productAppExceptionAction?.status === 'BRANCHES_READY' && interactiveManifest?.productAppExceptionAction?.resultRows >= 4],
 ];
 const failedStatusChecks = requiredStatuses.filter(([, passed]) => !passed).map(([name]) => name);
 const status = missingFiles.length === 0 && failedStatusChecks.length === 0 ? 'LOCAL_READY' : 'BLOCKED';

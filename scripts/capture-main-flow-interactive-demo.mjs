@@ -507,15 +507,24 @@ async function runProductAppFlow(cdp, viewport, fileName) {
       await waitFor(() => document.querySelector('#app-flow-run') && !document.querySelector('#app-flow-run').disabled, 'product app flow action button');
       document.querySelector('#app-flow-run').click();
       await waitFor(() => document.querySelector('#app-flow-status')?.textContent.trim() === 'COMPLETED', 'product app flow completion');
+      await waitFor(() => document.querySelector('#app-exception-run') && !document.querySelector('#app-exception-run').disabled, 'product app exception action button');
+      document.querySelector('#app-exception-run').click();
+      await waitFor(() => document.querySelector('#app-exception-status')?.textContent.trim() === 'BRANCHES_READY', 'product app exception completion');
       const bodyText = document.body.textContent || '';
       return {
         status: document.querySelector('#app-flow-status')?.textContent.trim() || '',
+        exceptionStatus: document.querySelector('#app-exception-status')?.textContent.trim() || '',
         route: document.querySelector('#app-route-label')?.textContent.trim() || '',
         resultRows: document.querySelectorAll('#app-flow-result article').length,
+        exceptionRows: document.querySelectorAll('#app-exception-result article').length,
         hasStoreOrder: bodyText.includes('门店下单'),
         hasPurchaserConfirm: bodyText.includes('采购确认'),
         hasSupplierShipment: bodyText.includes('供应商发货'),
         hasStoreReceipt: bodyText.includes('门店收货'),
+        hasSupplierRejection: bodyText.includes('供应商拒单'),
+        hasPurchaserReallocation: bodyText.includes('采购改派'),
+        hasDiscrepancyAccept: bodyText.includes('差异同意'),
+        hasReplenishReturn: bodyText.includes('补发退回'),
         noticeText: document.querySelector('#app-notice')?.textContent.trim() || '',
         viewportWidth: window.innerWidth,
         horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
@@ -652,6 +661,7 @@ async function main() {
           productAppPurchaserScreenshot: productAppPurchaser.file,
           productAppSupplierScreenshot: productAppSupplier.file,
           productAppFlowActionScreenshot: productAppFlowAction.file,
+          productAppExceptionActionScreenshot: productAppFlowAction.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
@@ -670,6 +680,15 @@ async function main() {
           productAppPurchaser: productAppPurchaser.state,
           productAppSupplier: productAppSupplier.state,
           productAppFlowAction: productAppFlowAction.state,
+          productAppExceptionAction: {
+            status: productAppFlowAction.state.exceptionStatus,
+            resultRows: productAppFlowAction.state.exceptionRows,
+            hasSupplierRejection: productAppFlowAction.state.hasSupplierRejection,
+            hasPurchaserReallocation: productAppFlowAction.state.hasPurchaserReallocation,
+            hasDiscrepancyAccept: productAppFlowAction.state.hasDiscrepancyAccept,
+            hasReplenishReturn: productAppFlowAction.state.hasReplenishReturn,
+            horizontalOverflow: productAppFlowAction.state.horizontalOverflow,
+          },
           viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench, purchaserWorkbench, mobilePurchaserWorkbench, supplierWorkbench, mobileSupplierWorkbench, productApp, mobileProductApp, productAppStore, productAppPurchaser, productAppSupplier, productAppFlowAction },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
@@ -701,6 +720,7 @@ async function main() {
         console.log(`  Supplier workbench status: ${supplierWorkbench.state.status}, orders: ${supplierWorkbench.state.orderRows}, discrepancies: ${supplierWorkbench.state.discrepancyCards}`);
         console.log(`  Product app routes: ${productApp.state.status}/${productAppStore.state.status}/${productAppPurchaser.state.status}/${productAppSupplier.state.status}`);
         console.log(`  Product app flow action: ${productAppFlowAction.state.status}, rows: ${productAppFlowAction.state.resultRows}`);
+        console.log(`  Product app exception action: ${productAppFlowAction.state.exceptionStatus}, rows: ${productAppFlowAction.state.exceptionRows}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');
