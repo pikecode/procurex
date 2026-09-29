@@ -132,4 +132,4 @@ The original dual-client requirement remains represented: the Web App has browse
 
 ## Recommended Next Step
 
-Refresh the M6 local evidence package and stronger acceptance baselines after the mini-program statistics update; keep WeChat device and production launch evidence explicitly open under M6.
+Keep the refreshed M6 local evidence package and stronger acceptance baselines green; keep WeChat device and production launch evidence explicitly open under M6.

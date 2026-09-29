@@ -34,4 +34,4 @@ Do not mark production launch ready until these are provided and checked: produc
 
 ## Next Local Work
 
-Continue with broad requirement closure rather than narrow page polish: refresh the local M6 evidence package after this mini-program statistics change, then run the stronger acceptance baselines. Any new work should reduce one of the remaining mapped gaps above.
+The local M6 evidence package, readiness browser screenshots, customer evidence request, and M5 close baseline have been refreshed after the mini-program statistics change. Continue with broad requirement closure rather than narrow page polish: keep the baselines green, and only add local code where it reduces one of the mapped gaps above. The remaining closure items are mainly external M6 launch evidence.

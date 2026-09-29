@@ -1,23 +1,17 @@
 {
-  "generatedAt": "2026-09-29T22:05:49.443Z",
+  "generatedAt": "2026-09-29T22:10:08.976Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "ba06827eb693df681289e83e92191fcb10d9dc4b",
+    "commit": "641f825c2d5ef0b8461a2651bf198835a665ffd5",
     "remote": "git@github.com-pikecode:pikecode/procurex.git",
     "dirty": true,
     "dirtyStatus": [
-      "M apps/api/src/reports/reports.controller.ts",
-      " M apps/miniprogram/mini-flow-check.json",
-      " M apps/miniprogram/pages/purchaser/index.js",
-      " M apps/miniprogram/pages/purchaser/index.wxml",
-      " M apps/miniprogram/pages/store/index.js",
-      " M apps/miniprogram/pages/store/index.wxml",
-      " M apps/miniprogram/pages/supplier/index.js",
-      " M apps/miniprogram/pages/supplier/index.wxml",
+      "M apps/web/m6-external-evidence.json",
       " M apps/web/m6-local-evidence-package.json",
+      " M apps/web/m6-readiness.json",
       " M docs/acceptance-dashboard.md",
       " M docs/continuation.md",
       " M docs/development-log.md",
@@ -25,10 +19,12 @@
       " M docs/m6-local-evidence-handoff.md",
       " M docs/main-flow-acceptance.md",
       " M docs/progress.md",
-      " M scripts/check-miniprogram-flow.mjs",
-      " M scripts/check-miniprogram-surface.mjs",
+      " M docs/requirements-surface-audit.md",
+      " M var/m6-external-evidence.json",
       " M var/m6-local-evidence-package.json",
-      "?? docs/requirements-surface-audit.md"
+      " M var/m6-readiness-evidence/m6-readiness-desktop.png",
+      " M var/m6-readiness-evidence/m6-readiness-mobile.png",
+      " M var/m6-readiness-evidence/manifest.json"
     ]
   },
   "commands": [
@@ -85,19 +81,19 @@
       "path": "apps/web/m6-readiness.json",
       "exists": true,
       "sizeBytes": 4956,
-      "sha256": "7e7c1e09aaf1c871f96f86caa47b5f1c02fbb56b428c630a8649a0e5d61a95b6"
+      "sha256": "d85388db932176ef535d39e4f8e7751fa3fe023ab44ae8f0b7ed53272065d519"
     },
     {
       "path": "apps/web/m6-external-evidence.json",
       "exists": true,
       "sizeBytes": 5044,
-      "sha256": "b9ba498720ea41af6797e57607fefe902a3d9f37721934295b1785acbbf2f161"
+      "sha256": "2dc37b094ddf19ec1fc1ec7fd98cae803713e2b3ce3826d96cdddf42f0a8b7c7"
     },
     {
       "path": "var/m6-external-evidence.json",
       "exists": true,
       "sizeBytes": 5044,
-      "sha256": "b9ba498720ea41af6797e57607fefe902a3d9f37721934295b1785acbbf2f161"
+      "sha256": "2dc37b094ddf19ec1fc1ec7fd98cae803713e2b3ce3826d96cdddf42f0a8b7c7"
     },
     {
       "path": "var/m6-performance-report.json",
@@ -127,19 +123,19 @@
       "path": "var/m6-readiness-evidence/manifest.json",
       "exists": true,
       "sizeBytes": 2183,
-      "sha256": "64e86ece454edd9855d3bba693989518c469ca117d0824cf4a7193e4f44d4d8e"
+      "sha256": "6dc537654da2f92c9b82bffa328dea433e5eac0e80cf51df33b7b37a74200173"
     },
     {
       "path": "var/m6-readiness-evidence/m6-readiness-desktop.png",
       "exists": true,
-      "sizeBytes": 449847,
-      "sha256": "065d1a60566a8d6d4ba79971982e491890fd38613346816880e1ac841cda35a5"
+      "sizeBytes": 457466,
+      "sha256": "2b42648889d5b3b6ad2b5e3c6d2e426270863c5b5373240202c0a2458328cdff"
     },
     {
       "path": "var/m6-readiness-evidence/m6-readiness-mobile.png",
       "exists": true,
-      "sizeBytes": 1179247,
-      "sha256": "33d785116ddceb1c934b05d376125d0e2f1574d460316b88d4a307a98f1869de"
+      "sizeBytes": 1196966,
+      "sha256": "42d28d9749d5556bf96d16f07155e641eeb2d11b3c1aaaf79bd291c922e56b70"
     },
     {
       "path": "apps/miniprogram/mini-flow-check.json",

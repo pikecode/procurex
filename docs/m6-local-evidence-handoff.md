@@ -13,7 +13,7 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | External evidence status | BLOCKED |
 | Git branch | main |
-| Packaged commit | ba06827eb693df681289e83e92191fcb10d9dc4b |
+| Packaged commit | 641f825c2d5ef0b8461a2651bf198835a665ffd5 |
 | Remote | git@github.com-pikecode:pikecode/procurex.git |
 | Dirty at packaging | yes |
 
@@ -43,16 +43,16 @@ This handoff summarizes the local M6 evidence package. It does not claim product
 
 | Path | State | Bytes | SHA-256 |
 |---|---|---|---|
-| apps/web/m6-readiness.json | present | 4956 | 7e7c1e09aaf1c871f96f86caa47b5f1c02fbb56b428c630a8649a0e5d61a95b6 |
-| apps/web/m6-external-evidence.json | present | 5044 | b9ba498720ea41af6797e57607fefe902a3d9f37721934295b1785acbbf2f161 |
-| var/m6-external-evidence.json | present | 5044 | b9ba498720ea41af6797e57607fefe902a3d9f37721934295b1785acbbf2f161 |
+| apps/web/m6-readiness.json | present | 4956 | d85388db932176ef535d39e4f8e7751fa3fe023ab44ae8f0b7ed53272065d519 |
+| apps/web/m6-external-evidence.json | present | 5044 | 2dc37b094ddf19ec1fc1ec7fd98cae803713e2b3ce3826d96cdddf42f0a8b7c7 |
+| var/m6-external-evidence.json | present | 5044 | 2dc37b094ddf19ec1fc1ec7fd98cae803713e2b3ce3826d96cdddf42f0a8b7c7 |
 | var/m6-performance-report.json | present | 2502 | ef810f1d3c8971f25c81655682576cf9f1408dc33b3c8c1af7fb87bbd4c92838 |
 | var/m6-rollback-drill.json | present | 4421 | 6d5028efb0082f04e1473b200e973e5d97758bf23a906d5fb44d0c15fb5d3296 |
 | var/m6-initialization-signoff.json | present | 4806 | 95f3ba32a422fdaad43a0b7f7a171b6b31bd3f6b83addc293f100e60bea2ce28 |
 | var/m6-pilot-run.json | present | 4557 | 66abf81a69e53e2c0944787bf82481eef0b8ed2edf49e889e2c18027529377b1 |
-| var/m6-readiness-evidence/manifest.json | present | 2183 | 64e86ece454edd9855d3bba693989518c469ca117d0824cf4a7193e4f44d4d8e |
-| var/m6-readiness-evidence/m6-readiness-desktop.png | present | 449847 | 065d1a60566a8d6d4ba79971982e491890fd38613346816880e1ac841cda35a5 |
-| var/m6-readiness-evidence/m6-readiness-mobile.png | present | 1179247 | 33d785116ddceb1c934b05d376125d0e2f1574d460316b88d4a307a98f1869de |
+| var/m6-readiness-evidence/manifest.json | present | 2183 | 6dc537654da2f92c9b82bffa328dea433e5eac0e80cf51df33b7b37a74200173 |
+| var/m6-readiness-evidence/m6-readiness-desktop.png | present | 457466 | 2b42648889d5b3b6ad2b5e3c6d2e426270863c5b5373240202c0a2458328cdff |
+| var/m6-readiness-evidence/m6-readiness-mobile.png | present | 1196966 | 42d28d9749d5556bf96d16f07155e641eeb2d11b3c1aaaf79bd291c922e56b70 |
 | apps/miniprogram/mini-flow-check.json | present | 2428 | 23643a107e2f2b280af4f96d33441fb665fddbfe0b79d522371c8d9d5b61cc76 |
 | apps/web/m5-gate-status.json | present | 2122 | 2ec4c95ed2daf2b4e9ab847a6844d6d8cc18dc6ffe6613be871e0f26c70a2e71 |
 | apps/web/app.html | present | 348 | 59df6ba85c82b57bd2ded02b2e7536648939df873ef971a301343e4120c2f1ef |
