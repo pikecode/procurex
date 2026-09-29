@@ -3,10 +3,10 @@ const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&':
 const money = (value) => Number.isFinite(Number(value)) ? `¥${Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
 const stages = [
-  { key: 'store', title: '门店下单', role: '门店', owner: 'Store', href: '/role-workbenches.html', action: '去门店工作台', description: '按订货模板选择商品，提交采购需求，余额不足时保留需求但不直接推单。' },
+  { key: 'store', title: '门店下单', role: '门店', owner: 'Store', href: '/store-workbench.html', action: '去门店工作台', description: '按订货模板选择商品，提交采购需求，余额不足时保留需求但不直接推单。' },
   { key: 'purchase', title: '采购确认', role: '采购', owner: 'Purchaser', href: '/role-workbenches.html', action: '去采购工作台', description: '复核门店需求，确认商品、供应商和资金状态，处理拒单后的改派。' },
   { key: 'supplier', title: '供应商履约', role: '供应商', owner: 'Supplier', href: '/role-workbenches.html', action: '去供应商工作台', description: '查看供应商执行单，完成发货、拒单、差异处理、补发或退回。' },
-  { key: 'receipt', title: '门店收货', role: '门店', owner: 'Store', href: '/role-workbenches.html', action: '处理收货', description: '确认实收数量，少收时生成差异，供应商处理后门店继续跟踪结果。' },
+  { key: 'receipt', title: '门店收货', role: '门店', owner: 'Store', href: '/store-workbench.html', action: '处理收货', description: '确认实收数量，少收时生成差异，供应商处理后门店继续跟踪结果。' },
   { key: 'finance', title: '财务结算', role: '财务', owner: 'Operator', href: '/billing.html', action: '去财务结算', description: '按门店应收、供应商应付、直营账期和付款凭证完成结算闭环。' },
 ];
 
@@ -61,7 +61,7 @@ function renderBoard(seed, run) {
 
 function renderTodos(seed, run) {
   const todos = [
-    { title: '门店补充或复核订货', detail: `${seed?.storeUsername || '门店账号'} 查看订单状态、收货和差异结果。`, href: '/role-workbenches.html' },
+    { title: '门店补充或复核订货', detail: `${seed?.storeUsername || '门店账号'} 查看订单状态、收货和差异结果。`, href: '/store-workbench.html' },
     { title: '采购处理确认与改派', detail: `${seed?.username || '采购账号'} 处理确认、供应商拒单和审计追踪。`, href: '/role-workbenches.html' },
     { title: '供应商处理发货与差异', detail: `${seed?.supplierUsername || '供应商账号'} 完成发货、少收处理、补发和退回。`, href: '/role-workbenches.html' },
     { title: '财务查看账单和付款', detail: '进入财务结算页查看门店账单、供应商账单、付款记录和凭证。', href: '/billing.html' },

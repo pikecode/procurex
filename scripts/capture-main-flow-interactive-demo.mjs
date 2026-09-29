@@ -348,6 +348,41 @@ async function captureBusinessFlow(cdp, viewport, fileName) {
   return { file, state, viewport };
 }
 
+async function captureStoreWorkbench(cdp, viewport, fileName) {
+  await setViewport(cdp, viewport);
+  await navigate(cdp, `${webBaseUrl}/store-workbench.html`);
+  const state = await evaluate(cdp, `
+    (async () => {
+      const waitFor = async (predicate, label) => {
+        for (let i = 0; i < 100; i += 1) {
+          if (await predicate()) return;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        throw new Error(label + ' did not become ready.');
+      };
+      await waitFor(() => document.querySelector('#store-page-status')?.textContent.trim() === 'READY', 'store workbench status');
+      await waitFor(() => document.querySelectorAll('#store-summary .metric').length >= 4, 'store summary metrics');
+      const bodyText = document.body.textContent || '';
+      return {
+        status: document.querySelector('#store-page-status')?.textContent.trim() || '',
+        summaryRows: document.querySelectorAll('#store-summary .metric').length,
+        accountRows: document.querySelectorAll('#store-account article').length,
+        orderRows: document.querySelectorAll('#store-orders tr').length,
+        notificationCards: document.querySelectorAll('#store-notifications article').length,
+        hasOrderForm: Boolean(document.querySelector('#store-order-form')),
+        hasReceiptPanel: Boolean(document.querySelector('#store-receipt')),
+        hasAccountEndpointCopy: bodyText.includes('/stores/{id}/account') || bodyText.includes('门店账款'),
+        viewportWidth: window.innerWidth,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
+      };
+    })()
+  `);
+  const file = resolve(outputDir, fileName);
+  await rm(file, { force: true });
+  await captureScreenshot(cdp, file);
+  return { file, state, viewport };
+}
+
 async function main() {
   await run('npm', ['run', 'main-flow:seed-demo']);
   await run('npm', ['run', 'main-flow:check-demo']);
@@ -382,6 +417,16 @@ async function main() {
           { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
           'm7-business-flow-mobile.png',
         );
+        const storeWorkbench = await captureStoreWorkbench(
+          cdp,
+          { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false },
+          'store-workbench.png',
+        );
+        const mobileStoreWorkbench = await captureStoreWorkbench(
+          cdp,
+          { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
+          'store-workbench-mobile.png',
+        );
         await writeFile(resolve(outputDir, 'interactive-manifest.json'), `${JSON.stringify({
           generatedAt: new Date().toISOString(),
           browser,
@@ -395,13 +440,17 @@ async function main() {
           mobileRoleWorkbenchActionScreenshot: mobileRoleWorkbenchAction.file,
           businessFlowScreenshot: businessFlow.file,
           mobileBusinessFlowScreenshot: mobileBusinessFlow.file,
+          storeWorkbenchScreenshot: storeWorkbench.file,
+          mobileStoreWorkbenchScreenshot: mobileStoreWorkbench.file,
           services: { startedApi, startedWeb },
           state: desktop.state,
           roleWorkbenchAction: roleWorkbenchAction.state,
           mobileRoleWorkbenchAction: mobileRoleWorkbenchAction.state,
           businessFlow: businessFlow.state,
           mobileBusinessFlow: mobileBusinessFlow.state,
-          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow },
+          storeWorkbench: storeWorkbench.state,
+          mobileStoreWorkbench: mobileStoreWorkbench.state,
+          viewports: { desktop, mobile, roleWorkbenchAction, mobileRoleWorkbenchAction, businessFlow, mobileBusinessFlow, storeWorkbench, mobileStoreWorkbench },
         }, null, 2)}\n`);
         console.log('Main-flow interactive browser evidence captured.');
         console.log(`  Browser: ${browser}`);
@@ -413,11 +462,14 @@ async function main() {
         console.log(`  Mobile role workbench screenshot: ${mobileRoleWorkbenchAction.file}`);
         console.log(`  Business flow screenshot: ${businessFlow.file}`);
         console.log(`  Mobile business flow screenshot: ${mobileBusinessFlow.file}`);
+        console.log(`  Store workbench screenshot: ${storeWorkbench.file}`);
+        console.log(`  Mobile store workbench screenshot: ${mobileStoreWorkbench.file}`);
         console.log(`  Desktop completed rows: ${desktop.state.completedRows}/${desktop.state.stepRows}`);
         console.log(`  Mobile completed rows: ${mobile.state.completedRows}/${mobile.state.stepRows}`);
         console.log(`  Role workbench flow: ${roleWorkbenchAction.state.status} (${roleWorkbenchAction.state.storeResultText}; ${roleWorkbenchAction.state.purchaserResultText}; ${roleWorkbenchAction.state.shipmentResultText}; ${roleWorkbenchAction.state.receiptResultText}; ${roleWorkbenchAction.state.discrepancyResultText}; ${roleWorkbenchAction.state.rejectionResultText}; ${roleWorkbenchAction.state.discrepancyBranchesResultText})`);
         console.log(`  Mobile role workbench flow: ${mobileRoleWorkbenchAction.state.status} (${mobileRoleWorkbenchAction.state.storeResultText}; ${mobileRoleWorkbenchAction.state.purchaserResultText}; ${mobileRoleWorkbenchAction.state.shipmentResultText}; ${mobileRoleWorkbenchAction.state.receiptResultText}; ${mobileRoleWorkbenchAction.state.discrepancyResultText}; ${mobileRoleWorkbenchAction.state.rejectionResultText}; ${mobileRoleWorkbenchAction.state.discrepancyBranchesResultText})`);
         console.log(`  Business flow stages: ${businessFlow.state.stageRows}, todos: ${businessFlow.state.todoRows}, finance cards: ${businessFlow.state.financeRows}`);
+        console.log(`  Store workbench status: ${storeWorkbench.state.status}, orders: ${storeWorkbench.state.orderRows}, account cards: ${storeWorkbench.state.accountRows}`);
         console.log(`  Manifest: ${resolve(outputDir, 'interactive-manifest.json')}`);
       } finally {
         chrome.kill('SIGTERM');

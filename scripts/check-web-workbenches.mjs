@@ -31,7 +31,7 @@ function checkSyntax(path) {
   }
 }
 
-const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
+const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHtml, mainFlowJs, m4Html, m4Js, m4Css, m4Gates, mainFlowDemoHtml, mainFlowDemoJs, roleWorkbenchesHtml, roleWorkbenchesJs, storeWorkbenchHtml, storeWorkbenchJs, businessFlowHtml, businessFlowJs, mainFlowInteractiveCapture, opsHtml, opsJs, m6Html, m6Js, m6ReadinessScript] = await Promise.all([
   readProjectFile('apps/web/billing.html'),
   readProjectFile('apps/web/billing.js'),
   readProjectFile('apps/web/billing.css'),
@@ -48,6 +48,8 @@ const [billingHtml, billingJs, billingCss, appJs, appCss, reportHtml, mainFlowHt
   readProjectFile('apps/web/main-flow-demo.js'),
   readProjectFile('apps/web/role-workbenches.html'),
   readProjectFile('apps/web/role-workbenches.js'),
+  readProjectFile('apps/web/store-workbench.html'),
+  readProjectFile('apps/web/store-workbench.js'),
   readProjectFile('apps/web/m7-business-flow.html'),
   readProjectFile('apps/web/m7-business-flow.js'),
   readProjectFile('scripts/capture-main-flow-interactive-demo.mjs'),
@@ -73,6 +75,8 @@ for (const path of [
   'apps/web/main-flow-demo.js',
   'apps/web/role-workbenches.html',
   'apps/web/role-workbenches.js',
+  'apps/web/store-workbench.html',
+  'apps/web/store-workbench.js',
   'apps/web/m7-business-flow.html',
   'apps/web/m7-business-flow.js',
   'apps/web/ops.html',
@@ -92,6 +96,7 @@ checkSyntax('apps/web/main-flow.js');
 checkSyntax('apps/web/m4-acceptance.js');
 checkSyntax('apps/web/main-flow-demo.js');
 checkSyntax('apps/web/role-workbenches.js');
+checkSyntax('apps/web/store-workbench.js');
 checkSyntax('apps/web/m7-business-flow.js');
 checkSyntax('apps/web/ops.js');
 checkSyntax('apps/web/m6-readiness.js');
@@ -136,6 +141,7 @@ assertIncludes(billingCss, '@media', 'responsive billing styles');
 
 assertIncludes(reportHtml, '报表与分析', 'W11 report page');
 assertIncludes(reportHtml, '/ops.html', 'W13 navigation entry');
+assertIncludes(reportHtml, '/store-workbench.html', 'M7 store workbench navigation entry');
 assertIncludes(reportHtml, '/m7-business-flow.html', 'M7 business flow navigation entry');
 assertIncludes(reportHtml, '/m6-readiness.html', 'M6 readiness navigation entry');
 assertIncludes(reportHtml, 'M5 验收状态', 'M5 acceptance summary');
@@ -302,6 +308,27 @@ assertIncludes(roleWorkbenchesJs, '供应商工作台', 'role workbenches suppli
 assertIncludes(roleWorkbenchesJs, '下一步页面边界', 'role workbenches next page boundary');
 assertIncludes(roleWorkbenchesJs, 'roleEvidence', 'role workbenches role evidence mapping');
 
+assertIncludes(storeWorkbenchHtml, '门店日常工作台', 'M7 store workbench page');
+assertIncludes(storeWorkbenchHtml, '/store-workbench.js', 'M7 store workbench script');
+assertIncludes(storeWorkbenchHtml, 'id="store-summary"', 'M7 store summary');
+assertIncludes(storeWorkbenchHtml, 'id="store-order-form"', 'M7 store order form');
+assertIncludes(storeWorkbenchHtml, 'id="store-account"', 'M7 store account panel');
+assertIncludes(storeWorkbenchHtml, 'id="store-orders"', 'M7 store order list');
+assertIncludes(storeWorkbenchHtml, 'id="store-notifications"', 'M7 store notifications');
+assertIncludes(storeWorkbenchHtml, 'id="store-receipt"', 'M7 store receipt panel');
+assertIncludes(storeWorkbenchHtml, '/m7-business-flow.html', 'M7 store business flow navigation');
+assertIncludes(storeWorkbenchJs, 'main-flow-demo-seed.json', 'M7 store seed loader');
+assertIncludes(storeWorkbenchJs, '/auth/login', 'M7 store login');
+assertIncludes(storeWorkbenchJs, '/stores/${storeId}/account', 'M7 store account endpoint');
+assertIncludes(storeWorkbenchJs, '/stores/${storeId}/ledgers', 'M7 store ledgers endpoint');
+assertIncludes(storeWorkbenchJs, '/purchase-requests/preview', 'M7 store order preview endpoint');
+assertIncludes(storeWorkbenchJs, '/purchase-requests', 'M7 store order endpoints');
+assertIncludes(storeWorkbenchJs, '/notifications', 'M7 store notification endpoint');
+assertIncludes(storeWorkbenchJs, '/shipments/${shipmentId}', 'M7 store shipment detail endpoint');
+assertIncludes(storeWorkbenchJs, '/shipments/${state.shipment.id}/receipts', 'M7 store receipt endpoint');
+assertIncludes(storeWorkbenchJs, 'store-workbench-order-', 'M7 store idempotent order key');
+assertIncludes(storeWorkbenchJs, 'store-workbench-receipt-', 'M7 store idempotent receipt key');
+
 assertIncludes(businessFlowHtml, '采购协同业务流程', 'M7 business flow page');
 assertIncludes(businessFlowHtml, '/m7-business-flow.js', 'M7 business flow script');
 assertIncludes(businessFlowHtml, 'id="business-board"', 'M7 business flow board');
@@ -314,6 +341,7 @@ assertIncludes(businessFlowJs, '门店下单', 'M7 store stage');
 assertIncludes(businessFlowJs, '采购确认', 'M7 purchaser stage');
 assertIncludes(businessFlowJs, '供应商履约', 'M7 supplier stage');
 assertIncludes(businessFlowJs, '财务结算', 'M7 finance stage');
+assertIncludes(businessFlowJs, '/store-workbench.html', 'M7 store workbench navigation');
 assertIncludes(businessFlowJs, '/role-workbenches.html', 'M7 role workbench navigation');
 assertIncludes(businessFlowJs, '/billing.html', 'M7 billing navigation');
 

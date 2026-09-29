@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProcureX · 门店工作台</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <aside class="sidebar"><div class="brand"><span class="mark">P</span><span>ProcureX<small>采购协同平台</small></span></div><div class="nav-label">工作台</div><a class="nav-item" href="/m4-acceptance.html">M4 验收</a><a class="nav-item" href="/main-flow-demo.html">主流程操作台</a><a class="nav-item" href="/role-workbenches.html">角色工作台</a><a class="nav-item active" href="/store-workbench.html">门店工作台</a><a class="nav-item" href="/m7-business-flow.html">业务流程</a><a class="nav-item" href="/main-flow.html">主流程验收</a><a class="nav-item" href="/billing.html">财务结算</a><a class="nav-item" href="/">报表与分析</a><a class="nav-item" href="/ops.html">运营与对账</a><a class="nav-item" href="/m6-readiness.html">M6 上线准备</a><div class="side-foot"><span class="pulse"></span>门店日常业务</div></aside>
+  <main class="main">
+    <header class="topbar"><div class="crumb">工作台 <span>/</span> 门店工作台</div><div class="profile"><span id="store-page-status">等待门店登录</span><span class="avatar">S</span></div></header>
+    <section class="page-head"><div><div class="eyebrow">Store Workspace</div><h1>门店日常工作台</h1><p>门店订货、账户余额、订单进度、待收货提醒和收货登记集中在同一个业务页面。</p></div><div class="updated"><span class="pulse"></span><span id="store-updated">等待刷新</span></div></section>
+    <div id="store-notice" class="notice hidden"></div>
+    <section class="summary-grid" id="store-summary"></section>
+    <section class="store-layout">
+      <section class="data-card">
+        <div class="data-head"><div><h3>门店订货</h3><p>使用门店账号调用预览与创建接口</p></div><span id="store-order-label" class="tag">待预览</span></div>
+        <form id="store-order-form" class="store-form">
+          <label>门店 ID<input id="store-id" autocomplete="off"></label>
+          <label>商品 ID<input id="product-id" autocomplete="off"></label>
+          <label>数量<input id="quantity" autocomplete="off"></label>
+          <div class="form-actions"><button id="preview-order" class="secondary" type="button">预览金额</button><button id="submit-order" class="primary" type="submit">提交订货</button></div>
+        </form>
+        <div id="order-preview" class="store-result"></div>
+      </section>
+      <section class="data-card">
+        <div class="data-head"><div><h3>门店账款</h3><p>余额、授信、未清与最近流水</p></div><button id="refresh-store-account" class="secondary">刷新</button></div>
+        <div id="store-account" class="store-account"></div>
+        <div class="table-wrap compact"><table><thead><tr><th>类型</th><th>金额</th><th>业务</th></tr></thead><tbody id="store-ledgers"></tbody></table></div>
+      </section>
+    </section>
+    <section class="store-layout lower">
+      <section class="data-card">
+        <div class="data-head"><div><h3>订单进度</h3><p>门店作用域下最近订货单</p></div><button id="refresh-store-orders" class="secondary">刷新</button></div>
+        <div class="table-wrap"><table><thead><tr><th>单号</th><th>订单状态</th><th>资金状态</th><th class="money">销售额</th></tr></thead><tbody id="store-orders"></tbody></table></div>
+      </section>
+      <section class="data-card">
+        <div class="data-head"><div><h3>待收货提醒</h3><p>从站内通知进入发货单收货</p></div><button id="refresh-store-notifications" class="secondary">刷新</button></div>
+        <div id="store-notifications" class="store-notification-list"></div>
+      </section>
+    </section>
+    <section class="data-card acceptance-card">
+      <div class="data-head"><div><h3>收货登记</h3><p>读取发货单详情后提交完整收货或少收差异</p></div><span id="receipt-label" class="tag">等待发货单</span></div>
+      <div class="receipt-panel">
+        <label>发货单 ID<input id="shipment-id" autocomplete="off"></label>
+        <label>少收数量<input id="short-quantity" value="0" autocomplete="off"></label>
+        <div class="form-actions"><button id="load-shipment" class="secondary">读取发货单</button><button id="receive-full" class="primary">完整收货</button><button id="receive-short" class="secondary">提交少收</button></div>
+      </div>
+      <div id="store-receipt" class="store-result"></div>
+    </section>
+    <footer>门店工作台调用真实 API；业务流程总览见 <a href="/m7-business-flow.html">M7 业务流程</a>。</footer>
+  </main>
+  <script src="/store-workbench.js"></script>
+</body>
+</html>
