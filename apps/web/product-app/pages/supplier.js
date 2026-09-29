@@ -2,7 +2,7 @@ import { login, request } from '../api.js';
 import { state } from '../state.js';
 import { esc, money, metric, tableRows, setNotice } from '../ui.js';
 import { setHeader } from '../shell.js';
-import { loadWorkflowContext } from '../workflow.js';
+import { loadWorkflowContext, saveWorkflowContext } from '../workflow.js';
 
 export async function render() {
   setHeader({ title: '供应商工作台', subtitle: '供应商执行单、发货、差异和收款。', routeLabel: '供应商', status: '加载中' });
@@ -101,6 +101,7 @@ function bindSupplier(token) {
         headers: { 'idempotency-key': `product-app-supplier-payment-confirm-${crypto.randomUUID()}` },
         body: JSON.stringify({ expectedVersion: payment.version }),
       }, token);
+      saveWorkflowContext({ paymentId: payment.id, paymentNo: payment.paymentNo, paymentStatus: payment.status || 'CONFIRMED' });
       show(payment.status || 'CONFIRMED', { 付款记录: payment.paymentNo || payment.id, 付款状态: payment.status || 'CONFIRMED', 付款金额: money(payment.amount), 当前版本: payment.version ?? '—' });
       setNotice('');
     } catch (error) { setNotice(error.message); }
@@ -113,6 +114,7 @@ function bindSupplier(token) {
         headers: { 'idempotency-key': `product-app-supplier-payment-reject-${crypto.randomUUID()}` },
         body: JSON.stringify({ expectedVersion: payment.version, reason: document.getElementById('app-payment-reason').value.trim() || '供应商工作台驳回付款' }),
       }, token);
+      saveWorkflowContext({ paymentId: payment.id, paymentNo: payment.paymentNo, paymentStatus: payment.status || 'REJECTED' });
       show(payment.status || 'REJECTED', { 付款记录: payment.paymentNo || payment.id, 付款状态: payment.status || 'REJECTED', 付款金额: money(payment.amount), 当前版本: payment.version ?? '—' });
       setNotice('');
     } catch (error) { setNotice(error.message); }

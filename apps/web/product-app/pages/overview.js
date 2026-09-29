@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { metric, esc } from '../ui.js';
 import { setHeader } from '../shell.js';
-import { loadWorkflowContext } from '../workflow.js';
+import { loadWorkflowContext, workflowNextAction } from '../workflow.js';
 
 export async function render() {
   const seed = state.seed;
@@ -10,6 +10,7 @@ export async function render() {
   const workflow = loadWorkflowContext();
   const readinessCounts = readiness?.counts || {};
   const roleEvidence = run?.roleEvidence || [];
+  const nextAction = workflowNextAction(workflow);
   setHeader({
     title: '采购协同产品应用',
     subtitle: '主流程、角色待办、异常处理和财务结算集中在正式产品入口。',
@@ -39,13 +40,25 @@ export async function render() {
         </div>
       </section>
       <section class="data-card">
-        <div class="data-head"><div><h3>流程交接</h3><p>最近一次正式 App 主流程上下文。</p></div><span class="tag">${esc(workflow?.status || '等待流程')}</span></div>
+        <div class="data-head"><div><h3>流程交接</h3><p>最近一次正式 App 主流程上下文。</p></div><span class="tag">${esc(workflow?.paymentStatus || workflow?.status || '等待流程')}</span></div>
         <div class="overview-next-list">
           ${nextItem('采购申请', workflow?.purchaseRequestNo || workflow?.purchaseRequestId || '运行主流程后生成', '#/purchaser')}
-          ${nextItem('供应商单', workflow?.supplierOrderId || '运行主流程后生成', '#/supplier')}
-          ${nextItem('发货 / 收货', workflow?.shipmentNo || workflow?.shipmentId || '运行主流程后生成', '#/store')}
+          ${nextItem('收货状态', workflow?.receiptNo || workflow?.receiptId || '等待收货', '#/store')}
+          ${nextItem('付款状态', workflow?.paymentStatus ? `${workflow.paymentStatus} · ${workflow.paymentNo || workflow.paymentId || ''}` : '等待财务登记', '#/finance')}
         </div>
       </section>
+    </section>
+    <section class="data-card acceptance-card">
+      <div class="data-head"><div><h3>下一步处理</h3><p>根据最近流程交接判断当前最该处理的角色页面。</p></div><span class="tag">WORKFLOW</span></div>
+      <div class="finance-panel">
+        ${statusCard('建议动作', nextAction.title, nextAction.detail)}
+        ${statusCard('供应商单', workflow?.supplierOrderId || '待生成', '供应商履约入口')}
+        ${statusCard('发货单', workflow?.shipmentNo || workflow?.shipmentId || '待生成', '门店收货入口')}
+        ${statusCard('付款单', workflow?.paymentNo || workflow?.paymentId || '待登记', '财务/供应商收款入口')}
+      </div>
+      <div class="overview-next-list">
+        ${nextItem(nextAction.title, nextAction.detail, nextAction.href)}
+      </div>
     </section>
     <section class="data-card acceptance-card">
       <div class="data-head"><div><h3>下一步推进</h3><p>当前正式 App 的开发焦点。</p></div><span class="tag">M7</span></div>

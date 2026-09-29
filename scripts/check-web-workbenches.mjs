@@ -207,7 +207,10 @@ assertIncludes(productAppState, 'main-flow-demo-seed.json', 'product app seed st
 assertIncludes(productAppState, 'm6-readiness.json', 'product app readiness state loader');
 assertIncludes(productAppWorkflow, 'procurex-product-app-workflow', 'product app workflow storage key');
 assertIncludes(productAppWorkflow, 'saveWorkflowContext', 'product app workflow save helper');
+assertIncludes(productAppWorkflow, 'workflowNextAction', 'product app workflow next action helper');
 assertIncludes(productOverviewPage, '流程交接', 'product app overview workflow handoff');
+assertIncludes(productOverviewPage, '下一步处理', 'product app overview workflow next action');
+assertIncludes(productOverviewPage, '付款状态', 'product app overview payment status');
 assertIncludes(productOverviewPage, '组件化迁移状态', 'product app migration status');
 assertIncludes(productOverviewPage, '今日角色证据', 'product app role evidence overview');
 assertIncludes(productOverviewPage, '下一步推进', 'product app next-step overview');
@@ -251,6 +254,7 @@ assertIncludes(productSupplierPage, '/payment-records/${id}', 'product app suppl
 assertIncludes(productSupplierPage, '/payment-records/${payment.id}/confirm', 'product app supplier payment confirm endpoint');
 assertIncludes(productSupplierPage, '/payment-records/${payment.id}/reject', 'product app supplier payment reject endpoint');
 assertIncludes(productSupplierPage, '确认收款', 'product app supplier payment confirm action');
+assertIncludes(productSupplierPage, 'paymentStatus', 'product app supplier workflow payment status save');
 assertIncludes(productFinancePage, '/supplier-statements', 'product app finance supplier statements endpoint');
 assertIncludes(productFinancePage, '/supplier-statements/${statementId}', 'product app finance supplier statement detail endpoint');
 assertIncludes(productFinancePage, '/store-statements', 'product app finance store statements endpoint');

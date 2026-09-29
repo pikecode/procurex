@@ -36,6 +36,8 @@ The Finance formal route detail view is now tightened as well. `app.html#/financ
 
 The first guided day-to-day workflow connection is now in place. `app.html#/flow` saves the latest main-flow handoff to `sessionStorage` via `apps/web/product-app/workflow.js`; Overview displays that handoff, and Store/Purchaser/Supplier/Finance prefill the relevant IDs from it. Continue M7 by making the handoff more actionable after finance registration, for example by surfacing payment status back on Overview and adding route-level refresh actions, not by adding new standalone HTML pages.
 
+Workflow status is now more actionable: `workflowNextAction` drives the Overview “下一步处理” panel, Overview shows receipt/payment status, and Supplier confirmation/rejection writes paymentStatus back into the same workflow context. Continue M7 by adding route-level refresh actions and making Finance registration surface an explicit PENDING handoff before supplier confirmation, rather than adding new standalone HTML pages.
+
 ## Latest High-Signal Work
 
 Recent commits closed M4 and restarted M5 reporting/export/operations acceptance:
