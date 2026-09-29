@@ -1,20 +1,14 @@
 {
-  "generatedAt": "2026-09-29T11:37:32.695Z",
+  "generatedAt": "2026-09-29T11:37:57.531Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "6b2ddf80b99ca58965af010539f50b2d68241137",
+    "commit": "e0b56654268290584b78c06a06ebb15824d7acae",
     "remote": "git@github.com-pikecode:pikecode/procurex.git",
-    "dirty": true,
-    "dirtyStatus": [
-      "M apps/web/product-app/pages/finance.js",
-      " M docs/continuation.md",
-      " M docs/development-log.md",
-      " M docs/progress.md",
-      " M scripts/check-web-workbenches.mjs"
-    ]
+    "dirty": false,
+    "dirtyStatus": []
   },
   "commands": [
     "npm run m6:performance",
