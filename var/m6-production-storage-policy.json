@@ -1,0 +1,35 @@
+{
+  "signed": false,
+  "owner": "",
+  "storageProvider": "",
+  "privateFileRoot": "",
+  "retentionDays": 0,
+  "accessReview": {
+    "roles": [],
+    "lastReviewedAt": "",
+    "reviewer": ""
+  },
+  "backupSchedule": {
+    "frequency": "",
+    "retention": ""
+  },
+  "restoreTestReference": "var/m6-production-recovery-drill.json",
+  "downloadAuditPolicy": "",
+  "signedAt": "",
+  "status": "BLOCKED",
+  "issues": [
+    "signed must be true after operations/security approval",
+    "owner must name the storage policy owner",
+    "storageProvider must name the production object-storage or private-file service",
+    "privateFileRoot must be a production path/service, not a local var/ path",
+    "retentionDays must be at least 365",
+    "accessReview.roles must include ADMIN and HQ_FINANCE",
+    "accessReview.lastReviewedAt is required",
+    "accessReview.reviewer is required",
+    "backupSchedule.frequency is required",
+    "backupSchedule.retention is required",
+    "downloadAuditPolicy must mention authenticated audit logging",
+    "signedAt is required"
+  ],
+  "checkedAt": "2026-09-29T02:29:14.861Z"
+}

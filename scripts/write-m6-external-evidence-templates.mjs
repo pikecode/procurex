@@ -29,6 +29,7 @@ const templates = {
     signedAt: '2026-09-28',
   },
   'production-storage-policy.json': {
+    status: 'READY',
     signed: true,
     owner: 'operations owner',
     storageProvider: 'object-storage-or-mounted-private-file-service',
@@ -45,6 +46,7 @@ const templates = {
     },
     restoreTestReference: 'var/m6-production-recovery-drill.json',
     downloadAuditPolicy: 'payment evidence downloads must be authenticated and audit logged',
+    signedAt: '2026-09-28',
   },
   'production-runtime.json': {
     status: 'READY',
@@ -159,6 +161,7 @@ Use:
 \`\`\`bash
 npm run m6:write-external-templates
 npm run m6:check-external-templates
+npm run m6:check-storage-policy
 npm run m6:external-evidence
 \`\`\`
 `;

@@ -9,7 +9,7 @@ This request lists the external materials still needed before M6 can be reviewed
 | Item | Value |
 |---|---|
 | Local package status | LOCAL_READY |
-| Packaged commit | 9cf95b18de9bc43c0c0fc6461abbe8a28e2415d8 |
+| Packaged commit | fb5a4b7f51542a2fcbbcc0115be40105aea9464a |
 | Readiness counts | READY 1, LOCAL_READY 7, BLOCKED 3, PLANNED 0 |
 | Evidence handoff | `docs/m6-local-evidence-handoff.md` |
 | Visible readiness page | `apps/web/m6-readiness.html` |
@@ -72,9 +72,10 @@ Current status: BLOCKED
 
 Request:
 
+  - [ ] 按 docs/m6-storage-policy-guide.md 准备生产私有凭证存储策略
   - [ ] 私有付款凭证保存周期、访问角色、下载审计策略
   - [ ] 备份频率、保留周期、恢复测试引用
-  - [ ] 负责人签字
+  - [ ] 运行 npm run m6:check-storage-policy，并由负责人签字
 
 ### PRODUCTION_RECOVERY
 
@@ -134,6 +135,7 @@ npm run m6:external-evidence
 npm run m6:prepare-wechat-evidence
 npm run m6:check-wechat-evidence
 npm run m6:check-production-runtime
+npm run m6:check-storage-policy
 npm run m6:readiness
 npm run m6:package-local-evidence
 npm run m6:write-local-handoff

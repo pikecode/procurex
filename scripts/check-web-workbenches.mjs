@@ -77,6 +77,7 @@ for (const path of [
   'apps/web/m6-readiness.js',
   'docs/m6-wechat-device-evidence-guide.md',
   'docs/m6-production-runtime-guide.md',
+  'docs/m6-storage-policy-guide.md',
 ]) {
   assertExists(path, 'web asset');
 }
@@ -96,6 +97,7 @@ checkSyntax('scripts/m6-wechat-evidence-lib.mjs');
 checkSyntax('scripts/prepare-m6-wechat-device-evidence.mjs');
 checkSyntax('scripts/check-m6-wechat-device-evidence.mjs');
 checkSyntax('scripts/check-m6-production-runtime.mjs');
+checkSyntax('scripts/check-m6-storage-policy.mjs');
 checkSyntax('scripts/check-m6-external-evidence.mjs');
 checkSyntax('scripts/write-m6-external-evidence-templates.mjs');
 checkSyntax('scripts/capture-m6-readiness-evidence.mjs');
@@ -168,6 +170,7 @@ assertIncludes(packageJson.scripts['m6:pilot-check'], 'check-m6-pilot.mjs', 'M6 
 assertIncludes(packageJson.scripts['m6:prepare-wechat-evidence'], 'prepare-m6-wechat-device-evidence.mjs', 'M6 WeChat evidence draft script');
 assertIncludes(packageJson.scripts['m6:check-wechat-evidence'], 'check-m6-wechat-device-evidence.mjs', 'M6 WeChat evidence check script');
 assertIncludes(packageJson.scripts['m6:check-production-runtime'], 'check-m6-production-runtime.mjs', 'M6 production runtime check script');
+assertIncludes(packageJson.scripts['m6:check-storage-policy'], 'check-m6-storage-policy.mjs', 'M6 storage policy check script');
 assertIncludes(packageJson.scripts['m6:external-evidence'], 'check-m6-external-evidence.mjs', 'M6 external evidence script');
 assertIncludes(packageJson.scripts['m6:external-evidence:strict'], '--strict', 'M6 strict external evidence script');
 assertIncludes(packageJson.scripts['m6:write-external-templates'], 'write-m6-external-evidence-templates.mjs', 'M6 external evidence template writer');
@@ -328,6 +331,8 @@ assertIncludes(m6Html, 'm6:prepare-wechat-evidence', 'M6 WeChat evidence prepare
 assertIncludes(m6Html, 'm6:check-wechat-evidence', 'M6 WeChat evidence check command');
 assertIncludes(m6Html, 'docs/m6-production-runtime-guide.md', 'M6 production runtime guide visible path');
 assertIncludes(m6Html, 'm6:check-production-runtime', 'M6 production runtime check command');
+assertIncludes(m6Html, 'docs/m6-storage-policy-guide.md', 'M6 storage policy guide visible path');
+assertIncludes(m6Html, 'm6:check-storage-policy', 'M6 storage policy check command');
 assertIncludes(m6Html, 'docs/m6-customer-evidence-request.md', 'M6 customer evidence request visible path');
 assertIncludes(m6Html, 'm6:external-evidence:strict', 'M6 strict external evidence visible command');
 assertIncludes(m6Js, 'm6-readiness.json', 'M6 readiness output loader');
@@ -340,6 +345,7 @@ assertIncludes(m6ReadinessScript, 'WECHAT_APP_ID', 'M6 WeChat external dependenc
 assertIncludes(m6ReadinessScript, 'validateWechatDeviceEvidence', 'M6 WeChat manifest validation guard');
 assertIncludes(m6ReadinessScript, 'example.com', 'M6 production endpoint example-domain guard');
 assertIncludes(m6ReadinessScript, 'm6-production-runtime.json', 'M6 production runtime report guard');
+assertIncludes(m6ReadinessScript, 'm6-storage-policy-guide.md', 'M6 storage policy guide guard');
 assertIncludes(m6ReadinessScript, 'mini-flow-check.json', 'M6 mini-program flow evidence check');
 assertIncludes(m6ReadinessScript, 'check-miniprogram-flow.mjs', 'M6 mini-program flow script evidence');
 assertIncludes(m6ReadinessScript, 'm6-performance-report.json', 'M6 performance evidence check');

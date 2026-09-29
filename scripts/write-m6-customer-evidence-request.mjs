@@ -31,9 +31,10 @@ const requestDetails = {
     'HTTPS PUBLIC_API_BASE_URL、域名、TLS 路由、NODE_ENV=production、HOST/PORT，并运行 npm run m6:check-production-runtime',
   ],
   STORAGE_POLICY: [
+    '按 docs/m6-storage-policy-guide.md 准备生产私有凭证存储策略',
     '私有付款凭证保存周期、访问角色、下载审计策略',
     '备份频率、保留周期、恢复测试引用',
-    '负责人签字',
+    '运行 npm run m6:check-storage-policy，并由负责人签字',
   ],
   PRODUCTION_RECOVERY: [
     '生产或准生产恢复演练时间窗口',
@@ -114,6 +115,7 @@ npm run m6:external-evidence
 npm run m6:prepare-wechat-evidence
 npm run m6:check-wechat-evidence
 npm run m6:check-production-runtime
+npm run m6:check-storage-policy
 npm run m6:readiness
 npm run m6:package-local-evidence
 npm run m6:write-local-handoff

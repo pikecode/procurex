@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-29T02:17:48.485Z",
+  "generatedAt": "2026-09-29T02:29:34.371Z",
   "title": "M6 External Evidence Check",
   "status": "BLOCKED",
   "summary": "External launch evidence is still missing; local readiness remains useful but cannot close M6 production launch.",
@@ -31,7 +31,7 @@
       "id": "STORAGE_POLICY",
       "title": "Object storage/private evidence policy",
       "status": "BLOCKED",
-      "detail": "Need signed retention, access-control, backup, restore, and evidence-download policy for private payment files.",
+      "detail": "Need npm run m6:check-storage-policy with signed retention, access-control, backup, restore, and evidence-download policy for private payment files.",
       "evidence": [
         "var/m6-production-storage-policy.json"
       ]
@@ -97,12 +97,16 @@
       "path": "var/m6-production-storage-policy.json",
       "template": "docs/m6-evidence-templates/production-storage-policy.json",
       "fields": [
-        "signed",
+        "status=READY",
+        "signed=true",
         "owner",
-        "retentionDays",
+        "storageProvider",
+        "privateFileRoot",
+        "retentionDays>=365",
         "accessReview",
         "backupSchedule",
-        "restoreTestReference"
+        "restoreTestReference",
+        "downloadAuditPolicy"
       ]
     },
     "recoveryDrill": {

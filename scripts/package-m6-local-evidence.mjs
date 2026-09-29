@@ -54,8 +54,10 @@ const evidenceFiles = [
   'docs/m6-production-readiness.md',
   'docs/m6-wechat-device-evidence-guide.md',
   'docs/m6-production-runtime-guide.md',
+  'docs/m6-storage-policy-guide.md',
   'docs/m6-external-evidence-templates.md',
   'var/m6-production-runtime.json',
+  'var/m6-production-storage-policy.json',
 ];
 
 const [
@@ -118,6 +120,7 @@ const result = {
     'npm run m6:prepare-wechat-evidence',
     'npm run m6:check-wechat-evidence',
     'npm run m6:check-production-runtime',
+    'npm run m6:check-storage-policy',
     'npm run m6:external-evidence',
     'npm run m6:check-external-templates',
     'npm run m6:readiness',

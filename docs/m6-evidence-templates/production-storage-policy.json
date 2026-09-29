@@ -1,4 +1,5 @@
 {
+  "status": "READY",
   "signed": true,
   "owner": "operations owner",
   "storageProvider": "object-storage-or-mounted-private-file-service",
@@ -17,5 +18,6 @@
     "retention": "at least 30 days"
   },
   "restoreTestReference": "var/m6-production-recovery-drill.json",
-  "downloadAuditPolicy": "payment evidence downloads must be authenticated and audit logged"
+  "downloadAuditPolicy": "payment evidence downloads must be authenticated and audit logged",
+  "signedAt": "2026-09-28"
 }

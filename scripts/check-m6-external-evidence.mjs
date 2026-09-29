@@ -74,8 +74,10 @@ const checks = [
   item(
     'STORAGE_POLICY',
     'Object storage/private evidence policy',
-    storagePolicy?.signed === true,
-    'Need signed retention, access-control, backup, restore, and evidence-download policy for private payment files.',
+    storagePolicy?.status === 'READY' && storagePolicy?.signed === true,
+    storagePolicy?.status === 'READY'
+      ? 'Signed production object storage/private evidence policy passed the storage-policy preflight.'
+      : 'Need npm run m6:check-storage-policy with signed retention, access-control, backup, restore, and evidence-download policy for private payment files.',
     ['var/m6-production-storage-policy.json'],
   ),
   item(
@@ -124,7 +126,7 @@ const result = {
     storagePolicy: {
       path: 'var/m6-production-storage-policy.json',
       template: 'docs/m6-evidence-templates/production-storage-policy.json',
-      fields: ['signed', 'owner', 'retentionDays', 'accessReview', 'backupSchedule', 'restoreTestReference'],
+      fields: ['status=READY', 'signed=true', 'owner', 'storageProvider', 'privateFileRoot', 'retentionDays>=365', 'accessReview', 'backupSchedule', 'restoreTestReference', 'downloadAuditPolicy'],
     },
     recoveryDrill: {
       path: 'var/m6-production-recovery-drill.json',

@@ -134,7 +134,7 @@ const productionEnvReady =
 const productionRuntime = await readJson('var/m6-production-runtime.json');
 const readinessRunbookExists = await fileExists('docs/m6-production-readiness.md');
 const storagePolicy = await readJson('var/m6-production-storage-policy.json');
-const storagePolicyReady = storagePolicy?.signed === true;
+const storagePolicyReady = storagePolicy?.status === 'READY' && storagePolicy?.signed === true;
 add(
   'DEV-603-DEPLOY',
   '部署配置与生产环境',
@@ -149,9 +149,9 @@ add(
   '对象存储与私有凭证策略',
   storagePolicyReady ? 'READY' : 'BLOCKED',
   storagePolicyReady
-    ? 'Signed production object storage/private evidence policy is present.'
-    : 'Signed production object storage/private evidence policy is required; a local PRIVATE_FILE_DIR is not enough.',
-  ['docs/m6-production-readiness.md', 'var/m6-production-storage-policy.json'],
+    ? 'Signed production object storage/private evidence policy passed the storage-policy preflight.'
+    : 'Run npm run m6:check-storage-policy with signed retention, access-control, backup, restore, and evidence-download policy; a local PRIVATE_FILE_DIR is not enough.',
+  ['docs/m6-storage-policy-guide.md', 'var/m6-production-storage-policy.json'],
 );
 
 const localRestoreEvidence =

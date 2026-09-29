@@ -1,14 +1,40 @@
 {
-  "generatedAt": "2026-09-29T02:19:56.253Z",
+  "generatedAt": "2026-09-29T02:29:47.893Z",
   "title": "M6 Local Evidence Package",
   "status": "LOCAL_READY",
   "summary": "All expected local M6 evidence artifacts are present and internally consistent; external launch evidence remains separate.",
   "git": {
     "branch": "main",
-    "commit": "9cf95b18de9bc43c0c0fc6461abbe8a28e2415d8",
+    "commit": "fb5a4b7f51542a2fcbbcc0115be40105aea9464a",
     "remote": "git@github.com:pikecode/procurex.git",
-    "dirty": false,
-    "dirtyStatus": []
+    "dirty": true,
+    "dirtyStatus": [
+      "M apps/web/m6-external-evidence.json",
+      " M apps/web/m6-readiness.html",
+      " M apps/web/m6-readiness.json",
+      " M docs/development-log.md",
+      " M docs/m6-customer-evidence-request.md",
+      " M docs/m6-evidence-templates/production-storage-policy.json",
+      " M docs/m6-external-evidence-templates.md",
+      " M docs/m6-production-readiness.md",
+      " M docs/progress.md",
+      " M package.json",
+      " M scripts/capture-m6-readiness-evidence.mjs",
+      " M scripts/check-m6-external-evidence.mjs",
+      " M scripts/check-web-workbenches.mjs",
+      " M scripts/package-m6-local-evidence.mjs",
+      " M scripts/report-m6-readiness.mjs",
+      " M scripts/write-m6-customer-evidence-request.mjs",
+      " M scripts/write-m6-external-evidence-templates.mjs",
+      " M var/m6-external-evidence.json",
+      " M var/m6-readiness-evidence/m6-readiness-desktop.png",
+      " M var/m6-readiness-evidence/m6-readiness-mobile.png",
+      " M var/m6-readiness-evidence/manifest.json",
+      "?? docs/m6-storage-policy-guide.md",
+      "?? scripts/check-m6-storage-policy.mjs",
+      "?? var/chrome-m6-readiness-evidence/",
+      "?? var/m6-production-storage-policy.json"
+    ]
   },
   "commands": [
     "npm run m6:performance",
@@ -18,6 +44,7 @@
     "npm run m6:prepare-wechat-evidence",
     "npm run m6:check-wechat-evidence",
     "npm run m6:check-production-runtime",
+    "npm run m6:check-storage-policy",
     "npm run m6:external-evidence",
     "npm run m6:check-external-templates",
     "npm run m6:readiness",
@@ -61,20 +88,20 @@
     {
       "path": "apps/web/m6-readiness.json",
       "exists": true,
-      "sizeBytes": 4904,
-      "sha256": "4e70b4ca5babf8b4e8363509e488b78ace9a1ce947f5f7e6df6e01594ea0a063"
+      "sizeBytes": 4956,
+      "sha256": "7e7c1e09aaf1c871f96f86caa47b5f1c02fbb56b428c630a8649a0e5d61a95b6"
     },
     {
       "path": "apps/web/m6-external-evidence.json",
       "exists": true,
-      "sizeBytes": 4888,
-      "sha256": "20ee4be6b62291f5386ad08c3f364ea356225441cf16ee89657a52d36b799fd3"
+      "sizeBytes": 5044,
+      "sha256": "b9ba498720ea41af6797e57607fefe902a3d9f37721934295b1785acbbf2f161"
     },
     {
       "path": "var/m6-external-evidence.json",
       "exists": true,
-      "sizeBytes": 4888,
-      "sha256": "20ee4be6b62291f5386ad08c3f364ea356225441cf16ee89657a52d36b799fd3"
+      "sizeBytes": 5044,
+      "sha256": "b9ba498720ea41af6797e57607fefe902a3d9f37721934295b1785acbbf2f161"
     },
     {
       "path": "var/m6-performance-report.json",
@@ -103,20 +130,20 @@
     {
       "path": "var/m6-readiness-evidence/manifest.json",
       "exists": true,
-      "sizeBytes": 2109,
-      "sha256": "c6f2ced00394139f5e3b5925247657f52d1f67f167b879a4ab4214e1d0dcbd42"
+      "sizeBytes": 2183,
+      "sha256": "64e86ece454edd9855d3bba693989518c469ca117d0824cf4a7193e4f44d4d8e"
     },
     {
       "path": "var/m6-readiness-evidence/m6-readiness-desktop.png",
       "exists": true,
-      "sizeBytes": 439166,
-      "sha256": "39f1b5efb8080fe3b3627ebec0558af38154008abe66258d72618c2d2292d3e6"
+      "sizeBytes": 449847,
+      "sha256": "065d1a60566a8d6d4ba79971982e491890fd38613346816880e1ac841cda35a5"
     },
     {
       "path": "var/m6-readiness-evidence/m6-readiness-mobile.png",
       "exists": true,
-      "sizeBytes": 1149673,
-      "sha256": "cf116bb34d754f32be56e0e97ad7eaab4a2448c232fce5b06cce40106be08c12"
+      "sizeBytes": 1179247,
+      "sha256": "33d785116ddceb1c934b05d376125d0e2f1574d460316b88d4a307a98f1869de"
     },
     {
       "path": "apps/miniprogram/mini-flow-check.json",
@@ -139,8 +166,8 @@
     {
       "path": "docs/m6-production-readiness.md",
       "exists": true,
-      "sizeBytes": 11452,
-      "sha256": "4054d0343a730fd01b58db2bb2376e2fa08733fe22c3c596ec04dfd4b49dc120"
+      "sizeBytes": 11898,
+      "sha256": "37d23fd1a01ebcff1e91357f816b34fa73d31b06e1a69a95c541c54a173b0305"
     },
     {
       "path": "docs/m6-wechat-device-evidence-guide.md",
@@ -155,16 +182,28 @@
       "sha256": "d0092156325942a22878c316a0762e3fc9900fb35db0596e5378055c4e02ea98"
     },
     {
+      "path": "docs/m6-storage-policy-guide.md",
+      "exists": true,
+      "sizeBytes": 2160,
+      "sha256": "3cdc50a7efe026f76d5aa58a33f36080d6d079c8444deb99fd720416d59e2544"
+    },
+    {
       "path": "docs/m6-external-evidence-templates.md",
       "exists": true,
-      "sizeBytes": 1123,
-      "sha256": "900cf458c8d8b0a4d9a14ce64c51d01d6b9d7cfd90c656e9d69b264af985ef46"
+      "sizeBytes": 1155,
+      "sha256": "121ffa87b542061489b4fc078e013538c6aa370aba9279017b31eff718a233f6"
     },
     {
       "path": "var/m6-production-runtime.json",
       "exists": true,
       "sizeBytes": 1974,
       "sha256": "f8998157202763f0bf2b8a4163bb735633af71f176f8618d5db89598b5aa4f75"
+    },
+    {
+      "path": "var/m6-production-storage-policy.json",
+      "exists": true,
+      "sizeBytes": 1113,
+      "sha256": "4aec7851ec937558cf2dd9d91ee8a6bf2ad6dd7481d997d938a1c31149a386a7"
     }
   ],
   "missingFiles": [],

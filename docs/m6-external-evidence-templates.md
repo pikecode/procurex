@@ -18,5 +18,6 @@ Use:
 ```bash
 npm run m6:write-external-templates
 npm run m6:check-external-templates
+npm run m6:check-storage-policy
 npm run m6:external-evidence
 ```
