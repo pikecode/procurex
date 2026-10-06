@@ -2,7 +2,122 @@
 
 Last updated: 2026-10-06
 
+## Latest Delivery: Account Funding Labels
+
+- 门店订单及采购申请将paymentStatus明确为“储值/挂账入账”，不再将月结申请UNPAID解释为整单未支付；paidAmount显示为“账户入账金额”。账单结算继续以账单/付款记录为准。
+- 未修改财务算法；后台类型检查及生产构建通过，浏览器专项尚未重跑。整体签收口径不变，剩余真实恢复验证、需求映射与默认入口切换。
+
+## Latest Delivery: Product Images, PDF And Real Payment Rejection
+
+- `test:admin:oss-attachments` passed both monthly/direct scenarios and cleanup. React saves real OSS PNG/JPEG product images and reloads/enlarges them; six synthetic payment PDFs open through authenticated blob links and download byte-for-byte correctly.
+- All three payment directions reject only with a reason, release the original allocation, allow corrected registration and finish with exactly one confirmed allocation. Reopened rejected/confirmed details are read-only. Ten file objects pass contents/checksum/link/privacy checks including bound store/supplier direction rules; exact versions and temporary records removed.
+- Evidence: `var/react-admin-oss-attachments-evidence/manifest.json`, 38 unique mobile screenshots. Added terminal-state selector initially matched two confirmed labels; scoped to descriptions and full rerun passed, failed-run cleanup passed. Local normal four-mode regression, 182 unit tests and admin typecheck passed. No business algorithm changes/bank transfers.
+- Requirement audit corrects an inaccurate prior gap: baseline §4.1.3/§6.2.2 explicitly requires automatic template/supplier settlement matching, not store selection. Do not implement a conflicting selector.
+- NEXT: fix monthly order funding/payment display ambiguity, verify remaining real React lost-response/reload recovery branches, then final mapping and cutover. Product-image/PDF and payment-rejection items now closed; fixed local 3/7 and closure 6/9 unchanged. This supersedes historical NEXT below.
+
+## Latest Delivery: Real React OSS Evidence Journey
+
+- `test:admin:oss-journey` final four-mode run and all cleanup passed; local-storage real journey also reran 4/4 successfully. Reuses the five-role React chain with real API/database commands, not response fixtures; business algorithms and normal service configuration unchanged.
+- Eleven synthetic PNGs uploaded to real private OSS cover recharge, clearing, receipts and three payment directions. Every file is READY, checksum/bytes match and document-linked; thumbnail and enlarged browser preview pass. Anonymous OSS 403, anonymous API 401 and unrelated purchaser 404 verified per file.
+- Deletes only each temporary UUID object's exact version, verifies version/current absence, then cleans scoped database fixtures. Missing objects are skipped to avoid creating delete markers. No bucket-wide deletion or credential output.
+- Evidence: `var/react-admin-oss-journey-evidence/manifest.json`, 40 mobile screenshots. Unit tests 182/182, admin typecheck, fixture guard, syntax and diff checks passed. Existing pg deprecation warning remains.
+- NEXT: remaining product-image/PDF attachment checks, exceptional-path evidence and requirement mapping, then handoff/cutover. Business PNG OSS happy-path subitem closed, not all attachment types or production acceptance. Fixed local 3/7 and closure 6/9 unchanged; supersedes historical NEXT below.
+
+## Latest Delivery: Real React Same-Order Journey
+
+- `npm run test:admin:real-journey` final rerun passed all four settlement modes and cleanup. Real React commands cover five roles, ordering, purchasing, shipping, receipt, applicable recharge/clearing and three payment directions. Only temporary master data/initial prices are seeded; no API response mocking.
+- Stored value: 1000 recharge, 24 reserved before receipt, 976 balance/zero reserve afterward, exactly one request-linked debit. Credit: 24 debt cleared to zero without stored-value debit. Monthly/direct payment records and exact single allocations are confirmed for 24/18 and 18 respectively.
+- Clearing DEBIT ledger is not a stored-value deduction. Monthly request funding summary stays UNPAID although statement payment allocations are confirmed; display/requirement mapping remains a handoff check, not a financial algorithm change.
+- Real private synthetic PNG upload/association/authenticated download and unauthenticated 401 passed, using isolated local storage, NOT OSS or bank transfers. Evidence: `var/react-admin-real-journey-evidence/manifest.json`, 29 mobile screenshots. Build, syntax and diff checks passed; existing pg query deprecation warning remains.
+- NEXT: real OSS joint acceptance, exceptional-path evidence and requirement-gap audit, then handoff/cutover. Happy-path same-order subitem is closed, R5 overall is not; local 3/7 and closure 6/9 unchanged. This supersedes historical NEXT below.
+
+## Latest Delivery: R5 Consolidated Regression And Static Deployment
+
+- Added `test:admin:all`: all 12 existing React browser suites passed in the final full rerun. Evidence: `var/react-admin-r5-evidence/manifest.json`, individual logs, source hashes and timing. First run was 11/12; purchase test failed on virtual dropdown selection, fixed by searching before selecting, then individual and full reruns passed. No business code changes.
+- Admin production build passed. New Nginx static image, SPA fallback and API reverse proxy verified locally: eight direct routes, JS/CSS cache, missing-asset 404, API 401/database health, real login/refresh restore and 1440/320 finance screenshots. Temporary container/image cleanup passed; evidence: `var/react-admin-deployment-evidence/manifest.json`.
+- Docker build context excludes secrets/data and includes only static output/configuration. Deployment commands and API upstream configuration documented. Existing large shared-bundle warning remains.
+- Boundary: base suite has temporary store-group writes/cleanup; other business writes use fixtures. Static deployment uses real login/reads only. No real funds, OSS or production deployment acceptance; fixed local 3/7 and closure 6/9 unchanged.
+- NEXT: protected local real React same-order role chain, applicable funds/OSS joint acceptance, then final handoff/cutover. No extra page-polish work package. Current details in `react-admin-migration.md`; handoff in `continuation.md`.
+
+## Latest Delivery: Supplier Finance And Reports
+
+- Supplier statements, incoming company/direct payments, read-only settlement differences and supply-basis reports now use bound-supplier scope. Missing bindings prevent reads; foreign details and unrelated recovery commands are blocked.
+- Confirmation/rejection reread current payment amounts, allocation, status and version; rejection requires a reason. Unknown commands preserve original body/key. No supplier payer registration/cancellation or self-confirmation of returns payable to the company.
+- Supply reports reject sales basis and foreign orders, hide profit, and reuse authenticated evidence/CSV access and persistent export-review gates.
+- Supplier finance, central/store billing and reports, supplier fulfillment and admin build passed; five desktop/mobile screenshots inspected. Supplier API responses are fixtures, not real funds/OSS/export acceptance.
+- NEXT: R5 full-role business-chain regression, real business/funds/OSS joint acceptance and deployment cutover. R2-R4 planned page implementation is present; joint acceptance and payment-choice contract gap remain open. This supersedes historical NEXT entries below.
+
+## Latest Delivery: Supplier Fulfillment Workspace
+
+- Supplier accounts now enter React `/supplier-orders` with a restricted menu and bound-supplier list/detail checks. Missing binding prevents order reads; foreign rows/details are rejected. Only supply amounts are shown; no central purchasing, funds reconciliation, receipt registration or freight approval controls.
+- Shipment/replenishment and permanent reduction reuse existing versioned previews and commands; supplier previews correctly accept the backend's omitted company sales fields. Freight requests and reason-required rejection implemented. Rejection rereads ownership/status/version before writing and is unavailable after shipping.
+- Supplier `/discrepancies` supports ACCEPT/REPLENISH/RETURN, current discrepancy versions, private evidence and order navigation. Detail/action/recovery check linked order ownership. Order and discrepancy unknown results retain the original body/key; supplier cannot replay unrelated central commands.
+- `test:admin:supplier`, central shipping/receipts, store ordering and `build:admin` passed. Three 1440/320 screenshots inspected. Supplier tests use API response fixtures only, not real supplier funds/OSS acceptance. Existing shared bundle warning remains.
+- NEXT: supplier statements, recipient payment confirmation/rejection, settlement-difference and scoped report views; then R5 full role-chain/real business, funds/OSS acceptance and deployment cutover. Supplier migration is not yet complete. Payment-choice contract gap remains. This section supersedes historical NEXT entries below.
+
+## Latest Delivery: R4 Settlement Differences And Reports
+
+- React `/settlement-differences` now provides scoped adjustment lists/details, OFFLINE_RETURN/OFFSET registration, current amount/target rereads, recipient confirmation with current version, and original-key unknown-result recovery. Store recovery rechecks ownership and cannot create central disposals; supply costs hidden from store views.
+- React `/reports` now provides order amount monthly/detail views, product quantities and central-only profit, dates/master-data filters and default-10 pagination. Store binding overrides URL; missing binding blocks reads; quantity ranges over three months blocked before request. Server decimal amounts/quantities retained.
+- CSV jobs use successful-query snapshots; changed filters block exports. Queue polling, failure retry, expired-job protection and authenticated download implemented. Non-idempotent export unknown results persist as an explicit task-review gate, not automatic resubmission or alleged financial-command replay.
+- `test:admin:r4-reports` passed with real read-only counts 2 adjustments, 28 completed orders, 0 export jobs, then all writes mocked. Five desktop/mobile screenshots checked; billing/account regressions and admin build passed. No real financial/OSS/export creation. Existing large shared chunk warning remains.
+- R4 page migration is now implemented, but real funds/OSS joint acceptance stays open. NEXT: independent supplier workspace, then R5 complete role-chain/joint acceptance and deployment cutover. Payment-choice contract gap remains documented. Historical NEXT entries below are superseded.
+
+## Latest Delivery: R4 Direct And Store Payments
+
+- Supersedes prior NEXT: central `/finance` now includes direct and supplier-per-store statements. STORE/STORE_FINANCE get scoped store/direct statements, payment registration and pending-payment cancellation, never recipient confirmation/rejection.
+- Bound store scope overrides URL parameters; missing binding prevents reads; foreign list/detail/preview results are filtered/rejected. Cancellation replay rechecks payment ownership. Original body/key replay retained; no stored-value/credit rule change.
+- Expanded billing browser evidence includes five screenshots and both STORE_TO_COMPANY/STORE_TO_SUPPLIER registrations; real read-only counts include 155 direct and 10 supplier-per-store statements. All business/file writes intercepted; no real funds/OSS changes.
+- Regression reproduced confirmation timeouts after conflict/re-preview in store ordering and account clearing. Waiting or controlled open alone did not resolve them. Rebuilding confirmation by reviewed result, with controlled open and form-local mounting, passed ordering/account/billing browser suites and the admin build. No financial contract changed.
+- R4 remains open for settlement discrepancies/reports. Supplier workspace, payment-choice contract gap and R5 real-chain/OSS/deployment acceptance remain open.
+
+## Latest Delivery: R4 Central Billing And Payments
+
+- Supersedes previous NEXT: `/finance` now provides supplier/store statements, settlement lines and adjustments, required-evidence payment registration, payment records and versioned confirm/reject/cancel. Only ADMIN/HQ_FINANCE use this central route.
+- Fresh preview before registration blocks changed amounts/versions and invalid settlement items. PAYMENT JPEG/PNG/PDF files must be READY; private PDF view/download and image preview supported. Unknown result retains original body/key after reload. No funds logic changed.
+- `test:admin:r4-billing` passed: real read-only counts 10 supplier statements, 3 store statements, 36 payments; subsequent writes intercepted. Three screenshots inspected at 1440/320. Account regression passed after one confirmation-popup timeout and rerun; build passed with existing bundle warning. No actual payment/OSS writes.
+- R4 still in progress. NEXT: direct/supplier-per-store statements and store payment entry, then settlement discrepancies/reports. Supplier workspace, payment-choice gap and R5 real-chain/OSS/deployment remain open.
+
+## Latest Delivery: R4 Store Accounts
+
+- Supersedes previous NEXT: `/store-finance` now provides store financial overview, recharge, credit-limit adjustment, filtered credit clearing, stored-value/credit ledgers and private document evidence. ADMIN/HQ_FINANCE may write; store roles see only their bound account, read-only.
+- Clearing rechecks the server preview before submit; changed amounts/versions require renewed review. Financial unknown results retain the original body/key across reload. Recharge adds stored value; clearing releases credit, not stored value. Existing receipt debit rules remain unchanged.
+- `build:admin`, `test:admin:r4-accounts`, `test:admin:r3-store`, `test:admin:r3-shipping` and `test:admin:r3-receipts` passed. Finance evidence: `var/react-admin-r4-accounts-evidence/manifest.json`, four screenshots. Real login/read only; subsequent writes are fixtures, no actual funds or OSS writes. Bundle-size warning remains.
+- R4 remains in progress. NEXT: bills and payments, then settlement discrepancies/reports. Supplier workspace, payment-choice contract gap and R5 real-chain/OSS/deployment acceptance remain open; no claim of complete migration.
+
+## Latest Delivery: Store Ordering
+
+- Supersedes previous NEXT: STORE ordering now lives in `/store-orders`, with scoped catalog, decimal quantity/unit snapshots, server price/funding preview, approved template/product/price versions and idempotent submit. STORE_FINANCE remains read-only. Unknown-result submit survives reload with the same body/key; 409 invalidates preview.
+- Backend settlement is configured by template/supplier; no user-selectable payment method is accepted in the current create contract. The earlier free-choice requirement remains a contract gap, not silently declared implemented. Existing receipt debit/reservation/credit rules unchanged.
+- `build:admin`, `test:admin:r3-store` and `test:admin:r3-receipts` passed; screenshots include 320/1440 ordering. Real login/read only; writes are fixtures, no real funds/OSS changed. Bundle-size warning remains.
+- Admin/store R3 page implementation is connected. NEXT development batch: R4 finance. Supplier-role workspace, full-role/real-write acceptance and R5 deployment/cutover remain open; not complete migration or production delivery.
+
+## Latest React Migration Batch: Store Orders
+
+- Added `/store-orders` for STORE/STORE_FINANCE: scoped order list, sales-only detail, shipment progress and private receipt evidence. STORE can register/revise receipts; STORE_FINANCE is read-only. Missing store scope blocks requests; central routes are denied for store scope.
+- Receipt unknown-result recovery remains available inside the order modal after reload, using the original body/idempotency key. Existing reservation/debit/credit accounting rules unchanged.
+- Verified `build:admin`, `test:admin:r3-receipts`, `test:admin:r3-shipping` and `node scripts/check-react-admin-r3-store.mjs`. Store evidence: `var/react-admin-r3-store-evidence/manifest.json`, desktop/mobile screenshots. Login real; role and business-write checks mocked; no real financial/OSS writes. Existing >500KB bundle warning remains.
+- Historical query/receipt batch: store ordering was pending then; see Latest Delivery above for current state. R4 and R5 remain open.
+
 ## Current Delivery Direction
+
+2026-10-06 React R3收货及差异交付（覆盖下方历史NEXT）：管理员在供应商订单发货明细登记/修订收货，逐项覆盖并携带订单版本+收货修订号，锁定项不能改；私有JPEG/PNG凭证上传完成后关联，缩略图/预览/下载。新增收货差异列表与接受短缺/安排补发/退回修订，差异版本及幂等恢复；采购员/总部财务不能处理或访问差异接口。保持收货扣储值及挂账后端规则不变。总部管理端采购至收货差异页面已接通，但完整真实业务链及OSS联合验收仍属R5；R3尚余门店订单和门店角色后台，随后R4财务、R5切换，不将整体迁移标为完成。验收详情见docs/react-admin-migration.md和var/react-admin-r3-receipts-evidence/manifest.json，业务/文件写入为响应夹具，无真实资金或OSS写入。
+
+2026-10-06 React R3发货链交付（覆盖下方历史NEXT）：供应商订单已接入发货、永久减量、补发缺口分配、服务端预览、运费申请及确认/驳回。管理员可发货和申请运费，采购员可审核运费，总部财务只读；沿用后端资金规则。共享采购幂等恢复记录，发货未知结果刷新后保持原键和原请求。构建、采购及拒单回归通过，新增发货链浏览器验收使用响应夹具，不是生产写入验收。NEXT收货修订/私有凭证/差异处理和门店角色流程，然后R4财务、R5切换；R3仍未全部完成。详见docs/react-admin-migration.md。
+
+2026-10-06 React R3拒单处理交付（覆盖下方历史NEXT）：采购页拒单待办、采购详情/订单入口、逐项重分配或取消、清单确认及原因、原模板/有效供应商/已发货限制、历史拒单防重复处理已迁入；手机纵向表单。复用原键恢复，409后可重新读取，未知结果刷新和跨页仍用原请求；金额及资金由提交时服务端核定，不修改资金规则。build:admin、test:admin、test:admin:r3、test:admin:r2、test:admin:r3-exceptions通过；拒单6张截图，真实待办读为0条，采购/订单/资金写入均为响应夹具；资料回归分组真实CRUD后清理，审计保留。NEXT固定发货/永久减量/补发/运费、收货/凭证/差异，再R4财务和R5切换；不把R3或完整迁移标为完成。详见docs/react-admin-migration.md及var/react-admin-r3-exceptions-evidence/manifest.json。
+
+2026-10-06 React R3供应商调整补充：采购详情增加批量选择商品、目标供应商、服务端资格及金额预览、双价格版本批准和幂等提交，未知结果沿用采购共用恢复记录。R3仍未完成，下一项为拒单待办和重分配，之后发收货、运费及差异。未改变资金规则，未执行真实订单或OSS写入。
+
+2026-10-06最新React R3交付（覆盖下方历史NEXT）：采购申请及供应商订单迁入4174，完成门店目录选品/销售与采购单位/金额资金预览/新增/修改/确认/取消、订单资金核对和关联发货记录查看。真实读取37条申请/55条订单及首条详情；写入、原键恢复和发货明细测试为响应夹具，无真实采购/订单/资金/OSS写入。R3仍进行中，NEXT换供应商/拒单重分配、发货/补发/运费、收货/凭证/差异，之后R4/R5。目录及预览版本随请求提交，不改收货扣储值或挂账规则。迁移清单见docs/react-admin-migration.md，证据var/react-admin-r3-evidence/manifest.json。
+
+2026-10-06最新React交付（覆盖下方历史NEXT）：R2模板与价格已迁入，R2页面实现及前端回归完成。入口4174/templates与4174/prices；模板版本化关联/结算覆盖，价格预览/发布/版本/重算及刷新后原键恢复已验证。build:admin、test:admin、test:admin:r2通过，新增6张桌面/手机截图。本批写操作为响应夹具，没有真实改价、模板/订单/资金或OSS写入；完整真实写入与OSS联合验收仍待R5。NEXT固定R3采购、订单、发收货及差异流程，随后R4财务和R5全量切换；不把技术迁移当整体业务或生产门槛完成。详见docs/react-admin-migration.md。
+
+React R2新增商品与供应商页面：商品资料/图片/采购单位换算，供应商资料/商品关联/归档；模板与价格未迁移，R2继续进行中。入口4174/products与4174/suppliers，复用现有API，未改变订单资金规则。
+
+React迁移R2进行中：商品分类、品牌、单位维护已加入4174后台，沿用两级分类、版本与引用保护。R2尚未完成：商品/图片/单位换算、供应商、模板与价格待迁移；不新增订单或资金规则。
+
+2026-10-06新增用户批准的React后台并行迁移：apps/admin首批R1（登录与框架、门店、分组、收款账户）完成，直接共用开发数据。新入口4174/stores，旧后台4173保留。迁移范围与下一阶段详见docs/react-admin-migration.md；R2/R3/R4/R5仍未完成，此项不代表原生产/真机/签字门槛完成。
 
 2026-10-06挂账口径补充确认：额度是门店欠公司货款的上限，挂账下单先记未付欠款、占用额度；约定周期收到还款后批量清账，恢复额度，不扣储值、不自动到期清零。现有资金逻辑符合，本次同步需求定义，不新增自动销账任务。
 

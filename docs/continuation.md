@@ -2,6 +2,36 @@
 
 Last updated: 2026-10-06
 
+最新接续：React门店订单及采购申请的paymentStatus改为“储值/挂账入账”，对应未入账/部分入账/已入账；门店列表paidAmount改为“账户入账金额”。不再表示整单付款状态，月结付款以账单/付款记录为准。未修改财务算法或新增结算汇总接口。后台类型检查和生产构建通过，浏览器专项尚未重跑。下一步：真实丢响应/刷新原键恢复验证、最终需求映射、默认入口切换；整体完成口径不变。
+
+最新接续（覆盖下方旧NEXT）：商品PNG/JPEG、付款PDF和三方向真实驳回链已验收。`test:admin:oss-attachments` 最终2/2及cleanup PASS，10份OSS对象（含6PDF）、38张唯一390宽截图，证据 `var/react-admin-oss-attachments-evidence/manifest.json`。React商品保存/刷新放大、PDF打开认证blob及浏览器下载、空原因阻止驳回、释放原分配/重登/确认/终态只读、绑定门店/供应商及采购附件权限通过。对象具体版本及临时数据清理；不是银行转账。终态选择器首轮严格匹配失败已修正并重跑，失败清理PASS。本地正常4/4、182单元及后台类型检查通过。
+
+下一批先修正StoreOrders付款展示口径（月结已确认分配但申请资金汇总UNPAID），再核查React真实丢响应/刷新原键恢复，最后需求映射及默认后台切换。不要把存储/驳回重复列为未完成。当前requirements.md §4.1.3/§6.2.2明确自动模板/供应商结算匹配、门店不手选；旧“支付自由选择契约缺口”已撤销，不需要新增选择器。原整体口径3/7、6/9及生产/微信真机/业务签收门槛保留。
+
+最新接续：R5真实OSS业务PNG凭证链已完成，覆盖下方历史NEXT。`npm run test:admin:oss-journey` 四模式4/4、cleanup全部PASS；本地同单也4/4。11份充值/销账/收货/三方向付款凭证实际OSS上传，SHA256/字节/单据关联、React缩略图和放大、匿名OSS403/API401及无权采购员404通过。按具体版本删除本次UUID对象并验证版本/当前均不存在，再清理临时数据库。证据 `var/react-admin-oss-journey-evidence/manifest.json`及40张390宽图；182单元测试、后台类型检查及脚本/diff/数据库保护检查通过。
+
+下一批只处理剩余商品图片/PDF附件类型、异常路径证据和需求映射，再交接切换；不要把PNG正常流程代签所有附件或异常。月结申请资金状态/账单展示及支付方式选择契约差距仍开放。真实同单脚本运行前需build；OSS版仅允许已配置测试Bucket和procurex-test/，密钥由.env加载不能记录/回显。无银行实际转账或生产签收。本地3/7、收尾6/9不变；正常4174/4173/3114未改变。
+
+最新R5接续（覆盖下方历史NEXT）：`npm run test:admin:real-journey` 四模式真实React同单正常流程4/4 PASS、每组cleanup PASS。五角色实际操作充值/额度、下单、采购、供应商发货、门店收货、适用销账及付款确认；预置仅临时主数据/初始价格。证据 `var/react-admin-real-journey-evidence/manifest.json`及29张390宽截图。储值1000→冻结24→收货976且关联申请扣款1条；挂账24→销账0且储值不变；三付款方向的单条分配确认。build/语法/diff检查通过。附件合成PNG实际私有上传下载、匿名401，但独立本地存储不是OSS或银行转账。
+
+当前下一批：真实OSS与React凭证联合验收，异常路径证据核查及需求映射，再交接/默认后台切换。月结付款已确认但申请资金汇总仍UNPAID，需核查展示衔接；CLEARING借方流水不是储值扣款，不要错误修改算法。支付方式自由选择契约差距继续开放。R5正常同单子项已完成，不重跑全部页面作为下一阶段；生产域名/HTTPS/真机/客户签收单列。本地3/7、收尾6/9不变，4174新后台、4173旧后台、3114正常API保留。脚本拒绝未知/远程库，禁止重置数据库或生产种子；本批无业务代码变更。
+
+R5最终本批结果：test:admin:all完整重跑12/12 PASS，build:admin PASS，test:admin:deployment PASS且cleanup PASS。两个manifest路径见下段。首轮11/12失败已由采购脚本搜索后选择修复，并非未解决业务缺陷。仍未签真实React同单、资金/OSS联合或生产切换；无需重做已通过专项，后续直接推进R5剩余出口。
+
+React当前接续（覆盖下方旧NEXT）：R2-R4页面及供应商履约/财务/供货报表已实现。R5新增 `npm run test:admin:all` 串行12专项，证据 `var/react-admin-r5-evidence/manifest.json`；基础组有真实临时分组读写及清理，其余业务写入夹具，不能签真实同单资金链。新增Nginx静态镜像及专用Dockerignore，`build:admin`后 `test:admin:deployment` 验证8路径刷新、JS/CSS、404、API401/健康、真实登录恢复及1440/320图，临时容器/镜像回收通过。首轮采购专项因虚拟下拉选择不稳定失败，搜索后选择修复并重跑。最终集中回归结果以最新manifest为准。
+
+下一步仅按 `docs/react-admin-migration.md` 的R5剩余出口：受保护本地夹具完成真实React跨角色同单，再资金/OSS联合验收，最后交接切换。不要重置数据库、重跑生产种子或把模拟写入签为真实资金验收。新后台4174、旧后台4173和API3114保留；生产域名/HTTPS/真机与业务签收单列，原本地3/7和收尾6/9不因React测试数上调。
+
+React最新R3接续（下方旧NEXT为历史）：/purchase-requests与/supplier-orders可用。采购申请新增、门店目录、单位选择、金额/资金预览、修改明细、确认及取消；供应商订单详情/资金核对/发货摘要与权限内明细、申请往返已实现。未知提交结果跨两页及刷新后用原键恢复，禁止新键重复确认；原单位输入/商品版本及双价格版本保留。专用test:admin:r3已通过，现有列表/首条详情真实读取，所有采购写入为响应夹具；没有实际订单/资金/OSS写入。R3未完成，NEXT换供应商与拒单重分配，再发货/补发/运费、收货修订/凭证、差异处理，随后R4/R5。不扩展采购员发收货权限，不重置数据库。入口4174/purchase-requests，API3114及旧后台4173保留，证据var/react-admin-r3-evidence/manifest.json；详细剩余见docs/react-admin-migration.md。
+
+React最新接续（以下旧NEXT为历史）：R2全部页面已实现，新增/templates与/prices。模板新增/编辑/复制/门店/商品/供应商优先级/结算覆盖/归档，价格报价/预览/发布/版本/重算/原键恢复已接现有接口。build:admin、test:admin、test:admin:r2通过，证据var/react-admin-r2-evidence/manifest.json。写入响应夹具验收不等于真实业务写入或OSS验收；未改价或写订单资金。NEXT进入R3采购、订单、发收货、差异处理，随后R4/R5；不要重置业务库。新后台4174保持运行，旧后台4173/API3114保留。迁移计划见docs/react-admin-migration.md。
+
+React最新交付：/products、/suppliers已加入菜单，商品支持图片和独立采购单位换算，供应商支持银行/发票/结算资料、商品关联及归档确认。下一批模板与价格，R2仍未完成；不重置数据库。商品/关联写入测试采用响应夹具，真实OSS联调仍需验收。
+
+React R2最新交付：/categories、/brands、/units三页已接真实API维护；HQ_FINANCE只读，ADMIN/PURCHASER可维护。下一批商品与供应商，然后模板和价格；R2不能标为完成。回归脚本已加入三页桌面/手机列表与新增弹窗检查。
+
+最新方向：用户批准React并行迁移，新增apps/admin（React/TS/Vite/Ant Design），两套后台直接共用开发数据，不额外隔离。R1首批登录/会话/菜单/路由、门店、分组、收款账户已实现；新入口http://127.0.0.1:4174/stores，API3114，旧后台4173保持可用。完整迁移清单和运行命令见docs/react-admin-migration.md；下一阶段R2基础资料/商品/供应商/模板/价格，再R3订单采购、R4财务、R5全量切换。未迁移页面不显示空菜单，不将R1视为完整React迁移。npm run start:admin/build:admin/check:admin/test:admin；不要重置现有业务库。
+
 账单查询#/finance已紧凑化：账单列表优先，账户/付款记录/结算差异可展开，详情定位及收起；finance-compact-1刷新生效。三种账单×1440/320浏览器验证及24Web测试通过，不改变结算逻辑。
 
 账户单据凭证已支持缩略图、点击放大、下载和失败重试；仍经鉴权接口读取私有图片。缓存proof-preview-1，刷新后从账户流水“查看账户单据”进入；1440/320浏览器回归及24Web测试通过，无真实资金/OSS写入。
