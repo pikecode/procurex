@@ -1,5 +1,15 @@
 # 数据库详细设计
 
+2026-10-06收款账户配置：64个迁移，20261006170000_collection_accounts新增CollectionAccount（UUID主键、唯一name、bankName、accountName、accountNo、StoreStatus启停、version、创建更新时间）。无预置真实账户，无业务删除入口。RechargeDocument原collectionAccountId保留，不给历史自由文本强加外键；新外部充值在事务中校验启用账户，配置变更与充值共用锁。新店首次额度配置在资金事务中创建StoreAccount，无账户GET仍返回零值不写库。
+
+2026-10-05挂账历史更新：累计62迁移，20261005140000_credit_occurrence_history新增StoreAccount.creditCumulative可空numeric(20,2)及CreditMovement。既存账户保留null（历史未核定），新账户默认0，不回填假累计。流水关联账户与资金分配，BOOKING/RELEASE/CLEARING三种，正金额、非负事后未清约束，保存sourceType/sourceId、occurredAt及创建时间。实际正向挂账递增累计；清账/取消/减少/少收只追加释放流水，不减少累计；NULL递增保持NULL。业务同事务且已有资金行锁保护。外键随隔离夹具账户/分配删除级联，不增加业务删除入口。
+
+2026-10-05账户凭证更新：累计61迁移，20261005120000_account_document_evidence新增FileObject.rechargeId/clearingId可空外键与索引，对应RechargeDocument/ClearingDocument.evidenceFiles；删除单据SET NULL。数据库CHECK限制paymentId/receiptId/rechargeId/clearingId最多一个非空；商品关联另由绑定条件校验。旧单和文件不回填，操作人继续取既有同事务AuditLog而非伪造历史操作者。新关联与资金/命令/审计同事务，单据读取按门店范围过滤。
+
+2026-10-05 执行约定更新：累计60个迁移，20261005090000_add_atomic_price_execution_contract已部署。CommandRecord.atomicPriceExecution布尔默认false，仅新有键price.process由服务器begin设置true，客户端body不控制；旧记录不回填。标记约定业务/资金/命令成功响应同事务提交且执行先锁命令行。管理员取得该行锁后仍见PROCESSING，可证明此原子业务未提交并审计关闭；已SUCCEEDED不可改失败。不是“超时=回滚”，其他资金动作及旧/无键记录不受此恢复规则覆盖。
+
+2026-10-04 实现更新（覆盖下文初稿“未执行迁移”的状态）：累计59个迁移，最新20261004110000_add_rejected_credit_adjustment_source已部署。AdjustmentDocument新增可空UUID sourceRejectedOrderId；与sourcePriceChangeId/sourceDiscrepancyId/sourceShipmentId四选一CHECK，拒单来源与side组合唯一。拒单来源保留真实原SupplierOrder身份，不伪造价格或少收来源。原CREDIT分配停用且target/outstanding归零，netPaid/ClearingItem与原订单关联保留；新分配不复用旧款。查询/有效已付包括拒单差额的已确认处置，申请付款汇总排除退役订单。新字段沿用现有来源标识的标量存储模式；本轮真实DB验证通过，不代表全局财务/崩溃对账已完成。
+
 > 版本：v1.0 详细设计评审稿，2026-09-24
 > 基线：[需求 v1.4](./requirements.md)、[已确认架构](./architecture-design.md)
 > 状态：文档设计，未执行建表或迁移。D1-D7 已确认，本稿细化其实现。
@@ -73,6 +83,8 @@ erDiagram
 
 ### 3.2 门店、供应商、商品
 
+2026-10-04 实现补充：Supplier.isArchived BOOLEAN NOT NULL DEFAULT false，迁移20261004130000_supplier_archive，累计58迁移；旧行不变。归档保留供应商并设DISABLED，删除当前SupplierProduct、TemplateItemSupplier及TemplateSupplierSetting，保留订单/PriceScope/PriceVersion。相关模板版本递增，不重写历史金额/来源，不取消未完成业务。归档区别于普通停用，不允许普通PATCH恢复。
+
 | 表 | 字段 | 约束与默认值 |
 |---|---|---|
 | `stores` | `code varchar(64)`、`name S`、`group_name S?`、`type DIRECT/FRANCHISE/JOINT`、`contact_name S`、`phone varchar(32)`、`province/city/district S`、`address text`、`receiver_name S`、`receiver_phone varchar(32)`、`receiver_address jsonb`、`status ENABLED/DISABLED` | code 唯一；地址和收货信息均必填；财务字段不放本表 |
@@ -87,6 +99,8 @@ erDiagram
 结算枚举固定为 `STORED_VALUE / CREDIT / SUPPLIER_TERM / COMPANY_TERM`；周期固定为 `IMMEDIATE / WEEK / HALF_MONTH / MONTH`。API 不允许自定义产生第五种结算方式。
 
 ## 4. 模板和价格
+
+2026-10-04实际实现补充（表下仍为原设计稿）：Prisma使用现有PriceScope/PriceVersion，templateKey空字符串标识公共供货及兼容销售范围，模板UUID标识独立销售范围；模板版本中的供货字段只是发布/复制时公共成本快照，并非独立模板成本。双来源读取合并模板销售版本和公共成本版本；新RequestItem/OrderItem记录两侧来源，PriceVersion.supplySourceVersionId保留真实成本来源，历史未知NULL不回填。TemplateItem.minOrderQty/orderMultiple可空继承商品，isEnabled显式维护。复制只建当时有效及未来销售配置，不复制旧发布任务/历史，不带门店；公共成本仍随供应商生效。实际字段、约束和57项迁移以database/schema.prisma及migrations为准，不把这份原设计稿的表名当作已部署结构。
 
 | 表 | 字段 | 唯一键与规则 |
 |---|---|---|

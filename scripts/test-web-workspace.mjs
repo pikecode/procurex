@@ -4,7 +4,24 @@ import { allowedRoutes, canEdit, createWorkspaceClient, resolveApiBase, SESSION_
 import { purchasingSignature, repairDraftLines } from '../apps/web/product-app/workspace-purchasing.js';
 import { shipmentSignature } from '../apps/web/product-app/workspace-supplier.js';
 import { receiptChanged } from '../apps/web/product-app/workspace-store.js';
-import { clearingSignature } from '../apps/web/product-app/workspace-finance.js';
+import { clearingSignature, filterCreditItems } from '../apps/web/product-app/workspace-finance.js';
+
+test('store finance filters credit dates and supplier without retaining hidden selections', () => {
+  const rows = [
+    { id: 'a', occurredAt: '2026-10-01T12:00:00Z', supplierId: 'one' },
+    { id: 'b', occurredAt: '2026-10-02T12:00:00Z', supplierId: 'two' },
+    { id: 'c', occurredAt: '2026-10-02T12:00:00Z', supplierId: null },
+  ];
+  assert.deepEqual(filterCreditItems(rows, { from: '2026-10-02', to: '2026-10-02', supplierId: 'two' }).map(row => row.id), ['b']);
+  assert.deepEqual(filterCreditItems(rows, { supplierId: 'unassigned' }).map(row => row.id), ['c']);
+  assert.deepEqual(filterCreditItems(rows, { from: '2026-10-03', to: '2026-10-01' }), []);
+  assert.equal(filterCreditItems(rows).length, 3);
+  for (const role of ['STORE', 'STORE_FINANCE', 'SUPPLIER', 'PURCHASER']) {
+    assert.ok(!allowedRoutes({ roles: [role] }).includes('collection-accounts'));
+    assert.ok(!allowedRoutes({ roles: [role] }).includes('store-finance'));
+  }
+  assert.ok(allowedRoutes({ roles: ['HQ_FINANCE'] }).includes('store-finance'));
+});
 import { paymentSignature } from '../apps/web/product-app/workspace-payments.js';
 import { differenceSignature } from '../apps/web/product-app/workspace-differences.js';
 import { composeAddress, splitAddress } from '../apps/web/product-app/workspace-address.js';

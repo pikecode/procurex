@@ -305,6 +305,7 @@ model CommandRecord {
   idempotencyKey String        @db.VarChar(128)
   requestHash    String        @db.Char(64)
   status         CommandStatus @default(PROCESSING)
+  atomicPriceExecution Boolean @default(false)
   resourceType   String?       @db.VarChar(80)
   resourceId     String?       @db.Uuid
   responseBody   Json?
@@ -359,6 +360,15 @@ model RolePermission {
   @@id([roleId, permissionId])
 }
 
+model StoreGroup {
+  id        String      @id @default(uuid()) @db.Uuid
+  name      String      @unique @db.VarChar(120)
+  status    StoreStatus @default(ACTIVE)
+  version   Int         @default(1)
+  createdAt DateTime    @default(now()) @db.Timestamptz(6)
+  stores    Store[]
+}
+
 model Store {
   id                String                 @id @default(uuid()) @db.Uuid
   code              String                 @unique @db.VarChar(80)
@@ -366,6 +376,12 @@ model Store {
   contactName       String?                @db.VarChar(120)
   contactPhone      String?                @db.VarChar(32)
   address           String?                @db.VarChar(300)
+  groupName         String?                @db.VarChar(120)
+  group             StoreGroup?            @relation(fields: [groupName], references: [name], onUpdate: Cascade, onDelete: Restrict)
+  storeType         String?                @db.VarChar(20)
+  receiptAddress    String?                @db.VarChar(300)
+  receiptContactName String?               @db.VarChar(120)
+  receiptContactPhone String?              @db.VarChar(32)
   status            StoreStatus            @default(ACTIVE)
   createdAt         DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime               @updatedAt @db.Timestamptz(6)
@@ -377,14 +393,26 @@ model Store {
   clearingDocuments ClearingDocument[]
   userScopes        UserScope[]
   overpayments      Overpayment[]
+  @@index([groupName])
 }
 
 model Supplier {
+  isArchived Boolean @default(false)
   id                       String                    @id @default(uuid()) @db.Uuid
   code                     String                    @unique @db.VarChar(80)
   name                     String                    @db.VarChar(200)
   contactName              String?                   @db.VarChar(120)
   contactPhone             String?                   @db.VarChar(32)
+  address                  String?                   @db.VarChar(300)
+  bankName                 String?                   @db.VarChar(200)
+  bankAccountName          String?                   @db.VarChar(200)
+  bankAccount              String?                   @db.VarChar(80)
+  taxpayerId               String?                   @db.VarChar(80)
+  invoiceTitle             String?                   @db.VarChar(200)
+  requiresFreight          Boolean?
+  supplierType             String?                   @db.VarChar(20)
+  settlementCycleDescription String?                 @db.VarChar(500)
+  remark                   String?                   @db.VarChar(500)
   deliveryMode             DeliveryMode
   defaultSettlementMode    SettlementMode
   defaultSettlementCycle   String                    @db.VarChar(40)
@@ -408,6 +436,7 @@ model Category {
   name      String     @db.VarChar(160)
   sortOrder Int        @default(0)
   createdAt DateTime   @default(now()) @db.Timestamptz(6)
+  version   Int        @default(1)
   parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
   children  Category[] @relation("CategoryTree")
   products  Product[]
@@ -418,13 +447,23 @@ model Unit {
   code      String    @unique @db.VarChar(40)
   name      String    @db.VarChar(80)
   createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  version   Int       @default(1)
   products  Product[]
 }
 
 model Product {
   id            String                 @id @default(uuid()) @db.Uuid
-  sku           String                 @unique @db.VarChar(100)
+  sku           String?                @unique @db.VarChar(100)
+  defaultSalesPrice Decimal?           @db.Decimal(20, 6)
   name          String                 @db.VarChar(240)
+  specification String?                @db.VarChar(240)
+  brand         String?                @db.VarChar(120)
+  brandId       String?                @db.Uuid
+  brandRecord   Brand?                 @relation(fields: [brandId], references: [id])
+  barcode       String?                @db.VarChar(100)
+  storageCondition String?             @db.VarChar(24)
+  imageFileId   String?                @unique @db.Uuid
+  imageFile     FileObject?            @relation("ProductImage", fields: [imageFileId], references: [id], onDelete: SetNull)
   categoryId    String                 @db.Uuid
   baseUnitId    String                 @db.Uuid
   minOrderQty   Decimal                @default(1) @db.Decimal(20, 6)
@@ -439,6 +478,14 @@ model Product {
   templateItems TemplateItem[]
   requestItems  RequestItem[]
   orderItems    OrderItem[]
+}
+
+model Brand {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String    @unique @db.VarChar(120)
+  version   Int       @default(1)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  products  Product[]
 }
 
 model ProductUnitConversion {
@@ -470,6 +517,8 @@ model OrderTemplate {
   id         String                    @id @default(uuid()) @db.Uuid
   code       String                    @unique @db.VarChar(80)
   name       String                    @db.VarChar(200)
+  tag        String?                   @db.VarChar(120)
+  remark     String?                   @db.VarChar(500)
   isArchived Boolean                   @default(false)
   createdAt  DateTime                  @default(now()) @db.Timestamptz(6)
   updatedAt  DateTime                  @updatedAt @db.Timestamptz(6)
@@ -492,6 +541,9 @@ model StoreTemplateBinding {
 }
 
 model TemplateItem {
+  minOrderQty Decimal?             @db.Decimal(20, 6)
+  orderMultiple Decimal?           @db.Decimal(20, 6)
+  initialSalesPrice Decimal?         @db.Decimal(20, 6)
   id         String                 @id @default(uuid()) @db.Uuid
   templateId String                 @db.Uuid
   productId  String                 @db.Uuid
@@ -532,6 +584,7 @@ model TemplateSupplierSetting {
 }
 
 model PriceScope {
+  templateKey String        @default("") @db.VarChar(36)
   id         String         @id @default(uuid()) @db.Uuid
   productId  String         @db.Uuid
   supplierId String         @db.Uuid
@@ -539,10 +592,11 @@ model PriceScope {
   supplier   Supplier       @relation(fields: [supplierId], references: [id])
   versions   PriceVersion[]
 
-  @@unique([productId, supplierId])
+  @@unique([productId, supplierId, templateKey])
 }
 
 model PriceVersion {
+  supplySourceVersionId String?        @db.Uuid
   id          String                  @id @default(uuid()) @db.Uuid
   scopeId     String                  @db.Uuid
   salesPrice  Decimal                 @db.Decimal(20, 6)
@@ -615,7 +669,11 @@ model PriceChangeAdjustment {
 
 model AdjustmentDocument {
   id                  String                   @id @default(uuid()) @db.Uuid
-  sourcePriceChangeId String                   @db.Uuid
+  sourcePriceChangeId String?                  @db.Uuid
+  sourceDiscrepancyId String?                  @db.Uuid
+  sourceRejectedOrderId String?                @db.Uuid
+  sourceShipmentId    String?                  @db.Uuid
+  shipmentAdjustmentKind String?
   supplierOrderId     String                   @db.Uuid
   storeId             String                   @db.Uuid
   supplierId          String                   @db.Uuid
@@ -629,6 +687,9 @@ model AdjustmentDocument {
   disposalItems       DifferenceDisposalItem[]
 
   @@unique([sourcePriceChangeId, side])
+  @@unique([sourceDiscrepancyId, side])
+  @@unique([sourceRejectedOrderId, side])
+  @@unique([sourceShipmentId, side, shipmentAdjustmentKind])
   @@index([storeId, supplierId, settlementPeriodKey])
 }
 
@@ -637,6 +698,8 @@ model AdjustmentDocumentItem {
   adjustmentId String             @db.Uuid
   orderItemId  String             @db.Uuid
   amount       Decimal            @db.Decimal(20, 2)
+  quantitySnapshot Decimal?       @db.Decimal(20, 6)
+  unitPriceSnapshot Decimal?      @db.Decimal(20, 6)
   createdAt    DateTime           @default(now()) @db.Timestamptz(6)
   adjustment   AdjustmentDocument @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
 
@@ -671,10 +734,14 @@ model PurchaseRequest {
 }
 
 model RequestItem {
+  supplyPriceVersionId String? @db.Uuid
+  unitSnapshot     Json?
   id               String          @id @default(uuid()) @db.Uuid
   requestId        String          @db.Uuid
   productId        String          @db.Uuid
   supplierId       String          @db.Uuid
+  settlementModeSnapshot SettlementMode?
+  settlementCycleSnapshot String?  @db.VarChar(40)
   priceVersionId   String?         @db.Uuid
   quantity         Decimal         @db.Decimal(20, 6)
   salesUnitPrice   Decimal         @db.Decimal(20, 6)
@@ -699,6 +766,7 @@ model SupplierOrder {
   supplierId              String                   @db.Uuid
   settlementMode          SettlementMode           @default(COMPANY_TERM)
   settlementCycleSnapshot String                   @default("MONTHLY") @db.VarChar(40)
+  requiresFreightSnapshot Boolean?
   status                  SupplierOrderStatus      @default(DRAFT)
   fulfillmentStatus       FulfillmentStatus        @default(PENDING)
   completedAt             DateTime?                @db.Timestamptz(6)
@@ -742,6 +810,9 @@ model SettlementItemSnapshot {
 }
 
 model OrderItem {
+  salesPriceVersionId String? @db.Uuid
+  supplyPriceVersionId String? @db.Uuid
+  unitSnapshot           Json?
   id                     String                  @id @default(uuid()) @db.Uuid
   supplierOrderId        String                  @db.Uuid
   productId              String                  @db.Uuid
@@ -827,6 +898,7 @@ model Receipt {
   createdAt   DateTime      @default(now()) @db.Timestamptz(6)
   shipment    Shipment      @relation(fields: [shipmentId], references: [id])
   items       ReceiptItem[]
+  evidenceFiles FileObject[]
 
   @@unique([shipmentId, revision])
   @@index([shipmentId, isCurrent])
@@ -925,18 +997,32 @@ model FreightConfirmation {
   @@index([supplierOrderId, status])
 }
 
+model CollectionAccount {
+  id          String      @id @default(uuid()) @db.Uuid
+  name        String      @unique @db.VarChar(120)
+  bankName    String      @db.VarChar(120)
+  accountName String      @db.VarChar(120)
+  accountNo   String      @db.VarChar(80)
+  status      StoreStatus @default(ACTIVE)
+  version     Int         @default(1)
+  createdAt   DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime    @updatedAt @db.Timestamptz(6)
+}
+
 model StoreAccount {
   id                 String              @id @default(uuid()) @db.Uuid
   storeId            String              @db.Uuid
   balance            Decimal             @default(0) @db.Decimal(20, 2)
   creditLimit        Decimal             @default(0) @db.Decimal(20, 2)
   creditUsed         Decimal             @default(0) @db.Decimal(20, 2)
+  creditCumulative   Decimal?            @default(0) @db.Decimal(20, 2)
   version            Int                 @default(1)
   createdAt          DateTime            @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime            @updatedAt @db.Timestamptz(6)
   store              Store               @relation(fields: [storeId], references: [id])
   ledgers            AccountLedger[]
   fundingAllocations FundingAllocation[]
+  creditMovements    CreditMovement[]
 
   @@unique([storeId])
 }
@@ -945,6 +1031,8 @@ model FundingAllocation {
   id                String                  @id @default(uuid()) @db.Uuid
   storeId           String                  @db.Uuid
   supplierOrderId   String?                 @db.Uuid
+  requestId         String?                 @db.Uuid
+  supplierId        String?                 @db.Uuid
   method            FundingAllocationMethod
   targetAmount      Decimal                 @db.Decimal(20, 2)
   netPaid           Decimal                 @default(0) @db.Decimal(20, 2)
@@ -956,9 +1044,29 @@ model FundingAllocation {
   store             StoreAccount            @relation(fields: [storeId], references: [storeId])
   supplierOrder     SupplierOrder?          @relation(fields: [supplierOrderId], references: [id])
   clearingItems     ClearingItem[]
+  creditMovements   CreditMovement[]
 
   @@index([storeId, active])
   @@index([supplierOrderId])
+  @@index([requestId, active])
+}
+
+model CreditMovement {
+  id                  String            @id @default(uuid()) @db.Uuid
+  accountId           String            @db.Uuid
+  fundingAllocationId String            @db.Uuid
+  kind                String            @db.VarChar(16)
+  amount              Decimal           @db.Decimal(20, 2)
+  outstandingAfter    Decimal           @db.Decimal(20, 2)
+  sourceType          LedgerSourceType
+  sourceId            String            @db.Uuid
+  occurredAt          DateTime          @default(now()) @db.Timestamptz(6)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(6)
+  account             StoreAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  allocation          FundingAllocation @relation(fields: [fundingAllocationId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, occurredAt])
+  @@index([fundingAllocationId])
 }
 
 model RechargeDocument {
@@ -971,6 +1079,7 @@ model RechargeDocument {
   remark              String?  @db.VarChar(300)
   createdAt           DateTime @default(now()) @db.Timestamptz(6)
   store               Store    @relation(fields: [storeId], references: [id])
+  evidenceFiles       FileObject[]
 
   @@index([storeId, businessDate])
 }
@@ -985,6 +1094,7 @@ model ClearingDocument {
   createdAt    DateTime       @default(now()) @db.Timestamptz(6)
   store        Store          @relation(fields: [storeId], references: [id])
   items        ClearingItem[]
+  evidenceFiles FileObject[]
 
   @@index([storeId, businessDate])
 }
@@ -1042,12 +1152,22 @@ model FileObject {
   status          String         @default("UPLOADING") @db.VarChar(20)
   ownerId         String         @db.Uuid
   paymentId       String?        @db.Uuid
+  receiptId       String?        @db.Uuid
+  rechargeId      String?        @db.Uuid
+  clearingId      String?        @db.Uuid
   createdAt       DateTime       @default(now()) @db.Timestamptz(6)
   owner           User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   payment         PaymentRecord? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  receipt         Receipt?       @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  recharge        RechargeDocument? @relation(fields: [rechargeId], references: [id], onDelete: SetNull)
+  clearing        ClearingDocument? @relation(fields: [clearingId], references: [id], onDelete: SetNull)
+  product         Product?       @relation("ProductImage")
 
   @@index([ownerId, status])
   @@index([paymentId])
+  @@index([receiptId])
+  @@index([rechargeId])
+  @@index([clearingId])
 }
 
 model Overpayment {
@@ -1135,6 +1255,7 @@ model AccountLedger {
   balanceAfter Decimal          @db.Decimal(20, 2)
   sourceType   LedgerSourceType
   sourceId     String           @db.Uuid
+  requestId    String?          @db.Uuid
   note         String?          @db.VarChar(300)
   occurredAt   DateTime         @default(now()) @db.Timestamptz(6)
   createdAt    DateTime         @default(now()) @db.Timestamptz(6)
@@ -1142,4 +1263,5 @@ model AccountLedger {
 
   @@unique([sourceType, sourceId, direction])
   @@index([accountId, occurredAt])
+  @@index([requestId])
 }

@@ -14,10 +14,30 @@ import type {
   RechargeDocument,
   Store,
   StoreAccount,
+  Prisma,
 } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { AuditService } from '../audit/audit.service.js';
+import { auditedMasterDataTransaction, type MasterDataAuditContext } from '../audit/master-data-audit.js';
+import type { StoreProfile } from '../common/master-data-profile.js';
+import { lockFundingRequest, refreshRequestPaymentSummary } from '../purchase-requests/request-funding.js';
+import { recordCreditMovement } from './credit-movements.js';
+import { lockStoreGroups, validateStoreGroup } from './store-groups.service.js';
 
-export type StoreView = {
+async function attachAccountEvidence(tx: Prisma.TransactionClient, input: { evidenceFileIds?: string[]; actorUserId?: string }, purpose: 'RECHARGE' | 'CLEARING', id: string) {
+  if (input.evidenceFileIds === undefined) return;
+  const ids = input.evidenceFileIds;
+  if (!input.actorUserId || !ids.length || ids.length > 5 || new Set(ids).size !== ids.length) {
+    throw new ConflictException({ code: 'ACCOUNT_EVIDENCE_INVALID', message: 'Account evidence is invalid' });
+  }
+  const updated = await tx.fileObject.updateMany({ where: { id: { in: ids }, ownerId: input.actorUserId,
+    status: 'READY', purpose, mimeType: { in: ['image/jpeg', 'image/png'] }, paymentId: null, receiptId: null,
+    rechargeId: null, clearingId: null, product: { is: null } },
+    data: purpose === 'RECHARGE' ? { rechargeId: id } : { clearingId: id } });
+  if (updated.count !== ids.length) throw new ConflictException({ code: 'ACCOUNT_EVIDENCE_INVALID', message: 'Account evidence must be owned, ready and unused' });
+}
+
+export type StoreView = Pick<Store, 'groupName' | 'storeType' | 'receiptAddress' | 'receiptContactName' | 'receiptContactPhone'> & {
   id: string;
   code: string;
   name: string;
@@ -36,6 +56,7 @@ export type StoreAccountView = {
   balance: string;
   creditLimit: string;
   creditUsed: string;
+  creditCumulative: string | null;
   creditAvailable: string;
   version: number;
   createdAt: string | null;
@@ -61,6 +82,8 @@ export type AccountLedgerView = {
 };
 
 export type CreateRechargeInput = {
+  evidenceFileIds?: string[];
+  actorUserId?: string;
   amount: string;
   businessDate: Date;
   collectionAccountId: string;
@@ -77,6 +100,18 @@ export type ClearingPreviewInput = {
   fundingAllocationIds: string[];
 };
 
+export type CreditItemView = {
+  occurredAt: string;
+  supplierId: string | null;
+  supplierName: string | null;
+  fundingAllocationId: string;
+  supplierOrderNo: string | null;
+  requestId: string | null;
+  method: FundingAllocationMethod;
+  creditOutstanding: string;
+  version: number;
+};
+
 export type ClearingPreviewView = {
   storeId: string;
   totalAmount: string;
@@ -84,6 +119,8 @@ export type ClearingPreviewView = {
 };
 
 export type CreateClearingInput = {
+  evidenceFileIds?: string[];
+  actorUserId?: string;
   items: CreateClearingItemInput[];
   businessDate: Date;
   remark?: string;
@@ -96,6 +133,7 @@ export type CreateClearingItemInput = {
 };
 
 export type ClearingDocumentView = {
+  evidenceFileIds?: string[];
   id: string;
   clearingNo: string;
   storeId: string;
@@ -125,6 +163,7 @@ export type ClearingPreviewItemView = {
 };
 
 export type RechargeDocumentView = {
+  evidenceFileIds?: string[];
   id: string;
   rechargeNo: string;
   storeId: string;
@@ -136,7 +175,7 @@ export type RechargeDocumentView = {
   account: StoreAccountView;
 };
 
-export type CreateStoreInput = {
+export type CreateStoreInput = StoreProfile & {
   code: string;
   name: string;
   contactName?: string;
@@ -144,7 +183,7 @@ export type CreateStoreInput = {
   address?: string;
 };
 
-export type UpdateStoreInput = {
+export type UpdateStoreInput = StoreProfile & {
   expectedVersion: number;
   name?: string;
   contactName?: string | null;
@@ -155,7 +194,7 @@ export type UpdateStoreInput = {
 
 @Injectable()
 export class StoresService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly database: DatabaseService, private readonly audit: AuditService = new AuditService(database)) {}
 
   async listStores(): Promise<StoreView[]> {
     const stores = await this.database.client.store.findMany({
@@ -165,21 +204,36 @@ export class StoresService {
     return stores.map(toStoreView);
   }
 
-  async createStore(input: CreateStoreInput): Promise<StoreView> {
-    const store = await this.database.client.store.create({
+  async getStore(id: string): Promise<StoreView> {
+    const store = await this.database.client.store.findUnique({ where: { id } });
+    if (!store) throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'Store was not found' });
+    return toStoreView(store);
+  }
+
+  async createStore(input: CreateStoreInput, context?: MasterDataAuditContext): Promise<StoreView> {
+    const store = await auditedMasterDataTransaction(this.database, this.audit, context, 'store.create', 'Store', async tx => {
+      await lockStoreGroups(tx);
+      await validateStoreGroup(tx, input.groupName);
+      return tx.store.create({
       data: {
         code: input.code,
         name: input.name,
         contactName: input.contactName,
         contactPhone: input.contactPhone,
         address: input.address,
+        groupName: input.groupName,
+        storeType: input.storeType,
+        receiptAddress: input.receiptAddress,
+        receiptContactName: input.receiptContactName,
+        receiptContactPhone: input.receiptContactPhone,
       },
+    });
     });
 
     return toStoreView(store);
   }
 
-  async updateStore(id: string, input: UpdateStoreInput): Promise<StoreView> {
+  async updateStore(id: string, input: UpdateStoreInput, context?: MasterDataAuditContext): Promise<StoreView> {
     const existing = await this.database.client.store.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException({
@@ -197,15 +251,27 @@ export class StoresService {
       });
     }
 
-    const updated = await this.database.client.store.update({
-      where: { id },
+    const updated = await auditedMasterDataTransaction(this.database, this.audit, context, 'store.update', 'Store', async tx => {
+    await lockStoreGroups(tx);
+    await validateStoreGroup(tx, input.groupName, existing.groupName);
+    const changed = await tx.store.updateMany({
+      where: { id, updatedAt: { gte: new Date(version), lt: new Date(version + 1) } },
       data: {
         name: input.name,
         contactName: input.contactName,
         contactPhone: input.contactPhone,
         address: input.address,
         status: input.status,
+        groupName: input.groupName,
+        storeType: input.storeType,
+        receiptAddress: input.receiptAddress,
+        receiptContactName: input.receiptContactName,
+        receiptContactPhone: input.receiptContactPhone,
+        updatedAt: new Date(Math.max(Date.now(), version + 1)),
       },
+    });
+    if (!changed.count) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Store version has changed' });
+    return tx.store.findUniqueOrThrow({ where: { id } });
     });
 
     return toStoreView(updated);
@@ -215,6 +281,11 @@ export class StoresService {
     await this.assertStoreExists(storeId);
     const account = await this.database.client.storeAccount.findUnique({ where: { storeId } });
     return toStoreAccountView(storeId, account);
+  }
+
+  async listFinanceStores() {
+    const rows = await this.database.client.store.findMany({ include: { accounts: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] });
+    return rows.map(({ accounts, ...store }) => ({ ...toStoreView(store), account: toStoreAccountView(store.id, accounts[0] ?? null) }));
   }
 
   async listLedgers(storeId: string, query: StoreLedgerQuery): Promise<AccountLedgerView[]> {
@@ -238,8 +309,8 @@ export class StoresService {
     return ledgers.map(toAccountLedgerView);
   }
 
-  async createRecharge(storeId: string, input: CreateRechargeInput): Promise<RechargeDocumentView> {
-    await this.assertStoreExists(storeId);
+  async createRecharge(storeId: string, input: CreateRechargeInput, transaction?: Prisma.TransactionClient): Promise<RechargeDocumentView> {
+    await this.assertStoreExists(storeId, transaction);
 
     const amount = new Decimal(input.amount).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
     if (amount.lte(0)) {
@@ -249,7 +320,14 @@ export class StoresService {
       });
     }
 
-    const result = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      // Serialize account disabling with new recharges; historical documents stay unchanged.
+      if (input.actorUserId) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('procurex.collection-accounts'))`;
+        const collection = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(input.collectionAccountId)
+          ? await tx.collectionAccount.findFirst({ where: { id: input.collectionAccountId, status: 'ACTIVE' } }) : null;
+        if (!collection) throw new ConflictException({ code: 'COLLECTION_ACCOUNT_UNAVAILABLE', message: 'Select an active collection account' });
+      }
       const recharge = await tx.rechargeDocument.create({
         data: {
           rechargeNo: makeRechargeNo(),
@@ -260,6 +338,8 @@ export class StoresService {
           remark: input.remark,
         },
       });
+
+      await attachAccountEvidence(tx, input, 'RECHARGE', recharge.id);
 
       const account = await tx.storeAccount.upsert({
         where: { storeId },
@@ -287,52 +367,85 @@ export class StoresService {
       });
 
       return { recharge, account };
-    });
+    };
+    const result = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
 
-    return toRechargeDocumentView(result.recharge, result.account);
+    return { ...toRechargeDocumentView(result.recharge, result.account), ...(input.evidenceFileIds ? { evidenceFileIds: input.evidenceFileIds } : {}) };
   }
 
-  async updateCreditLimit(storeId: string, input: UpdateCreditLimitInput): Promise<StoreAccountView> {
-    await this.assertStoreExists(storeId);
-    const account = await this.database.client.storeAccount.findUnique({ where: { storeId } });
-    if (!account) {
-      throw new NotFoundException({
-        code: 'STORE_ACCOUNT_NOT_FOUND',
-        message: 'Store account was not found',
+  async updateCreditLimit(storeId: string, input: UpdateCreditLimitInput, transaction?: Prisma.TransactionClient): Promise<StoreAccountView> {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await this.assertStoreExists(storeId, tx);
+      if (input.expectedVersion === 0) {
+        const created = await tx.storeAccount.createMany({ data: { storeId }, skipDuplicates: true });
+        if (!created.count) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Store account has changed' });
+      }
+      await tx.$queryRaw`SELECT id FROM "StoreAccount" WHERE "storeId" = ${storeId}::uuid FOR UPDATE`;
+      const account = await tx.storeAccount.findUnique({ where: { storeId } });
+      if (!account) {
+        throw new NotFoundException({
+          code: 'STORE_ACCOUNT_NOT_FOUND',
+          message: 'Store account was not found',
+        });
+      }
+
+      const expectedVersion = input.expectedVersion === 0 ? 1 : input.expectedVersion;
+      if (account.version !== expectedVersion) {
+        throw new ConflictException({
+          code: 'VERSION_CONFLICT',
+          message: 'Store account version has changed',
+          details: { expectedVersion: input.expectedVersion, currentVersion: account.version },
+        });
+      }
+
+      const limit = new Decimal(input.limit).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+      if (limit.lt(account.creditUsed)) {
+        throw new ConflictException({
+          code: 'CREDIT_LIMIT_BELOW_USED',
+          message: 'Credit limit cannot be lower than currently used credit',
+          details: { creditUsed: account.creditUsed.toFixed(2), limit: limit.toFixed(2) },
+        });
+      }
+
+      const updated = await tx.storeAccount.update({
+        where: { id: account.id, version: expectedVersion },
+        data: {
+          creditLimit: limit.toFixed(2),
+          version: { increment: 1 },
+        },
       });
-    }
 
-    if (account.version !== input.expectedVersion) {
-      throw new ConflictException({
-        code: 'VERSION_CONFLICT',
-        message: 'Store account version has changed',
-        details: { expectedVersion: input.expectedVersion, currentVersion: account.version },
-      });
-    }
-
-    const limit = new Decimal(input.limit).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
-    if (limit.lt(account.creditUsed)) {
-      throw new ConflictException({
-        code: 'CREDIT_LIMIT_BELOW_USED',
-        message: 'Credit limit cannot be lower than currently used credit',
-        details: { creditUsed: account.creditUsed.toFixed(2), limit: limit.toFixed(2) },
-      });
-    }
-
-    const updated = await this.database.client.storeAccount.update({
-      where: { id: account.id },
-      data: {
-        creditLimit: limit.toFixed(2),
-        version: { increment: 1 },
-      },
-    });
-
-    return toStoreAccountView(storeId, updated);
+      return toStoreAccountView(storeId, updated);
+    };
+    return transaction ? execute(transaction) : this.database.client.$transaction(execute);
   }
 
-  async previewClearing(storeId: string, input: ClearingPreviewInput): Promise<ClearingPreviewView> {
+  async listCreditItems(storeId: string): Promise<CreditItemView[]> {
     await this.assertStoreExists(storeId);
-    const allocations = await this.database.client.fundingAllocation.findMany({
+    const rows = await this.database.client.fundingAllocation.findMany({
+      where: { storeId, active: true, creditOutstanding: { gt: 0 } },
+      include: { supplierOrder: { select: { supplierOrderNo: true, supplierId: true, supplier: { select: { name: true } } } } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(row => ({ occurredAt: row.createdAt.toISOString(), supplierId: row.supplierOrder?.supplierId ?? null,
+      supplierName: row.supplierOrder?.supplier.name ?? null, fundingAllocationId: row.id, supplierOrderNo: row.supplierOrder?.supplierOrderNo ?? null,
+      requestId: row.requestId, method: row.method, creditOutstanding: row.creditOutstanding.toFixed(2), version: row.version }));
+  }
+
+  async listCreditMovements(storeId: string) {
+    await this.assertStoreExists(storeId);
+    const rows = await this.database.client.creditMovement.findMany({ where: { account: { storeId } },
+      include: { allocation: { select: { requestId: true, supplierOrder: { select: { supplierOrderNo: true } } } } },
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 100 });
+    return rows.map(row => ({ id: row.id, kind: row.kind, amount: row.amount.toFixed(2), outstandingAfter: row.outstandingAfter.toFixed(2),
+      fundingAllocationId: row.fundingAllocationId, requestId: row.allocation.requestId,
+      supplierOrderNo: row.allocation.supplierOrder?.supplierOrderNo ?? null, sourceType: row.sourceType, sourceId: row.sourceId,
+      occurredAt: row.occurredAt.toISOString() }));
+  }
+
+  async previewClearing(storeId: string, input: ClearingPreviewInput, transaction?: Prisma.TransactionClient): Promise<ClearingPreviewView> {
+    await this.assertStoreExists(storeId, transaction);
+    const allocations = await (transaction ?? (this.database.client as Prisma.TransactionClient)).fundingAllocation.findMany({
       where: { id: { in: input.fundingAllocationIds } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
@@ -387,10 +500,10 @@ export class StoresService {
     };
   }
 
-  async createClearing(storeId: string, input: CreateClearingInput): Promise<ClearingDocumentView> {
+  async createClearing(storeId: string, input: CreateClearingInput, transaction?: Prisma.TransactionClient): Promise<ClearingDocumentView> {
     const preview = await this.previewClearing(storeId, {
       fundingAllocationIds: input.items.map((item) => item.fundingAllocationId),
-    });
+    }, transaction);
     const inputById = new Map(input.items.map((item) => [item.fundingAllocationId, item]));
     for (const item of preview.items) {
       const inputItem = inputById.get(item.fundingAllocationId)!;
@@ -418,7 +531,7 @@ export class StoresService {
       }
     }
 
-    const account = await this.database.client.storeAccount.findUnique({ where: { storeId } });
+    const account = await (transaction ?? (this.database.client as Prisma.TransactionClient)).storeAccount.findUnique({ where: { storeId } });
     if (!account) {
       throw new NotFoundException({
         code: 'STORE_ACCOUNT_NOT_FOUND',
@@ -434,7 +547,15 @@ export class StoresService {
       });
     }
 
-    const result = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockFundingRequest(tx, storeId);
+      const selectedAllocations = await tx.fundingAllocation.findMany({
+        where: { id: { in: preview.items.map(item => item.fundingAllocationId) }, storeId },
+        select: { requestId: true, supplierOrder: { select: { requestId: true } } },
+      });
+      const requestIds = [...new Set(selectedAllocations.map(item => item.requestId ?? item.supplierOrder?.requestId)
+        .filter((id): id is string => Boolean(id)))].sort();
+      for (const requestId of requestIds) await lockFundingRequest(tx, storeId, requestId);
       const clearing = await tx.clearingDocument.create({
         data: {
           clearingNo: makeClearingNo(),
@@ -444,6 +565,8 @@ export class StoresService {
           remark: input.remark,
         },
       });
+
+      await attachAccountEvidence(tx, input, 'CLEARING', clearing.id);
 
       for (const item of preview.items) {
         await tx.clearingItem.create({
@@ -475,6 +598,8 @@ export class StoresService {
             details: { fundingAllocationId: item.fundingAllocationId },
           });
         }
+        await recordCreditMovement(tx, { accountId: account.id, fundingAllocationId: item.fundingAllocationId,
+          before: item.creditOutstanding, after: '0', sourceType: 'CLEARING', sourceId: clearing.id, clearing: true, occurredAt: input.businessDate });
       }
 
       const accountUpdated = await tx.storeAccount.updateMany({
@@ -488,6 +613,11 @@ export class StoresService {
         throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Store account changed during clearing' });
       }
       const updatedAccount = await tx.storeAccount.findUniqueOrThrow({ where: { id: account.id } });
+
+      // Refresh payment summaries without reconciling funds or booking another debit.
+      for (const requestId of requestIds) {
+        await refreshRequestPaymentSummary(tx, requestId);
+      }
 
       await tx.accountLedger.create({
         data: {
@@ -508,13 +638,30 @@ export class StoresService {
       });
 
       return { clearing: created, account: updatedAccount };
-    });
+    };
+    const result = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
 
-    return toClearingDocumentView(result.clearing, result.account);
+    return { ...toClearingDocumentView(result.clearing, result.account), ...(input.evidenceFileIds ? { evidenceFileIds: input.evidenceFileIds } : {}) };
   }
 
-  private async assertStoreExists(storeId: string): Promise<void> {
-    const store = await this.database.client.store.findUnique({ where: { id: storeId } });
+  async getAccountDocument(storeId: string, id: string, kind: 'RECHARGE' | 'CLEARING') {
+    const include = { evidenceFiles: { select: { id: true, filename: true, mimeType: true } } };
+    const document = kind === 'RECHARGE'
+      ? await this.database.client.rechargeDocument.findFirst({ where: { id, storeId }, include })
+      : await this.database.client.clearingDocument.findFirst({ where: { id, storeId }, include });
+    if (!document) throw new NotFoundException({ code: 'ACCOUNT_DOCUMENT_NOT_FOUND', message: 'Account document was not found' });
+    const audit = await this.database.client.auditLog.findFirst({ where: { entityId: document.id,
+      entityType: kind === 'RECHARGE' ? 'RechargeDocument' : 'ClearingDocument',
+      action: kind === 'RECHARGE' ? 'store.recharge.create' : 'store.clearing.create' },
+      orderBy: { createdAt: 'desc' }, select: { actor: { select: { displayName: true } } } });
+    return { id: document.id, documentNo: 'rechargeNo' in document ? document.rechargeNo : document.clearingNo,
+      kind, storeId, amount: document.amount.toFixed(2), businessDate: document.businessDate.toISOString().slice(0, 10),
+      remark: document.remark, evidenceFiles: document.evidenceFiles, operatorName: audit?.actor?.displayName ?? null,
+      collectionAccountId: 'collectionAccountId' in document ? document.collectionAccountId : null };
+  }
+
+  private async assertStoreExists(storeId: string, transaction?: Prisma.TransactionClient): Promise<void> {
+    const store = await (transaction ?? (this.database.client as Prisma.TransactionClient)).store.findUnique({ where: { id: storeId } });
     if (!store) {
       throw new NotFoundException({
         code: 'STORE_NOT_FOUND',
@@ -526,6 +673,11 @@ export class StoresService {
 
 function toStoreView(store: Store): StoreView {
   return {
+    groupName: store.groupName,
+    storeType: store.storeType,
+    receiptAddress: store.receiptAddress,
+    receiptContactName: store.receiptContactName,
+    receiptContactPhone: store.receiptContactPhone,
     id: store.id,
     code: store.code,
     name: store.name,
@@ -551,6 +703,7 @@ function toStoreAccountView(storeId: string, account: StoreAccount | null): Stor
       balance: '0.00',
       creditLimit: '0.00',
       creditUsed: '0.00',
+      creditCumulative: '0.00',
       creditAvailable: '0.00',
       version: 0,
       createdAt: null,
@@ -565,6 +718,7 @@ function toStoreAccountView(storeId: string, account: StoreAccount | null): Stor
     balance: account.balance.toFixed(2),
     creditLimit: account.creditLimit.toFixed(2),
     creditUsed: account.creditUsed.toFixed(2),
+    creditCumulative: account.creditCumulative?.toFixed(2) ?? null,
     creditAvailable: creditAvailable.toFixed(2),
     version: account.version,
     createdAt: account.createdAt.toISOString(),

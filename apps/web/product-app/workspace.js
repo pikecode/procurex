@@ -3,8 +3,10 @@ import { allowedRoutes, createWorkspaceClient, resolveApiBase } from './workspac
 import { renderManagement } from './workspace-management.js';
 import { renderOperations } from './workspace-operations.js';
 import { navigationGroups } from './workspace-navigation.js';
+import { renderStoreFinance, renderCollectionAccounts } from './workspace-finance.js';
 
 const labels = { products: '商品资料', stores: '门店管理', suppliers: '供应商管理', templates: '订货模板',
+  'store-finance': '门店财务', 'collection-accounts': '收款账户',
   categories: '商品分类', brands: '商品品牌', units: '商品单位',
   prices: '价格管理', purchaser: '采购处理', supplier: '供应商订单', store: '门店订单', finance: '账单查询', profile: '自身资料', 'supplier-products': '供货商品' };
 const root = () => document.getElementById('product-app');
@@ -18,7 +20,7 @@ const expandedGroups = new Map();
 let navigationRoute;
 let sidebarCollapsed = false;
 try { sidebarCollapsed = sessionStorage.getItem('procurex-sidebar-collapsed') === 'true'; } catch { /* Keep an in-memory preference when storage is blocked. */ }
-const routeIcons = { products: 'package', categories: 'list-tree', brands: 'tag', units: 'ruler', stores: 'store', suppliers: 'truck', templates: 'notebook-tabs', prices: 'badge-dollar-sign', purchaser: 'clipboard-list', supplier: 'package-check', store: 'shopping-cart', finance: 'wallet', profile: 'user-round', 'supplier-products': 'boxes' };
+const routeIcons = { "store-finance": "wallet", "collection-accounts": "landmark", products: 'package', categories: 'list-tree', brands: 'tag', units: 'ruler', stores: 'store', suppliers: 'truck', templates: 'notebook-tabs', prices: 'badge-dollar-sign', purchaser: 'clipboard-list', supplier: 'package-check', store: 'shopping-cart', finance: 'wallet', profile: 'user-round', 'supplier-products': 'boxes' };
 function cleanup() { cleanups.splice(0).forEach(dispose => dispose()); }
 
 export const iconButton = (icon, title, attrs = '') => `<button class="ws-icon" type="button" title="${esc(title)}" aria-label="${esc(title)}" ${attrs}><i data-lucide="${esc(icon)}"></i></button>`;
@@ -159,7 +161,9 @@ async function render() {
     return;
   }
   try {
-    if (['products', 'categories', 'brands', 'units', 'stores', 'suppliers', 'templates', 'prices', 'profile', 'supplier-products'].includes(route)) await renderManagement(context);
+    if (route === 'store-finance') await renderStoreFinance(context);
+    else if (route === 'collection-accounts') await renderCollectionAccounts(context);
+    else if (['products', 'categories', 'brands', 'units', 'stores', 'suppliers', 'templates', 'prices', 'profile', 'supplier-products'].includes(route)) await renderManagement(context);
     else await renderOperations(context);
     if (context.active()) icons();
   } catch (error) {

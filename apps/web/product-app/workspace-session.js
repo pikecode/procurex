@@ -22,6 +22,7 @@ export function allowedRoutes(user) {
   if (roles.some(role => ['ADMIN', 'PURCHASER', 'SUPPLIER'].includes(role))) routes.push('supplier');
   if (roles.some(role => ['STORE', 'STORE_FINANCE'].includes(role))) routes.push('store');
   if (roles.some(role => ['ADMIN', 'HQ_FINANCE', 'SUPPLIER', 'STORE', 'STORE_FINANCE'].includes(role))) routes.push('finance');
+  if (roles.some(role => ['ADMIN', 'HQ_FINANCE'].includes(role))) routes.push('store-finance', 'collection-accounts');
   if (roles.some(role => ['SUPPLIER', 'STORE', 'STORE_FINANCE'].includes(role))) routes.push('profile');
   if (roles.includes('SUPPLIER')) routes.push('supplier-products');
   return routes;

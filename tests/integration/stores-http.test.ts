@@ -57,6 +57,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
   const { app, baseUrl } = await createTestApp();
 
   try {
+    const collection = await prisma.collectionAccount.create({ data: { name: storeCode, bankName: '测试银行', accountName: '测试户名', accountNo: storeCode } });
     const [adminRole, storeRole] = await Promise.all([
       prisma.role.upsert({ where: { code: 'ADMIN' }, update: {}, create: { code: 'ADMIN', name: 'Administrator' } }),
       prisma.role.upsert({ where: { code: 'STORE' }, update: {}, create: { code: 'STORE', name: 'Store' } }),
@@ -107,6 +108,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
         contactName: 'Alice',
         contactPhone: '13800000000',
         address: 'Shanghai',
+        storeType: 'DIRECT',
       }),
     });
     assert.equal(created.status, 201);
@@ -117,6 +119,8 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(createdBody.traceId, 'trace-stores-create');
     assert.equal(createdBody.data.code, storeCode);
     assert.equal(createdBody.data.status, StoreStatus.ACTIVE);
+    const scopedStoreUser = await prisma.user.findUniqueOrThrow({ where: { username: storeUsername } });
+    await prisma.userScope.create({ data: { userId: scopedStoreUser.id, scopeType: 'STORE', storeId: createdBody.data.id } });
     const createRecharge = async () => {
       const response = await fetch(`${baseUrl}/stores/${createdBody.data.id}/recharges`, {
         method: 'POST',
@@ -129,7 +133,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
         body: JSON.stringify({
           amount: '320.50',
           businessDate: '2026-09-24',
-          collectionAccountId: 'COLLECT-001',
+          collectionAccountId: collection.id,
           remark: 'Initial recharge',
         }),
       });
@@ -155,7 +159,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(recharge.data.storeId, createdBody.data.id);
     assert.equal(recharge.data.amount, '320.50');
     assert.equal(recharge.data.businessDate, '2026-09-24');
-    assert.equal(recharge.data.collectionAccountId, 'COLLECT-001');
+    assert.equal(recharge.data.collectionAccountId, collection.id);
     assert.equal(recharge.data.remark, 'Initial recharge');
     assert.equal(recharge.data.account.balance, '320.50');
     const rechargeAuditLogs = await prisma.auditLog.findMany({
@@ -163,6 +167,21 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     });
     assert.equal(rechargeAuditLogs.length, 1);
     assert.equal(rechargeAuditLogs[0]?.entityId, recharge.data.id);
+
+    const failedRechargeBody = { amount: '0.00', businessDate: '2026-09-24', collectionAccountId: 'COLLECT-001' };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const rejected = await fetch(`${baseUrl}/stores/${createdBody.data.id}/recharges`, {
+        method: 'POST', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json', 'idempotency-key': 'invalid-recharge-replay' },
+        body: JSON.stringify(failedRechargeBody),
+      });
+      assert.equal(rejected.status, 409);
+      assert.equal(((await rejected.json()) as { code: string }).code, 'INVALID_RECHARGE_AMOUNT');
+    }
+    const failedCommand = await prisma.commandRecord.findFirstOrThrow({ where: { actorUserId: (await prisma.user.findUniqueOrThrow({ where: { username: adminUsername } })).id,
+      action: 'store.recharge.create', idempotencyKey: 'invalid-recharge-replay' } });
+    assert.equal(failedCommand.status, 'FAILED');
+    assert.equal(await prisma.rechargeDocument.count({ where: { storeId: createdBody.data.id } }), 1);
+    assert.equal(await prisma.accountLedger.count({ where: { accountId: recharge.data.account.id } }), 1);
 
     const rechargeDetailResponse = await fetch(`${baseUrl}/recharges/${recharge.data.id}`, {
       headers: {
@@ -190,7 +209,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(rechargeDetail.data.storeId, createdBody.data.id);
     assert.equal(rechargeDetail.data.amount, '320.50');
     assert.equal(rechargeDetail.data.businessDate, '2026-09-24');
-    assert.equal(rechargeDetail.data.collectionAccountId, 'COLLECT-001');
+    assert.equal(rechargeDetail.data.collectionAccountId, collection.id);
     assert.equal(rechargeDetail.data.remark, 'Initial recharge');
     assert.equal(rechargeDetail.data.account.id, recharge.data.account.id);
     assert.equal(rechargeDetail.data.account.balance, '320.50');
@@ -292,6 +311,12 @@ test('stores endpoint creates, lists and disables stores with admin role', async
       },
     });
     await prisma.storeAccount.update({ where: { storeId: createdBody.data.id }, data: { creditUsed: '250.00', version: { increment: 1 } } });
+    const creditItemsResponse = await fetch(`${baseUrl}/stores/${createdBody.data.id}/credit-items`, { headers: { authorization: `Bearer ${storeToken}` } });
+    assert.equal(creditItemsResponse.status, 200);
+    const creditItems = ((await creditItemsResponse.json()) as { data: Array<{ fundingAllocationId: string; creditOutstanding: string; version: number }> }).data;
+    assert.deepEqual(creditItems.map(item => item.fundingAllocationId).sort(), [fundingAllocation.id, unselectedFundingAllocation.id].sort());
+    assert.equal(creditItems.find(item => item.fundingAllocationId === fundingAllocation.id)?.creditOutstanding, '200.00');
+    assert.equal(creditItems.find(item => item.fundingAllocationId === fundingAllocation.id)?.version, 1);
     const clearingPreviewResponse = await fetch(`${baseUrl}/stores/${createdBody.data.id}/clearings/preview`, {
       method: 'POST',
       headers: {
@@ -530,7 +555,9 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     await prisma.rechargeDocument.deleteMany({ where: { store: { code: storeCode } } });
     await prisma.fundingAllocation.deleteMany({ where: { store: { store: { code: storeCode } } } });
     await prisma.storeAccount.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.userScope.deleteMany({ where: { user: { username: storeUsername } } });
     await prisma.store.deleteMany({ where: { code: storeCode } });
+    await prisma.collectionAccount.deleteMany({ where: { name: storeCode } });
     await prisma.userSession.deleteMany({ where: { user: { username: { in: [adminUsername, storeUsername] } } } });
     await prisma.userRole.deleteMany({ where: { user: { username: { in: [adminUsername, storeUsername] } } } });
     await prisma.user.deleteMany({ where: { username: { in: [adminUsername, storeUsername] } } });

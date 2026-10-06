@@ -2,6 +2,8 @@
 
 Last updated: 2026-10-06
 
+最新阶段：门店财务需求图差距已补齐。入口http://127.0.0.1:4173/app.html#/store-finance；财务管理下还有#/collection-accounts，仅ADMIN/HQ_FINANCE。列表财务指标、共用默认10分页、充值/清账/额度/流水；清账挂账发生日期及供应商筛选，全选筛选结果、换筛选清除选择，确认保留版本/金额重校验及幂等。先配置并启用真实收款账户才可充值，不自动造银行账户。CollectionAccount迁移20261006170000应用，64迁移；新店expectedVersion=0首次授权额度，已有账户409。历史收款编号/订单/账户历史不迁移，不重跑seed。build/182单元/24Web/静态/732集成/导航通过。scripts/check-store-finance-ui.mjs六截图var/store-finance-evidence；scripts/capture-finance-accounts.mjs隔离local API3115真实充值/清账/凭证/恢复通过并清理，3115已关闭。API3114/Web4173保留；资源store-finance-1。后续优先用户真实资料本地验收及原生产/真机/签字边界，钉钉暂不接，不继续扩展无关细节。本阶段按用户要求提交本地Git，未push；具体提交号以git log为准。
+
 最新入口简化：http://127.0.0.1:4173/app.html#/stores，不再需要api参数。本地workspace-config.js端口3114，生产同域/api/v1；旧api链接自动移除查询并标签页保存覆盖，隔离验收随机端口仍兼容。23Web/静态和无参数列表/旧参数导航刷新回归通过。资源clean-url-1。后续给用户链接使用简洁地址，API3114/Web4173无需重启。
 
 最新增量：后台新增编辑表单统一紧凑化，640px/少字段480px、12px间距、桌面36px手机38px控件，必填标记同行、标题与操作区收紧；原交互校验保存保留。资源forms-1。23Web/静态/列表回归及node scripts/check-workspace-forms.mjs六页面新增编辑×1440/320通过，24截图var/form-layout-evidence。仅打开取消，无业务数据写入。

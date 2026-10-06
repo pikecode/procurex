@@ -1,10 +1,12 @@
 import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
+import { masterDataAuditContext } from '../audit/master-data-audit.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { CommandsService } from '../commands/commands.service.js';
 import { getOrCreateTraceId } from '../common/request-context.js';
 import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contract.js';
@@ -13,12 +15,14 @@ import {
   type AccountLedgerView,
   type ClearingDocumentView,
   type ClearingPreviewView,
+  type CreditItemView,
   type RechargeDocumentView,
   type StoreAccountView,
   type StoreLedgerQuery,
   type StoreView,
 } from './stores.service.js';
 import { StoreStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import { parseStoreProfile, profileText, type StoreProfile } from '../common/master-data-profile.js';
 import {
   validateDecimalString,
   validateExpectedVersion,
@@ -26,7 +30,7 @@ import {
   type ValidationIssue,
 } from '../../../../packages/domain/src/validation.js';
 
-type CreateStoreBody = {
+type CreateStoreBody = Record<string, unknown> & {
   code?: unknown;
   name?: unknown;
   contactName?: unknown;
@@ -45,6 +49,7 @@ type LedgerQuery = {
 };
 
 type CreateRechargeBody = {
+  evidenceFileIds?: unknown;
   amount?: unknown;
   businessDate?: unknown;
   collectionAccountId?: unknown;
@@ -62,13 +67,14 @@ type ClearingPreviewBody = {
 };
 
 type CreateClearingBody = {
+  evidenceFileIds?: unknown;
   items?: unknown;
   businessDate?: unknown;
   remark?: unknown;
 };
 
 @Controller('stores')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class StoresController {
   constructor(
     private readonly storesService: StoresService,
@@ -82,10 +88,26 @@ export class StoresController {
     return this.storesService.listStores();
   }
 
+  @Get('finance-overview')
+  @RequireRoles('ADMIN', 'HQ_FINANCE')
+  financeOverview() { return this.storesService.listFinanceStores(); }
+
+  @Get(':id')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  getStore(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<StoreView> {
+    throwIfInvalid(validateUuid('id', id));
+    const user = request.auth!.user;
+    if (!user.roles.some(role => ['ADMIN', 'PURCHASER', 'HQ_FINANCE'].includes(role))) {
+      if (!user.scope?.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+      if (user.scope.storeId.toLowerCase() !== id.toLowerCase()) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Store is outside the current scope' });
+    }
+    return this.storesService.getStore(id);
+  }
+
   @Post()
   @RequireRoles('ADMIN')
-  createStore(@Body() body: CreateStoreBody): Promise<StoreView> {
-    return this.storesService.createStore(parseCreateStoreBody(body));
+  createStore(@Body() body: CreateStoreBody, @Req() request: AuthenticatedRequest): Promise<StoreView> {
+    return this.storesService.createStore(parseCreateStoreBody(body), masterDataAuditContext(request));
   }
 
   @Get(':id/account')
@@ -102,6 +124,38 @@ export class StoresController {
     throwIfInvalid(validateUuid('id', id));
     applyStoreScope(id, request);
     return this.storesService.listLedgers(id, parseLedgerQuery(query));
+  }
+
+  @Get(':id/credit-items')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  listCreditItems(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<CreditItemView[]> {
+    throwIfInvalid(validateUuid('id', id));
+    applyStoreScope(id, request);
+    return this.storesService.listCreditItems(id);
+  }
+
+  @Get(':id/credit-movements')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  listCreditMovements(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    throwIfInvalid(validateUuid('id', id));
+    applyStoreScope(id, request);
+    return this.storesService.listCreditMovements(id);
+  }
+
+  @Get(':id/recharges/:documentId')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  getRecharge(@Param('id') id: string, @Param('documentId') documentId: string, @Req() request: AuthenticatedRequest) {
+    throwIfInvalid([...validateUuid('id', id), ...validateUuid('documentId', documentId)]);
+    applyStoreScope(id, request);
+    return this.storesService.getAccountDocument(id, documentId, 'RECHARGE');
+  }
+
+  @Get(':id/clearings/:documentId')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  getClearing(@Param('id') id: string, @Param('documentId') documentId: string, @Req() request: AuthenticatedRequest) {
+    throwIfInvalid([...validateUuid('id', id), ...validateUuid('documentId', documentId)]);
+    applyStoreScope(id, request);
+    return this.storesService.getAccountDocument(id, documentId, 'CLEARING');
   }
 
   @Post(':id/recharges')
@@ -122,35 +176,38 @@ export class StoresController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
       return command.command.responseBody as RechargeDocumentView;
     }
 
-    const result = await this.storesService.createRecharge(input.id, input.recharge);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'RechargeDocument',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'store.recharge.create',
-      entityType: 'RechargeDocument',
-      entityId: result.id,
-      traceId,
-      reason: input.recharge.remark,
-      after: {
-        storeId: result.storeId,
-        amount: result.amount,
-        businessDate: result.businessDate,
-        collectionAccountId: result.collectionAccountId,
-        accountVersion: result.account.version,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.storesService.createRecharge(input.id, { ...input.recharge, actorUserId: auth.user.id }, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'RechargeDocument',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'store.recharge.create',
+        entityType: 'RechargeDocument',
+        entityId: result.id,
+        traceId,
+        reason: input.recharge.remark,
+        after: {
+          storeId: result.storeId,
+          amount: result.amount,
+          businessDate: result.businessDate,
+          collectionAccountId: result.collectionAccountId,
+          ...(result.evidenceFileIds ? { evidenceFileIds: result.evidenceFileIds } : {}),
+          accountVersion: result.account.version,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Patch(':id/credit-limit')
@@ -171,35 +228,37 @@ export class StoresController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
       return command.command.responseBody as StoreAccountView;
     }
 
-    const result = await this.storesService.updateCreditLimit(input.id, input.creditLimit);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'StoreAccount',
-      resourceId: result.id ?? input.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'store.credit-limit.update',
-      entityType: 'StoreAccount',
-      entityId: result.id ?? input.id,
-      traceId,
-      reason: input.creditLimit.reason,
-      after: {
-        storeId: result.storeId,
-        creditLimit: result.creditLimit,
-        creditUsed: result.creditUsed,
-        creditAvailable: result.creditAvailable,
-        version: result.version,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.storesService.updateCreditLimit(input.id, input.creditLimit, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'StoreAccount',
+        resourceId: result.id ?? input.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'store.credit-limit.update',
+        entityType: 'StoreAccount',
+        entityId: result.id ?? input.id,
+        traceId,
+        reason: input.creditLimit.reason,
+        after: {
+          storeId: result.storeId,
+          creditLimit: result.creditLimit,
+          creditUsed: result.creditUsed,
+          creditAvailable: result.creditAvailable,
+          version: result.version,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Post(':id/clearings/preview')
@@ -227,57 +286,61 @@ export class StoresController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
       return command.command.responseBody as ClearingDocumentView;
     }
 
-    const result = await this.storesService.createClearing(input.id, input.clearing);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'ClearingDocument',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'store.clearing.create',
-      entityType: 'ClearingDocument',
-      entityId: result.id,
-      traceId,
-      reason: input.clearing.remark,
-      after: {
-        storeId: result.storeId,
-        amount: result.amount,
-        businessDate: result.businessDate,
-        itemCount: result.items.length,
-        accountVersion: result.account.version,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.storesService.createClearing(input.id, { ...input.clearing, actorUserId: auth.user.id }, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'ClearingDocument',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'store.clearing.create',
+        entityType: 'ClearingDocument',
+        entityId: result.id,
+        traceId,
+        reason: input.clearing.remark,
+        after: {
+          storeId: result.storeId,
+          amount: result.amount,
+          businessDate: result.businessDate,
+          itemCount: result.items.length,
+          ...(result.evidenceFileIds ? { evidenceFileIds: result.evidenceFileIds } : {}),
+          accountVersion: result.account.version,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Patch(':id')
   @RequireRoles('ADMIN')
-  updateStore(@Param('id') id: string, @Body() body: PatchStoreBody): Promise<StoreView> {
+  updateStore(@Param('id') id: string, @Body() body: PatchStoreBody, @Req() request: AuthenticatedRequest): Promise<StoreView> {
     const input = parsePatchStoreBody(id, body);
-    return this.storesService.updateStore(id, input);
+    return this.storesService.updateStore(id, input, masterDataAuditContext(request));
   }
 }
 
 function applyStoreScope(storeId: string, request: AuthenticatedRequest): void {
-  const scope = request.auth?.user.scope;
-  if (scope?.type !== 'STORE' && scope?.type !== 'STORE_FINANCE') return;
-  if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
-  if (scope.storeId !== storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Store is outside the current store scope' });
+  const user = request.auth!.user;
+  if (user.roles.some(role => ['ADMIN', 'HQ_FINANCE', 'PURCHASER'].includes(role))) return;
+  const scope = user.scope;
+  if (!scope?.storeId || !['STORE', 'STORE_FINANCE'].includes(scope.type)) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+  if (scope.storeId.toLowerCase() !== storeId.toLowerCase()) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Store is outside the current store scope' });
 }
 
 function auditScope(auth: AuthenticatedSession) {
   return { roles: auth.user.roles, ...(auth.user.scope ? { scope: auth.user.scope } : {}) };
 }
 
-function parseCreateStoreBody(body: CreateStoreBody): {
+function parseCreateStoreBody(body: CreateStoreBody): StoreProfile & {
   code: string;
   name: string;
   contactName?: string;
@@ -287,16 +350,19 @@ function parseCreateStoreBody(body: CreateStoreBody): {
   const issues: ValidationIssue[] = [];
   const code = requiredTrimmedString('code', body.code, issues);
   const name = requiredTrimmedString('name', body.name, issues);
-  const contactName = optionalTrimmedString('contactName', body.contactName, issues);
-  const contactPhone = optionalTrimmedString('contactPhone', body.contactPhone, issues);
-  const address = optionalTrimmedString('address', body.address, issues);
+  const contactName = profileText('contactName', body.contactName, 120, true, false, issues) ?? undefined;
+  const contactPhone = profileText('contactPhone', body.contactPhone, 32, true, false, issues) ?? undefined;
+  const address = profileText('address', body.address, 300, true, false, issues) ?? undefined;
+  const profile = parseStoreProfile(body, true, issues);
+  profileText('code', body.code, 80, true, false, issues);
+  profileText('name', body.name, 200, true, false, issues);
 
   throwIfInvalid(issues);
 
-  return { code: code!, name: name!, contactName, contactPhone, address };
+  return { ...profile, code: code!, name: name!, contactName, contactPhone, address };
 }
 
-function parsePatchStoreBody(id: string, body: PatchStoreBody): {
+function parsePatchStoreBody(id: string, body: PatchStoreBody): StoreProfile & {
   expectedVersion: number;
   name?: string;
   contactName?: string | null;
@@ -310,15 +376,18 @@ function parsePatchStoreBody(id: string, body: PatchStoreBody): {
   ];
 
   const name = optionalTrimmedString('name', body.name, issues);
-  const contactName = optionalNullableTrimmedString('contactName', body.contactName, issues);
-  const contactPhone = optionalNullableTrimmedString('contactPhone', body.contactPhone, issues);
-  const address = optionalNullableTrimmedString('address', body.address, issues);
+  const contactName = profileText('contactName', body.contactName, 120, false, false, issues);
+  const contactPhone = profileText('contactPhone', body.contactPhone, 32, false, false, issues);
+  const address = profileText('address', body.address, 300, false, false, issues);
+  const profile = parseStoreProfile(body, false, issues);
+  profileText('name', body.name, 200, false, false, issues);
   const status = optionalStoreStatus(body.status, issues);
 
   throwIfInvalid(issues);
 
   return {
     expectedVersion: body.expectedVersion as number,
+    ...profile,
     name,
     contactName,
     contactPhone,
@@ -336,14 +405,26 @@ function parseLedgerQuery(query: LedgerQuery): StoreLedgerQuery {
   return { occurredFrom, occurredTo };
 }
 
+function accountEvidence(value: unknown, issues: ValidationIssue[]): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 5 || new Set(value).size !== value.length) {
+    issues.push({ field: 'evidenceFileIds', code: 'ACCOUNT_EVIDENCE_INVALID', message: 'Provide one to five distinct evidence IDs' });
+    return undefined;
+  }
+  value.forEach((id, index) => issues.push(...validateUuid(`evidenceFileIds.${index}`, id)));
+  return value as string[];
+}
+
 function parseCreateRechargeBody(
   id: string,
   body: CreateRechargeBody,
-): { id: string; recharge: { amount: string; businessDate: Date; collectionAccountId: string; remark?: string } } {
+): { id: string; recharge: { amount: string; businessDate: Date; collectionAccountId: string; remark?: string; evidenceFileIds?: string[] } } {
   const issues: ValidationIssue[] = [...validateUuid('id', id), ...validateDecimalString('amount', body.amount, 2)];
   const businessDate = requiredDate('businessDate', body.businessDate, issues);
   const collectionAccountId = requiredTrimmedString('collectionAccountId', body.collectionAccountId, issues);
   const remark = optionalTrimmedString('remark', body.remark, issues);
+
+  const evidenceFileIds = accountEvidence(body.evidenceFileIds, issues);
 
   throwIfInvalid(issues);
   return {
@@ -353,6 +434,7 @@ function parseCreateRechargeBody(
       businessDate: businessDate!,
       collectionAccountId: collectionAccountId!,
       remark,
+      ...(evidenceFileIds ? { evidenceFileIds } : {}),
     },
   };
 }
@@ -363,7 +445,7 @@ function parseUpdateCreditLimitBody(
 ): { id: string; creditLimit: { expectedVersion: number; limit: string; reason: string } } {
   const issues: ValidationIssue[] = [
     ...validateUuid('id', id),
-    ...validateExpectedVersion('expectedVersion', body.expectedVersion),
+    ...(body.expectedVersion === 0 ? [] : validateExpectedVersion('expectedVersion', body.expectedVersion)),
     ...validateDecimalString('limit', body.limit, 2),
   ];
   const reason = requiredTrimmedString('reason', body.reason, issues);
@@ -420,6 +502,7 @@ function parseCreateClearingBody(
 ): {
   id: string;
   clearing: {
+    evidenceFileIds?: string[];
     items: Array<{ fundingAllocationId: string; expectedVersion: number; expectedAmount: string }>;
     businessDate: Date;
     remark?: string;
@@ -466,8 +549,10 @@ function parseCreateClearingBody(
   const businessDate = requiredDate('businessDate', body.businessDate, issues);
   const remark = optionalTrimmedString('remark', body.remark, issues);
 
+  const evidenceFileIds = accountEvidence(body.evidenceFileIds, issues);
+
   throwIfInvalid(issues);
-  return { id, clearing: { items, businessDate: businessDate!, remark } };
+  return { id, clearing: { items, businessDate: businessDate!, remark, ...(evidenceFileIds ? { evidenceFileIds } : {}) } };
 }
 
 function requiredTrimmedString(field: string, value: unknown, issues: ValidationIssue[]): string | undefined {
