@@ -8,8 +8,11 @@ import {
   UserScopeType,
   UserStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { Discrepancy, DiscrepancyReturn, ReplenishmentGap } from '../../../../packages/backend/generated/prisma/client.js';
+import type { Discrepancy, DiscrepancyReturn, ReplenishmentGap, Prisma } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { adjustAcceptedShortage } from './shortage-financials.js';
+import { lockFundingRequest, synchronizeRequestFunding } from '../purchase-requests/request-funding.js';
+import { applyEffectiveOrderPrices, lockPricePublication } from '../pricing/price-checkpoint.js';
 import { resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
 
 export type ResolveDiscrepancyInput = {
@@ -29,6 +32,13 @@ export type DiscrepancyView = {
   createdAt: string;
   replenishmentGap: ReplenishmentGapView | null;
   returnRecord: DiscrepancyReturnView | null;
+  productName?: string;
+  supplierOrderId?: string;
+  supplierOrderNo?: string;
+  shipmentNo?: string;
+  shippedQuantity?: string;
+  receivedQuantity?: string;
+  evidenceFiles?: Array<{ id: string; filename: string; mimeType: string; sizeBytes: string }>;
 };
 
 export type ReplenishmentGapView = {
@@ -56,13 +66,27 @@ export type DiscrepancyReturnView = {
 export class DiscrepanciesService {
   constructor(private readonly database: DatabaseService) {}
 
+  async list(scope?: { type: string; supplierId?: string }) {
+    const rows = await this.database.client.discrepancy.findMany({
+      where: { status: { in: [DiscrepancyStatus.OPEN, DiscrepancyStatus.REPLENISH_PENDING] },
+        ...(scope?.type === 'SUPPLIER' ? { orderItem: { supplierOrder: { supplierId: scope.supplierId } } } : {}) },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, status: true, missingQuantity: true, orderItem: { select: { product: { select: { name: true } }, supplierOrder: { select: { supplierOrderNo: true } } } } },
+    });
+    return rows.map(row => ({ id: row.id, status: row.status, missingQuantity: row.missingQuantity.toString(), productName: row.orderItem.product.name, supplierOrderNo: row.orderItem.supplierOrder.supplierOrderNo }));
+  }
+
   async get(id: string, scope?: { type: string; supplierId?: string }): Promise<DiscrepancyView> {
     const discrepancy = await this.database.client.discrepancy.findUnique({
       where: {
         id,
         orderItem: scope?.type === 'SUPPLIER' ? { supplierOrder: { supplierId: scope?.supplierId } } : undefined,
       },
-      include: { replenishmentGap: true, returnRecord: true },
+      include: {
+        replenishmentGap: true, returnRecord: true,
+        orderItem: { include: { product: { select: { name: true } }, supplierOrder: { select: { id: true, supplierOrderNo: true } } } },
+        receiptItem: { include: { receipt: { include: { evidenceFiles: true } }, shipmentItem: { include: { shipment: { select: { shipmentNo: true } } } } } },
+      },
     });
     if (!discrepancy) {
       throw new NotFoundException({
@@ -71,16 +95,20 @@ export class DiscrepanciesService {
       });
     }
 
-    return toDiscrepancyView(discrepancy);
+    return { ...toDiscrepancyView(discrepancy), productName: discrepancy.orderItem.product.name,
+      supplierOrderId: discrepancy.orderItem.supplierOrder.id, supplierOrderNo: discrepancy.orderItem.supplierOrder.supplierOrderNo,
+      shipmentNo: discrepancy.receiptItem.shipmentItem.shipment.shipmentNo,
+      evidenceFiles: discrepancy.receiptItem.receipt.evidenceFiles.map(file => ({ id: file.id, filename: file.filename, mimeType: file.mimeType, sizeBytes: file.sizeBytes.toString() })),
+      shippedQuantity: discrepancy.receiptItem.shipmentItem.quantity.toString(), receivedQuantity: discrepancy.receiptItem.receivedQuantity.toString() };
   }
 
-  async resolve(id: string, input: ResolveDiscrepancyInput, scope?: { type: string; supplierId?: string }): Promise<DiscrepancyView> {
+  async resolve(id: string, input: ResolveDiscrepancyInput, scope?: { type: string; supplierId?: string }, transaction?: Prisma.TransactionClient): Promise<DiscrepancyView> {
     const discrepancy = await this.database.client.discrepancy.findUnique({
       where: {
         id,
         orderItem: scope?.type === 'SUPPLIER' ? { supplierOrder: { supplierId: scope?.supplierId } } : undefined,
       },
-      include: { replenishmentGap: true, returnRecord: true },
+      include: { replenishmentGap: true, returnRecord: true, receiptItem: { include: { shipmentItem: { include: { shipment: true } } } } },
     });
     if (!discrepancy) {
       throw new NotFoundException({
@@ -109,7 +137,17 @@ export class DiscrepanciesService {
       });
     }
 
-    const resolved = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockPricePublication(tx);
+      const order = await tx.orderItem.findUniqueOrThrow({ where: { id: discrepancy.orderItemId }, select: { supplierOrderId: true, supplierOrder: { select: { storeId: true, requestId: true } } } });
+      await lockFundingRequest(tx, order.supplierOrder.storeId, order.supplierOrder.requestId);
+      const settlementIds = ['DIRECT', 'STORE_RECEIVABLE', 'SUPPLIER_PAYABLE'].map(kind => Buffer.from(JSON.stringify({ kind, supplierOrderId: order.supplierOrderId })).toString('base64url')).sort();
+      for (const settlementId of settlementIds) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${settlementId}::text, 0))`;
+      await tx.$queryRaw`SELECT id FROM "SupplierOrder" WHERE id = ${order.supplierOrderId}::uuid FOR UPDATE`;
+      const current = await tx.discrepancy.findUniqueOrThrow({ where: { id } });
+      if (current.version !== input.expectedVersion || current.status !== DiscrepancyStatus.OPEN) {
+        throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Discrepancy changed during resolution' });
+      }
       await tx.discrepancyAction.create({
         data: {
           discrepancyId: discrepancy.id,
@@ -153,17 +191,25 @@ export class DiscrepanciesService {
         where: { id: discrepancy.orderItemId },
         select: {
           supplierOrderId: true,
-          supplierOrder: { select: { supplierOrderNo: true, storeId: true, supplierId: true } },
+          supplierOrder: { select: { supplierOrderNo: true, storeId: true, supplierId: true, requestId: true } },
         },
       });
       const orderItems = await tx.orderItem.findMany({
         where: { supplierOrderId: orderItem.supplierOrderId },
         include: {
           shipmentItems: true,
-          discrepancies: { include: { replenishmentGap: true } },
+          discrepancies: { include: { replenishmentGap: true, returnRecord: true } },
         },
       });
       const nextFulfillmentStatus = resolveSupplierOrderFulfillmentStatus(orderItems);
+      if (input.action === DiscrepancyActionType.ACCEPT) await adjustAcceptedShortage(tx, discrepancy.id, discrepancy.orderItemId);
+      if (nextFulfillmentStatus === FulfillmentStatus.COMPLETED) {
+        const completingOrder = await tx.supplierOrder.findUniqueOrThrow({ where: { id: orderItem.supplierOrderId } });
+        if (completingOrder.firstShippedAt) {
+          const repriced = await applyEffectiveOrderPrices(tx, completingOrder.id, completingOrder.firstShippedAt, { deferCreditShortfall: true });
+          if (repriced.changed && !repriced.fundingHandled) await synchronizeRequestFunding(tx, completingOrder.requestId, { sourceId: discrepancy.id, deferCreditShortfall: true });
+        }
+      }
       await tx.supplierOrder.update({
         where: { id: orderItem.supplierOrderId },
         data: {
@@ -173,6 +219,9 @@ export class DiscrepanciesService {
           version: { increment: 1 },
         },
       });
+
+      const fundingRequest = await tx.purchaseRequest.findUniqueOrThrow({ where: { id: orderItem.supplierOrder.requestId } });
+      if (fundingRequest.storedValueOnReceipt) await synchronizeRequestFunding(tx, fundingRequest.id, { requireFull: true, sourceId: discrepancy.id, deferCreditShortfall: true });
 
       const recipients = await tx.user.findMany({
         where: {
@@ -199,6 +248,8 @@ export class DiscrepanciesService {
               storeId: orderItem.supplierOrder.storeId,
               supplierId: orderItem.supplierOrder.supplierId,
               discrepancyId: discrepancy.id,
+              shipmentId: discrepancy.receiptItem.shipmentItem.shipmentId,
+              shipmentNo: discrepancy.receiptItem.shipmentItem.shipment.shipmentNo,
             },
           })),
           skipDuplicates: true,
@@ -206,8 +257,8 @@ export class DiscrepanciesService {
       }
 
       return updated;
-    });
-
+    };
+    const resolved = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
     return toDiscrepancyView(resolved);
   }
 }

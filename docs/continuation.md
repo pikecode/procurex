@@ -2,6 +2,12 @@
 
 Last updated: 2026-10-06
 
+最新挂账确认：挂账为未向公司支付的货款，授权额度限制当前未清欠款；下单占用额度但不记已付、不扣储值。按约定周期确认收到还款后批量清账，释放对应额度；不得实现到期自动清零。现有资金逻辑符合，需求§6.4.3已明确。
+
+最新用户确认优先级：储值订单“下单冻结，收货完成扣款，取消/减量释放”；充值增加余额；销账（清账）偿还挂账欠款、恢复额度，不扣储值。本次已实现，需求v1.5优先于下方历史下单即扣款记录。拆分执行单独立结算，部分收货/未解决差异保持冻结；完成后扣账面余额并释放冻结，支付状态只按实际扣款计算。历史请求策略false保留旧账，业务新建true；不要把旧单批量改true或重跑seed。
+
+第65迁移20261006190000_stored_value_reservations已部署。StoreAccount.reservedBalance、FundingAllocation.reservedAmount；账户接口availableBalance=balance-reservedBalance，订单详情storedReservedAmount，列表/详情storedValueOnReceipt。核心request-funding.ts统一调整冻结/扣款，ShipmentsService/DiscrepanciesService完成后同步，shortage-financials释放对应冻结。新回归tests/integration/stored-value-reservations.test.ts；原原子命令/HTTP断言同步新时点并保留失败回滚/并发/重放覆盖。build、182单元、736集成、24Web、92小程序、静态均通过；finance桌面/320六截图var/store-finance-evidence。API3114已重启健康正常，Web4173；入口http://127.0.0.1:4173/app.html#/store-finance。后台资源stored-reservations-1。本次未提交/推送，上一提交6b9ee1c。后续优先用户资料本地验收、真机/生产与签字门槛，不继续扩展无关细节；小程序页面改动需开发者工具重新编译。
+
 最新阶段：门店财务需求图差距已补齐。入口http://127.0.0.1:4173/app.html#/store-finance；财务管理下还有#/collection-accounts，仅ADMIN/HQ_FINANCE。列表财务指标、共用默认10分页、充值/清账/额度/流水；清账挂账发生日期及供应商筛选，全选筛选结果、换筛选清除选择，确认保留版本/金额重校验及幂等。先配置并启用真实收款账户才可充值，不自动造银行账户。CollectionAccount迁移20261006170000应用，64迁移；新店expectedVersion=0首次授权额度，已有账户409。历史收款编号/订单/账户历史不迁移，不重跑seed。build/182单元/24Web/静态/732集成/导航通过。scripts/check-store-finance-ui.mjs六截图var/store-finance-evidence；scripts/capture-finance-accounts.mjs隔离local API3115真实充值/清账/凭证/恢复通过并清理，3115已关闭。API3114/Web4173保留；资源store-finance-1。后续优先用户真实资料本地验收及原生产/真机/签字边界，钉钉暂不接，不继续扩展无关细节。本阶段按用户要求提交本地Git，未push；具体提交号以git log为准。
 
 最新入口简化：http://127.0.0.1:4173/app.html#/stores，不再需要api参数。本地workspace-config.js端口3114，生产同域/api/v1；旧api链接自动移除查询并标签页保存覆盖，隔离验收随机端口仍兼容。23Web/静态和无参数列表/旧参数导航刷新回归通过。资源clean-url-1。后续给用户链接使用简洁地址，API3114/Web4173无需重启。

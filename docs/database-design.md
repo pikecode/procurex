@@ -1,5 +1,7 @@
 # 数据库详细设计
 
+2026-10-06储值冻结：第65个迁移20261006190000_stored_value_reservations新增StoreAccount.reservedBalance和FundingAllocation.reservedAmount（numeric(20,2)，默认0、非负CHECK），PurchaseRequest.storedValueOnReceipt（默认false保留旧单；业务创建接口显式true）。没有回填或重算旧余额/扣款流水。新请求下单冻结，账户账面余额不变，执行单收货完成才把冻结转入netPaid并记真实DEBIT；变更/取消按冻结净差调整，旧单继续原扣款/退款策略。账户行锁与请求/执行单锁串行化，金额计算继续Decimal。reservedBalance为全店占用汇总，reservedAmount为请求供应商资金分配占用；冻结不写现金流水，资金和业务命令/审计在同一事务中完成。
+
 2026-10-06收款账户配置：64个迁移，20261006170000_collection_accounts新增CollectionAccount（UUID主键、唯一name、bankName、accountName、accountNo、StoreStatus启停、version、创建更新时间）。无预置真实账户，无业务删除入口。RechargeDocument原collectionAccountId保留，不给历史自由文本强加外键；新外部充值在事务中校验启用账户，配置变更与充值共用锁。新店首次额度配置在资金事务中创建StoreAccount，无账户GET仍返回零值不写库。
 
 2026-10-05挂账历史更新：累计62迁移，20261005140000_credit_occurrence_history新增StoreAccount.creditCumulative可空numeric(20,2)及CreditMovement。既存账户保留null（历史未核定），新账户默认0，不回填假累计。流水关联账户与资金分配，BOOKING/RELEASE/CLEARING三种，正金额、非负事后未清约束，保存sourceType/sourceId、occurredAt及创建时间。实际正向挂账递增累计；清账/取消/减少/少收只追加释放流水，不减少累计；NULL递增保持NULL。业务同事务且已有资金行锁保护。外键随隔离夹具账户/分配删除级联，不增加业务删除入口。

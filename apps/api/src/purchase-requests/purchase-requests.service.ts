@@ -1,17 +1,23 @@
 import { randomInt } from 'node:crypto';
+import { lockCatalog } from '../catalog/catalog-registries.service.js';
+import { readTransactionUnits, requireTransactionUnitsUnchanged, transactionUnitView } from '../catalog/transaction-units.js';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import { evaluateStoredValueFunding } from '../../../../packages/domain/src/funding.js';
-import { lineAmount, toMoney, toQuantity } from '../../../../packages/domain/src/money.js';
+import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
 import {
   FulfillmentStatus,
   PaymentStatus,
   PurchaseRequestStatus,
   SupplierOrderStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { PurchaseRequest, RequestItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import type { Prisma, PurchaseRequest, RequestItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import { PricingService } from '../pricing/pricing.service.js';
+import { effectivePriceVersion } from '../pricing/effective-price.js';
+import { lockPricePublication } from '../pricing/price-checkpoint.js';
+import { lockFundingRequest, requireRequestVersion, synchronizeRequestFunding } from './request-funding.js';
+import { isHistoricalRejection, requestProgress } from './request-progress.js';
 import {
   PurchaseRequestPreviewService,
   type PurchaseRequestPreview,
@@ -28,6 +34,8 @@ export type PurchaseRequestView = PurchaseRequestPreview & {
 };
 
 export type PurchaseRequestSummaryView = {
+  storedValueOnReceipt: boolean;
+  storedReservedAmount?: string;
   id: string;
   requestNo: string;
   storeId: string;
@@ -42,6 +50,11 @@ export type PurchaseRequestSummaryView = {
   submittedAt: string;
   confirmedAt: string | null;
   rejectedAt: string | null;
+  supplierCount?: number;
+  completedSupplierCount?: number;
+  canceledSupplierCount?: number;
+  rejectedSupplierCount?: number;
+  fulfillmentStage?: string;
 };
 
 export type PurchaseRequestDetailView = PurchaseRequestSummaryView & {
@@ -50,9 +63,11 @@ export type PurchaseRequestDetailView = PurchaseRequestSummaryView & {
   supplierOrders: SupplierOrderSummaryView[];
 };
 
-export type PurchaseRequestItemView = {
+export type PurchaseRequestItemView = ReturnType<typeof transactionUnitView> & {
+  supplyPriceVersionId: string | null;
   id: string;
   productId: string;
+  productName?: string;
   supplierId: string;
   priceVersionId: string | null;
   quantity: string;
@@ -72,6 +87,9 @@ export type SupplierOrderSummaryView = {
   supplyGoodsAmount: string;
   pushedAt: string | null;
   version: number;
+  supplierName?: string;
+  rejectionHandled?: boolean;
+  shipments?: Array<{ id: string; shipmentNo: string; kind: string; shippedAt: string; trackingNo: string | null; receivedAt: string | null; receiptRevision: number }>;
 };
 
 export type ListPurchaseRequestsInput = {
@@ -80,6 +98,10 @@ export type ListPurchaseRequestsInput = {
 };
 
 export type ReplacePurchaseRequestItemInput = {
+  expectedPriceVersionId?: string;
+  expectedSupplyPriceVersionId?: string;
+  expectedProductVersion?: number;
+  unitId?: string;
   productId: string;
   supplierId: string;
   quantity: string;
@@ -92,6 +114,7 @@ export type ReassignPurchaseRequestPreview = {
 };
 
 export type ReassignPurchaseRequestPreviewItem = {
+  supplyPriceVersionId: string | null;
   requestItemId: string;
   productId: string | null;
   currentSupplierId: string | null;
@@ -139,17 +162,18 @@ export class PurchaseRequestsService {
         status: input.status,
       },
       orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+      include: { items: { select: { productId: true, supplierId: true } }, supplierOrders: { select: { id: true, createdAt: true, status: true, supplierId: true, items: { select: { productId: true } } } } },
     });
 
-    return requests.map(toPurchaseRequestSummaryView);
+    return requests.map(request => ({ ...toPurchaseRequestSummaryView(request), ...requestProgress(request) }));
   }
 
-  async get(id: string, scope?: { type: string; storeId?: string }): Promise<PurchaseRequestDetailView> {
-    const request = await this.database.client.purchaseRequest.findUnique({
+  async get(id: string, scope?: { type: string; storeId?: string }, transaction?: Prisma.TransactionClient): Promise<PurchaseRequestDetailView> {
+    const request = await (transaction ?? (this.database.client as Prisma.TransactionClient)).purchaseRequest.findUnique({
       where: { id, storeId: isStoreScope(scope?.type) ? scope?.storeId : undefined },
       include: {
-        items: { orderBy: { createdAt: 'asc' } },
-        supplierOrders: { orderBy: { createdAt: 'asc' } },
+        items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true } } } },
+        supplierOrders: { orderBy: { createdAt: 'asc' }, include: { items: { select: { productId: true } }, supplier: { select: { name: true } }, shipments: { orderBy: { sequence: 'asc' }, include: { receipts: { where: { isCurrent: true }, select: { submittedAt: true, revision: true } } } } } },
       },
     });
     if (!request) {
@@ -159,17 +183,48 @@ export class PurchaseRequestsService {
       });
     }
 
-    return toPurchaseRequestDetailView(request);
+    const reservations = await (transaction ?? (this.database.client as Prisma.TransactionClient)).fundingAllocation.aggregate({
+      where: { requestId: request.id, active: true, method: 'STORED_VALUE' }, _sum: { reservedAmount: true },
+    });
+    return { ...toPurchaseRequestDetailView(request), storedReservedAmount: reservations._sum.reservedAmount?.toFixed(2) ?? '0.00', ...requestProgress(request), items: request.items.map(item => ({ ...toPurchaseRequestItemView(item), productName: item.product.name })),
+      supplierOrders: request.supplierOrders.map(order => ({ ...toSupplierOrderSummaryView(order), supplierName: order.supplier.name, rejectionHandled: isHistoricalRejection(request, order),
+        shipments: order.shipments.map(shipment => ({ id: shipment.id, shipmentNo: shipment.shipmentNo, kind: shipment.kind, shippedAt: shipment.shippedAt.toISOString(), trackingNo: shipment.trackingNo,
+          receivedAt: shipment.receipts[0]?.submittedAt.toISOString() ?? null, receiptRevision: shipment.receipts[0]?.revision ?? 0 })) })) };
   }
 
-  async create(input: PurchaseRequestPreviewInput): Promise<PurchaseRequestView> {
-    const preview = await this.previewService.preview(input);
-    const status = preview.funding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS;
+  async rejectionTodos() {
+    const orders = await this.database.client.supplierOrder.findMany({
+      where: { status: 'REJECTED', request: { status: { not: 'CANCELED' } } },
+      orderBy: [{ rejectedAt: 'desc' }, { id: 'desc' }],
+      include: { items: { select: { productId: true } }, supplier: { select: { name: true } },
+        request: { include: { store: { select: { name: true } }, items: { select: { productId: true, supplierId: true } },
+          supplierOrders: { select: { id: true, createdAt: true, status: true, supplierId: true, items: { select: { productId: true } } } } } } },
+    });
+    return orders.filter(order => !isHistoricalRejection(order.request, order)).map(order => ({
+      id: order.id, supplierOrderId: order.id, supplierOrderNo: order.supplierOrderNo,
+      purchaseRequestId: order.requestId, requestNo: order.request.requestNo,
+      storeName: order.request.store.name, supplierName: order.supplier.name,
+      reason: order.rejectedReason || '', createdAt: order.rejectedAt?.toISOString() ?? order.createdAt.toISOString(),
+    }));
+  }
 
-    const request = await this.database.client.$transaction(async (tx) => {
+  async create(input: PurchaseRequestPreviewInput, transaction?: Prisma.TransactionClient): Promise<PurchaseRequestView> {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockPricePublication(tx);
+      await lockCatalog(tx, true);
+      // Reuse the command transaction; a second pooled connection can starve under load.
+      const preview = await this.previewService.preview(input, tx);
+      const status = preview.funding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS;
+      for (const item of preview.items) await requireTransactionUnitsUnchanged(tx, item.productId, item.unitSnapshot);
+      for (const item of preview.items) {
+        const price = await effectivePriceVersion(tx, item.productId, item.supplierId, new Date(), preview.templateId);
+        if (price?.id !== item.priceVersionId || price?.supplyVersionId !== item.supplyPriceVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Effective price changed; preview again' });
+      }
+      await lockFundingRequest(tx, preview.storeId);
       const created = await tx.purchaseRequest.create({
         data: {
           requestNo: makeRequestNo(),
+          storedValueOnReceipt: true,
           storeId: preview.storeId,
           templateId: preview.templateId,
           status,
@@ -184,9 +239,11 @@ export class PurchaseRequestsService {
       await tx.requestItem.createMany({
         data: preview.items.map((item) => ({
           requestId: created.id,
+          unitSnapshot: item.unitSnapshot,
           productId: item.productId,
           supplierId: item.supplierId,
           priceVersionId: item.priceVersionId,
+          supplyPriceVersionId: item.supplyPriceVersionId,
           quantity: item.quantity,
           salesUnitPrice: item.salesUnitPrice,
           supplyUnitPrice: item.supplyUnitPrice,
@@ -195,11 +252,19 @@ export class PurchaseRequestsService {
         })),
       });
 
-      return created;
-    });
+      const funding = await synchronizeRequestFunding(tx, created.id, { initial: true, sourceId: created.id });
+      const request = await tx.purchaseRequest.update({ where: { id: created.id }, data: {
+        status: funding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS,
+      } });
+      return { request, funding, preview };
+    };
+    const { request, funding, preview } = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
 
     return {
       ...preview,
+      funding: { ...preview.funding, canConfirm: funding.canConfirm, stored: {
+        required: funding.storedRequired.toFixed(2), paid: funding.storedPaid.toFixed(2), reserved: funding.storedReserved.toFixed(2), available: funding.available.toFixed(2), shortfall: funding.shortfallAmount.toFixed(2),
+      } },
       id: request.id,
       requestNo: request.requestNo,
       status: request.status,
@@ -213,7 +278,19 @@ export class PurchaseRequestsService {
     id: string,
     expectedVersion: number,
     items: ReplacePurchaseRequestItemInput[],
+    transaction?: Prisma.TransactionClient,
   ): Promise<PurchaseRequestDetailView> {
+    const { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding } = await this.prepareReplacement(id, expectedVersion, items);
+    return this.saveReplacement(request, expectedVersion, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding, transaction);
+  }
+
+  async previewReplacement(id: string, expectedVersion: number, items: ReplacePurchaseRequestItemInput[]) {
+    const { request, pricedItems, salesGoodsAmount, supplyGoodsAmount } = await this.prepareReplacement(id, expectedVersion, items);
+    return { requestId: request.id, templateId: request.templateId, version: request.version, items: pricedItems,
+      totals: { salesGoodsAmount: salesGoodsAmount.toFixed(2), supplyGoodsAmount: supplyGoodsAmount.toFixed(2) } };
+  }
+
+  private async prepareReplacement(id: string, expectedVersion: number, items: ReplacePurchaseRequestItemInput[]) {
     const request = await this.database.client.purchaseRequest.findUnique({
       where: { id },
       include: { supplierOrders: true },
@@ -233,7 +310,7 @@ export class PurchaseRequestsService {
       });
     }
 
-    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT || request.supplierOrders.length > 0) {
+    if ((request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS) || request.supplierOrders.length > 0) {
       throw new ConflictException({
         code: 'PURCHASE_REQUEST_ITEMS_NOT_EDITABLE',
         message: 'Purchase request items cannot be edited in its current status',
@@ -256,7 +333,7 @@ export class PurchaseRequestsService {
         isEnabled: true,
         product: { isActive: true },
       },
-      include: { suppliers: true },
+      include: { suppliers: { where: { supplier: { status: 'ACTIVE', isArchived: false } } } },
     });
     const allowedSuppliersByProduct = new Map(
       templateItems.map((item) => [item.productId, new Set(item.suppliers.map((supplier) => supplier.supplierId))]),
@@ -280,7 +357,11 @@ export class PurchaseRequestsService {
           });
         }
 
-        const quantity = toQuantity(item.quantity);
+        const units = await this.database.client.$transaction(async tx => {
+          await lockCatalog(tx, true);
+          return readTransactionUnits(tx, item.productId, item.quantity, item.unitId, item.expectedProductVersion, request.templateId);
+        });
+        const quantity = new Decimal(units.quantity);
         if (quantity.lte(0)) {
           throw new ConflictException({
             code: 'INVALID_ITEM_QUANTITY',
@@ -289,11 +370,17 @@ export class PurchaseRequestsService {
           });
         }
 
-        const price = await this.pricingService.getEffectivePrice(item.productId, item.supplierId, new Date());
+        const price = await this.pricingService.getEffectivePrice(item.productId, item.supplierId, new Date(), request.templateId);
+        if ((item.expectedPriceVersionId !== undefined && item.expectedPriceVersionId !== price.versionId)
+          || (item.expectedSupplyPriceVersionId !== undefined && item.expectedSupplyPriceVersionId !== price.supplyVersionId)) {
+          throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Approved price changed; preview again' });
+        }
         return {
+          unitSnapshot: units.unitSnapshot,
           productId: item.productId,
           supplierId: item.supplierId,
           priceVersionId: price.versionId,
+          supplyPriceVersionId: price.supplyVersionId,
           quantity: quantity.toString(),
           salesUnitPrice: new Decimal(price.salesPrice).toString(),
           supplyUnitPrice: new Decimal(price.supplyPrice).toString(),
@@ -307,14 +394,34 @@ export class PurchaseRequestsService {
     const supplyGoodsAmount = pricedItems.reduce((sum, item) => sum.plus(item.supplyLineAmount), toMoney(0));
     const account = await this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } });
     const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), salesGoodsAmount);
-    const updated = await this.database.client.$transaction(async (tx) => {
+    return { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding };
+  }
+
+  private async saveReplacement(request: PurchaseRequest, expectedVersion: number,
+    pricedItems: Awaited<ReturnType<PurchaseRequestsService['prepareReplacement']>>['pricedItems'],
+    salesGoodsAmount: Decimal, supplyGoodsAmount: Decimal, funding: ReturnType<typeof evaluateStoredValueFunding>, transaction?: Prisma.TransactionClient) {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockPricePublication(tx);
+      await lockCatalog(tx, true);
+      for (const item of pricedItems) await requireTransactionUnitsUnchanged(tx, item.productId, item.unitSnapshot);
+      for (const item of pricedItems) {
+        const allowed = await tx.templateItem.findFirst({ where: { templateId: request.templateId, productId: item.productId, isEnabled: true,
+          product: { isActive: true }, suppliers: { some: { supplierId: item.supplierId, supplier: { status: 'ACTIVE', isArchived: false } } } } });
+        if (!allowed) throw new ConflictException({ code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT', message: 'Supplier eligibility changed; preview again' });
+        const price = await effectivePriceVersion(tx, item.productId, item.supplierId, new Date(), request.templateId);
+        if (price?.id !== item.priceVersionId || price?.supplyVersionId !== item.supplyPriceVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Effective price changed; preview again' });
+      }
+      await lockFundingRequest(tx, request.storeId, request.id);
+      await requireRequestVersion(tx, request.id, expectedVersion);
       await tx.requestItem.deleteMany({ where: { requestId: request.id } });
       await tx.requestItem.createMany({
         data: pricedItems.map((item) => ({
           requestId: request.id,
+          unitSnapshot: item.unitSnapshot,
           productId: item.productId,
           supplierId: item.supplierId,
           priceVersionId: item.priceVersionId,
+          supplyPriceVersionId: item.supplyPriceVersionId,
           quantity: item.quantity,
           salesUnitPrice: item.salesUnitPrice,
           supplyUnitPrice: item.supplyUnitPrice,
@@ -335,17 +442,14 @@ export class PurchaseRequestsService {
           version: { increment: 1 },
         },
       });
+      const actualFunding = await synchronizeRequestFunding(tx, request.id);
+      await tx.purchaseRequest.update({ where: { id: request.id }, data: { status: actualFunding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS } });
 
-      return tx.purchaseRequest.findUniqueOrThrow({
-        where: { id: request.id },
-        include: {
-          items: { orderBy: { createdAt: 'asc' } },
-          supplierOrders: { orderBy: { createdAt: 'asc' } },
-        },
-      });
-    });
+      return this.get(request.id, undefined, tx);
+    };
+    const updated = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
 
-    return toPurchaseRequestDetailView(updated);
+    return updated;
   }
 
   async reassignPreview(id: string, expectedVersion: number, itemIds: string[], supplierId: string): Promise<ReassignPurchaseRequestPreview> {
@@ -354,9 +458,16 @@ export class PurchaseRequestsService {
     return { requestId: request.id, supplierId, items: previewItems };
   }
 
-  async assign(id: string, expectedVersion: number, itemIds: string[], supplierId: string): Promise<PurchaseRequestDetailView> {
+  async assign(id: string, expectedVersion: number, itemIds: string[], supplierId: string,
+    expectedPrices?: Array<{ requestItemId: string; priceVersionId: string; supplyPriceVersionId: string }>, transaction?: Prisma.TransactionClient): Promise<PurchaseRequestDetailView> {
     const request = await this.loadEditableRequest(id, expectedVersion);
     const previewItems = await this.previewReassignment(request, itemIds, supplierId);
+    for (const expected of expectedPrices ?? []) {
+      const price = previewItems.find(item => item.requestItemId === expected.requestItemId);
+      if (price?.priceVersionId !== expected.priceVersionId || price?.supplyPriceVersionId !== expected.supplyPriceVersionId) {
+        throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Approved assignment price changed; preview again' });
+      }
+    }
     const ineligible = previewItems.filter((item) => !item.eligible);
     if (ineligible.length > 0) {
       throw new ConflictException({
@@ -375,6 +486,7 @@ export class PurchaseRequestsService {
         ...item,
         supplierId,
         priceVersionId: preview.priceVersionId,
+        supplyPriceVersionId: preview.supplyPriceVersionId,
         salesUnitPrice: new Decimal(preview.salesUnitPrice!),
         supplyUnitPrice: new Decimal(preview.supplyUnitPrice!),
         salesLineAmount: new Decimal(preview.salesLineAmount!),
@@ -386,13 +498,27 @@ export class PurchaseRequestsService {
     const account = await this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } });
     const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), salesGoodsAmount);
 
-    const updated = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockPricePublication(tx);
+      await lockCatalog(tx, true);
+      for (const preview of previewItems) {
+        const allowed = await tx.templateItem.findFirst({ where: { templateId: request.templateId, productId: preview.productId!, isEnabled: true,
+          product: { isActive: true }, suppliers: { some: { supplierId, supplier: { status: 'ACTIVE', isArchived: false } } } } });
+        if (!allowed) throw new ConflictException({ code: 'REASSIGNMENT_NOT_ELIGIBLE', message: 'Supplier eligibility changed; preview again' });
+        const price = await effectivePriceVersion(tx, preview.productId!, supplierId, new Date(), request.templateId);
+        if (price?.id !== preview.priceVersionId || price?.supplyVersionId !== preview.supplyPriceVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Effective price changed; preview again' });
+      }
+      await lockFundingRequest(tx, request.storeId, request.id);
+      await requireRequestVersion(tx, request.id, expectedVersion);
       for (const preview of previewItems) {
         await tx.requestItem.update({
           where: { id: preview.requestItemId },
           data: {
             supplierId,
+            settlementModeSnapshot: null,
+            settlementCycleSnapshot: null,
             priceVersionId: preview.priceVersionId,
+            supplyPriceVersionId: preview.supplyPriceVersionId,
             salesUnitPrice: preview.salesUnitPrice!,
             supplyUnitPrice: preview.supplyUnitPrice!,
             salesLineAmount: preview.salesLineAmount!,
@@ -414,16 +540,14 @@ export class PurchaseRequestsService {
         },
       });
 
-      return tx.purchaseRequest.findUniqueOrThrow({
-        where: { id: request.id },
-        include: {
-          items: { orderBy: { createdAt: 'asc' } },
-          supplierOrders: { orderBy: { createdAt: 'asc' } },
-        },
-      });
-    });
+      const actualFunding = await synchronizeRequestFunding(tx, request.id);
+      await tx.purchaseRequest.update({ where: { id: request.id }, data: { status: actualFunding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS } });
 
-    return toPurchaseRequestDetailView(updated);
+      return this.get(request.id, undefined, tx);
+    };
+    const updated = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
+
+    return updated;
   }
 
   async reallocate(
@@ -431,6 +555,7 @@ export class PurchaseRequestsService {
     expectedVersion: number,
     rejectedOrderId: string,
     assignments: ReallocatePurchaseRequestAssignmentInput[],
+    transaction?: Prisma.TransactionClient,
   ): Promise<PurchaseRequestDetailView> {
     const request = await this.database.client.purchaseRequest.findUnique({
       where: { id },
@@ -498,7 +623,7 @@ export class PurchaseRequestsService {
         isEnabled: true,
         product: { isActive: true },
       },
-      include: { suppliers: true },
+      include: { suppliers: { where: { supplier: { status: 'ACTIVE', isArchived: false } } } },
     });
     const allowedSuppliersByProduct = new Map(
       templateItems.map((item) => [item.productId, new Set(item.suppliers.map((supplier) => supplier.supplierId))]),
@@ -545,7 +670,7 @@ export class PurchaseRequestsService {
           });
         }
 
-        const price = await this.pricingService.getEffectivePrice(item.productId, assignment.supplierId, new Date());
+        const price = await this.pricingService.getEffectivePrice(item.productId, assignment.supplierId, new Date(), request.templateId);
         return { assignment, item, price };
       }),
     );
@@ -561,6 +686,7 @@ export class PurchaseRequestsService {
           ...item,
           supplierId: priced.assignment.supplierId,
           priceVersionId: priced.price.versionId,
+          supplyPriceVersionId: priced.price.supplyVersionId,
           salesUnitPrice: new Decimal(priced.price.salesPrice),
           supplyUnitPrice: new Decimal(priced.price.supplyPrice),
           salesLineAmount: lineAmount(item.quantity, priced.price.salesPrice),
@@ -579,8 +705,26 @@ export class PurchaseRequestsService {
     });
     const reassignmentSettingsBySupplier = new Map(reassignmentSettings.map((setting) => [setting.supplierId, setting]));
 
-    const updated = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockPricePublication(tx);
+      await lockCatalog(tx, true);
       for (const priced of pricedAssignments) {
+        if (!priced.price || !priced.assignment.supplierId) continue;
+        const price = await effectivePriceVersion(tx, priced.item.productId, priced.assignment.supplierId, new Date(), request.templateId);
+        if (price?.id !== priced.price.versionId || price?.supplyVersionId !== priced.price.supplyVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Effective price changed; preview again' });
+      }
+      await lockFundingRequest(tx, request.storeId, request.id);
+      await requireRequestVersion(tx, request.id, expectedVersion);
+      for (const priced of pricedAssignments) {
+        if (!priced.assignment.cancel && priced.assignment.supplierId) {
+          await tx.$queryRaw`SELECT "id" FROM "Supplier" WHERE "id" = ${priced.assignment.supplierId}::uuid FOR SHARE`;
+          const allowed = await tx.templateItem.findFirst({ where: { templateId: request.templateId, productId: priced.item.productId, isEnabled: true,
+            product: { isActive: true }, suppliers: { some: { supplierId: priced.assignment.supplierId, supplier: { status: 'ACTIVE', isArchived: false } } } } });
+          if (!allowed) throw new ConflictException({ code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT', message: 'Supplier eligibility changed; reload the rejected order' });
+          const target = await tx.supplierOrder.findFirst({ where: { requestId: request.id, supplierId: priced.assignment.supplierId,
+            status: { not: SupplierOrderStatus.REJECTED }, firstShippedAt: { not: null } } });
+          if (target) throw new ConflictException({ code: 'TARGET_SUPPLIER_ALREADY_SHIPPED', message: 'Target supplier order has already shipped' });
+        }
         if (priced.assignment.cancel) {
           await tx.requestItem.delete({ where: { id: priced.item.id } });
           continue;
@@ -590,7 +734,10 @@ export class PurchaseRequestsService {
           where: { id: priced.item.id },
           data: {
             supplierId: priced.assignment.supplierId!,
+            settlementModeSnapshot: null,
+            settlementCycleSnapshot: null,
             priceVersionId: priced.price!.versionId,
+            supplyPriceVersionId: priced.price!.supplyVersionId,
             salesUnitPrice: priced.price!.salesPrice,
             supplyUnitPrice: priced.price!.supplyPrice,
             salesLineAmount: lineAmount(priced.item.quantity, priced.price!.salesPrice).toFixed(2),
@@ -610,6 +757,7 @@ export class PurchaseRequestsService {
               requestId: request.id,
               storeId: request.storeId,
               supplierId: priced.assignment.supplierId!,
+              requiresFreightSnapshot: reassignmentSuppliersById.get(priced.assignment.supplierId!)!.requiresFreight,
               settlementMode: reassignmentSettingsBySupplier.get(priced.assignment.supplierId!)?.settlementMode ?? reassignmentSuppliersById.get(priced.assignment.supplierId!)!.defaultSettlementMode,
               settlementCycleSnapshot: reassignmentSettingsBySupplier.get(priced.assignment.supplierId!)?.settlementCycle ?? reassignmentSuppliersById.get(priced.assignment.supplierId!)!.defaultSettlementCycle,
               status: SupplierOrderStatus.PUSHED,
@@ -635,6 +783,8 @@ export class PurchaseRequestsService {
         await tx.orderItem.create({
           data: {
             supplierOrderId: targetOrder.id,
+            ...(priced.item.unitSnapshot ? { unitSnapshot: priced.item.unitSnapshot as never } : {}),
+            salesPriceVersionId: priced.price!.versionId, supplyPriceVersionId: priced.price!.supplyVersionId,
             productId: priced.item.productId,
             quantity: priced.item.quantity,
             salesUnitPrice: priced.price!.salesPrice,
@@ -648,7 +798,8 @@ export class PurchaseRequestsService {
       await tx.purchaseRequest.update({
         where: { id: request.id },
         data: {
-          status: funding.canConfirm ? PurchaseRequestStatus.CONFIRMED : PurchaseRequestStatus.PENDING_FUNDS,
+          status: replacementItems.length === 0 ? PurchaseRequestStatus.CANCELED
+            : funding.canConfirm ? PurchaseRequestStatus.CONFIRMED : PurchaseRequestStatus.PENDING_FUNDS,
           paymentStatus: funding.canConfirm ? PaymentStatus.PAID : PaymentStatus.UNPAID,
           salesGoodsAmount: salesGoodsAmount.toFixed(2),
           supplyGoodsAmount: supplyGoodsAmount.toFixed(2),
@@ -658,16 +809,15 @@ export class PurchaseRequestsService {
         },
       });
 
-      return tx.purchaseRequest.findUniqueOrThrow({
-        where: { id: request.id },
-        include: {
-          items: { orderBy: { createdAt: 'asc' } },
-          supplierOrders: { orderBy: { createdAt: 'asc' } },
-        },
-      });
-    });
+      const actualFunding = await synchronizeRequestFunding(tx, request.id);
+      await tx.purchaseRequest.update({ where: { id: request.id }, data: { status: replacementItems.length === 0 ? PurchaseRequestStatus.CANCELED
+        : actualFunding.canConfirm ? PurchaseRequestStatus.CONFIRMED : PurchaseRequestStatus.PENDING_FUNDS } });
 
-    return toPurchaseRequestDetailView(updated);
+      return this.get(request.id, undefined, tx);
+    };
+    const updated = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
+
+    return updated;
   }
 
   private async loadEditableRequest(id: string, expectedVersion: number): Promise<PurchaseRequest & { items: RequestItem[]; supplierOrders: SupplierOrder[] }> {
@@ -693,7 +843,7 @@ export class PurchaseRequestsService {
       });
     }
 
-    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT || request.supplierOrders.length > 0) {
+    if ((request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS) || request.supplierOrders.length > 0) {
       throw new ConflictException({
         code: 'PURCHASE_REQUEST_ITEMS_NOT_EDITABLE',
         message: 'Purchase request items cannot be edited in its current status',
@@ -710,6 +860,10 @@ export class PurchaseRequestsService {
     supplierId: string,
   ): Promise<ReassignPurchaseRequestPreviewItem[]> {
     const itemsById = new Map(request.items.map((item) => [item.id, item]));
+    const target = await this.database.client.supplier.findUnique({ where: { id: supplierId }, select: { status: true, isArchived: true } });
+    if (!target || target.status !== 'ACTIVE' || target.isArchived) {
+      return itemIds.map(itemId => { const item = itemsById.get(itemId); return toIneligibleReassignment(itemId, item?.productId ?? null, item?.supplierId ?? null, supplierId, 'SUPPLIER_NOT_ACTIVE'); });
+    }
     const templateItems = await this.database.client.templateItem.findMany({
       where: {
         templateId: request.templateId,
@@ -735,7 +889,7 @@ export class PurchaseRequestsService {
         }
 
         try {
-          const price = await this.pricingService.getEffectivePrice(item.productId, supplierId, new Date());
+          const price = await this.pricingService.getEffectivePrice(item.productId, supplierId, new Date(), request.templateId);
           return {
             requestItemId: item.id,
             productId: item.productId,
@@ -748,6 +902,7 @@ export class PurchaseRequestsService {
             salesLineAmount: lineAmount(item.quantity, price.salesPrice).toFixed(2),
             supplyLineAmount: lineAmount(item.quantity, price.supplyPrice).toFixed(2),
             priceVersionId: price.versionId,
+            supplyPriceVersionId: price.supplyVersionId,
           };
         } catch (error) {
           if (error instanceof NotFoundException) {
@@ -759,8 +914,9 @@ export class PurchaseRequestsService {
     );
   }
 
-  async confirm(id: string, expectedVersion: number): Promise<ConfirmPurchaseRequestResult> {
-    const request = await this.database.client.purchaseRequest.findUnique({
+  async confirm(id: string, expectedVersion: number, transaction?: Prisma.TransactionClient): Promise<ConfirmPurchaseRequestResult> {
+    const client = transaction ?? (this.database.client as Prisma.TransactionClient);
+    const request = await client.purchaseRequest.findUnique({
       where: { id },
       include: { items: true, supplierOrders: true },
     });
@@ -787,22 +943,11 @@ export class PurchaseRequestsService {
       };
     }
 
-    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT) {
+    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS) {
       throw new ConflictException({
         code: 'PURCHASE_REQUEST_NOT_CONFIRMABLE',
         message: 'Purchase request cannot be confirmed in its current status',
         details: { status: request.status },
-      });
-    }
-
-    const currentSalesAmount = request.items.reduce((sum, item) => sum.plus(item.salesLineAmount), toMoney(0));
-    const account = await this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } });
-    const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), currentSalesAmount);
-    if (!funding.canConfirm) {
-      throw new ConflictException({
-        code: 'PURCHASE_REQUEST_FUNDING_SHORTFALL',
-        message: 'Current store balance does not cover the purchase request',
-        details: { required: currentSalesAmount.toFixed(2), available: toMoney(account?.balance ?? 0).toFixed(2), shortfall: funding.shortfallAmount.toFixed(2) },
       });
     }
 
@@ -812,14 +957,18 @@ export class PurchaseRequestsService {
       group.push(item);
       supplierGroups.set(item.supplierId, group);
     }
-    const suppliers = await this.database.client.supplier.findMany({ where: { id: { in: [...supplierGroups.keys()] } } });
+    const suppliers = await client.supplier.findMany({ where: { id: { in: [...supplierGroups.keys()] } } });
     const suppliersById = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
-    const settings = await this.database.client.templateSupplierSetting.findMany({
+    const settings = await client.templateSupplierSetting.findMany({
       where: { templateId: request.templateId, supplierId: { in: [...supplierGroups.keys()] } },
     });
     const settingsBySupplier = new Map(settings.map((setting) => [setting.supplierId, setting]));
 
-    const supplierOrderIds = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockFundingRequest(tx, request.storeId, request.id);
+      await requireRequestVersion(tx, request.id, expectedVersion);
+      await synchronizeRequestFunding(tx, request.id, { requireFull: true });
+      const snapshotItems = await tx.requestItem.findMany({ where: { requestId: request.id } });
       const createdOrderIds: string[] = [];
 
       for (const [supplierId, items] of supplierGroups.entries()) {
@@ -831,8 +980,9 @@ export class PurchaseRequestsService {
             requestId: request.id,
             storeId: request.storeId,
             supplierId,
-            settlementMode: settingsBySupplier.get(supplierId)?.settlementMode ?? suppliersById.get(supplierId)!.defaultSettlementMode,
-            settlementCycleSnapshot: settingsBySupplier.get(supplierId)?.settlementCycle ?? suppliersById.get(supplierId)!.defaultSettlementCycle,
+            settlementMode: snapshotItems.find(item => item.supplierId === supplierId)?.settlementModeSnapshot ?? settingsBySupplier.get(supplierId)?.settlementMode ?? suppliersById.get(supplierId)!.defaultSettlementMode,
+            requiresFreightSnapshot: suppliersById.get(supplierId)!.requiresFreight,
+            settlementCycleSnapshot: snapshotItems.find(item => item.supplierId === supplierId)?.settlementCycleSnapshot ?? settingsBySupplier.get(supplierId)?.settlementCycle ?? suppliersById.get(supplierId)!.defaultSettlementCycle,
             status: SupplierOrderStatus.PUSHED,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             pushedAt: new Date(),
@@ -844,6 +994,8 @@ export class PurchaseRequestsService {
         await tx.orderItem.createMany({
           data: items.map((item) => ({
             supplierOrderId: supplierOrder.id,
+            ...(item.unitSnapshot ? { unitSnapshot: item.unitSnapshot as never } : {}),
+            salesPriceVersionId: item.priceVersionId, supplyPriceVersionId: item.supplyPriceVersionId,
             productId: item.productId,
             quantity: item.quantity,
             salesUnitPrice: item.salesUnitPrice,
@@ -854,6 +1006,7 @@ export class PurchaseRequestsService {
         });
 
         createdOrderIds.push(supplierOrder.id);
+        await tx.fundingAllocation.updateMany({ where: { requestId: request.id, supplierId, active: true }, data: { supplierOrderId: supplierOrder.id } });
       }
 
       await tx.purchaseRequest.update({
@@ -866,7 +1019,8 @@ export class PurchaseRequestsService {
       });
 
       return createdOrderIds;
-    });
+    };
+    const supplierOrderIds = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
 
     return {
       requestId: request.id,
@@ -875,8 +1029,8 @@ export class PurchaseRequestsService {
     };
   }
 
-  async reject(id: string, expectedVersion: number, reason: string): Promise<RejectPurchaseRequestResult> {
-    const request = await this.database.client.purchaseRequest.findUnique({ where: { id } });
+  async reject(id: string, expectedVersion: number, reason: string, transaction?: Prisma.TransactionClient): Promise<RejectPurchaseRequestResult> {
+    const request = await (transaction ?? (this.database.client as Prisma.TransactionClient)).purchaseRequest.findUnique({ where: { id } });
     if (!request) {
       throw new NotFoundException({
         code: 'PURCHASE_REQUEST_NOT_FOUND',
@@ -901,7 +1055,7 @@ export class PurchaseRequestsService {
       };
     }
 
-    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT) {
+    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS) {
       throw new ConflictException({
         code: 'PURCHASE_REQUEST_NOT_REJECTABLE',
         message: 'Purchase request cannot be rejected in its current status',
@@ -909,7 +1063,10 @@ export class PurchaseRequestsService {
       });
     }
 
-    const rejected = await this.database.client.purchaseRequest.update({
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockFundingRequest(tx, request.storeId, request.id);
+      await requireRequestVersion(tx, request.id, expectedVersion);
+      const rejected = await tx.purchaseRequest.update({
       where: { id: request.id },
       data: {
         status: PurchaseRequestStatus.CANCELED,
@@ -917,7 +1074,11 @@ export class PurchaseRequestsService {
         rejectedReason: reason,
         version: { increment: 1 },
       },
-    });
+      });
+      await synchronizeRequestFunding(tx, request.id);
+      return rejected;
+    };
+    const rejected = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
 
     return {
       requestId: rejected.id,
@@ -934,6 +1095,7 @@ function isStoreScope(type?: string): boolean {
 
 function toPurchaseRequestSummaryView(request: PurchaseRequest): PurchaseRequestSummaryView {
   return {
+    storedValueOnReceipt: request.storedValueOnReceipt,
     id: request.id,
     requestNo: request.requestNo,
     storeId: request.storeId,
@@ -964,10 +1126,12 @@ function toPurchaseRequestDetailView(
 
 function toPurchaseRequestItemView(item: RequestItem): PurchaseRequestItemView {
   return {
+    ...transactionUnitView(item.unitSnapshot, item.salesUnitPrice.toString(), item.supplyUnitPrice.toString()),
     id: item.id,
     productId: item.productId,
     supplierId: item.supplierId,
     priceVersionId: item.priceVersionId,
+    supplyPriceVersionId: item.supplyPriceVersionId,
     quantity: item.quantity.toString(),
     salesUnitPrice: item.salesUnitPrice.toString(),
     supplyUnitPrice: item.supplyUnitPrice.toString(),
@@ -1020,6 +1184,7 @@ function toIneligibleReassignment(
     salesLineAmount: null,
     supplyLineAmount: null,
     priceVersionId: null,
+    supplyPriceVersionId: null,
   };
 }
 

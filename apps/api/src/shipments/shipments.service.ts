@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
+import { readUnitSnapshot } from '../catalog/transaction-units.js';
 import {
   DiscrepancyStatus,
   FulfillmentStatus,
@@ -8,14 +9,17 @@ import {
   UserScopeType,
   UserStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { Receipt, ReceiptItem, Shipment, ShipmentItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
+import type { FileObject, Prisma, Receipt, ReceiptItem, Shipment, ShipmentItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import { resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
+import { lockFundingRequest, synchronizeRequestFunding } from '../purchase-requests/request-funding.js';
+import { applyEffectiveOrderPrices, lockPricePublication } from '../pricing/price-checkpoint.js';
 
 export type CreateReceiptInput = {
   expectedOrderVersion: number;
   expectedReceiptRevision: number;
   items: ReceiptItemInput[];
+  evidenceFileIds?: string[];
 };
 
 export type ReceiptItemInput = {
@@ -31,7 +35,10 @@ export type ReceiptView = {
   isCurrent: boolean;
   submittedAt: string;
   items: ReceiptItemView[];
+  evidenceFiles: ReceiptEvidenceView[];
 };
+
+type ReceiptEvidenceView = { id: string; filename: string; mimeType: string; sizeBytes: string };
 
 export type ReceiptItemView = {
   id: string;
@@ -49,15 +56,19 @@ export type ShipmentDetailView = {
   shippedAt: string;
   trackingNo: string | null;
   currentReceiptRevision: number;
+  evidenceFiles: ReceiptEvidenceView[];
   items: ShipmentDetailItemView[];
 };
 
 export type ShipmentDetailItemView = {
+  unitName: string | null;
   id: string;
   orderItemId: string;
   productId: string;
   productName: string;
   shippedQuantity: string;
+  currentReceivedQuantity: string | null;
+  receiptLocked: boolean;
   salesPriceSnapshot: string;
   supplyPriceSnapshot: string;
 };
@@ -74,11 +85,12 @@ export class ShipmentsService {
       },
       include: {
         supplierOrder: true,
-        items: { include: { orderItem: { include: { product: true } } }, orderBy: { createdAt: 'asc' } },
+        items: { include: { orderItem: { include: { product: true } }, receiptItems: { include: { discrepancy: { include: { returnRecord: true } } } } }, orderBy: { createdAt: 'asc' } },
         receipts: {
           where: { isCurrent: true },
           orderBy: { revision: 'desc' },
           take: 1,
+          include: { items: true, evidenceFiles: true },
         },
       },
     });
@@ -92,7 +104,7 @@ export class ShipmentsService {
     return toShipmentDetailView(shipment);
   }
 
-  async createReceipt(shipmentId: string, input: CreateReceiptInput, scope?: { type: string; storeId?: string }): Promise<ReceiptView> {
+  async createReceipt(shipmentId: string, input: CreateReceiptInput, scope?: { type: string; storeId?: string }, actorUserId?: string, transaction?: Prisma.TransactionClient): Promise<ReceiptView> {
     const shipment = await this.database.client.shipment.findUnique({
       where: {
         id: shipmentId,
@@ -100,7 +112,7 @@ export class ShipmentsService {
       },
       include: {
         supplierOrder: { include: { items: { include: { shipmentItems: true } } } },
-        items: { orderBy: { createdAt: 'asc' } },
+        items: { orderBy: { createdAt: 'asc' }, include: { receiptItems: { include: { discrepancy: { include: { returnRecord: true } } } } } },
         receipts: {
           where: { isCurrent: true },
           include: { items: { include: { discrepancy: true } } },
@@ -132,14 +144,10 @@ export class ShipmentsService {
         details: { expectedReceiptRevision: input.expectedReceiptRevision, currentRevision },
       });
     }
-    const blockingDiscrepancy = currentReceipt?.items.find(
-      (item) => item.discrepancy && item.discrepancy.status !== DiscrepancyStatus.OPEN,
-    )?.discrepancy;
-    if (blockingDiscrepancy) {
+    if (currentReceipt && shipment.items.every(item => isReceiptItemLocked(item.receiptItems))) {
       throw new ConflictException({
         code: 'RECEIPT_REVISION_NOT_REPLACEABLE',
-        message: 'Receipt cannot be replaced after its discrepancy has been resolved or moved to replenishment',
-        details: { discrepancyId: blockingDiscrepancy.id, status: blockingDiscrepancy.status },
+        message: 'Receipt has no open or returned discrepancies to revise',
       });
     }
 
@@ -181,10 +189,24 @@ export class ShipmentsService {
         });
       }
 
-      return { shipmentItem, receivedQuantity };
+      const receiptLocked = Boolean(currentReceipt) && isReceiptItemLocked(shipmentItem.receiptItems);
+      const previous = currentReceipt?.items.find(item => item.shipmentItemId === shipmentItem.id);
+      if (receiptLocked && (!previous || !receivedQuantity.eq(previous.receivedQuantity))) {
+        throw new ConflictException({ code: 'RECEIPT_REVISION_NOT_REPLACEABLE', message: 'Resolved or replenishment receipt quantities cannot be changed', details: { shipmentItemId: shipmentItem.id } });
+      }
+      return { shipmentItem, receivedQuantity, receiptLocked };
     });
 
-    const receipt = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockPricePublication(tx);
+      await lockFundingRequest(tx, shipment.supplierOrder.storeId, shipment.supplierOrder.requestId);
+      const lockedOrder = await tx.supplierOrder.findUniqueOrThrow({ where: { id: shipment.supplierOrderId } });
+      if (lockedOrder.version !== input.expectedOrderVersion) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Supplier order changed before receipt submission' });
+      if (input.evidenceFileIds !== undefined) {
+        if (!actorUserId || input.evidenceFileIds.length < 1 || input.evidenceFileIds.length > 6 || new Set(input.evidenceFileIds).size !== input.evidenceFileIds.length) {
+          throw new ConflictException({ code: 'RECEIPT_EVIDENCE_INVALID', message: 'Provide one to six completed receipt images owned by the current user' });
+        }
+      }
       if (currentReceipt) {
         await tx.receipt.update({
           where: { id: currentReceipt.id },
@@ -192,8 +214,8 @@ export class ShipmentsService {
         });
         await tx.discrepancy.updateMany({
           where: {
-            receiptItem: { receiptId: currentReceipt.id },
-            status: DiscrepancyStatus.OPEN,
+            receiptItem: { shipmentItemId: { in: receiptItems.filter(item => !item.receiptLocked).map(item => item.shipmentItem.id) } },
+            OR: [{ status: DiscrepancyStatus.OPEN }, { status: DiscrepancyStatus.RESOLVED, returnRecord: { isNot: null } }],
           },
           data: { status: DiscrepancyStatus.SUPERSEDED },
         });
@@ -208,6 +230,13 @@ export class ShipmentsService {
           revision: currentRevision + 1,
         },
       });
+      if (input.evidenceFileIds?.length) {
+        const attached = await tx.fileObject.updateMany({
+          where: { id: { in: input.evidenceFileIds }, ownerId: actorUserId, purpose: 'RECEIPT', status: 'READY', mimeType: { in: ['image/jpeg', 'image/png'] }, receiptId: null, paymentId: null },
+          data: { receiptId: created.id },
+        });
+        if (attached.count !== input.evidenceFileIds.length) throw new ConflictException({ code: 'RECEIPT_EVIDENCE_INVALID', message: 'Receipt images are unavailable, incomplete, already linked or owned by another user' });
+      }
 
       const discrepancyIds: string[] = [];
       for (const item of receiptItems) {
@@ -219,7 +248,7 @@ export class ShipmentsService {
           },
         });
         const missingQuantity = new Decimal(item.shipmentItem.quantity).minus(item.receivedQuantity);
-        if (missingQuantity.gt(0)) {
+        if (missingQuantity.gt(0) && !item.receiptLocked) {
           const discrepancy = await tx.discrepancy.create({
             data: {
               receiptItemId: createdReceiptItem.id,
@@ -243,10 +272,14 @@ export class ShipmentsService {
         where: { supplierOrderId: shipment.supplierOrderId },
         include: {
           shipmentItems: true,
-          discrepancies: { include: { replenishmentGap: true } },
+          discrepancies: { include: { replenishmentGap: true, returnRecord: true } },
         },
       });
       const nextFulfillmentStatus = resolveSupplierOrderFulfillmentStatus(orderItems);
+      if (nextFulfillmentStatus === FulfillmentStatus.COMPLETED && lockedOrder.firstShippedAt) {
+        const repriced = await applyEffectiveOrderPrices(tx, lockedOrder.id, lockedOrder.firstShippedAt, { deferCreditShortfall: true });
+        if (repriced.changed && !repriced.fundingHandled) await synchronizeRequestFunding(tx, lockedOrder.requestId, { sourceId: created.id, deferCreditShortfall: true });
+      }
       await tx.supplierOrder.update({
         where: { id: shipment.supplierOrderId },
         data: {
@@ -256,6 +289,8 @@ export class ShipmentsService {
           version: { increment: 1 },
         },
       });
+      const fundingRequest = await tx.purchaseRequest.findUniqueOrThrow({ where: { id: lockedOrder.requestId } });
+      if (fundingRequest.storedValueOnReceipt) await synchronizeRequestFunding(tx, lockedOrder.requestId, { requireFull: true, sourceId: created.id, deferCreditShortfall: true });
 
       if (discrepancyIds.length) {
         const recipients = await tx.user.findMany({
@@ -290,18 +325,18 @@ export class ShipmentsService {
 
       return tx.receipt.findUniqueOrThrow({
         where: { id: created.id },
-        include: { items: { orderBy: { createdAt: 'asc' } } },
+        include: { items: { orderBy: { createdAt: 'asc' } }, evidenceFiles: true },
       });
-    });
-
+    };
+    const receipt = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
     return toReceiptView(receipt);
   }
 }
 
 function toShipmentDetailView(shipment: Shipment & {
   supplierOrder: SupplierOrder;
-  items: Array<ShipmentItem & { orderItem: { productId: string; product: { name: string } } }>;
-  receipts: Receipt[];
+  items: Array<ShipmentItem & { orderItem: { productId: string; unitSnapshot?: Prisma.JsonValue | null; product: { name: string } }; receiptItems: Array<{ discrepancy: { status: DiscrepancyStatus; returnRecord?: unknown } | null }> }>;
+  receipts: Array<Receipt & { items: ReceiptItem[]; evidenceFiles?: FileObject[] }>;
 }): ShipmentDetailView {
   return {
     id: shipment.id,
@@ -313,19 +348,32 @@ function toShipmentDetailView(shipment: Shipment & {
     shippedAt: shipment.shippedAt.toISOString(),
     trackingNo: shipment.trackingNo,
     currentReceiptRevision: shipment.receipts[0]?.revision ?? 0,
+    evidenceFiles: (shipment.receipts[0]?.evidenceFiles ?? []).map(toEvidenceView),
     items: shipment.items.map((item) => ({
       id: item.id,
       orderItemId: item.orderItemId,
       productId: item.orderItem.productId,
       productName: item.orderItem.product.name,
+      unitName: readUnitSnapshot(item.orderItem.unitSnapshot)?.salesUnitName ?? null,
       shippedQuantity: item.quantity.toString(),
+      currentReceivedQuantity: shipment.receipts[0]?.items.find(receiptItem => receiptItem.shipmentItemId === item.id)?.receivedQuantity.toString() ?? null,
+      receiptLocked: Boolean(shipment.receipts[0]) && isReceiptItemLocked(item.receiptItems),
       salesPriceSnapshot: item.salesPriceSnapshot.toString(),
       supplyPriceSnapshot: item.supplyPriceSnapshot.toString(),
     })),
   };
 }
 
-function toReceiptView(receipt: Receipt & { items: ReceiptItem[] }): ReceiptView {
+export function isReceiptItemLocked(history: Array<{ discrepancy: { status: DiscrepancyStatus; returnRecord?: unknown } | null }>): boolean {
+  const active = history.flatMap(item => item.discrepancy && item.discrepancy.status !== DiscrepancyStatus.SUPERSEDED ? [item.discrepancy] : []);
+  return active.some(item => item.status !== DiscrepancyStatus.OPEN && !(item.status === DiscrepancyStatus.RESOLVED && item.returnRecord));
+}
+
+function toEvidenceView(file: FileObject): ReceiptEvidenceView {
+  return { id: file.id, filename: file.filename, mimeType: file.mimeType, sizeBytes: file.sizeBytes.toString() };
+}
+
+function toReceiptView(receipt: Receipt & { items: ReceiptItem[]; evidenceFiles?: FileObject[] }): ReceiptView {
   return {
     id: receipt.id,
     receiptNo: receipt.receiptNo,
@@ -333,6 +381,7 @@ function toReceiptView(receipt: Receipt & { items: ReceiptItem[] }): ReceiptView
     revision: receipt.revision,
     isCurrent: receipt.isCurrent,
     submittedAt: receipt.submittedAt.toISOString(),
+    evidenceFiles: (receipt.evidenceFiles ?? []).map(toEvidenceView),
     items: receipt.items.map((item) => ({
       id: item.id,
       shipmentItemId: item.shipmentItemId,

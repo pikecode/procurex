@@ -1,5 +1,9 @@
 # 接口详细设计
 
+2026-10-06储值时点更新：新`POST /purchase-requests`下单足额冻结，不扣账面余额；`funding.stored`新增reserved，paid只表示实际扣款，available扣除全店其他订单冻结。采购确认/拆单/发货仅调整冻结；供应商执行单收货完成（含差异处理）时同事务转实际扣款，重复命令和重算不重复扣款。
+
+`GET /stores/{id}/account`及财务总览account新增reservedBalance和availableBalance；balance为账面余额，availableBalance=balance-reservedBalance。`GET /purchase-requests/{id}`新增storedReservedAmount，列表/详情新增storedValueOnReceipt标识新旧计费策略。冻结不等于PAID；不足仍保留PENDING_FUNDS，补足后重新冻结并确认。减量/取消释放冻结，无实际现金变动时不造现金流水。充值增加balance不自动扣款；清账只减少creditUsed并恢复creditAvailable，不扣储值。历史请求策略保留，未回写金额或流水。
+
 2026-10-06门店财务增量：`GET /stores/finance-overview`仅ADMIN/HQ_FINANCE，返回门店资料及account（balance/creditLimit/creditUsed/creditCumulative/creditAvailable/version），无账户返回零值及version=0，不在GET创建账户。`GET /stores/{id}/credit-items`增加occurredAt（挂账分配创建时间）、supplierId/supplierName，历史或未分配供应商为null；保持原范围和版本字段。
 
 `GET/POST /collection-accounts`及`PATCH /collection-accounts/{id}`仅ADMIN/HQ_FINANCE。维护name/bankName/accountName（必填最长120）、accountNo（必填最长80）、status=ACTIVE/DISABLED。PATCH全表单及expectedVersion必传，过期409 VERSION_CONFLICT，重复名称409 COLLECTION_ACCOUNT_NAME_EXISTS；无删除入口。维护与审计同事务，与外部充值校验共用事务锁。外部充值collectionAccountId必须有效且启用的UUID，其他引用409 COLLECTION_ACCOUNT_UNAVAILABLE；不回写旧单引用。`PATCH /stores/{id}/credit-limit`允许无账户时expectedVersion=0首次创建及授权，同事务；账户已存在时0返回409，不把已有账户当新账户覆盖。其余正版本校验及低于未清额度拒绝保持。

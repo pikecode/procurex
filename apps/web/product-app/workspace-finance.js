@@ -33,9 +33,9 @@ export async function renderCollectionAccounts(context) {
 export async function renderStoreFinance(context) {
   const rows = await context.get('/stores/finance-overview');
   renderTable(context, { title: '门店财务', rows,
-    columns: ['门店名称', '分组', '挂账额度', '挂账未清金额', '累计挂账金额', '挂账剩余额度', '储值余额'],
+    columns: ['门店名称', '分组', '挂账额度', '挂账未清金额', '累计挂账金额', '挂账剩余额度', '储值余额', '冻结金额', '可用储值'],
     cells: item => [item.name, item.groupName || '-', item.account.creditLimit, item.account.creditUsed,
-      item.account.creditCumulative ?? '历史未核定', item.account.creditAvailable, item.account.balance].map(esc),
+      item.account.creditCumulative ?? '历史未核定', item.account.creditAvailable, item.account.balance, item.account.reservedBalance ?? '0.00', item.account.availableBalance ?? item.account.balance].map(esc),
     filters: [{ key: 'groupName', label: '分组', choices: [...new Set(rows.map(row => row.groupName).filter(Boolean))].map(name => [name, name]) }],
     actions: item => iconButton('wallet', '充值', `data-finance-store="${esc(item.id)}" data-finance-action="recharge"`)
       + iconButton('check', '清账', `data-finance-store="${esc(item.id)}" data-finance-action="clearing"`)
@@ -93,7 +93,7 @@ export async function mountFinanceAccounts(context, stores, target, initialActio
       const [account, ledgers, credit, movements] = await Promise.all([context.get(`/stores/${storeId}/account`), context.get(`/stores/${storeId}/ledgers`), context.get(`/stores/${storeId}/credit-items`), context.get(`/stores/${storeId}/credit-movements`)]);
       if (!context.active() || current !== generation || (target && !target.isConnected)) return;
       const writable = central && !context.client.pendingCommand;
-      content.innerHTML = `<dl><dt>储值余额</dt><dd>${esc(account.balance)}</dd><dt>挂账额度</dt><dd>${esc(account.creditLimit)}</dd><dt>累计挂账</dt><dd>${esc(account.creditCumulative ?? '历史未核定')}</dd><dt>未清挂账</dt><dd>${esc(account.creditUsed)}</dd><dt>挂账剩余额度</dt><dd>${esc(account.creditAvailable)}</dd></dl>`
+      content.innerHTML = `<dl><dt>储值余额</dt><dd>${esc(account.balance)}</dd><dt>冻结金额</dt><dd>${esc(account.reservedBalance ?? '0.00')}</dd><dt>可用储值</dt><dd>${esc(account.availableBalance ?? account.balance)}</dd><dt>挂账额度</dt><dd>${esc(account.creditLimit)}</dd><dt>累计挂账</dt><dd>${esc(account.creditCumulative ?? '历史未核定')}</dd><dt>未清挂账</dt><dd>${esc(account.creditUsed)}</dd><dt>挂账剩余额度</dt><dd>${esc(account.creditAvailable)}</dd></dl>`
         + (writable ? '<div class="ws-actions"><button class="ws-secondary" data-recharge><i data-lucide="wallet"></i>充值</button><button class="ws-secondary" data-credit><i data-lucide="pencil"></i>调整额度</button></div>' : '')
         + '<h3>未清挂账</h3><div class="ws-grid">' + field('creditFrom', '挂账开始日期', '', { type: 'date' })
         + field('creditTo', '挂账结束日期', '', { type: 'date' })

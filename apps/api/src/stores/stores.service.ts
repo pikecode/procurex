@@ -54,6 +54,8 @@ export type StoreAccountView = {
   id: string | null;
   storeId: string;
   balance: string;
+  reservedBalance: string;
+  availableBalance: string;
   creditLimit: string;
   creditUsed: string;
   creditCumulative: string | null;
@@ -701,6 +703,8 @@ function toStoreAccountView(storeId: string, account: StoreAccount | null): Stor
       id: null,
       storeId,
       balance: '0.00',
+      reservedBalance: '0.00',
+      availableBalance: '0.00',
       creditLimit: '0.00',
       creditUsed: '0.00',
       creditCumulative: '0.00',
@@ -716,6 +720,8 @@ function toStoreAccountView(storeId: string, account: StoreAccount | null): Stor
     id: account.id,
     storeId: account.storeId,
     balance: account.balance.toFixed(2),
+    reservedBalance: account.reservedBalance.toFixed(2),
+    availableBalance: account.balance.minus(account.reservedBalance).toFixed(2),
     creditLimit: account.creditLimit.toFixed(2),
     creditUsed: account.creditUsed.toFixed(2),
     creditCumulative: account.creditCumulative?.toFixed(2) ?? null,
