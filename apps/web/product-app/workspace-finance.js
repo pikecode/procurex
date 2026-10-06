@@ -146,7 +146,17 @@ export async function mountFinanceAccounts(context, stores, target, initialActio
         try {
         const accounts = (await context.get('/collection-accounts')).filter(item => item.status === 'ACTIVE');
         if (!context.active() || !content.isConnected) return;
-        if (!accounts.length) throw new Error('请先在收款账户中新增并启用账户。');
+        if (!accounts.length) {
+          const editor = openEditor(context, '暂时无法充值', '<p class="ws-wide">尚无启用的收款账户，请先配置公司实际收款账户。</p>');
+          const configure = document.createElement('button');
+          configure.type = 'button'; configure.className = 'ws-primary'; configure.textContent = '配置收款账户';
+          configure.onclick = () => {
+            document.querySelectorAll('.ws-dialog').forEach(dialog => { dialog.close(); dialog.remove(); });
+            location.hash = '#/collection-accounts';
+          };
+          editor.form.querySelector('.ws-dialog-actions').append(configure);
+          return;
+        }
         openAccountEvidenceEditor(context, '门店充值',
         field('amount', '充值金额', '', { type: 'number', min: '0.01', step: '0.01', required: true }) + field('businessDate', '业务日期', today(), { type: 'date', required: true })
         + field('collectionAccountId', '收款账户', '', { required: true, choices: [['', '请选择'], ...accounts.map(item => [item.id, `${item.name} · ${item.bankName} · 尾号${item.accountNo.slice(-4)}`])] }) + field('remark', '备注'),

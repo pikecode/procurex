@@ -16,6 +16,16 @@ try {
   await page.locator('[data-finance-action=clearing]').first().waitFor();
   await page.locator('#ws-search').fill('PXFLOW');
   assert.equal(await page.locator('#ws-page-size').inputValue(), '10');
+  await page.route('**/collection-accounts', route => route.fulfill({ json: { data: [] } }));
+  await page.locator('[data-finance-action=recharge]').first().click();
+  await page.getByRole('heading', { name: '暂时无法充值' }).waitFor();
+  await page.getByRole('button', { name: '配置收款账户' }).click();
+  await page.locator('#ws-create').waitFor();
+  assert.equal(await page.locator('dialog').count(), 0);
+  await page.unroute('**/collection-accounts');
+  await page.evaluate(() => { location.hash = '#/store-finance'; });
+  await page.locator('[data-finance-action=recharge]').first().waitFor();
+  await page.locator('#ws-search').fill('PXFLOW');
   const credits = [
     { fundingAllocationId: 'fixture-one', supplierOrderNo: '测试订单一', supplierId: 'one', supplierName: '测试供应商一', occurredAt: '2026-10-01T12:00:00Z', creditOutstanding: '12.34', version: 1 },
     { fundingAllocationId: 'fixture-two', supplierOrderNo: '测试订单二', supplierId: 'two', supplierName: '测试供应商二', occurredAt: '2026-10-02T12:00:00Z', creditOutstanding: '20.01', version: 1 },
