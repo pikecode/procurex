@@ -2,6 +2,18 @@
 
 Last updated: 2026-10-06
 
+最新入口简化：http://127.0.0.1:4173/app.html#/stores，不再需要api参数。本地workspace-config.js端口3114，生产同域/api/v1；旧api链接自动移除查询并标签页保存覆盖，隔离验收随机端口仍兼容。23Web/静态和无参数列表/旧参数导航刷新回归通过。资源clean-url-1。后续给用户链接使用简洁地址，API3114/Web4173无需重启。
+
+最新增量：后台新增编辑表单统一紧凑化，640px/少字段480px、12px间距、桌面36px手机38px控件，必填标记同行、标题与操作区收紧；原交互校验保存保留。资源forms-1。23Web/静态/列表回归及node scripts/check-workspace-forms.mjs六页面新增编辑×1440/320通过，24截图var/form-layout-evidence。仅打开取消，无业务数据写入。
+
+最新用户增量：本地80条演示/旧测试记录名称中文化（门店10/供应商17/商品10/分类6/单位6/模板7/账号显示名24），账号密码与编号未变。仅localize-demo-data.mjs白名单原名称+测试编号，用户改名不覆盖；--apply事务已执行，重复预览0，备份明细var/demo-localization-evidence/applied.json。3演示seed及小程序商品准备中文化、报表断言同步；未重跑seed。安全映射单测/脚本语法/浏览器列表回归通过。历史订单快照保留英文，不改账务历史；后续不要重置业务库。
+
+最新微调：下拉箭头用现有Lucide背景图标，右侧10px间距、文字34px留白，分页96px；仍原生select，强制颜色回退。资源selects-2覆盖下方版本。复现check-workspace-lists.mjs，桌面/手机及表单证据var/list-layout-evidence。
+
+最新增量：原生select布局优化，桌面稳定筛选宽度、手机两列筛选标签上置、分页固定宽度及对齐、表单省市区40px及焦点禁用样式；没有引入第三方下拉组件或自绘弹出层。资源selects-1覆盖下方历史版本。23Web/静态及check-workspace-lists.mjs（9截图、筛选/表单/分页回归）PASSED，var/list-layout-evidence；API3114/Web4173。无后端改动。
+
+最新增量：公共主列表renderTable默认每页10，选20/50/100，首末页/上下页/数字跳转、空态和越界保护；搜索筛选紧凑左对齐与重置，总数移至分页区、行距收紧。内嵌详情非全部共用，分页仍为已加载数据前端分页，未改后端。23Web/静态与门店商品账单320/1440及35条内存分页验证通过；复现node scripts/check-workspace-lists.mjs，证据var/list-layout-evidence。资源版本lists-1覆盖下方旧值；API3114/Web4173。固定完成标准不变。
+
 最新增量：整个侧栏收起/展开完成，顶部页面标题左侧按钮；桌面64px图标栏、手机隐藏菜单，同标签页刷新记忆状态，保留分组折叠及权限。资源sidebar-1覆盖下方旧版本。23Web/静态检查及三账号320/1440展开收起浏览器验收PASSED（var/navigation-evidence，12截图）；复现node scripts/check-workspace-navigation.mjs，仍用API3114/Web4173。不改后端/数据库/完成边界。
 
 最新用户增量：后台左侧业务导航已分组，权限过滤、空组隐藏、原生键盘折叠、当前组自动展开及会话内展开状态保留；手机两列导航最高230px内部滚动。无后端/数据库改动。Web23及静态检查通过，浏览器三账号320/1440证据var/navigation-evidence；复现npm run web:test、npm run web:check、node scripts/check-workspace-navigation.mjs（API3114/Web4173）。资源版本navigation-1覆盖下方历史groups-1。门店分组入口仍在门店管理内；固定6/9与3/7未签收项不变。

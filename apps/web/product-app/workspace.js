@@ -22,7 +22,16 @@ const routeIcons = { products: 'package', categories: 'list-tree', brands: 'tag'
 function cleanup() { cleanups.splice(0).forEach(dispose => dispose()); }
 
 export const iconButton = (icon, title, attrs = '') => `<button class="ws-icon" type="button" title="${esc(title)}" aria-label="${esc(title)}" ${attrs}><i data-lucide="${esc(icon)}"></i></button>`;
-export function icons() { globalThis.lucide?.createIcons({ attrs: { 'stroke-width': 1.8 } }); }
+export function icons() {
+  const lucide = globalThis.lucide;
+  lucide?.createIcons({ attrs: { 'stroke-width': 1.8 } });
+  if (lucide?.createElement && !document.body.classList.contains('ws-select-icons')) {
+    const arrow = lucide.createElement(lucide.icons.ChevronDown, { stroke: '#657582', 'stroke-width': 1.8 });
+    const svg = new XMLSerializer().serializeToString(arrow);
+    document.body.style.setProperty('--ws-select-arrow', `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+    document.body.classList.add('ws-select-icons');
+  }
+}
 
 function loginView(message = '') {
   expandedGroups.clear();
@@ -163,7 +172,16 @@ async function render() {
 export async function startWorkspace() {
   document.body.classList.add('business-workspace');
   try {
-    client = createWorkspaceClient({ base: resolveApiBase(location.href), storage: sessionStorage, onExpired: () => loginView('登录已失效，请重新登录。') });
+    let override;
+    try { override = sessionStorage.getItem('procurex-api-base'); } catch { /* The default configuration remains available. */ }
+    const base = resolveApiBase(location.href, override);
+    const address = new URL(location.href);
+    if (address.searchParams.has('api')) {
+      try { sessionStorage.setItem('procurex-api-base', base); } catch { /* A blocked storage provider does not prevent this visit. */ }
+      address.searchParams.delete('api');
+      history.replaceState(null, '', address.pathname + address.search + address.hash);
+    }
+    client = createWorkspaceClient({ base, storage: sessionStorage, onExpired: () => loginView('登录已失效，请重新登录。') });
     window.addEventListener('hashchange', render);
     window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
     if (client.session) {
@@ -181,6 +199,8 @@ export function openEditor(context, title, content, submit) {
     <fieldset><div class="ws-form-grid">${content}</div><div class="ws-dialog-actions"><button type="button" class="ws-secondary" data-close>取消</button><button type="submit" class="ws-primary">保存</button></div></fieldset></form>`;
   document.body.append(dialog); dialog.showModal(); icons();
   const form = dialog.querySelector('form');
+  const grid = form.querySelector('.ws-form-grid');
+  if (grid.children.length <= 4 && !grid.querySelector('.ws-address, .ws-table-wrap, .ws-template-list')) dialog.classList.add('ws-dialog-compact');
   if (!submit) {
     form.querySelector('[type="submit"]').remove();
     form.querySelector('[data-close]').textContent = '关闭';

@@ -81,7 +81,7 @@ async function run() {
     });
 
     const quantities = await request(`${baseUrl}/reports/product-quantities?${range}`, { headers: authHeaders(storeToken) });
-    const rice = quantities.products.find((product) => product.productName === 'PX Reports Rice');
+    const rice = quantities.products.find((product) => product.productName === '验收大米');
     assert.equal(rice?.quantity, '14.000000');
     record('2. R02 product quantities aggregate final received quantity', {
       productName: rice.productName,
@@ -119,7 +119,7 @@ async function run() {
     assert.equal(download.status, 200);
     const csv = await download.text();
     assert.match(csv, /supplierOrderId/);
-    assert.match(csv, /PX Reports Rice/);
+    assert.match(csv, /验收大米/);
     const exportJobs = await request(`${baseUrl}/exports`, { headers: authHeaders(adminToken) });
     assert.equal(exportJobs[0]?.jobId, exportJob.jobId);
     assert.equal(exportJobs[0]?.status, 'READY');
@@ -191,12 +191,12 @@ async function run() {
     });
 
     await writeFile(
-      resolve(process.cwd(), 'apps/web/reports-acceptance-run.json'),
+      resolve(process.cwd(), process.env.REPORTS_ACCEPTANCE_OUTPUT ?? 'apps/web/reports-acceptance-run.json'),
       `${JSON.stringify({ ...result, generatedAt: new Date().toISOString(), status: 'PASSED' }, null, 2)}\n`,
     );
     console.log('Reports acceptance check passed.');
     console.log('  R01 scoped total amount: 164.00 across 2 completed store orders');
-    console.log('  R02 PX Reports Rice quantity: 14.000000');
+    console.log('  R02 验收大米 quantity: 14.000000');
     console.log('  R03 profit: 42.00 with freight 8.00 separate');
     console.log(`  R04 export job: ${exportJob.jobId} READY, CSV bytes ${csv.length}`);
     console.log(`  DEV-505 stale export recovered: ${staleExport.id} ${recovered.status}`);

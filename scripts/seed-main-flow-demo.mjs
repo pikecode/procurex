@@ -1,4 +1,5 @@
 import { writeFile } from 'node:fs/promises';
+import { assertLocalFixtureDatabase } from './local-fixture-guard.mjs';
 import { resolve } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { DeliveryMode, SettlementMode } from '../dist/packages/backend/generated/prisma/enums.js';
@@ -7,6 +8,7 @@ import { hashPassword } from '../dist/packages/domain/src/password.js';
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public';
+assertLocalFixtureDatabase(connectionString);
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const prefix = 'PXFLOW';
 const username = 'pxflow_user';
@@ -81,18 +83,18 @@ async function run() {
   const roleRows = await roles();
   const roleByCode = Object.fromEntries(roleRows.map((role) => [role.code, role]));
   const [store, supplier, secondarySupplier, template, category, unit] = await Promise.all([
-    prisma.store.create({ data: { code: `${prefix}-STORE`, name: 'PX Flow Demo Store' } }),
-    prisma.supplier.create({ data: { code: `${prefix}-SUP`, name: 'PX Flow Demo Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.STORED_VALUE, defaultSettlementCycle: 'MONTHLY' } }),
-    prisma.supplier.create({ data: { code: `${prefix}-SUP2`, name: 'PX Flow Demo Backup Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.STORED_VALUE, defaultSettlementCycle: 'MONTHLY' } }),
-    prisma.orderTemplate.create({ data: { code: `${prefix}-TPL`, name: 'PX Flow Demo Template' } }),
-    prisma.category.create({ data: { code: `${prefix}-CAT`, name: 'PX Flow Demo Category' } }),
-    prisma.unit.create({ data: { code: `${prefix}-UNIT`, name: 'piece' } }),
+    prisma.store.create({ data: { code: `${prefix}-STORE`, name: '主流程演示门店' } }),
+    prisma.supplier.create({ data: { code: `${prefix}-SUP`, name: '主流程演示供应商', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.STORED_VALUE, defaultSettlementCycle: 'MONTHLY' } }),
+    prisma.supplier.create({ data: { code: `${prefix}-SUP2`, name: '主流程备用供应商', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.STORED_VALUE, defaultSettlementCycle: 'MONTHLY' } }),
+    prisma.orderTemplate.create({ data: { code: `${prefix}-TPL`, name: '主流程订货模板' } }),
+    prisma.category.create({ data: { code: `${prefix}-CAT`, name: '主流程商品分类' } }),
+    prisma.unit.create({ data: { code: `${prefix}-UNIT`, name: '件' } }),
   ]);
-  const product = await prisma.product.create({ data: { sku: `${prefix}-SKU`, name: 'PX Flow Demo Product', categoryId: category.id, baseUnitId: unit.id } });
+  const product = await prisma.product.create({ data: { sku: `${prefix}-SKU`, name: '主流程演示商品', categoryId: category.id, baseUnitId: unit.id } });
   await prisma.user.create({
     data: {
       username,
-      displayName: 'PX Flow Demo User',
+      displayName: '演示管理员',
       passwordHash: await hashPassword(password),
       roles: { create: roleRows.map((role) => ({ roleId: role.id })) },
     },
@@ -100,7 +102,7 @@ async function run() {
   await prisma.user.create({
     data: {
       username: storeUsername,
-      displayName: 'PX Flow Store User',
+      displayName: '演示门店用户',
       passwordHash: await hashPassword(password),
       roles: { create: [{ roleId: roleByCode.STORE.id }] },
       scopes: { create: { scopeType: 'STORE', storeId: store.id } },
@@ -109,7 +111,7 @@ async function run() {
   await prisma.user.create({
     data: {
       username: supplierUsername,
-      displayName: 'PX Flow Supplier User',
+      displayName: '演示供应商用户',
       passwordHash: await hashPassword(password),
       roles: { create: [{ roleId: roleByCode.SUPPLIER.id }] },
       scopes: { create: { scopeType: 'SUPPLIER', supplierId: supplier.id } },
@@ -118,7 +120,7 @@ async function run() {
   await prisma.user.create({
     data: {
       username: secondarySupplierUsername,
-      displayName: 'PX Flow Backup Supplier User',
+      displayName: '备用供应商用户',
       passwordHash: await hashPassword(password),
       roles: { create: [{ roleId: roleByCode.SUPPLIER.id }] },
       scopes: { create: { scopeType: 'SUPPLIER', supplierId: secondarySupplier.id } },

@@ -1,4 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
+import { assertLocalFixtureDatabase } from './local-fixture-guard.mjs';
 import {
   DeliveryMode,
   FulfillmentStatus,
@@ -16,6 +17,7 @@ import { hashPassword } from '../dist/packages/domain/src/password.js';
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public';
+assertLocalFixtureDatabase(connectionString);
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const prefix = 'PXRPT';
 const password = 'correct-password';
@@ -164,19 +166,19 @@ async function run() {
   await cleanup();
   const role = await roles();
   const [store, otherStore, template, category, unit] = await Promise.all([
-    prisma.store.create({ data: { code: `${prefix}-STORE`, name: 'PX Reports Store' } }),
-    prisma.store.create({ data: { code: `${prefix}-OTHER-STORE`, name: 'PX Reports Other Store' } }),
-    prisma.orderTemplate.create({ data: { code: `${prefix}-TPL`, name: 'PX Reports Template' } }),
-    prisma.category.create({ data: { code: `${prefix}-CAT`, name: 'PX Reports Category' } }),
-    prisma.unit.create({ data: { code: `${prefix}-UNIT`, name: 'kg' } }),
+    prisma.store.create({ data: { code: `${prefix}-STORE`, name: '报表验收门店' } }),
+    prisma.store.create({ data: { code: `${prefix}-OTHER-STORE`, name: '报表对照门店' } }),
+    prisma.orderTemplate.create({ data: { code: `${prefix}-TPL`, name: '报表验收模板' } }),
+    prisma.category.create({ data: { code: `${prefix}-CAT`, name: '粮油分类' } }),
+    prisma.unit.create({ data: { code: `${prefix}-UNIT`, name: '千克' } }),
   ]);
   const [product, otherProduct] = await Promise.all([
-    prisma.product.create({ data: { sku: `${prefix}-SKU-RICE`, name: 'PX Reports Rice', categoryId: category.id, baseUnitId: unit.id } }),
-    prisma.product.create({ data: { sku: `${prefix}-SKU-OIL`, name: 'PX Reports Oil', categoryId: category.id, baseUnitId: unit.id } }),
+    prisma.product.create({ data: { sku: `${prefix}-SKU-RICE`, name: '验收大米', categoryId: category.id, baseUnitId: unit.id } }),
+    prisma.product.create({ data: { sku: `${prefix}-SKU-OIL`, name: '验收食用油', categoryId: category.id, baseUnitId: unit.id } }),
   ]);
   const [companySupplier, directSupplier] = await Promise.all([
-    prisma.supplier.create({ data: { code: `${prefix}-SUP-COMPANY`, name: 'PX Reports Company Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.COMPANY_TERM, defaultSettlementCycle: 'MONTHLY' } }),
-    prisma.supplier.create({ data: { code: `${prefix}-SUP-DIRECT`, name: 'PX Reports Direct Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } }),
+    prisma.supplier.create({ data: { code: `${prefix}-SUP-COMPANY`, name: '报表公司账期供应商', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.COMPANY_TERM, defaultSettlementCycle: 'MONTHLY' } }),
+    prisma.supplier.create({ data: { code: `${prefix}-SUP-DIRECT`, name: '报表直结供应商', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } }),
   ]);
   const item = await prisma.templateItem.create({ data: { templateId: template.id, productId: product.id } });
   const otherItem = await prisma.templateItem.create({ data: { templateId: template.id, productId: otherProduct.id } });
@@ -189,9 +191,9 @@ async function run() {
     prisma.supplierProduct.create({ data: { supplierId: directSupplier.id, productId: otherProduct.id } }),
   ]);
 
-  await createUser('pxrpt_admin', 'PX Reports Admin', [role.ADMIN.id, role.HQ_FINANCE.id], null);
-  await createUser('pxrpt_store', 'PX Reports Store User', [role.STORE.id, role.STORE_FINANCE.id], { scopeType: 'STORE', storeId: store.id });
-  await createUser('pxrpt_supplier', 'PX Reports Supplier User', [role.SUPPLIER.id], { scopeType: 'SUPPLIER', supplierId: companySupplier.id });
+  await createUser('pxrpt_admin', '报表验收管理员', [role.ADMIN.id, role.HQ_FINANCE.id], null);
+  await createUser('pxrpt_store', '报表验收门店用户', [role.STORE.id, role.STORE_FINANCE.id], { scopeType: 'STORE', storeId: store.id });
+  await createUser('pxrpt_supplier', '报表验收供应商用户', [role.SUPPLIER.id], { scopeType: 'SUPPLIER', supplierId: companySupplier.id });
 
   await createOrder({ store, supplier: companySupplier, template, product, no: 'COMPANY-A', mode: SettlementMode.COMPANY_TERM, completedAt: '2026-09-05T04:00:00.000Z', quantity: 8, salesUnitPrice: 12, supplyUnitPrice: 9, freight: '5.00' });
   await createOrder({ store, supplier: companySupplier, template, product, no: 'COMPANY-B', mode: SettlementMode.STORED_VALUE, completedAt: '2026-09-21T04:00:00.000Z', quantity: 6, salesUnitPrice: 10, supplyUnitPrice: 7, freight: '3.00' });

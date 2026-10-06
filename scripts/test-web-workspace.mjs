@@ -136,9 +136,13 @@ test('empty payment preview exposes the actual collection blocker without changi
 });
 
 test('workspace API configuration uses local default, production same-origin and explicit local override', () => {
-  assert.equal(resolveApiBase('http://localhost:4173/app.html'), 'http://localhost:3100/api/v1');
+  assert.equal(resolveApiBase('http://localhost:4173/app.html'), 'http://localhost:3114/api/v1');
   assert.equal(resolveApiBase('https://procure.example/app.html'), 'https://procure.example/api/v1');
   assert.equal(resolveApiBase(`http://localhost:4173/app.html?api=${encodeURIComponent(base)}`), base);
+  assert.equal(resolveApiBase('http://localhost:4173/app.html#/stores', base), base);
+  assert.equal(resolveApiBase('http://127.0.0.1:4173/app.html'), 'http://127.0.0.1:3114/api/v1');
+  assert.equal(resolveApiBase('http://[::1]:4173/app.html'), 'http://[::1]:3114/api/v1');
+  assert.throws(() => resolveApiBase('http://localhost/', 'https://user:pass@host/api'));
   for (const value of ['file:///etc/passwd', 'https://user:pass@host/api', 'https://host/api?token=abc']) assert.throws(() => resolveApiBase(`http://localhost/?api=${encodeURIComponent(value)}`));
 });
 

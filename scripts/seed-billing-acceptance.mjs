@@ -1,4 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
+import { assertLocalFixtureDatabase } from './local-fixture-guard.mjs';
 import {
   DeliveryMode,
   FulfillmentStatus,
@@ -18,6 +19,7 @@ import { hashPassword } from '../dist/packages/domain/src/password.js';
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public';
+assertLocalFixtureDatabase(connectionString);
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const prefix = 'PXACC';
 const password = 'correct-password';
@@ -235,19 +237,19 @@ async function run() {
   await cleanup();
   const role = await roles();
   const [store, template, category, unit] = await Promise.all([
-    prisma.store.create({ data: { code: `${prefix}-STORE`, name: 'PX Acceptance Store' } }),
-    prisma.orderTemplate.create({ data: { code: `${prefix}-TPL`, name: 'PX Acceptance Template' } }),
-    prisma.category.create({ data: { code: `${prefix}-CAT`, name: 'PX Acceptance Category' } }),
-    prisma.unit.create({ data: { code: `${prefix}-UNIT`, name: 'piece' } }),
+    prisma.store.create({ data: { code: `${prefix}-STORE`, name: '结算验收门店' } }),
+    prisma.orderTemplate.create({ data: { code: `${prefix}-TPL`, name: '结算验收模板' } }),
+    prisma.category.create({ data: { code: `${prefix}-CAT`, name: '结算验收分类' } }),
+    prisma.unit.create({ data: { code: `${prefix}-UNIT`, name: '件' } }),
   ]);
   const product = await prisma.product.create({
-    data: { sku: `${prefix}-SKU`, name: 'PX Acceptance Product', categoryId: category.id, baseUnitId: unit.id },
+    data: { sku: `${prefix}-SKU`, name: '结算验收商品', categoryId: category.id, baseUnitId: unit.id },
   });
   const suppliers = {
-    company: await prisma.supplier.create({ data: { code: `${prefix}-SUP-COMPANY`, name: 'PX Company Term Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.COMPANY_TERM, defaultSettlementCycle: 'MONTHLY' } }),
-    stored: await prisma.supplier.create({ data: { code: `${prefix}-SUP-STORED`, name: 'PX Stored Value Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.STORED_VALUE, defaultSettlementCycle: 'MONTHLY' } }),
-    credit: await prisma.supplier.create({ data: { code: `${prefix}-SUP-CREDIT`, name: 'PX Credit Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.CREDIT, defaultSettlementCycle: 'HALF_MONTHLY' } }),
-    direct: await prisma.supplier.create({ data: { code: `${prefix}-SUP-DIRECT`, name: 'PX Direct Supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } }),
+    company: await prisma.supplier.create({ data: { code: `${prefix}-SUP-COMPANY`, name: '公司账期供应商', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.COMPANY_TERM, defaultSettlementCycle: 'MONTHLY' } }),
+    stored: await prisma.supplier.create({ data: { code: `${prefix}-SUP-STORED`, name: '储值供应商', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.STORED_VALUE, defaultSettlementCycle: 'MONTHLY' } }),
+    credit: await prisma.supplier.create({ data: { code: `${prefix}-SUP-CREDIT`, name: '挂账供应商', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.CREDIT, defaultSettlementCycle: 'HALF_MONTHLY' } }),
+    direct: await prisma.supplier.create({ data: { code: `${prefix}-SUP-DIRECT`, name: '直结供应商', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } }),
   };
   await prisma.storeAccount.create({ data: { storeId: store.id, balance: '1000.00', creditLimit: '800.00' } });
   const templateItem = await prisma.templateItem.create({ data: { templateId: template.id, productId: product.id } });
@@ -255,10 +257,10 @@ async function run() {
   await Promise.all(Object.values(suppliers).map((supplier, index) => prisma.templateItemSupplier.create({ data: { templateItemId: templateItem.id, supplierId: supplier.id, priority: index + 1 } })));
   await Promise.all(Object.values(suppliers).map((supplier) => prisma.supplierProduct.create({ data: { supplierId: supplier.id, productId: product.id } })));
 
-  await createUser('pxacc_admin', 'PX Acceptance Admin', [role.ADMIN.id, role.HQ_FINANCE.id], null);
-  await createUser('pxacc_store', 'PX Acceptance Store User', [role.STORE.id, role.STORE_FINANCE.id], { scopeType: 'STORE', storeId: store.id });
-  await createUser('pxacc_supplier_company', 'PX Acceptance Company Supplier', [role.SUPPLIER.id], { scopeType: 'SUPPLIER', supplierId: suppliers.company.id });
-  await createUser('pxacc_supplier_direct', 'PX Acceptance Direct Supplier', [role.SUPPLIER.id], { scopeType: 'SUPPLIER', supplierId: suppliers.direct.id });
+  await createUser('pxacc_admin', '结算验收管理员', [role.ADMIN.id, role.HQ_FINANCE.id], null);
+  await createUser('pxacc_store', '结算验收门店用户', [role.STORE.id, role.STORE_FINANCE.id], { scopeType: 'STORE', storeId: store.id });
+  await createUser('pxacc_supplier_company', '公司账期供应商用户', [role.SUPPLIER.id], { scopeType: 'SUPPLIER', supplierId: suppliers.company.id });
+  await createUser('pxacc_supplier_direct', '直结供应商用户', [role.SUPPLIER.id], { scopeType: 'SUPPLIER', supplierId: suppliers.direct.id });
 
   const companyOrder = await createOrder({ store, supplier: suppliers.company, template, product, no: 'COMPANY', mode: SettlementMode.COMPANY_TERM, cycle: 'MONTHLY', shippedAt: '2026-09-08T04:00:00.000Z', sales: '120.00', supply: '90.00', freight: '10.00' });
   const storedOrder = await createOrder({ store, supplier: suppliers.stored, template, product, no: 'STORED', mode: SettlementMode.STORED_VALUE, cycle: 'MONTHLY', shippedAt: '2026-09-09T04:00:00.000Z', sales: '80.00', supply: '64.00', freight: '5.00' });

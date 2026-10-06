@@ -19,6 +19,7 @@ try {
     await page.locator('[name=password]').fill('correct-password');
     await page.locator('#ws-login-form button').click();
     await page.locator('.ws-nav-full [aria-current=page]').waitFor();
+    assert.equal(new URL(page.url()).searchParams.has('api'), false);
     const user = await page.evaluate(() => {
       const key = Object.keys(sessionStorage).find(key => key.startsWith('procurex-web-session-v1:'));
       return JSON.parse(sessionStorage.getItem(key)).user;
