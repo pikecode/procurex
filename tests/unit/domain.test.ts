@@ -60,6 +60,23 @@ test('settlement periods keep half-month, week, year-end, and leap-day boundarie
   assert.equal(settlementPeriod('MONTHLY', new Date('2024-02-29T00:00:00.000Z')).endDate, '2024-02-29');
 });
 
+test('natural settlement cycles include complete calendar halves and cross-year weeks', () => {
+  for (const [date, cycle, startDate, endDate] of [
+    ['2026-01-15', 'HALF_MONTHLY', '2026-01-01', '2026-01-15'],
+    ['2026-01-16', 'HALF_MONTHLY', '2026-01-16', '2026-01-31'],
+    ['2026-04-30', 'HALF_MONTHLY', '2026-04-16', '2026-04-30'],
+    ['2026-02-28', 'HALF_MONTHLY', '2026-02-16', '2026-02-28'],
+    ['2024-02-29', 'HALF_MONTHLY', '2024-02-16', '2024-02-29'],
+    ['2026-12-28', 'WEEKLY', '2026-12-28', '2027-01-03'],
+    ['2027-01-03', 'WEEKLY', '2026-12-28', '2027-01-03'],
+    ['2027-01-04', 'WEEKLY', '2027-01-04', '2027-01-10'],
+    ['2026-01-31', 'MONTHLY', '2026-01-01', '2026-01-31'],
+    ['2026-04-30', 'MONTHLY', '2026-04-01', '2026-04-30'],
+  ] as const) {
+    assert.deepEqual(settlementPeriod(cycle, new Date(`${date}T12:00:00+08:00`)), { cycle, startDate, endDate });
+  }
+});
+
 test('idempotency request hash is stable for reordered object keys', () => {
   const left = {
     storeId: 'store-a',

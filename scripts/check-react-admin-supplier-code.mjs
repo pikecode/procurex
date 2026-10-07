@@ -22,7 +22,7 @@ try {
   await page.getByRole('heading', { name: '供应商管理', exact: true }).waitFor(); await page.getByRole('button', { name: '新增', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '新增供应商', exact: true });
   assert.equal(await dialog.getByLabel('编码', { exact: true }).count(), 0);
-  for (const [label, value] of [['供应商名称', name], ['联系人', '合成测试联系人'], ['联系电话', '13900000000'], ['地址', '合成测试地址'], ['开户银行', '合成测试银行'], ['开户户名', '合成测试户名'], ['银行账号', '000000'], ['纳税人识别号', 'TESTONLY'], ['发票抬头', '合成测试发票']]) await dialog.getByLabel(label, { exact: true }).fill(value);
+  for (const [label, value] of [['供应商名称', name], ['联系人', '合成测试联系人'], ['手机号', '13900000000'], ['地址', '合成测试地址'], ['开户行', '合成测试银行'], ['开户名', '合成测试户名'], ['银行账户', '000000'], ['纳税人识别号', 'TESTONLY'], ['发票抬头', '合成测试发票']]) await dialog.getByLabel(label, { exact: true }).fill(value);
   for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 1000 }); await page.waitForTimeout(300); const file = `supplier-create-${width}.png`; await page.screenshot({ path: `${output}/${file}` }); report.screenshots.push(file); }
   const saved = page.waitForResponse(r => r.url().endsWith('/api/v1/suppliers') && r.request().method() === 'POST');
   await dialog.getByRole('button', { name: '保存', exact: true }).click(); const response = await saved;
@@ -31,7 +31,7 @@ try {
   const supplier = await db.supplier.findFirstOrThrow({ where: { name } }); assert.match(supplier.code, /^GYS[A-F0-9]{32}$/);
   await page.reload(); await page.getByRole('textbox', { name: '搜索供应商管理' }).fill(name);
   await page.getByRole('button', { name: `编辑${name}`, exact: true }).click();
-  const editing = page.getByRole('dialog', { name: '编辑供应商', exact: true }); assert.equal(await editing.getByLabel('编码', { exact: true }).inputValue(), supplier.code); assert.ok(await editing.getByLabel('编码', { exact: true }).isDisabled());
+  const editing = page.getByRole('dialog', { name: '编辑供应商', exact: true }); assert.equal(await editing.getByLabel('编码', { exact: true }).count(), 0);
   await editing.getByLabel('联系人', { exact: true }).fill('合成测试编辑联系人');
   const updated = page.waitForResponse(r => r.url().endsWith(`/api/v1/suppliers/${supplier.id}`) && r.request().method() === 'PATCH');
   await editing.getByRole('button', { name: '保存', exact: true }).click(); assert.equal((await updated).status(), 200);

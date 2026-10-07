@@ -4,17 +4,17 @@ import { Archive, ArrowLeft, Link2, Pencil, Plus, Save, Trash2 } from 'lucide-re
 import { ListPage } from '../components/ListPage';
 import { hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
-import { Status, statusOptions } from './Stores';
+import { statusOptions } from './Stores';
 
 interface Supplier { id: string; name: string; code: string; version: number; status: string; isArchived: boolean; contactName: string; contactPhone: string; deliveryMode: string; defaultSettlementMode: string; defaultSettlementCycle: string; [key: string]: unknown }
 interface Product { id: string; name: string; sku: string | null; isActive: boolean; categoryId: string; baseUnitId: string; specification: string | null }
 interface Links { productIds: string[]; version: number }
 const choices = (values: Record<string, string>) => Object.entries(values).map(([value, label]) => ({ value, label }));
-const delivery = choices({ SELF: '供应商自送', LOGISTICS: '物流配送' });
+const delivery = choices({ SELF: '自配送', LOGISTICS: '物流' });
 const settlement = choices({ STORED_VALUE: '储值余额', CREDIT: '挂账', SUPPLIER_TERM: '供应商账期结算', COMPANY_TERM: '公司账期结算' });
 const cycle = choices({ IMMEDIATE: '现结', WEEKLY: '周结', HALF_MONTHLY: '半月结', MONTHLY: '月结' });
 const supplierTypes = choices({ HEADQUARTERS: '总部对接', DIRECT: '直送门店' });
-const fields = [['name', '供应商名称', 200], ['contactName', '联系人', 120], ['contactPhone', '联系电话', 32], ['address', '地址', 300], ['bankName', '开户银行', 200], ['bankAccountName', '开户户名', 200], ['bankAccount', '银行账号', 80], ['taxpayerId', '纳税人识别号', 80], ['invoiceTitle', '发票抬头', 200]] as const;
+const fields = [['name', '供应商名称', 200], ['contactName', '联系人', 120], ['contactPhone', '手机号', 32], ['address', '地址', 300], ['bankName', '开户行', 200], ['bankAccountName', '开户名', 200], ['bankAccount', '银行账户', 80], ['taxpayerId', '纳税人识别号', 80], ['invoiceTitle', '发票抬头', 200]] as const;
 export default function Suppliers({ user }: { user: User }) {
   const data = useRows<Supplier>('/suppliers'); const products = useRows<Product>('/products'); const writable = hasRole(user, 'ADMIN', 'PURCHASER');
   const categories = useRows<{ id: string; name: string }>('/categories'); const units = useRows<{ id: string; name: string }>('/units');
@@ -63,14 +63,10 @@ export default function Suppliers({ user }: { user: User }) {
     else leave();
   };
   return <>
-    {!linking && <ListPage title="供应商管理" {...data} create={writable ? () => edit(null) : undefined} filters={[{ key: 'status', label: '状态', options: statusOptions }, { key: 'supplierType', label: '供应商类型', options: supplierTypes }]} columns={[
-      { title: '供应商名称', dataIndex: 'name', width: 220 }, { title: '编码', dataIndex: 'code', width: 150 },
-      { title: '联系人', dataIndex: 'contactName', width: 110 }, { title: '联系电话', dataIndex: 'contactPhone', width: 140 },
-      { title: '配送方式', dataIndex: 'deliveryMode', width: 120, render: value => delivery.find(item => item.value === value)?.label || value },
-      { title: '结算方式', dataIndex: 'defaultSettlementMode', width: 130, render: value => settlement.find(item => item.value === value)?.label || value },
-      { title: '供应商类型', dataIndex: 'supplierType', width: 120, render: value => supplierTypes.find(item => item.value === value)?.label || '-' },
-      { title: '结算周期', dataIndex: 'defaultSettlementCycle', width: 100, render: value => cycle.find(item => item.value === value)?.label || value },
-      { title: '状态', width: 90, render: (_, row) => row.isArchived ? '已归档' : <Status value={row.status} /> },
+    {!linking && <ListPage title="供应商管理" searchPlaceholder="供应商名称、联系人" {...data} create={writable ? () => edit(null) : undefined} filters={[{ key: 'status', label: '状态', options: statusOptions }, { key: 'supplierType', label: '供应商类别', options: supplierTypes }]} columns={[
+      { title: '供应商名称', dataIndex: 'name', width: 320 },
+      { title: '供应商类别', dataIndex: 'supplierType', width: 180, render: value => supplierTypes.find(item => item.value === value)?.label || '-' },
+      { title: '结算周期', dataIndex: 'defaultSettlementCycle', width: 180, render: value => cycle.find(item => item.value === value)?.label || value || '-' },
       { title: '操作', fixed: 'right', width: 120, render: (_, row) => <div className="row-actions">
         <Tooltip title={writable ? '编辑' : '查看'}><Button type="text" aria-label={`${writable ? '编辑' : '查看'}${row.name}`} disabled={row.isArchived} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip>
         <Tooltip title="关联商品"><Button type="text" aria-label={`关联商品${row.name}`} disabled={row.isArchived} icon={<Link2 size={16} />} onClick={() => openLinks(row)} /></Tooltip>
@@ -92,16 +88,16 @@ export default function Suppliers({ user }: { user: User }) {
       footer={!writable ? null : undefined} confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving} onCancel={() => { if (!saving) setEditing(undefined); }}>
       {error && <Alert type="error" title={error} showIcon />}
       <Form form={form} layout="vertical" disabled={!writable || saving} className="compact-form"><div className="form-grid">
-        {editing && <Form.Item name="code" label="编码"><Input disabled /></Form.Item>}
-        {fields.map(([key, label, max]) => <Form.Item key={key} name={key} label={label} rules={[{ required: true, whitespace: true, message: `请填写${label}` }]}><Input maxLength={max} /></Form.Item>)}
+        {fields.slice(0, 3).map(([key, label, max]) => <Form.Item key={key} name={key} label={label} rules={[{ required: true, whitespace: true, message: `请填写${label}` }]}><Input maxLength={max} /></Form.Item>)}
         <Form.Item name="deliveryMode" label="配送方式" rules={[{ required: true }]}><Select options={delivery} /></Form.Item>
-        <Form.Item name="defaultSettlementMode" label="默认结算方式" rules={[{ required: true }]}><Select options={settlement} /></Form.Item>
+        <Form.Item name="defaultSettlementMode" label="结算方式" rules={[{ required: true }]}><Select options={settlement} /></Form.Item>
         <Form.Item name="defaultSettlementCycle" label="结算周期" rules={[{ required: true }]}><Select options={cycle} /></Form.Item>
-        <Form.Item name="supplierType" label="供应商类型"><Select allowClear options={supplierTypes} /></Form.Item>
         <Form.Item name="requiresFreight" label="是否需要运费" valuePropName="checked"><Switch checkedChildren="是" unCheckedChildren="否" /></Form.Item>
+        {fields.slice(3).map(([key, label, max]) => <Form.Item key={key} name={key} label={label} rules={[{ required: true, whitespace: true, message: `请填写${label}` }]}><Input maxLength={max} /></Form.Item>)}
+        <Form.Item name="remark" label="备注"><Input.TextArea maxLength={500} rows={2} /></Form.Item>
+        <Form.Item name="supplierType" label="供应商类型"><Select allowClear options={supplierTypes} /></Form.Item>
         {editing && <Form.Item name="status" label="状态"><Select options={statusOptions} /></Form.Item>}
         <Form.Item name="settlementCycleDescription" label="结算说明"><Input.TextArea maxLength={500} rows={2} /></Form.Item>
-        <Form.Item name="remark" label="备注"><Input.TextArea maxLength={500} rows={2} /></Form.Item>
       </div></Form>
     </Modal>
     <Modal title="添加供应商品" open={adding} width={800} okText="添加" cancelText="取消" okButtonProps={{ disabled: !candidates.length }} onCancel={() => setAdding(false)} onOk={() => { setSelected(current => [...new Set([...current, ...candidates])]); setAdding(false); }}>
