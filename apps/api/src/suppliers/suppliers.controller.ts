@@ -115,8 +115,8 @@ function parseCreateSupplierBody(body: CreateSupplierBody): SupplierProfile & {
   const deliveryMode = requiredDeliveryMode(body.deliveryMode, issues);
   const defaultSettlementMode = requiredSettlementMode(body.defaultSettlementMode, issues);
   const defaultSettlementCycle = requiredTrimmedString('defaultSettlementCycle', body.defaultSettlementCycle, issues);
-  const contactName = profileText('contactName', body.contactName, 120, true, false, issues) ?? undefined;
-  const contactPhone = profileText('contactPhone', body.contactPhone, 32, true, false, issues) ?? undefined;
+  const contactName = profileText('contactName', body.contactName, 120, false, true, issues) ?? undefined;
+  const contactPhone = profileText('contactPhone', body.contactPhone, 32, false, true, issues) ?? undefined;
   const profile = parseSupplierProfile(body, true, issues);
   profileText('name', body.name, 200, true, false, issues);
 
@@ -150,8 +150,8 @@ function parsePatchSupplierBody(id: string, body: PatchSupplierBody): SupplierPr
   ];
 
   const name = optionalTrimmedString('name', body.name, issues);
-  const contactName = profileText('contactName', body.contactName, 120, false, false, issues);
-  const contactPhone = profileText('contactPhone', body.contactPhone, 32, false, false, issues);
+  const contactName = profileText('contactName', body.contactName, 120, false, true, issues);
+  const contactPhone = profileText('contactPhone', body.contactPhone, 32, false, true, issues);
   const profile = parseSupplierProfile(body, false, issues);
   profileText('name', body.name, 200, false, false, issues);
   const deliveryMode = optionalDeliveryMode(body.deliveryMode, issues);

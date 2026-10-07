@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { Alert, App, Button, Form, Input, Modal, Popconfirm, Select, Switch, Table, Tooltip } from 'antd';
-import { Archive, ArrowLeft, Link2, Pencil, Plus, Save, Trash2 } from 'lucide-react';
+import { Alert, App, Button, Form, Input, Modal, Popconfirm, Select, Switch, Table, Tabs, Tag, Tooltip, Tree } from 'antd';
+import { Link2, Pencil, Save, Trash2 } from 'lucide-react';
 import { ListPage } from '../components/ListPage';
 import { hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { statusOptions } from './Stores';
+import './Suppliers.css';
 
 interface Supplier { id: string; name: string; code: string; version: number; status: string; isArchived: boolean; contactName: string; contactPhone: string; deliveryMode: string; defaultSettlementMode: string; defaultSettlementCycle: string; [key: string]: unknown }
 interface Product { id: string; name: string; sku: string | null; isActive: boolean; categoryId: string; baseUnitId: string; specification: string | null }
@@ -17,8 +18,9 @@ const supplierTypes = choices({ HEADQUARTERS: '总部对接', DIRECT: '直送门
 const fields = [['name', '供应商名称', 200], ['contactName', '联系人', 120], ['contactPhone', '手机号', 32], ['address', '地址', 300], ['bankName', '开户行', 200], ['bankAccountName', '开户名', 200], ['bankAccount', '银行账户', 80], ['taxpayerId', '纳税人识别号', 80], ['invoiceTitle', '发票抬头', 200]] as const;
 export default function Suppliers({ user }: { user: User }) {
   const data = useRows<Supplier>('/suppliers'); const products = useRows<Product>('/products'); const writable = hasRole(user, 'ADMIN', 'PURCHASER');
-  const categories = useRows<{ id: string; name: string }>('/categories'); const units = useRows<{ id: string; name: string }>('/units');
-  const [adding, setAdding] = useState(false); const [candidates, setCandidates] = useState<string[]>([]);
+  const categories = useRows<{ id: string; name: string; parentId: string | null }>('/categories'); const units = useRows<{ id: string; name: string }>('/units');
+  const [removals, setRemovals] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
   const [category, setCategory] = useState<string>(); const [productSearch, setProductSearch] = useState('');
   const [editing, setEditing] = useState<Supplier | null | undefined>(); const [linking, setLinking] = useState<Supplier | null>(null);
   const [links, setLinks] = useState<Links | null>(null); const [selected, setSelected] = useState<string[]>([]);
@@ -32,6 +34,7 @@ export default function Suppliers({ user }: { user: User }) {
     try {
       const body = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]));
       delete body.code;
+      for (const key of ['contactName', 'contactPhone', 'address', 'bankName', 'bankAccountName', 'bankAccount', 'taxpayerId', 'invoiceTitle']) body[key] = body[key] || null;
       for (const key of ['supplierType', 'remark', 'settlementCycleDescription']) body[key] = body[key] || null;
       await request(`/suppliers${editing ? `/${editing.id}` : ''}`, { method: editing ? 'PATCH' : 'POST', body: { ...body, ...(editing ? { expectedVersion: editing.version } : {}) } });
       setEditing(undefined); data.reload(); message.success('供应商已保存');
@@ -39,14 +42,14 @@ export default function Suppliers({ user }: { user: User }) {
   };
   const openLinks = async (row: Supplier) => {
     const generation = ++linkRequest.current;
-    setLinking(row); setLinks(null); setError('');
-    setCategory(undefined); setProductSearch(''); setAdding(false); setCandidates([]);
+    setLinking(row); setLinks(null); setSelected([]); setError('');
+    setCategory(undefined); setProductSearch(''); setAdding(false); setRemovals([]);
     try { const result = await request<Links>(`/suppliers/${row.id}/products`); if (generation === linkRequest.current) { setLinks(result); setSelected(result.productIds); } }
     catch (failure) { if (generation === linkRequest.current) setError((failure as Error).message); }
   };
   const saveLinks = async () => {
-    if (lock.current || !links || !linking) return; lock.current = true; setSaving(true); setError('');
-    try { const result = await request<Links>(`/suppliers/${linking.id}/products`, { method: 'PUT', body: { expectedVersion: links.version, productIds: selected } }); setLinks(result); data.reload(); message.success('商品关联已保存'); }
+    if (lock.current || !links || !linking || !dirty) return; lock.current = true; setSaving(true); setError('');
+    try { const result = await request<Links>(`/suppliers/${linking.id}/products`, { method: 'PUT', body: { expectedVersion: links.version, productIds: selected } }); setLinks(result); setSelected(result.productIds); setRemovals([]); data.reload(); message.success('商品关联已保存'); }
     catch (failure) { setError((failure as Error).message); } finally { lock.current = false; setSaving(false); }
   };
   const productColumns = [
@@ -56,53 +59,56 @@ export default function Suppliers({ user }: { user: User }) {
     { title: '单位', width: 90, render: (_: unknown, row: Product) => units.rows.find(item => item.id === row.baseUnitId)?.name || '-' },
     { title: '状态', width: 80, render: (_: unknown, row: Product) => row.isActive ? '启用' : '停用' },
   ];
-  const matching = (row: Product) => (!category || row.categoryId === category) && `${row.name} ${row.sku || ''}`.toLocaleLowerCase().includes(productSearch.trim().toLocaleLowerCase());
+  const dirty = Boolean(links && (selected.length !== links.productIds.length || selected.some(id => !links.productIds.includes(id))));
+  const categoryIds = (id: string): string[] => [id, ...categories.rows.filter(row => row.parentId === id).map(row => row.id)];
+  const matching = (row: Product) => (!category || categoryIds(category).includes(row.categoryId)) && `${row.name} ${row.sku || ''}`.toLocaleLowerCase().includes(productSearch.trim().toLocaleLowerCase());
+  const availableProduct = (row: Product) => row.isActive && !links?.productIds.includes(row.id);
+  const categoryNodes = (parentId: string | null): { key: string; title: string; children?: { key: string; title: string }[] }[] => categories.rows.filter(row => row.parentId === parentId).map(row => ({ key: row.id, title: `${row.name} (${products.rows.filter(product => (adding ? availableProduct(product) : selected.includes(product.id)) && categoryIds(row.id).includes(product.categoryId)).length})`, ...(parentId === null ? { children: categoryNodes(row.id) } : {}) }));
   const leaveLinks = () => {
     const leave = () => { linkRequest.current++; setLinking(null); setError(''); };
-    if (links && (selected.length !== links.productIds.length || selected.some(id => !links.productIds.includes(id)))) modal.confirm({ title: '放弃未保存的商品配置？', okText: '放弃', cancelText: '继续编辑', onOk: leave });
+    if (dirty) modal.confirm({ title: '放弃未保存的商品配置？', okText: '放弃', cancelText: '继续编辑', onOk: leave });
     else leave();
   };
   return <>
-    {!linking && <ListPage title="供应商管理" searchPlaceholder="供应商名称、联系人" {...data} create={writable ? () => edit(null) : undefined} filters={[{ key: 'status', label: '状态', options: statusOptions }, { key: 'supplierType', label: '供应商类别', options: supplierTypes }]} columns={[
+    <ListPage title="供应商管理" searchPlaceholder="供应商名称、联系人" {...data} rows={data.rows.filter(row => !row.isArchived)} create={writable ? () => edit(null) : undefined} filters={[{ key: 'status', label: '状态', options: statusOptions }, { key: 'supplierType', label: '供应商类别', options: supplierTypes }]} columns={[
       { title: '供应商名称', dataIndex: 'name', width: 320 },
       { title: '供应商类别', dataIndex: 'supplierType', width: 180, render: value => supplierTypes.find(item => item.value === value)?.label || '-' },
       { title: '结算周期', dataIndex: 'defaultSettlementCycle', width: 180, render: value => cycle.find(item => item.value === value)?.label || value || '-' },
       { title: '操作', fixed: 'right', width: 120, render: (_, row) => <div className="row-actions">
         <Tooltip title={writable ? '编辑' : '查看'}><Button type="text" aria-label={`${writable ? '编辑' : '查看'}${row.name}`} disabled={row.isArchived} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip>
         <Tooltip title="关联商品"><Button type="text" aria-label={`关联商品${row.name}`} disabled={row.isArchived} icon={<Link2 size={16} />} onClick={() => openLinks(row)} /></Tooltip>
-        {writable && <Popconfirm title="归档供应商？" description="将停用并移除商品、模板关联，历史订单保留。" onConfirm={async () => {
-          try { await request(`/suppliers/${row.id}/archive`, { method: 'POST', body: { expectedVersion: row.version } }); data.reload(); message.success('供应商已归档'); }
+        {writable && <Popconfirm title="删除供应商？" description="删除后解除商品及模板关联，历史订单不受影响，仍显示该供应商。" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={async () => {
+          try { await request(`/suppliers/${row.id}/archive`, { method: 'POST', body: { expectedVersion: row.version } }); data.reload(); message.success('供应商已删除'); }
           catch (failure) { message.error((failure as Error).message); }
-        }}><Tooltip title="归档"><Button type="text" danger disabled={row.isArchived} aria-label={`归档${row.name}`} icon={<Archive size={16} />} /></Tooltip></Popconfirm>}
+        }}><Tooltip title="删除供应商" styles={{ root: { pointerEvents: 'none' } }}><Button type="text" danger disabled={row.isArchived} aria-label={`删除${row.name}`} icon={<Trash2 size={16} />} /></Tooltip></Popconfirm>}
       </div> },
-    ]} />}
-    {linking && <section className="list-page">
-      <div className="page-heading"><div className="actions"><Tooltip title="返回供应商列表"><Button aria-label="返回供应商列表" icon={<ArrowLeft size={16} />} disabled={saving} onClick={leaveLinks} /></Tooltip><h1>供应商品配置 · {linking.name}</h1></div>
-        {writable && <div className="actions"><Button icon={<Plus size={16} />} disabled={!links || saving || products.loading || Boolean(products.error)} onClick={() => { setCandidates([]); setAdding(true); }}>添加商品</Button><Button type="primary" icon={<Save size={16} />} loading={saving} disabled={!links || products.loading || Boolean(products.error)} onClick={saveLinks}>保存</Button></div>}
+    ]} />
+    <Modal title={`管理商品 · ${linking?.name || ''}`} open={Boolean(linking)} width={1100} className="supplier-products-modal" maskClosable={false} closable={!saving} keyboard={!saving} onCancel={() => { if (!saving) leaveLinks(); }} footer={<div className="supplier-products-footer"><span>已供 {selected.length} 件{dirty && ` · 待新增 ${selected.filter(id => !links?.productIds.includes(id)).length} 件 · 待移除 ${links?.productIds.filter(id => !selected.includes(id)).length || 0} 件`}</span><div className="actions"><Button disabled={saving} onClick={leaveLinks}>取消</Button>{writable && <Button type="primary" icon={<Save size={16} />} loading={saving} disabled={!dirty || !links || products.loading || Boolean(products.error)} onClick={saveLinks}>保存修改</Button>}</div></div>}>
+      {(error || products.error || categories.error || units.error) && <Alert type="error" showIcon title={error || products.error || categories.error || units.error} action={<Button disabled={saving} onClick={() => { products.reload(); categories.reload(); units.reload(); if (!links && linking) void openLinks(linking); }}>重试</Button>} />}
+      <Tabs className="supplier-products-views" activeKey={adding ? 'available' : 'linked'} onChange={key => { setAdding(key === 'available'); setCategory(undefined); setProductSearch(''); setRemovals([]); }} items={[{ key: 'linked', label: `已供商品 (${selected.length})` }, ...(writable ? [{ key: 'available', label: `待添加商品 (${products.rows.filter(row => availableProduct(row)).length})` }] : [])]} />
+      <div className="supplier-products-layout">
+        <aside><strong>商品分类</strong><Tree titleRender={node => <Tooltip title={String(node.title)}><span className="supplier-category-label">{String(node.title)}</span></Tooltip>} blockNode defaultExpandAll selectedKeys={[category || 'all']} onSelect={keys => { setCategory(keys[0] === 'all' || !keys.length ? undefined : String(keys[0])); }} treeData={[{ key: 'all', title: `全部商品 (${adding ? products.rows.filter(row => availableProduct(row)).length : selected.length})` }, ...categoryNodes(null)]} /></aside>
+        <div className="supplier-products-main">
+          <div className="supplier-products-toolbar"><Input aria-label="搜索供应商品" placeholder="商品名称、货号" value={productSearch} onChange={event => setProductSearch(event.target.value)} allowClear /><div className="actions">{writable && !adding && <Button disabled={!removals.length || saving || !links} danger icon={<Trash2 size={16} />} onClick={() => { setSelected(current => current.filter(id => !removals.includes(id))); setRemovals([]); }}>移除所选{removals.length ? ` (${removals.length})` : ''}</Button>}</div></div>
+          <Table<Product> key={`${adding}-${category || 'all'}-${productSearch}`} rowKey="id" size="small" loading={!links && !error || products.loading} scroll={{ x: 700, y: 420 }} locale={{ emptyText: adding ? '暂无可添加商品' : '暂无供应商品' }} dataSource={products.rows.filter(row => (adding ? availableProduct(row) : selected.includes(row.id)) && matching(row))} rowSelection={writable ? { selectedRowKeys: adding ? selected.filter(id => !links?.productIds.includes(id)) : removals, preserveSelectedRowKeys: true, onChange: keys => { if (adding) setSelected(current => [...current.filter(id => links?.productIds.includes(id)), ...keys.map(String)]); else setRemovals(keys.map(String)); }, getCheckboxProps: () => ({ disabled: saving || !links }) } : undefined} columns={[...productColumns, ...(adding ? [{ title: '供应状态', width: 90, render: (_: unknown, row: Product) => selected.includes(row.id) ? <Tag color="processing">待新增</Tag> : '-' }] : writable ? [{ title: '操作', fixed: 'right' as const, width: 90, render: (_: unknown, row: Product) => <Button type="link" danger aria-label={`移除${row.name}`} disabled={saving || !links} icon={<Trash2 size={14} />} onClick={() => { setSelected(current => current.filter(id => id !== row.id)); setRemovals(current => current.filter(id => id !== row.id)); }}>移除</Button> }] : [])]} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条` }} />
+        </div>
       </div>
-      <div className="filter-bar"><Select aria-label="商品分类" placeholder="商品分类" allowClear value={category} onChange={setCategory} options={categories.rows.map(row => ({ value: row.id, label: row.name }))} /><Input aria-label="搜索供应商品" placeholder="商品名称、编号" value={productSearch} onChange={event => setProductSearch(event.target.value)} allowClear /></div>
-      {(error || products.error || categories.error || units.error) && <Alert type="error" showIcon title={error || products.error || categories.error || units.error} action={<Button onClick={() => { products.reload(); categories.reload(); units.reload(); void openLinks(linking); }}>重试</Button>} />}
-      <Table<Product> rowKey="id" size="small" loading={!links && !error || products.loading} scroll={{ x: 750 }} dataSource={products.rows.filter(row => selected.includes(row.id) && matching(row))} columns={[...productColumns, ...(writable ? [{ title: '操作', width: 80, render: (_: unknown, row: Product) => <Tooltip title="移除商品"><Button type="text" danger aria-label={`移除${row.name}`} disabled={saving} icon={<Trash2 size={16} />} onClick={() => setSelected(current => current.filter(id => id !== row.id))} /></Tooltip> }] : [])]} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条` }} />
-    </section>}
+    </Modal>
     <Modal title={`${writable ? editing ? '编辑' : '新增' : '查看'}供应商`} open={editing !== undefined} width={720} onOk={save} okText="保存" cancelText="取消"
       footer={!writable ? null : undefined} confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving} onCancel={() => { if (!saving) setEditing(undefined); }}>
       {error && <Alert type="error" title={error} showIcon />}
       <Form form={form} layout="vertical" disabled={!writable || saving} className="compact-form"><div className="form-grid">
-        {fields.slice(0, 3).map(([key, label, max]) => <Form.Item key={key} name={key} label={label} rules={[{ required: true, whitespace: true, message: `请填写${label}` }]}><Input maxLength={max} /></Form.Item>)}
+        {fields.slice(0, 3).map(([key, label, max]) => <Form.Item key={key} name={key} label={label} rules={[{ required: key === 'name', whitespace: key === 'name', message: `请填写${label}` }]}><Input maxLength={max} /></Form.Item>)}
         <Form.Item name="deliveryMode" label="配送方式" rules={[{ required: true }]}><Select options={delivery} /></Form.Item>
         <Form.Item name="defaultSettlementMode" label="结算方式" rules={[{ required: true }]}><Select options={settlement} /></Form.Item>
         <Form.Item name="defaultSettlementCycle" label="结算周期" rules={[{ required: true }]}><Select options={cycle} /></Form.Item>
         <Form.Item name="requiresFreight" label="是否需要运费" valuePropName="checked"><Switch checkedChildren="是" unCheckedChildren="否" /></Form.Item>
-        {fields.slice(3).map(([key, label, max]) => <Form.Item key={key} name={key} label={label} rules={[{ required: true, whitespace: true, message: `请填写${label}` }]}><Input maxLength={max} /></Form.Item>)}
+        {fields.slice(3).map(([key, label, max]) => <Form.Item key={key} name={key} label={label} ><Input maxLength={max} /></Form.Item>)}
         <Form.Item name="remark" label="备注"><Input.TextArea maxLength={500} rows={2} /></Form.Item>
         <Form.Item name="supplierType" label="供应商类型"><Select allowClear options={supplierTypes} /></Form.Item>
         {editing && <Form.Item name="status" label="状态"><Select options={statusOptions} /></Form.Item>}
         <Form.Item name="settlementCycleDescription" label="结算说明"><Input.TextArea maxLength={500} rows={2} /></Form.Item>
       </div></Form>
-    </Modal>
-    <Modal title="添加供应商品" open={adding} width={800} okText="添加" cancelText="取消" okButtonProps={{ disabled: !candidates.length }} onCancel={() => setAdding(false)} onOk={() => { setSelected(current => [...new Set([...current, ...candidates])]); setAdding(false); }}>
-      <div className="filter-bar"><Select aria-label="筛选商品分类" placeholder="商品分类" allowClear value={category} onChange={setCategory} options={categories.rows.map(row => ({ value: row.id, label: row.name }))} /><Input aria-label="搜索待添加商品" placeholder="商品名称、编号" value={productSearch} onChange={event => setProductSearch(event.target.value)} allowClear /></div>
-      <Table<Product> rowKey="id" size="small" scroll={{ x: 690 }} columns={productColumns} dataSource={products.rows.filter(row => row.isActive && !selected.includes(row.id) && matching(row))} rowSelection={{ selectedRowKeys: candidates, onChange: keys => setCandidates(keys as string[]), preserveSelectedRowKeys: true }} pagination={{ defaultPageSize: 10, showSizeChanger: true }} />
     </Modal>
   </>;
 }

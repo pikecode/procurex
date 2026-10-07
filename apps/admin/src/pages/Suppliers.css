@@ -1,0 +1,18 @@
+.supplier-products-layout { display: grid; grid-template-columns: clamp(200px, 24%, 240px) minmax(0, 1fr); gap: 16px; }
+.supplier-products-layout aside { min-width: 0; border-right: 1px solid #e5e7eb; padding-right: 12px; max-height: 540px; overflow-y: auto; overflow-x: hidden; }
+.supplier-products-layout aside > strong { display: block; margin-bottom: 12px; }
+.supplier-products-layout .ant-tree-treenode { width: 100%; min-width: 0; }
+.supplier-products-layout .ant-tree-node-content-wrapper { min-width: 0; overflow: hidden; white-space: nowrap; }
+.supplier-products-layout .ant-tree-title { display: block; min-width: 0; }
+.supplier-category-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 28px; }
+.supplier-products-main { min-width: 0; }
+.supplier-products-views > .ant-tabs-nav { margin-bottom: 16px; }
+.supplier-products-views > .ant-tabs-content-holder { display: none; }
+.supplier-products-toolbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; margin-bottom: 12px; }
+.supplier-products-toolbar > .ant-input-affix-wrapper { width: 230px; max-width: 100%; }
+.supplier-products-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.supplier-products-footer > span { color: #667085; font-size: 12px; }
+@media (max-width: 600px) {
+  .supplier-products-layout { grid-template-columns: minmax(0, 1fr); }
+  .supplier-products-layout aside { max-height: 120px; border-right: 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+}

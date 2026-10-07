@@ -8,12 +8,12 @@ export type StoreProfile = {
   receiptContactPhone?: string | null;
 };
 export type SupplierProfile = {
-  address?: string;
-  bankName?: string;
-  bankAccountName?: string;
-  bankAccount?: string;
-  taxpayerId?: string;
-  invoiceTitle?: string;
+  address?: string | null;
+  bankName?: string | null;
+  bankAccountName?: string | null;
+  bankAccount?: string | null;
+  taxpayerId?: string | null;
+  invoiceTitle?: string | null;
   requiresFreight?: boolean;
   supplierType?: string | null;
   settlementCycleDescription?: string | null;
@@ -58,9 +58,9 @@ export function parseStoreProfile(body: Record<string, unknown>, create: boolean
 
 export function parseSupplierProfile(body: Record<string, unknown>, create: boolean, issues: ValidationIssue[]): SupplierProfile {
   const result: SupplierProfile = {};
-  const requiredFields = { address: 300, bankName: 200, bankAccountName: 200, bankAccount: 80, taxpayerId: 80, invoiceTitle: 200 } as const;
-  for (const key of Object.keys(requiredFields) as (keyof typeof requiredFields)[]) {
-    result[key] = profileText(key, body[key], requiredFields[key], create, false, issues) ?? undefined;
+  const optionalFields = { address: 300, bankName: 200, bankAccountName: 200, bankAccount: 80, taxpayerId: 80, invoiceTitle: 200 } as const;
+  for (const key of Object.keys(optionalFields) as (keyof typeof optionalFields)[]) {
+    result[key] = profileText(key, typeof body[key] === 'string' && !body[key].trim() ? null : body[key], optionalFields[key], false, true, issues);
   }
   for (const key of ['settlementCycleDescription', 'remark'] as const) result[key] = profileText(key, body[key], 500, false, true, issues);
   result.supplierType = choice('supplierType', body.supplierType, ['HEADQUARTERS', 'DIRECT'], false, true, issues);

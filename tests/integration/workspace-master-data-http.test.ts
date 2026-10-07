@@ -30,7 +30,7 @@ test('formal workspace master-data reads are authorized and concurrent edits/bin
       return { status: response.status, body: await response.json() as any };
     };
     assert.equal((await call('/stores', 'POST', { code: prefix, name: 'Incomplete store' })).status, 400);
-    assert.equal((await call('/suppliers', 'POST', { code: prefix, name: 'Incomplete supplier', deliveryMode: 'SELF', defaultSettlementMode: 'COMPANY_TERM', defaultSettlementCycle: 'HALF_MONTHLY' })).status, 400);
+    assert.equal((await call('/suppliers', 'POST', { code: prefix, name: 'Incomplete supplier', defaultSettlementMode: 'COMPANY_TERM', defaultSettlementCycle: 'HALF_MONTHLY' })).status, 400);
     assert.equal((await call('/store-groups', 'POST', { name: `${prefix}East` })).status, 201);
     const storeResult = await call('/stores', 'POST', { code: prefix, name: 'Workspace store', contactName: 'Store contact', contactPhone: '13800000000', address: 'Store address', storeType: 'FRANCHISE', groupName: `${prefix}East`, receiptAddress: 'Warehouse address', receiptContactName: 'Warehouse contact', receiptContactPhone: '13900000000' });
     assert.equal(storeResult.status, 201);
@@ -42,6 +42,7 @@ test('formal workspace master-data reads are authorized and concurrent edits/bin
     const supplierResult = await call('/suppliers', 'POST', { code: prefix, name: 'Workspace supplier', deliveryMode: 'SELF', defaultSettlementMode: 'COMPANY_TERM', defaultSettlementCycle: 'HALF_MONTHLY', contactName: 'Supplier contact', contactPhone: '13900000000', address: 'Supplier address', bankName: 'Bank', bankAccountName: 'Supplier', bankAccount: '001234', taxpayerId: 'TEST-TAX', invoiceTitle: 'Supplier', supplierType: 'HEADQUARTERS', settlementCycleDescription: 'Natural half month', remark: 'Test profile' });
     assert.equal(supplierResult.body.data.code, prefix);
     const autoBody = { ...supplierResult.body.data, name: `${prefix}自动供应商` }; delete autoBody.code;
+    for (const key of ['contactName', 'contactPhone', 'address', 'bankName', 'bankAccountName', 'bankAccount', 'taxpayerId', 'invoiceTitle']) delete autoBody[key];
     const automatic = await Promise.all([call('/suppliers', 'POST', autoBody), call('/suppliers', 'POST', autoBody)]);
     for (const result of automatic) { assert.equal(result.status, 201); assert.match(result.body.data.code, /^GYS[A-F0-9]{32}$/); }
     assert.notEqual(automatic[0].body.data.code, automatic[1].body.data.code);
@@ -128,6 +129,9 @@ test('formal workspace master-data reads are authorized and concurrent edits/bin
     assert.equal(firstPrice.body.data.salesDelta, '4.00'); assert.equal(firstPrice.body.data.supplyDelta, '4.00');
     assert.equal(firstPrice.body.data.orders[0].supplierOrderId, legacyOrder.id);
     assert.equal((await db.supplierOrder.findUniqueOrThrow({ where: { id: legacyOrder.id } })).salesGoodsAmount.toFixed(2), '20.00');
+    const historicalSupplier = await db.supplierOrder.findUniqueOrThrow({ where: { id: legacyOrder.id }, include: { supplier: true } });
+    assert.equal(historicalSupplier.supplier.id, supplier.id);
+    assert.equal(historicalSupplier.supplier.name, supplier.name);
     assert.equal(await db.priceVersion.count({ where: { scope: { productId: product.id } } }), 0);
     const supplierBeforeClear = (await call('/suppliers')).body.data.find((row: any) => row.id === supplier.id);
     assert.equal((await call('/suppliers', 'GET', undefined, finance)).body.data.find((row: any) => row.id === supplier.id).bankAccount, '001234');

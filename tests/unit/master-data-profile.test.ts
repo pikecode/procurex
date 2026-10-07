@@ -18,16 +18,25 @@ test('store receipt profile is an atomic triple, with explicit reset to store co
   assert.equal(storeDestination({ ...store, receiptAddress: 'Warehouse', receiptContactName: 'Receiver', receiptContactPhone: '456' }).contactName, 'Receiver');
 });
 
-test('new supplier profiles require banking/tax/address data and default freight off, while legacy partial patches stay partial', () => {
+test('supplier banking/tax/address fields are optional and freight defaults off while patches stay partial', () => {
   let issues: ValidationIssue[] = [];
-  parseSupplierProfile({}, true, issues); assert.equal(issues.length, 6);
+  assert.equal(parseSupplierProfile({}, true, issues).requiresFreight, false); assert.deepEqual(issues, []);
   issues = [];
   const profile = parseSupplierProfile({ address: 'Address', bankName: 'Bank', bankAccountName: 'Name', bankAccount: '00123', taxpayerId: 'Tax', invoiceTitle: 'Title' }, true, issues);
   assert.deepEqual(issues, []); assert.equal(profile.requiresFreight, false); assert.equal(profile.bankAccount, '00123');
   issues = [];
   assert.equal(parseSupplierProfile({}, false, issues).requiresFreight, undefined); assert.deepEqual(issues, []);
   parseSupplierProfile({ requiresFreight: 'false', bankAccount: null, defaultSettlementCycle: 'CUSTOM', supplierType: 'OTHER' }, false, issues);
-  assert.equal(issues.length, 4);
+  assert.equal(issues.length, 3);
+});
+
+test('optional supplier fields can be cleared but reject invalid types and excessive lengths', () => {
+  const issues: ValidationIssue[] = [];
+  const result = parseSupplierProfile({ address: '  ', bankName: '', bankAccountName: null, bankAccount: null, taxpayerId: '', invoiceTitle: null }, false, issues);
+  assert.deepEqual(issues, []);
+  for (const key of ['address', 'bankName', 'bankAccountName', 'bankAccount', 'taxpayerId', 'invoiceTitle'] as const) assert.equal(result[key], null);
+  parseSupplierProfile({ bankAccount: 123, bankName: 'x'.repeat(201) }, true, issues);
+  assert.equal(issues.length, 2);
 });
 
 test('profile fields validate lengths, reject clearing required values, and retain explicit optional clearing', () => {
