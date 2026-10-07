@@ -1,0 +1,25 @@
+.product-editor .ant-modal-body { max-height: calc(100dvh - 164px); overflow-y: auto; padding-right: 8px; scrollbar-gutter: stable; }
+.product-editor .ant-modal-footer { border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 12px; }
+.product-editor .compact-form { margin-top: 8px; }
+.product-editor .ant-tabs-nav { position: sticky; top: 0; z-index: 2; background: #fff; }
+.product-editor .ant-tabs-content-holder { min-height: 320px; }
+.product-tab-error { color: #cf1322; margin-left: 6px; font-weight: 700; }
+.product-form-heading { grid-column: 1 / -1; font-size: 14px; font-weight: 600; margin: 4px 0 14px; padding-top: 14px; border-top: 1px solid #e5e7eb; }
+.product-editor .form-grid > .product-form-heading:first-child { border-top: 0; padding-top: 0; }
+.product-supplier-section { grid-column: 1 / -1; min-width: 0; margin-bottom: 4px; }
+.product-supplier-section .product-form-heading { border-top: 1px solid #e5e7eb; padding-top: 14px; }
+.product-conversion-fields { margin-top: 14px; }
+.product-supplier-heading, .product-supplier-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px; gap: 12px; align-items: start; }
+.product-supplier-heading { padding: 8px 0; color: #667085; font-size: 12px; }
+.product-supplier-row { padding: 8px 0; border-top: 1px solid #f0f0f0; }
+.product-supplier-name { line-height: 32px; overflow-wrap: anywhere; }
+.product-supplier-price { display: flex; gap: 8px; align-items: start; min-width: 0; }
+.product-supplier-price .ant-form-item { flex: 1; min-width: 0; margin-bottom: 0; }
+.product-price-unit { font-size: 12px; line-height: 32px; color: #667085; flex-shrink: 0; }
+.product-supplier-empty { padding: 12px 0; color: #667085; font-size: 13px; }
+@media (max-width: 600px) {
+  .product-supplier-heading, .product-supplier-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) 28px; gap: 8px; }
+  .product-supplier-price { flex-direction: column; gap: 0; }
+  .product-supplier-price .ant-form-item { width: 100%; }
+  .product-price-unit { line-height: 22px; }
+}

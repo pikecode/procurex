@@ -21,6 +21,7 @@ import {
 type CreateCategoryBody = { code?: unknown; name?: unknown; parentId?: unknown; sortOrder?: unknown };
 type CreateUnitBody = { code?: unknown; name?: unknown };
 type CreateProductBody = {
+  supplierPurchasePrices?: unknown;
   supplierIds?: unknown;
   purchaseUnitConversion?: unknown;
   defaultSalesPrice?: unknown;
@@ -199,6 +200,7 @@ function parseCreateUnitBody(body: CreateUnitBody): { code?: string; name: strin
 }
 
 function parseCreateProductBody(body: CreateProductBody): {
+  supplierPurchasePrices?: import('./catalog.service.js').ProductPurchasePrice[];
   supplierIds?: string[];
   purchaseUnitConversion?: { purchaseUnitId: string; salesUnitsPerPurchaseUnit: string } | null;
   defaultSalesPrice: string;
@@ -230,6 +232,7 @@ function parseCreateProductBody(body: CreateProductBody): {
 }
 
 function parsePatchProductBody(id: string, body: PatchProductBody): {
+  supplierPurchasePrices?: import('./catalog.service.js').ProductPurchasePrice[];
   supplierIds?: string[];
   purchaseUnitConversion?: { purchaseUnitId: string; salesUnitsPerPurchaseUnit: string } | null;
   defaultSalesPrice?: string;
@@ -267,6 +270,25 @@ function parsePatchProductBody(id: string, body: PatchProductBody): {
 }
 
 function parseProductConfiguration(body: CreateProductBody, issues: ValidationIssue[]) {
+  let supplierPurchasePrices: import('./catalog.service.js').ProductPurchasePrice[] | undefined;
+  if (body.supplierPurchasePrices !== undefined) {
+    if (!Array.isArray(body.supplierPurchasePrices) || body.supplierPurchasePrices.length > 100) issues.push({ field: 'supplierPurchasePrices', code: 'INVALID_ARRAY', message: '最多维护100个供应商采购价' });
+    else {
+      supplierPurchasePrices = [];
+      const seen = new Set<string>();
+      body.supplierPurchasePrices.forEach((value, index) => {
+        const field = `supplierPurchasePrices.${index}`;
+        if (!value || typeof value !== 'object' || Array.isArray(value)) { issues.push({ field, code: 'INVALID_OBJECT', message: '采购价格式无效' }); return; }
+        const row = value as Record<string, unknown>;
+        issues.push(...validateUuid(`${field}.supplierId`, row.supplierId));
+        const supplyPrice = parseDefaultSalesPrice(row.supplyPrice, true, issues);
+        if (row.expectedVersionId !== null) issues.push(...validateUuid(`${field}.expectedVersionId`, row.expectedVersionId));
+        if (seen.has(String(row.supplierId))) issues.push({ field, code: 'DUPLICATE_SUPPLIER', message: '供应商采购价不可重复' });
+        seen.add(String(row.supplierId));
+        supplierPurchasePrices!.push({ supplierId: row.supplierId as string, supplyPrice: supplyPrice!, expectedVersionId: row.expectedVersionId as string | null });
+      });
+    }
+  }
   let supplierIds: string[] | undefined;
   if (body.supplierIds !== undefined) {
     if (!Array.isArray(body.supplierIds) || body.supplierIds.length > 100) issues.push({ field: 'supplierIds', code: 'INVALID_ARRAY', message: 'Select at most 100 suppliers' });
@@ -282,7 +304,7 @@ function parseProductConfiguration(body: CreateProductBody, issues: ValidationIs
       purchaseUnitConversion = { purchaseUnitId: row.purchaseUnitId as string, salesUnitsPerPurchaseUnit: row.salesUnitsPerPurchaseUnit as string };
     }
   }
-  return { supplierIds, purchaseUnitConversion };
+  return { supplierIds, purchaseUnitConversion, supplierPurchasePrices };
 }
 
 function optionalSku(value: unknown, issues: ValidationIssue[]) {

@@ -6,6 +6,9 @@ import { AuditService } from '../audit/audit.service.js';
 import { auditedMasterDataTransaction, type MasterDataAuditContext } from '../audit/master-data-audit.js';
 import { storeDestination } from '../common/master-data-profile.js';
 import { PricingService } from '../pricing/pricing.service.js';
+import { lockPricePublication } from '../pricing/price-checkpoint.js';
+import { effectivePriceVersion } from '../pricing/effective-price.js';
+import { Decimal } from 'decimal.js';
 import { lockCatalog, requireUniqueUnitName, validateCategoryParent } from './catalog-registries.service.js';
 import { purchaseUnitPrice, validatePurchaseUnitConversion } from '../../../../packages/domain/src/unit-conversion.js';
 import type { ProductUnitConversion } from '../../../../packages/backend/generated/prisma/client.js';
@@ -41,6 +44,7 @@ export type UnitView = {
 };
 
 export type ProductView = {
+  supplierPurchasePrices?: ProductPurchasePrice[];
   supplierIds: string[];
   defaultSalesPrice: string | null;
   purchaseUnitConversion: { purchaseUnitId: string; salesUnitId: string; salesUnitsPerPurchaseUnit: string } | null;
@@ -97,7 +101,9 @@ export type CreateUnitInput = {
   name: string;
 };
 
+export type ProductPurchasePrice = { supplierId: string; supplyPrice: string; expectedVersionId: string | null };
 export type CreateProductInput = {
+  supplierPurchasePrices?: ProductPurchasePrice[];
   supplierIds?: string[];
   purchaseUnitConversion?: { purchaseUnitId: string; salesUnitsPerPurchaseUnit: string } | null;
   defaultSalesPrice: string;
@@ -116,6 +122,7 @@ export type CreateProductInput = {
 };
 
 export type UpdateProductInput = {
+  supplierPurchasePrices?: ProductPurchasePrice[];
   supplierIds?: string[];
   purchaseUnitConversion?: { purchaseUnitId: string; salesUnitsPerPurchaseUnit: string } | null;
   defaultSalesPrice?: string;
@@ -171,24 +178,26 @@ export class CatalogService {
 
   async listProducts(): Promise<ProductView[]> {
     const products = await this.database.client.product.findMany({ include: { suppliers: { where: { supplyEnabled: true } }, imageFile: true, brandRecord: true, conversion: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
-    return products.map(toProductView);
+    return this.withPurchasePrices(this.database.client, products.map(toProductView));
   }
 
   async createProduct(input: CreateProductInput, actorUserId?: string, context?: MasterDataAuditContext): Promise<ProductView> {
     await Promise.all([this.requireCategory(input.categoryId), this.requireUnit(input.baseUnitId)]);
 
     const product = await auditedMasterDataTransaction(this.database, this.audit, context, 'product.create', 'Product', async tx => {
+      if (input.supplierPurchasePrices?.length) await lockPricePublication(tx, true);
       await lockCatalog(tx);
       await this.requireProductReferences(tx, input.categoryId, input.baseUnitId);
       await this.requireAvailableSku(tx, input.sku);
       await this.requireImage(tx, input.imageFileId, actorUserId);
       const brand = await this.resolveBrand(tx, input);
-      const { supplierIds, purchaseUnitConversion, ...fields } = input;
+      const { supplierIds, purchaseUnitConversion, supplierPurchasePrices, ...fields } = input;
       const created = await tx.product.create({ data: { ...fields, ...brand } });
       await this.saveProductConfiguration(tx, created, supplierIds, purchaseUnitConversion);
+      await this.savePurchasePrices(tx, created.id, supplierPurchasePrices);
       return tx.product.findUniqueOrThrow({ where: { id: created.id }, include: { suppliers: { where: { supplyEnabled: true } }, imageFile: true, brandRecord: true, conversion: true } });
     });
-    return toProductView(product);
+    return (await this.withPurchasePrices(this.database.client, [toProductView(product)]))[0]!;
   }
 
   async updateProduct(id: string, input: UpdateProductInput, actorUserId?: string, context?: MasterDataAuditContext): Promise<ProductView> {
@@ -212,6 +221,7 @@ export class CatalogService {
     await Promise.all([input.categoryId ? this.requireCategory(input.categoryId) : undefined, input.baseUnitId ? this.requireUnit(input.baseUnitId) : undefined]);
 
     const updated = await auditedMasterDataTransaction(this.database, this.audit, context, 'product.update', 'Product', async tx => {
+      if (input.supplierPurchasePrices?.length) await lockPricePublication(tx, true);
       await lockCatalog(tx);
       await this.requireProductReferences(tx, input.categoryId, input.baseUnitId);
       await this.requireAvailableSku(tx, input.sku, id);
@@ -242,9 +252,29 @@ export class CatalogService {
       });
       if (!changed.count) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Product version has changed' });
       await this.saveProductConfiguration(tx, { id, baseUnitId: input.baseUnitId ?? existing.baseUnitId }, input.supplierIds, input.purchaseUnitConversion);
+      await this.savePurchasePrices(tx, id, input.supplierPurchasePrices);
       return tx.product.findUniqueOrThrow({ where: { id }, include: { suppliers: { where: { supplyEnabled: true } }, imageFile: true, brandRecord: true, conversion: true } });
     });
-    return toProductView(updated);
+    return (await this.withPurchasePrices(this.database.client, [toProductView(updated)]))[0]!;
+  }
+
+  private async withPurchasePrices(tx: Prisma.TransactionClient, products: ProductView[]): Promise<ProductView[]> {
+    const scopes = await tx.priceScope.findMany({ where: { productId: { in: products.map(row => row.id) }, templateKey: '' }, include: { versions: { where: { effectiveAt: { lte: new Date() } }, orderBy: [{ effectiveAt: 'desc' }, { revision: 'desc' }], take: 1 } } });
+    return products.map(product => ({ ...product, supplierPurchasePrices: scopes.filter(scope => scope.productId === product.id && product.supplierIds.includes(scope.supplierId) && scope.versions.length).map(scope => ({ supplierId: scope.supplierId, supplyPrice: scope.versions[0]!.supplyPrice.toString(), expectedVersionId: scope.versions[0]!.id })) }));
+  }
+
+  private async savePurchasePrices(tx: Prisma.TransactionClient, productId: string, prices?: ProductPurchasePrice[]) {
+    if (!prices?.length) return;
+    const product = await tx.product.findUniqueOrThrow({ where: { id: productId } });
+    const at = new Date();
+    for (const price of [...prices].sort((a, b) => a.supplierId.localeCompare(b.supplierId))) {
+      const link = await tx.supplierProduct.findUnique({ where: { supplierId_productId: { supplierId: price.supplierId, productId } }, include: { supplier: true } });
+      if (!link?.supplyEnabled || link.supplier.isArchived) throw new ConflictException({ code: 'SUPPLIER_UNAVAILABLE', message: '采购价仅可维护已关联供应商' });
+      const current = await effectivePriceVersion(tx, productId, price.supplierId, at);
+      if ((current?.supplyVersionId ?? null) !== price.expectedVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: '采购价已变更，请刷新商品后重试' });
+      if (current && new Decimal(price.supplyPrice).eq(current.supplyPrice)) continue;
+      await this.pricingService.publishPrice({ productId, supplierId: price.supplierId, supplyPrice: price.supplyPrice, salesPrice: link.supplier.defaultSettlementMode === 'SUPPLIER_TERM' ? price.supplyPrice : current?.salesPrice.toString() ?? product.defaultSalesPrice!.toString(), effectiveAt: at, reason: '商品资料维护采购价' }, tx);
+    }
   }
 
   private async saveProductConfiguration(tx: Prisma.TransactionClient, product: { id: string; baseUnitId: string }, supplierIds?: string[], conversion?: { purchaseUnitId: string; salesUnitsPerPurchaseUnit: string } | null) {
