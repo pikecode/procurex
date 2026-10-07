@@ -1,0 +1,110 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { chromium } from 'playwright';
+
+await mkdir('var/template-products-evidence', { recursive: true });
+const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const errors = []; const writes = []; let paymentAttempts = 0;
+  page.on('pageerror', error => { errors.push(error.message); console.error(error.message); });
+  const user = { id: 'admin', displayName: '测试管理员', roles: ['ADMIN'], scope: { type: 'ADMIN' } };
+  const products = ['原有大米', '新增面粉', '新增饮料'].map((name, index) => ({ id: `p${index + 1}`, name, categoryId: index === 2 ? 'c2' : 'c1', baseUnitId: 'u1', supplierIds: ['s1', 's2'], supplierPurchasePrices: [{ supplierId: 's1', supplyPrice: '6' }, { supplierId: 's2', supplyPrice: '12' }], isActive: true, defaultSalesPrice: '10', minOrderQty: '1', orderMultiple: '1' }));
+  const detail = { id: 't1', name: '测试模板', code: 'MB1', tag: '测试', version: 1, storeIds: [], isArchived: false, settings: [], items: [{ productId: 'p1', sortOrder: 0, isEnabled: true, minOrderQty: null, orderMultiple: null, suppliers: [{ supplierId: 's1', priority: 10 }] }] };
+  await page.addInitScript(user => sessionStorage.setItem('procurex-react-admin-session-v1', JSON.stringify({ accessToken: 'fixture', expiresAt: new Date(Date.now() + 3600000).toISOString(), user })), user);
+  await page.route('**/api/v1/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    const fulfill = data => route.fulfill({ json: { data } });
+    if (route.request().method() === 'PUT') {
+      if (path.endsWith('/supplier-settings') && ++paymentAttempts === 1) return route.fulfill({ status: 409, json: { error: { message: '测试保存失败' } } });
+      writes.push(route.request().postDataJSON()); return fulfill(detail);
+    }
+    if (path.endsWith('/templates/t1')) return fulfill(detail);
+    if (path.endsWith('/templates')) return fulfill([detail]);
+    if (path.endsWith('/products')) return fulfill(products);
+    if (path.endsWith('/categories')) return fulfill([{ id: 'root', name: '食品', parentId: null }, { id: 'c1', name: '粮油', parentId: 'root' }, { id: 'c2', name: '饮料', parentId: 'root' }]);
+    if (path.endsWith('/suppliers')) return fulfill([{ id: 's1', name: '测试供应商', isArchived: false, defaultSettlementMode: 'COMPANY_TERM', defaultSettlementCycle: 'MONTHLY' }, { id: 's2', name: '备用供应商', isArchived: false, defaultSettlementMode: 'CREDIT', defaultSettlementCycle: 'MONTHLY' }, { id: 's3', name: '未关联供应商', isArchived: false }]);
+    if (path.endsWith('/units')) return fulfill([{ id: 'u1', name: '袋' }]);
+    if (path.endsWith('/me')) return fulfill({ user, session: { expiresAt: new Date(Date.now() + 3600000).toISOString() } });
+    if (path.endsWith('/notifications')) return fulfill({ unreadCount: 0, notifications: [] });
+    return fulfill([]);
+  });
+  await page.goto('http://127.0.0.1:4174/templates');
+  assert.equal(await page.getByRole('columnheader', { name: '编号', exact: true }).count(), 0);
+  const open = () => page.getByRole('button', { name: '商品及供货优先级测试模板', exact: true }).click();
+  await open();
+  const dialog = page.getByRole('dialog').first();
+  await dialog.getByRole('columnheader', { name: '销售单位', exact: true }).waitFor();
+  await dialog.getByRole('cell', { name: '袋', exact: true }).waitFor();
+  await dialog.getByRole('cell', { name: '40.00%', exact: true }).waitFor();
+  assert.equal(await dialog.getByRole('columnheader', { name: '排序', exact: true }).count(), 0);
+  await dialog.getByRole('tab', { name: '待添加商品', exact: true }).click();
+  await dialog.getByRole('row').filter({ hasText: '新增面粉' }).getByRole('checkbox').click();
+  await dialog.getByRole('tab', { name: '已选商品 (2)', exact: true }).waitFor();
+  await dialog.locator('.ant-tree-title').getByText('饮料', { exact: true }).click();
+  await dialog.getByRole('row').filter({ hasText: '新增饮料' }).getByRole('checkbox').click();
+  await dialog.getByRole('tab', { name: '已选商品 (3)', exact: true }).waitFor();
+  await dialog.locator('.ant-tree-title').getByText('全部分类', { exact: true }).click();
+  await dialog.getByRole('row').filter({ hasText: '新增面粉' }).getByRole('checkbox').click();
+  await dialog.getByRole('tab', { name: '已选商品 (2)', exact: true }).click();
+  await dialog.getByRole('button', { name: '移除商品', exact: true }).first().click();
+  await dialog.getByRole('tab', { name: '待添加商品', exact: true }).click();
+  await dialog.getByRole('row').filter({ hasText: '原有大米' }).getByRole('checkbox').click();
+  await dialog.getByRole('tab', { name: '已选商品 (2)', exact: true }).waitFor();
+  await dialog.getByRole('tab', { name: '已选商品 (2)', exact: true }).click();
+  const rice = dialog.getByRole('row').filter({ hasText: '原有大米' });
+  await rice.getByRole('combobox', { name: '供应商', exact: true }).click();
+  assert.equal(await page.locator('.ant-select-dropdown:visible').getByText('未关联供应商', { exact: true }).count(), 0);
+  await page.locator('.ant-select-dropdown:visible').getByText('备用供应商', { exact: true }).click();
+  await rice.getByRole('cell', { name: '-20.00%', exact: true }).waitFor();
+  await dialog.getByRole('tab', { name: '待添加商品', exact: true }).click();
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  await page.getByRole('button', { name: '继续编辑', exact: true }).click();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 }); await page.waitForTimeout(300);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.screenshot({ path: `var/template-products-evidence/${width}.png`, fullPage: true });
+    await dialog.getByRole('tab', { name: '已选商品 (2)', exact: true }).click();
+    await page.screenshot({ path: `var/template-products-evidence/selected-${width}.png`, fullPage: true });
+    await dialog.getByRole('tab', { name: '待添加商品', exact: true }).click();
+  }
+  await dialog.getByRole('button', { name: '保存', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  assert.equal(writes.length, 1);
+  assert.deepEqual(writes[0].items.map(item => item.productId).sort(), ['p1', 'p3']);
+  assert.equal(writes[0].items.find(item => item.productId === 'p1').suppliers[0].supplierId, 's2');
+  assert.equal(writes[0].items.find(item => item.productId === 'p1').suppliers[0].priority, 0);
+  assert.equal(writes[0].items.find(item => item.productId === 'p1').suppliers[1].priority, 10);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await open();
+  await dialog.getByRole('tab', { name: '已选商品 (1)', exact: true }).waitFor();
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  assert.equal(await page.getByRole('button', { name: '放弃修改', exact: true }).count(), 0);
+  detail.items[0].suppliers.push({ supplierId: 's2', priority: 20 });
+  await page.getByRole('button', { name: '支付方式管理测试模板', exact: true }).click();
+  const paymentDialog = page.getByRole('dialog', { name: '支付方式管理 · 测试模板', exact: true });
+  await paymentDialog.getByRole('columnheader', { name: '支付方式', exact: true }).waitFor();
+  assert.equal(await paymentDialog.getByText('未关联供应商', { exact: true }).count(), 0);
+  assert.equal(await paymentDialog.getByRole('combobox', { name: '支付方式', exact: true }).count(), 2);
+  await paymentDialog.getByRole('combobox', { name: '支付方式', exact: true }).first().click();
+  await page.locator('.ant-select-dropdown:visible').getByText('挂账', { exact: true }).click();
+  await paymentDialog.getByRole('columnheader', { name: '供应商名称', exact: true }).click();
+  await page.screenshot({ path: 'var/template-products-evidence/payment.png', fullPage: true });
+  await paymentDialog.locator('.ant-modal-footer .ant-btn-primary').click();
+  await paymentDialog.getByText('测试保存失败', { exact: true }).waitFor();
+  await paymentDialog.getByRole('columnheader', { name: '供应商名称', exact: true }).click();
+  await page.screenshot({ path: 'var/template-products-evidence/payment-failed.png', fullPage: true });
+  await paymentDialog.getByText('挂账', { exact: true }).first().waitFor();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 }); await page.waitForTimeout(300);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.screenshot({ path: `var/template-products-evidence/payment-${width}.png`, fullPage: true });
+  }
+  await paymentDialog.locator('.ant-modal-footer .ant-btn-primary').click();
+  await paymentDialog.waitFor({ state: 'hidden' });
+  assert.equal(paymentAttempts, 2);
+  assert.deepEqual(writes[1].settings, [{ supplierId: 's1', settlementMode: 'CREDIT', settlementCycle: 'MONTHLY' }, { supplierId: 's2', settlementMode: 'CREDIT', settlementCycle: 'MONTHLY' }]);
+  assert.deepEqual(errors, []);
+  console.log('PASS: product columns/supplier/margin, cross-category draft, two payment rows, failed batch preserves draft and retries once, desktop/mobile; fixture API only');
+} finally { await browser.close(); }

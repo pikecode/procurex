@@ -27,6 +27,9 @@ try {
     return fulfill([]);
   });
   await page.goto('http://127.0.0.1:4174/products');
+  assert.equal(await page.getByRole('menuitem', { name: '价格管理', exact: true }).count(), 0);
+  await page.goto('http://127.0.0.1:4174/prices?productId=p1');
+  await page.waitForURL('**/products');
   await page.getByRole('button', { name: '编辑测试大米', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: '供应商供货价测试大米', exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: '采购单位换算测试大米', exact: true }).count(), 0);

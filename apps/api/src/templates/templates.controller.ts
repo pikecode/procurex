@@ -9,6 +9,7 @@ import { throwIfInvalid } from '../common/request-contract.js';
 import {
   TemplatesService,
   type TemplateItemInput,
+  type TemplatePaymentSetting,
   type TemplateItemsView,
   type TemplateListView,
   type TemplateStoresView,
@@ -86,6 +87,21 @@ export class TemplatesController {
   replaceItems(@Param('id') id: string, @Body() body: PutTemplateItemsBody, @Req() request: AuthenticatedRequest): Promise<TemplateItemsView> {
     const input = parsePutTemplateItemsBody(id, body);
     return this.templatesService.replaceTemplateItems(id, input.expectedVersion, input.items, masterDataAuditContext(request));
+  }
+
+  @Put(':id/supplier-settings')
+  replaceSupplierSettings(@Param('id') id: string, @Body() body: TemplateVersionBody & { settings?: unknown }, @Req() request: AuthenticatedRequest) {
+    const expectedVersion = parseVersion(id, body);
+    const issues: ValidationIssue[] = [];
+    if (!Array.isArray(body.settings)) issues.push({ field: 'settings', code: 'INVALID_ARRAY', message: 'settings must be an array' });
+    throwIfInvalid(issues);
+    const settings: TemplatePaymentSetting[] = (body.settings as unknown[]).map((row, index) => {
+      if (!isRecord(row)) { throwIfInvalid([{ field: `settings.${index}`, code: 'INVALID_SETTING', message: 'setting must be an object' }]); }
+      const value = row as Record<string, unknown>;
+      const parsed = parsePutTemplateSupplierSettingBody(id, String(value.supplierId), { ...value, expectedVersion });
+      return { supplierId: String(value.supplierId).toLowerCase(), settlementMode: parsed.settlementMode, settlementCycle: parsed.settlementCycle };
+    });
+    return this.templatesService.replaceSupplierSettings(id, expectedVersion, settings, masterDataAuditContext(request));
   }
 
   @Put(':id/supplier-settings/:supplierId')

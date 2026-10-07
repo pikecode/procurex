@@ -14,7 +14,6 @@ const CatalogRegistries = lazy(() => import('./pages/CatalogRegistries'));
 const Products = lazy(() => import('./pages/Products'));
 const Suppliers = lazy(() => import('./pages/Suppliers'));
 const Templates = lazy(() => import('./pages/Templates'));
-const Prices = lazy(() => import('./pages/Prices'));
 const PurchaseWorkspace = lazy(() => import('./pages/PurchaseWorkspace'));
 const SupplierOrders = lazy(() => import('./pages/SupplierOrders'));
 const SupplierWorkspace = lazy(() => import('./pages/SupplierWorkspace'));
@@ -44,7 +43,7 @@ function Login({ authenticated }: { authenticated: (user: User) => void }) {
     </Form>
   </section></main>;
 }
-const labels: Record<string, string> = { '/stores': '门店管理', '/store-groups': '门店分组', '/collection-accounts': '收款账户', '/categories': '商品分类', '/brands': '品牌管理', '/units': '单位管理', '/products': '商品管理', '/suppliers': '供应商管理', '/templates': '订货模板', '/prices': '价格管理', '/purchase-requests': '采购申请', '/supplier-orders': '供应商订单', '/discrepancies': '收货差异' };
+const labels: Record<string, string> = { '/stores': '门店管理', '/store-groups': '门店分组', '/collection-accounts': '收款账户', '/categories': '商品分类', '/brands': '品牌管理', '/units': '单位管理', '/products': '商品管理', '/suppliers': '供应商管理', '/templates': '订货模板', '/purchase-requests': '采购申请', '/supplier-orders': '供应商订单', '/discrepancies': '收货差异' };
 labels['/reports'] = '业务报表'; labels['/settlement-differences'] = '结算差异';
 labels['/commands'] = '命令诊断';
 function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
@@ -60,7 +59,7 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
       { key: '/suppliers', label: '供应商管理', icon: <Building2 size={16} /> },
     ] },
     { key: 'catalog', label: '商品资料', icon: <Package size={17} />, children: ['products', 'categories', 'brands', 'units'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) },
-    ...(hasRole(user, 'ADMIN', 'PURCHASER') ? [{ key: 'ordering', label: '订货配置', icon: <SlidersHorizontal size={17} />, children: ['templates', 'prices'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) }] : []),
+    ...(hasRole(user, 'ADMIN', 'PURCHASER') ? [{ key: 'ordering', label: '订货配置', icon: <SlidersHorizontal size={17} />, children: ['templates'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) }] : []),
     { key: 'procurement', label: '采购履约', icon: <ShoppingCart size={17} />, children: ['purchase-requests', 'supplier-orders', ...(hasRole(user, 'ADMIN') ? ['discrepancies'] : [])].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) },
     ...(central ? [{ key: 'finance', label: '财务结算', icon: <Landmark size={17} />, children: [{ key: '/store-finance', label: '门店财务', icon: <Landmark size={16} /> }, { key: '/finance', label: '账单与付款', icon: <Landmark size={16} /> }, { key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> }, { key: '/collection-accounts', label: '收款账户', icon: <Landmark size={16} /> }] }] : []),
   ];
@@ -75,7 +74,7 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
   const navigation = <Menu mode="inline" selectedKeys={[location.pathname]} openKeys={collapsed ? undefined : openKeys} onOpenChange={setOpenKeys} items={items}
     onClick={({ key }) => { navigate(key); setMobileOpen(false); }} inlineCollapsed={collapsed} />;
   if (!supported) return <Result status="403" title="当前账号暂未迁移" extra={<div className="actions"><a href={legacyUrl}><Button>打开原后台</Button></a><Button onClick={async () => { try { await logout(); } finally { signedOut(); } }}>退出登录</Button></div>} />;
-  const authorized = storeRole ? ['/', '/store-orders', '/store-finance', '/finance', '/settlement-differences', '/reports'].includes(location.pathname) : location.pathname !== '/store-orders' && (!['/collection-accounts', '/store-finance', '/finance', '/settlement-differences'].includes(location.pathname) || central) && (location.pathname !== '/discrepancies' || hasRole(user, 'ADMIN')) && (!['/templates', '/prices'].includes(location.pathname) || hasRole(user, 'ADMIN', 'PURCHASER'));
+  const authorized = storeRole ? ['/', '/store-orders', '/store-finance', '/finance', '/settlement-differences', '/reports'].includes(location.pathname) : location.pathname !== '/store-orders' && (!['/collection-accounts', '/store-finance', '/finance', '/settlement-differences'].includes(location.pathname) || central) && (location.pathname !== '/discrepancies' || hasRole(user, 'ADMIN')) && (!['/templates'].includes(location.pathname) || hasRole(user, 'ADMIN', 'PURCHASER'));
   return <div className={`admin-shell ${collapsed ? 'is-collapsed' : ''}`}>
     <aside className="sidebar"><Link className="brand" to={home}><Building2 size={24} /><span>ProcureX<small>采购协同</small></span></Link>{navigation}</aside>
     <Drawer title="ProcureX" placement="left" open={mobileOpen} onClose={() => setMobileOpen(false)} width={250}><Menu mode="inline" selectedKeys={[location.pathname]} openKeys={openKeys} onOpenChange={setOpenKeys} items={items} onClick={({ key }) => { navigate(key); setMobileOpen(false); }} /></Drawer>
@@ -99,7 +98,7 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
       <Route path="/products" element={<Products user={user} />} />
       <Route path="/suppliers" element={<Suppliers user={user} />} />
       <Route path="/templates" element={<Templates />} />
-      <Route path="/prices" element={<Prices user={user} />} />
+      <Route path="/prices" element={<Navigate to="/products" replace />} />
       <Route path="/purchase-requests" element={<PurchaseWorkspace user={user} />} />
       <Route path="/supplier-orders" element={supplierRole ? <SupplierWorkspace user={user} /> : <SupplierOrders user={user} />} />
       <Route path="/discrepancies" element={<Discrepancies user={user} />} />

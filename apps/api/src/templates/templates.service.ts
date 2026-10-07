@@ -52,6 +52,8 @@ export type TemplateSupplierSettingView = {
   version: number;
 };
 
+export type TemplatePaymentSetting = { supplierId: string; settlementMode: SettlementMode; settlementCycle: string };
+
 export type CreateTemplateInput = {
   code?: string;
   name: string;
@@ -299,6 +301,26 @@ export class TemplatesService {
       })),
       version: templateVersion(updated),
     };
+    });
+  }
+
+  async replaceSupplierSettings(templateId: string, expectedVersion: number, settings: TemplatePaymentSetting[], context?: MasterDataAuditContext) {
+    return auditedMasterDataTransaction(this.database, this.audit, context, 'template.supplier-settings.replace', 'OrderTemplate', async tx => {
+      await lockPricePublication(tx);
+      await lockCatalog(tx);
+      await this.lockTemplate(tx, templateId, expectedVersion);
+      const links = await tx.templateItemSupplier.findMany({ where: { templateItem: { templateId } }, select: { supplierId: true } });
+      const linkedIds = new Set(links.map(link => link.supplierId));
+      if (settings.length !== linkedIds.size || new Set(settings.map(row => row.supplierId)).size !== settings.length || settings.some(row => !linkedIds.has(row.supplierId))) {
+        throw new ConflictException({ code: 'SUPPLIER_NOT_IN_TEMPLATE', message: 'Settings must cover every linked supplier exactly once' });
+      }
+      for (const row of settings) {
+        if (row.settlementMode === SettlementMode.SUPPLIER_TERM) await this.requireDirectPrices(tx, templateId, row.supplierId);
+      }
+      await tx.templateSupplierSetting.deleteMany({ where: { templateId } });
+      if (settings.length) await tx.templateSupplierSetting.createMany({ data: settings.map(row => ({ ...row, templateId })) });
+      const updated = await this.touchTemplate(tx, templateId, expectedVersion);
+      return { templateId, version: templateVersion(updated), settings };
     });
   }
 

@@ -1,28 +1,37 @@
 import { useRef, useState } from 'react';
-import { Alert, App, Button, Form, Input, Modal, Select, Spin, Switch, Table, Tooltip } from 'antd';
+import { Alert, App, Button, Form, Input, Modal, Select, Spin, Table, Tooltip } from 'antd';
 import { Archive, Copy, ListOrdered, Pencil, Settings2, Store } from 'lucide-react';
 import { TemplateProducts } from '../components/TemplateProducts';
 import { ListPage } from '../components/ListPage';
 import { request } from '../lib/api';
 import { useRows } from '../lib/useRows';
-import { cycleOptions, positiveIntegerRule, namedOptions, settlementOptions, type CatalogProduct, type CatalogSupplier, type Named, type Template, type TemplateDetail, type TemplateItem } from '../lib/catalogTypes';
+import { cycleOptions, positiveIntegerRule, settlementOptions, type CatalogProduct, type CatalogSupplier, type Named, type Template, type TemplateDetail, type TemplateItem } from '../lib/catalogTypes';
 
 type Mode = 'metadata' | 'copy' | 'stores' | 'items' | 'settings' | 'archive';
-const titles: Record<Mode, string> = { metadata: '编辑模板', copy: '复制模板', stores: '绑定门店', items: '商品及供货优先级', settings: '结算覆盖', archive: '归档模板' };
+const titles: Record<Mode, string> = { metadata: '编辑模板', copy: '复制模板', stores: '绑定门店', items: '商品及供货优先级', settings: '支付方式管理', archive: '归档模板' };
 export default function Templates() {
   const data = useRows<Template>('/templates'); const stores = useRows<Named>('/stores'); const products = useRows<CatalogProduct>('/products'); const suppliers = useRows<CatalogSupplier>('/suppliers');
   const categories = useRows<Named>('/categories');
+  const units = useRows<Named>('/units');
   const [mode, setMode] = useState<Mode>('metadata'); const [open, setOpen] = useState(false); const [detail, setDetail] = useState<TemplateDetail | null>(null);
   const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState('');
   const [sourceId, setSourceId] = useState<string | null>(null);
-  const generation = useRef(0); const lock = useRef(false); const [form] = Form.useForm(); const { message } = App.useApp();
-  const referencesError = stores.error || products.error || suppliers.error || categories.error;
+  const generation = useRef(0); const lock = useRef(false); const initialItems = useRef('[]'); const initialSettings = useRef('[]'); const [form] = Form.useForm(); const { message, modal } = App.useApp();
+  const referencesError = stores.error || products.error || suppliers.error || categories.error || units.error;
   const initialize = (next: Mode, value: TemplateDetail | null) => {
     form.resetFields(); setDetail(value);
     if (!value) return;
     if (next === 'copy') form.setFieldsValue({ name: `${value.name.slice(0, 196)}副本`, tag: value.tag, remark: value.remark });
-    else if (next === 'settings') form.setFieldsValue({ usesDefault: true });
+    else if (next === 'settings') {
+      const ids = [...new Set(value.items.flatMap(item => item.suppliers.map(link => link.supplierId)))];
+      form.setFieldsValue({ settings: ids.map(supplierId => {
+        const setting = value.settings.find(row => row.supplierId === supplierId); const supplier = suppliers.rows.find(row => row.id === supplierId);
+        return { supplierId, settlementMode: setting?.settlementMode || supplier?.defaultSettlementMode, settlementCycle: setting?.settlementCycle || supplier?.defaultSettlementCycle };
+      }) });
+      initialSettings.current = JSON.stringify(form.getFieldValue('settings') || []);
+    }
     else form.setFieldsValue({ ...value, items: value.items.map(item => ({ ...item, suppliers: item.suppliers.map(link => ({ supplierId: link.supplierId, priority: link.priority })) })) });
+    initialItems.current = JSON.stringify(form.getFieldValue('items') || []);
   };
   const edit = async (next: Mode, row?: Template) => {
     const sequence = ++generation.current; setSourceId(row?.id || null); setMode(next); setOpen(true); setError(''); initialize(next, null); setLoading(Boolean(row));
@@ -31,10 +40,16 @@ export default function Templates() {
     catch (failure) { if (sequence === generation.current) setError((failure as Error).message); }
     finally { if (sequence === generation.current) setLoading(false); }
   };
-  const close = () => { if (!saving) { generation.current++; setOpen(false); } };
+  const close = () => {
+    if (saving) return;
+    const finish = () => { generation.current++; setOpen(false); };
+    if ((mode === 'items' && JSON.stringify(form.getFieldValue('items') || []) !== initialItems.current) || (mode === 'settings' && JSON.stringify(form.getFieldValue('settings') || []) !== initialSettings.current)) modal.confirm({ title: '放弃未保存的修改？', okText: '放弃修改', cancelText: '继续编辑', onOk: finish });
+    else finish();
+  };
   const save = async () => {
     if (lock.current || loading || referencesError || (sourceId && !detail)) return;
-    const values = await form.validateFields().catch(() => null); if (!values) return;
+    const valid = await form.validateFields().then(() => true).catch(() => false); if (!valid) return;
+    const values = form.getFieldsValue(true);
     lock.current = true; setSaving(true); setError('');
     try {
       let path = '/templates'; let method = 'POST'; let body: unknown;
@@ -58,8 +73,8 @@ export default function Templates() {
           }
           path += '/items'; method = 'PUT'; body = { ...version, items };
         } else if (mode === 'settings') {
-          path += `/supplier-settings/${values.supplierId}`; method = values.usesDefault ? 'DELETE' : 'PUT';
-          body = values.usesDefault ? version : { ...version, settlementMode: values.settlementMode, settlementCycle: values.settlementCycle };
+          path += '/supplier-settings'; method = 'PUT';
+          body = { ...version, settings: values.settings || [] };
         } else { path += '/archive'; body = version; }
       }
       await request(path, { method, body }); setOpen(false); data.reload(); message.success('模板已保存');
@@ -69,12 +84,12 @@ export default function Templates() {
   const actions = [{ mode: 'metadata', icon: Pencil }, { mode: 'copy', icon: Copy }, { mode: 'stores', icon: Store }, { mode: 'items', icon: ListOrdered }, { mode: 'settings', icon: Settings2 }, { mode: 'archive', icon: Archive }] as const;
   return <>
     <ListPage title="订货模板" {...data} create={() => edit('metadata')} columns={[
-      { title: '模板名称', dataIndex: 'name', width: 220 }, { title: '编号', dataIndex: 'code', width: 180 }, { title: '标签', dataIndex: 'tag', width: 120 },
+      { title: '模板名称', dataIndex: 'name', width: 220 }, { title: '标签', dataIndex: 'tag', width: 120 },
       { title: '门店数量', width: 100, render: (_, row) => row.storeIds.length }, { title: '备注', dataIndex: 'remark', width: 180 },
       { title: '状态', width: 90, render: (_, row) => row.isArchived ? '已归档' : '有效' },
       { title: '操作', width: 208, fixed: 'right', render: (_, row) => <div className="row-actions">{actions.map(action => <Tooltip key={action.mode} title={titles[action.mode]}><Button type="text" danger={action.mode === 'archive'} disabled={row.isArchived} aria-label={`${titles[action.mode]}${row.name}`} icon={<action.icon size={16} />} onClick={() => edit(action.mode, row)} /></Tooltip>)}</div> },
     ]} />
-    <Modal title={detail ? `${titles[mode]} · ${detail.name}` : '新增模板'} open={open} width={mode === 'items' ? 960 : 640} onCancel={close} onOk={save} okText={mode === 'archive' ? '确认归档' : '保存'} cancelText="取消"
+    <Modal className={mode === 'items' ? 'template-product-editor' : undefined} title={detail ? `${titles[mode]} · ${detail.name}` : '新增模板'} open={open} width={mode === 'items' ? 1400 : mode === 'settings' ? 900 : 640} onCancel={close} onOk={save} okText={mode === 'archive' ? '确认归档' : '保存'} cancelText="取消"
       confirmLoading={saving} okButtonProps={{ danger: mode === 'archive', disabled: loading || Boolean(referencesError) || Boolean(sourceId && !detail) || stores.loading || products.loading || suppliers.loading || categories.loading }} closable={!saving} maskClosable={!saving} keyboard={!saving}>
       {(error || referencesError) && <Alert type="error" title={error || referencesError} showIcon />}
       {loading ? <Spin /> : <Form form={form} layout="vertical" disabled={saving} className="compact-form">
@@ -86,27 +101,12 @@ export default function Templates() {
         </div>}
         {mode === 'stores' && <Form.Item name="storeIds" label="绑定门店"><Select mode="multiple" showSearch optionFilterProp="label" options={stores.rows.filter(row => !occupied.has(row.id) || detail?.storeIds.includes(row.id)).map(row => ({ value: row.id, label: row.name }))} /></Form.Item>}
         {mode === 'archive' && <Alert type="warning" showIcon title="将取消门店、商品及结算关联，历史订单保留。" />}
-        {mode === 'items' && <TemplateProducts products={products.rows} suppliers={suppliers.rows} categories={categories.rows} detail={detail} />}
-        {mode === 'settings' && <>
-          <Form.Item name="supplierId" label="供应商" rules={[{ required: true, message: '请选择供应商' }]}><Select showSearch optionFilterProp="label" options={namedOptions(suppliers.rows.filter(row => detail?.items.some(item => item.suppliers.some(link => link.supplierId === row.id)) || detail?.settings.some(setting => setting.supplierId === row.id)))} onChange={id => {
-            const setting = detail?.settings.find(row => row.supplierId === id); const supplier = suppliers.rows.find(row => row.id === id);
-            form.setFieldsValue({ usesDefault: !setting, settlementMode: setting?.settlementMode || supplier?.defaultSettlementMode, settlementCycle: setting?.settlementCycle || supplier?.defaultSettlementCycle });
-          }} /></Form.Item>
-          <Form.Item name="usesDefault" label="使用供应商默认结算" valuePropName="checked"><Switch /></Form.Item>
-          <Form.Item noStyle shouldUpdate>{({ getFieldValue }) => !getFieldValue('usesDefault') && <div className="form-grid">
-            <Form.Item name="settlementMode" label="结算方式" rules={[{ required: true }]}><Select options={settlementOptions} /></Form.Item>
-            <Form.Item name="settlementCycle" label="结算周期" rules={[{ required: true }]}><Select options={cycleOptions} /></Form.Item>
-          </div>}</Form.Item>
-          <Table size="small" rowKey="supplierId" pagination={false} scroll={{ x: 480 }} dataSource={Array.from(new Set(detail?.items.flatMap(item => item.suppliers.map(link => link.supplierId)) || [])).map(supplierId => {
-            const override = detail?.settings.find(setting => setting.supplierId === supplierId); const supplier = suppliers.rows.find(row => row.id === supplierId);
-            return { supplierId, settlementMode: override?.settlementMode || supplier?.defaultSettlementMode, settlementCycle: override?.settlementCycle || supplier?.defaultSettlementCycle, overridden: Boolean(override) };
-          })} columns={[
-            { title: '供应商', render: (_, row) => suppliers.rows.find(item => item.id === row.supplierId)?.name || row.supplierId },
-            { title: '结算方式', render: (_, row) => settlementOptions.find(item => item.value === row.settlementMode)?.label },
-            { title: '周期', render: (_, row) => cycleOptions.find(item => item.value === row.settlementCycle)?.label },
-            { title: '来源', render: (_, row) => row.overridden ? '模板设置' : '供应商默认' },
-          ]} />
-        </>}
+        {mode === 'items' && <TemplateProducts key={detail?.id} products={products.rows} suppliers={suppliers.rows} categories={categories.rows} units={units.rows} detail={detail} disabled={saving || units.loading} />}
+        {mode === 'settings' && <Form.List name="settings">{fields => <Table size="small" rowKey="key" dataSource={fields} pagination={false} scroll={{ x: 660, y: 420 }} columns={[
+          { title: '供应商名称', width: 240, render: (_, field) => suppliers.rows.find(row => row.id === form.getFieldValue(['settings', field.name, 'supplierId']))?.name || '—' },
+          { title: '支付方式', width: 230, render: (_, field) => <Form.Item name={[field.name, 'settlementMode']} rules={[{ required: true, message: '请选择支付方式' }]} style={{ marginBottom: 0 }}><Select aria-label="支付方式" options={settlementOptions} /></Form.Item> },
+          { title: '结算周期', width: 180, render: (_, field) => <Form.Item name={[field.name, 'settlementCycle']} rules={[{ required: true, message: '请选择结算周期' }]} style={{ marginBottom: 0 }}><Select aria-label="结算周期" options={cycleOptions} /></Form.Item> },
+        ]} locale={{ emptyText: '暂无关联供应商' }} />}</Form.List>}
       </Form>}
     </Modal>
   </>;

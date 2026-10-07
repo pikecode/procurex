@@ -276,6 +276,27 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
     assert.equal(settingBody.data.supplierId, supplier.id);
     assert.equal(settingBody.data.settlementMode, SettlementMode.STORED_VALUE);
     assert.equal(settingBody.data.settlementCycle, 'WEEKLY');
+    const template = await prisma.orderTemplate.findUniqueOrThrow({ where: { id: createdBody.data.id } });
+    const version = template.updatedAt.getTime();
+    const batch = (settings: unknown[], expectedVersion = version) => fetch(`${baseUrl}/templates/${template.id}/supplier-settings`, {
+      method: 'PUT', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ expectedVersion, settings }),
+    });
+    const entry = { supplierId: supplier.id, settlementMode: SettlementMode.CREDIT, settlementCycle: 'HALF_MONTHLY' };
+    const secondSupplier = await prisma.supplier.create({ data: { code: `${supplierCode}_batch`, name: 'Batch supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.COMPANY_TERM, defaultSettlementCycle: 'MONTHLY' } });
+    const templateItem = await prisma.templateItem.findFirstOrThrow({ where: { templateId: template.id } });
+    await prisma.templateItemSupplier.create({ data: { templateItemId: templateItem.id, supplierId: secondSupplier.id, priority: 20 } });
+    const secondEntry = { ...entry, supplierId: secondSupplier.id, settlementMode: SettlementMode.COMPANY_TERM };
+    assert.equal((await batch([])).status, 409);
+    assert.equal((await batch([entry, entry])).status, 409);
+    assert.equal((await batch([{ ...entry, settlementMode: 'INVALID' }])).status, 400);
+    assert.equal((await prisma.templateSupplierSetting.findUniqueOrThrow({ where: { templateId_supplierId: { templateId: template.id, supplierId: supplier.id } } })).settlementMode, SettlementMode.STORED_VALUE);
+    assert.equal((await batch([entry])).status, 409);
+    const saved = await batch([entry, secondEntry]); assert.equal(saved.status, 200);
+    const savedBody = await saved.json() as { data: { version: number } };
+    assert.ok(savedBody.data.version > version);
+    assert.equal((await batch([entry])).status, 409);
+    assert.equal((await prisma.templateSupplierSetting.findUniqueOrThrow({ where: { templateId_supplierId: { templateId: template.id, supplierId: supplier.id } } })).settlementCycle, 'HALF_MONTHLY');
+    assert.equal(await prisma.templateSupplierSetting.count({ where: { templateId: template.id } }), 2);
   } finally {
     await app.close();
     await prisma.templateSupplierSetting.deleteMany({ where: { template: { code: templateCode } } });
@@ -283,7 +304,7 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
     await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
     await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
     await prisma.product.deleteMany({ where: { sku } });
-    await prisma.supplier.deleteMany({ where: { code: supplierCode } });
+    await prisma.supplier.deleteMany({ where: { code: { in: [supplierCode, `${supplierCode}_batch`] } } });
     await prisma.category.deleteMany({ where: { code: categoryCode } });
     await prisma.unit.deleteMany({ where: { code: unitCode } });
     await prisma.userSession.deleteMany({ where: { user: { username: purchaserUsername } } });
