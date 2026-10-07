@@ -1,0 +1,58 @@
+.store-finance-page .ant-table-thead > tr:first-child > th { background: #f0f3f6; }
+.store-finance-money, .store-finance-balance dd { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.store-finance-money.outstanding-amount { color: #b54708; font-weight: 600; }
+.store-finance-store-link.ant-btn { padding: 0; height: auto; white-space: normal; text-align: left; justify-content: flex-start; }
+.store-finance-balances { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 12px 0 16px; border-bottom: 1px solid #e5e7eb; }
+.store-finance-balance { min-width: 0; }
+.store-finance-balance + .store-finance-balance { border-left: 1px solid #e5e7eb; padding-left: 24px; }
+.store-finance-balance-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; min-height: 24px; flex-wrap: wrap; }
+.store-finance-balance h2 { font-size: 14px; margin: 0; color: #475467; }
+.store-finance-balance dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
+.store-finance-balance dt { color: #667085; font-size: 12px; }
+.store-finance-balance dd { margin: 2px 0 0; font-size: 15px; color: #101828; }
+.store-finance-balance .primary-amount dd { font-size: 20px; font-weight: 600; }
+.store-finance-account .filter-bar { gap: 8px; margin-bottom: 10px; }
+.store-finance-account .filter-bar > .ant-input-affix-wrapper { width: 200px; }
+.store-finance-account .filter-bar > input[type="date"] { width: 150px; }
+.store-finance-account .filter-bar > .ant-btn-primary { margin-left: auto; }
+.store-finance-account .ant-tabs-nav { margin-bottom: 12px; }
+.store-finance-selection { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 0; color: #667085; font-size: 12px; }
+.store-finance-account .ant-table-cell { font-variant-numeric: tabular-nums; }
+.finance-history-evidence .evidence-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.finance-history-evidence .evidence-file { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: 140px; }
+.finance-history-evidence .evidence-name { display: none; }
+.finance-no-evidence { color: #98a2b3; font-size: 12px; }
+@media (max-width: 600px) {
+  .store-finance-balances { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .store-finance-balance + .store-finance-balance { border-left: 0; padding-left: 0; border-top: 1px solid #e5e7eb; padding-top: 16px; }
+  .store-finance-balance dd { white-space: normal; overflow-wrap: anywhere; }
+  .store-finance-account .filter-bar > .ant-input-affix-wrapper { width: 100%; }
+  .store-finance-account .filter-bar > input[type="date"] { width: calc(50% - 4px); min-width: 0; }
+  .store-finance-account .filter-bar > .ant-btn-primary { margin-left: 0; }
+}
+.store-finance-workspace { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 16px; }
+.store-finance-page { min-width: 0; }
+.finance-group-panel { min-width: 0; border-right: 1px solid #e1e6eb; padding-right: 12px; }
+.finance-group-panel > strong { display: block; margin: 7px 0 16px; }
+.finance-group-panel .ant-tree { background: transparent; margin-top: 12px; }
+.finance-group-panel .ant-tree-switcher { display: none; }
+.finance-group-panel .ant-tree-node-content-wrapper { padding: 5px 8px; overflow-wrap: anywhere; }
+.finance-group-mobile { display: none; }
+@media (max-width: 1000px) {
+  .store-finance-workspace { grid-template-columns: minmax(0, 1fr); }
+  .finance-group-panel { display: none; }
+  .finance-group-mobile { display: flex; width: 100%; margin-bottom: 14px; }
+}
+.finance-row-actions { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+.finance-row-actions .ant-btn { padding: 0; width: 28px; min-width: 28px; height: 28px; color: #475467; }
+.finance-row-actions .ant-btn:hover { color: #1677ff; background: #eff6ff; }
+.finance-row-actions .ant-btn:disabled { color: #b8bec8; }
+@media (max-width: 767px) {
+  .finance-row-actions { display: grid; grid-template-columns: repeat(2, 28px); gap: 4px; }
+}
+.store-finance-selection .actions { flex-wrap: wrap; }
+.finance-history-mobile { display: none; }
+@media (max-width: 600px) {
+  .finance-history-mobile { display: flex; width: 100%; margin-block: 12px; }
+  .finance-account-tabs > .ant-tabs-nav { display: none; }
+}

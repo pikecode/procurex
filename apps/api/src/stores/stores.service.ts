@@ -285,6 +285,23 @@ export class StoresService {
     return toStoreAccountView(storeId, account);
   }
 
+  async changeGroups(stores: { id: string; expectedVersion: number }[], groupName: string | null, context: MasterDataAuditContext) {
+    return this.database.client.$transaction(async tx => {
+      await lockStoreGroups(tx);
+      await validateStoreGroup(tx, groupName);
+      for (const item of [...stores].sort((a, b) => a.id.localeCompare(b.id))) {
+        const changed = await tx.store.updateMany({
+          where: { id: item.id, updatedAt: { gte: new Date(item.expectedVersion), lt: new Date(item.expectedVersion + 1) } },
+          data: { groupName, updatedAt: new Date(Math.max(Date.now(), item.expectedVersion + 1)) },
+        });
+        if (!changed.count) throw new ConflictException({ code: 'VERSION_CONFLICT', message: '门店资料已变化，请刷新后重新选择；本次分组调整未保存' });
+        await this.audit.record({ ...context, action: 'store.group-change', entityType: 'Store', entityId: item.id,
+          after: { result: 'SUCCEEDED', groupName } }, tx);
+      }
+      return { count: stores.length };
+    });
+  }
+
   async listFinanceStores() {
     const rows = await this.database.client.store.findMany({ include: { accounts: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] });
     return rows.map(({ accounts, ...store }) => ({ ...toStoreView(store), account: toStoreAccountView(store.id, accounts[0] ?? null) }));
@@ -438,7 +455,7 @@ export class StoresService {
     await this.assertStoreExists(storeId);
     const rows = await this.database.client.creditMovement.findMany({ where: { account: { storeId } },
       include: { allocation: { select: { requestId: true, supplierOrder: { select: { supplierOrderNo: true } } } } },
-      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 100 });
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] });
     return rows.map(row => ({ id: row.id, kind: row.kind, amount: row.amount.toFixed(2), outstandingAfter: row.outstandingAfter.toFixed(2),
       fundingAllocationId: row.fundingAllocationId, requestId: row.allocation.requestId,
       supplierOrderNo: row.allocation.supplierOrder?.supplierOrderNo ?? null, sourceType: row.sourceType, sourceId: row.sourceId,

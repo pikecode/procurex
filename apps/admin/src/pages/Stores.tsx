@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { Alert, App, Button, Cascader, Checkbox, Descriptions, Divider, Form, Input, Modal, Select, Tag, Tooltip } from 'antd';
+import { Alert, App, Button, Cascader, Checkbox, Descriptions, Divider, Form, Input, Modal, Select, Tag, Tooltip, Tree } from 'antd';
 import { Eye, Folders, Pencil } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ListPage } from '../components/ListPage';
 import { hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { composeAddress, regionOptions, splitAddress } from '../lib/regions';
+import './Stores.css';
 
 export interface Store {
   id: string; code: string; name: string; groupName: string | null; storeType: string | null; contactName: string | null; contactPhone: string | null;
@@ -24,13 +25,22 @@ interface StoreForm {
 }
 export default function Stores({ user }: { user: User }) {
   const data = useRows<Store>('/stores'); const groups = useRows<Group>('/store-groups');
+  const [params, setParams] = useSearchParams(); const groupKey = params.get('group') || 'all';
+  const selectedGroup = groups.rows.find(group => group.id === groupKey);
+  const [groupSearch, setGroupSearch] = useState(''); const [selected, setSelected] = useState<string[]>([]);
+  const [moving, setMoving] = useState(false); const [target, setTarget] = useState<string>('ungrouped');
+  const [moveError, setMoveError] = useState(''); const [moveBusy, setMoveBusy] = useState(false); const moveLock = useRef(false);
+  const chooseGroup = (key: string) => { setSelected([]); setParams(current => { const next = new URLSearchParams(current); if (key === 'all') next.delete('group'); else next.set('group', key); return next; }); };
+  const scopedRows = data.rows.filter(row => groupKey === 'all' || (groupKey === 'ungrouped' ? !row.groupName : selectedGroup && row.groupName === selectedGroup.name));
+  const groupChoices = [{ value: 'all', label: `全部门店 (${data.rows.length})` }, { value: 'ungrouped', label: `未分组 (${data.rows.filter(row => !row.groupName).length})` },
+    ...groups.rows.map(group => ({ value: group.id, label: `${group.name} (${group.storeCount})${group.status === 'DISABLED' ? ' · 已停用' : ''}` }))];
   const [editing, setEditing] = useState<Store | null | undefined>(); const [detail, setDetail] = useState<Store>();
   const [form] = Form.useForm<StoreForm>(); const [saving, setSaving] = useState(false); const lock = useRef(false);
   const [error, setError] = useState(''); const { message } = App.useApp();
   const sameReceipt = Form.useWatch('sameReceipt', form); const writable = hasRole(user, 'ADMIN');
   const edit = (store: Store | null) => {
     const address = splitAddress(store?.address || ''); const receipt = splitAddress(store?.receiptAddress || '');
-    form.resetFields(); form.setFieldsValue({ contactName: store?.contactName || '', contactPhone: store?.contactPhone || '', code: store?.code || '', name: store?.name || '', groupName: store?.groupName || undefined,
+    form.resetFields(); form.setFieldsValue({ contactName: store?.contactName || '', contactPhone: store?.contactPhone || '', code: store?.code || '', name: store?.name || '', groupName: store ? store.groupName || undefined : selectedGroup?.status === 'ACTIVE' ? selectedGroup.name : undefined,
       storeType: store?.storeType || undefined, region: address.region, addressDetail: address.detail,
       sameReceipt: !Boolean(store?.receiptAddress || store?.receiptContactName || store?.receiptContactPhone), receiptRegion: receipt.region, receiptDetail: receipt.detail,
       receiptContactName: store?.receiptContactName || '', receiptContactPhone: store?.receiptContactPhone || '', status: store?.status || 'ACTIVE' });
@@ -51,14 +61,36 @@ export default function Stores({ user }: { user: User }) {
         ...(editing ? { expectedVersion: editing.version, status: values.status } : {}),
       };
       await request(`/stores${editing ? `/${editing.id}` : ''}`, { method: editing ? 'PATCH' : 'POST', body });
-      setEditing(undefined); data.reload(); message.success('门店资料已保存');
+      setEditing(undefined); data.reload(); groups.reload(); message.success('门店资料已保存');
     } catch (failure) { setError((failure as Error).message); }
     finally { setSaving(false); lock.current = false; }
   };
+  const move = async () => {
+    if (moveLock.current) return;
+    const rows = selected.map(id => data.rows.find(row => row.id === id));
+    const destination = groups.rows.find(group => group.id === target);
+    if (!rows.length || rows.length > 100 || rows.some(row => !row) || (target !== 'ungrouped' && destination?.status !== 'ACTIVE')) { setMoveError('请选择1至100个门店及有效分组'); return; }
+    moveLock.current = true; setMoveBusy(true); setMoveError('');
+    try {
+      await request('/stores/group-memberships', { method: 'POST', body: { groupName: target === 'ungrouped' ? null : destination!.name, stores: rows.map(row => ({ id: row!.id, expectedVersion: row!.version })) } });
+      setMoving(false); setSelected([]); data.reload(); groups.reload(); message.success('门店分组已调整');
+    } catch (failure) { setMoveError((failure as Error).message); }
+    finally { moveLock.current = false; setMoveBusy(false); }
+  };
   return <>
-    <ListPage title="门店管理" {...data} create={writable ? () => edit(null) : undefined}
-      tools={<Link to="/store-groups"><Button icon={<Folders size={16} />}>分组管理</Button></Link>}
-      filters={[{ key: 'storeType', label: '门店类型', options: types }, { key: 'groupName', label: '所属分组', options: [...new Set(data.rows.map(row => row.groupName).filter(Boolean))].map(name => ({ value: name!, label: name! })) }, { key: 'status', label: '门店状态', options: statusOptions }]}
+    <div className="store-workspace">
+      <aside className="store-group-panel"><div className="store-group-heading"><strong>门店分组</strong><Tooltip title="维护分组"><Link to="/store-groups"><Button type="text" aria-label="维护分组" icon={<Folders size={16} />} /></Link></Tooltip></div>
+        <Input.Search aria-label="搜索门店分组" placeholder="分组名称" allowClear value={groupSearch} onChange={event => setGroupSearch(event.target.value)} />
+        <Tree blockNode selectedKeys={[groupKey]} onSelect={keys => { if (keys.length) chooseGroup(String(keys[0])); }} treeData={groupChoices.filter(choice => ['all', 'ungrouped'].includes(choice.value) || choice.label.toLowerCase().includes(groupSearch.trim().toLowerCase())).map(choice => ({ key: choice.value, title: <span className="store-group-label">{choice.label}</span> }))} />
+      </aside>
+      <div className="store-list-panel">
+      <Select className="store-group-mobile" aria-label="选择门店分组" showSearch optionFilterProp="label" value={groupKey} options={groupChoices} onChange={chooseGroup} />
+      {groups.error && <Alert type="warning" showIcon title={groups.error} action={<Button onClick={groups.reload}>重试</Button>} />}
+      {groupKey !== 'all' && <div className="store-group-context"><Tag>{groupKey === 'ungrouped' ? '未分组' : selectedGroup?.name || '分组不存在'}</Tag>{selectedGroup?.status === 'DISABLED' && <Tag>已停用</Tag>}</div>}
+    <ListPage key={groupKey} title="门店管理" {...data} rows={scopedRows} reload={() => { setSelected([]); data.reload(); groups.reload(); }} create={writable && (groupKey === 'all' || groupKey === 'ungrouped' || selectedGroup?.status === 'ACTIVE') ? () => edit(null) : undefined}
+      rowSelection={writable ? { selectedRowKeys: selected, preserveSelectedRowKeys: true, onChange: keys => setSelected(keys.map(String)) } : undefined}
+      tools={<>{writable && <Button icon={<Folders size={16} />} disabled={!selected.length || selected.length > 100} onClick={() => { setTarget('ungrouped'); setMoveError(''); setMoving(true); }}>调整分组{selected.length ? ` (${selected.length})` : ''}</Button>}<Link to="/store-groups"><Button icon={<Folders size={16} />}>分组管理</Button></Link></>}
+      filters={[{ key: 'storeType', label: '门店类型', options: types }, { key: 'status', label: '门店状态', options: statusOptions }]}
       columns={[
         { title: '门店名称', dataIndex: 'name', width: 260, sorter: (a, b) => a.name.localeCompare(b.name, 'zh-CN'), render: value => <strong>{value}</strong> },
         { title: '门店联系人', dataIndex: 'contactName', width: 140, render: value => value || '-' },
@@ -67,6 +99,12 @@ export default function Stores({ user }: { user: User }) {
         { title: '门店状态', dataIndex: 'status', width: 100, render: value => <Status value={value} /> },
         { title: '操作', width: 86, fixed: 'right', render: (_, row) => <div className="row-actions"><Tooltip title="查看门店"><Button type="text" aria-label={`查看${row.name}`} icon={<Eye size={16} />} onClick={() => setDetail(row)} /></Tooltip>{writable && <Tooltip title="编辑门店"><Button type="text" aria-label={`编辑${row.name}`} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip>}</div> },
       ]} />
+      </div>
+    </div>
+    <Modal title={`调整分组 · ${selected.length} 个门店`} open={moving} onOk={move} okText="确认调整" cancelText="取消" confirmLoading={moveBusy} closable={!moveBusy} maskClosable={!moveBusy} keyboard={!moveBusy} onCancel={() => { if (!moveBusy) setMoving(false); }}>
+      {moveError && <Alert type="error" showIcon title={moveError} />}
+      <Form layout="vertical" className="compact-form"><Form.Item label="目标分组"><Select aria-label="目标分组" showSearch optionFilterProp="label" disabled={moveBusy} value={target} onChange={setTarget} style={{ width: '100%' }} options={[{ value: 'ungrouped', label: '未分组' }, ...groups.rows.filter(group => group.status === 'ACTIVE').map(group => ({ value: group.id, label: group.name }))]} /></Form.Item></Form>
+    </Modal>
     <Modal title={editing ? '编辑门店' : '新增门店'} open={editing !== undefined} onCancel={() => { if (!saving) setEditing(undefined); }} onOk={save}
       okText="保存" cancelText="取消" confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving} width={680}>
       {error && <Alert type="error" showIcon title={error} />}

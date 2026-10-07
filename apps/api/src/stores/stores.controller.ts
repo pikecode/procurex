@@ -110,6 +110,29 @@ export class StoresController {
     return this.storesService.createStore(parseCreateStoreBody(body), masterDataAuditContext(request));
   }
 
+  @Post('group-memberships')
+  @RequireRoles('ADMIN')
+  changeGroups(@Body() body: Record<string, unknown>, @Req() request: AuthenticatedRequest) {
+    const issues: ValidationIssue[] = [];
+    if (body.groupName !== null && (typeof body.groupName !== 'string' || !body.groupName.trim() || body.groupName.length > 120)) {
+      issues.push({ field: 'groupName', code: 'INVALID_GROUP', message: '请选择有效分组或未分组' });
+    }
+    const stores = Array.isArray(body.stores) ? body.stores : [];
+    if (!stores.length || stores.length > 100) issues.push({ field: 'stores', code: 'INVALID_STORES', message: '请选择1至100个门店' });
+    const ids = new Set<string>();
+    stores.forEach((value, index) => {
+      const item = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+      issues.push(...validateUuid(`stores.${index}.id`, item.id), ...validateExpectedVersion(`stores.${index}.expectedVersion`, item.expectedVersion));
+      if (typeof item.id === 'string') {
+        const normalized = item.id.toLowerCase();
+        if (ids.has(normalized)) issues.push({ field: 'stores', code: 'DUPLICATE_STORE', message: '门店不能重复选择' });
+        ids.add(normalized);
+      }
+    });
+    throwIfInvalid(issues);
+    return this.storesService.changeGroups(stores as { id: string; expectedVersion: number }[], typeof body.groupName === 'string' ? body.groupName.trim() : null, masterDataAuditContext(request));
+  }
+
   @Get(':id/account')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
   getAccount(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<StoreAccountView> {

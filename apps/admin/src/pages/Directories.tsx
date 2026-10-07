@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Alert, App, Button, Form, Input, Modal, Popconfirm, Select, Tooltip } from 'antd';
-import { Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { ListPage } from '../components/ListPage';
 import { hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
@@ -33,9 +34,10 @@ export default function Directories({ user, kind }: { user: User; kind: 'groups'
   const title = groups ? '门店分组' : '收款账户';
   return <>
     <ListPage title={title} {...data} create={writable ? () => edit(null) : undefined} filters={[{ key: 'status', label: '状态', options: statusOptions }]}
+      tools={groups ? <Link to="/stores"><Button icon={<ArrowLeft size={16} />}>门店管理</Button></Link> : undefined}
       columns={[
         { title: groups ? '分组名称' : '账户名称', dataIndex: 'name', width: 220 },
-        ...(groups ? [{ title: '门店数量', dataIndex: 'storeCount', width: 130 }] : [
+        ...(groups ? [{ title: '门店数量', dataIndex: 'storeCount', width: 130, render: (_: unknown, item: Group) => <Link aria-label={`查看${item.name}的门店`} to={`/stores?group=${encodeURIComponent(item.id)}`}>{item.storeCount}</Link> }] : [
           { title: '开户银行', dataIndex: 'bankName', width: 180 }, { title: '开户户名', dataIndex: 'accountName', width: 200 }, { title: '账号', dataIndex: 'accountNo', width: 230 },
         ]),
         { title: '状态', dataIndex: 'status', width: 90, render: value => <Status value={value} /> },

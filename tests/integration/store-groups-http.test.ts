@@ -92,6 +92,30 @@ test('store groups enforce roles, uniqueness, versions, membership, disabled ass
     assert.equal(ungrouped.status, 200); assert.equal(ungrouped.body.data.groupName, null);
     assert.equal((await call(`/stores/${store.id}`, 'PATCH', { expectedVersion: ungrouped.body.data.version, groupName: currentStore.groupName })).body.code, 'STORE_GROUP_DISABLED');
     const other = (await call('/store-groups', 'POST', { name: `${prefix}OTHER` })).body.data;
+    const batchStores = await Promise.all([1, 2].map(index => call('/stores', 'POST', { ...payload, code: `${prefix}BATCH${index}`, groupName: null })));
+    const members = batchStores.map(result => ({ id: result.body.data.id, expectedVersion: result.body.data.version })).sort((a, b) => a.id.localeCompare(b.id));
+    const batchBody = { groupName: other.name, stores: members };
+    for (const token of [purchaser, finance, supplier]) assert.equal((await call('/stores/group-memberships', 'POST', batchBody, token)).status, 403);
+    for (const body of [{ groupName: other.name, stores: [] }, { stores: members }, { groupName: '', stores: members }, { groupName: null, stores: [members[0], members[0]] },
+      { groupName: null, stores: [{ id: 'invalid', expectedVersion: 1 }] }, { groupName: null, stores: [{ id: members[0]!.id, expectedVersion: -1 }] },
+      { groupName: null, stores: Array.from({ length: 101 }, () => members[0]) }]) assert.equal((await call('/stores/group-memberships', 'POST', body)).status, 400);
+    assert.equal((await call('/stores/group-memberships', 'POST', { ...batchBody, groupName: `${prefix}MISSING` })).status, 404);
+    assert.equal((await call('/stores/group-memberships', 'POST', { ...batchBody, groupName: currentStore.groupName })).body.code, 'STORE_GROUP_DISABLED');
+    assert.equal((await call('/stores/group-memberships', 'POST', { ...batchBody, stores: [members[0], { ...members[1], expectedVersion: members[1]!.expectedVersion - 1 }] })).status, 409);
+    for (const member of members) assert.equal((await db.store.findUniqueOrThrow({ where: { id: member.id } })).groupName, null);
+    try {
+      audit.record = async (input, tx) => { await originalAudit(input, tx); if (input.action === 'store.group-change' && input.entityId === members[1]!.id) throw new Error('Injected batch audit failure'); };
+      assert.equal((await call('/stores/group-memberships', 'POST', batchBody)).status, 500);
+      for (const member of members) assert.equal((await db.store.findUniqueOrThrow({ where: { id: member.id } })).groupName, null);
+      assert.equal(await db.auditLog.count({ where: { action: 'store.group-change', entityId: { in: members.map(member => member.id) } } }), 0);
+    } finally { audit.record = originalAudit; }
+    const batchRace = await Promise.all([call('/stores/group-memberships', 'POST', batchBody), call('/stores/group-memberships', 'POST', batchBody)]);
+    assert.deepEqual(batchRace.map(result => result.status).sort(), [201, 409]);
+    const updatedMembers = await Promise.all(members.map(async member => { const row = (await call(`/stores/${member.id}`)).body.data; assert.equal(row.groupName, other.name); return { id: row.id, expectedVersion: row.version }; }));
+    assert.equal((await call('/store-groups')).body.data.find((row: any) => row.id === other.id).storeCount, 2);
+    assert.equal((await call('/stores/group-memberships', 'POST', { groupName: null, stores: updatedMembers })).status, 201);
+    for (const member of members) assert.equal((await db.store.findUniqueOrThrow({ where: { id: member.id } })).groupName, null);
+    assert.equal(await db.auditLog.count({ where: { action: 'store.group-change', entityId: { in: members.map(member => member.id) } } }), 4);
     try {
       audit.record = async (input, tx) => { await originalAudit(input, tx); if (input.action === 'store-group.delete') throw new Error('Injected delete audit failure'); };
       assert.equal((await call(`/store-groups/${other.id}`, 'DELETE', { expectedVersion: other.version })).status, 500);
