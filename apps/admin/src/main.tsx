@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Alert, App as AntApp, Button, ConfigProvider, Drawer, Form, Input, Menu, Result, Spin, Tooltip } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import { Building2, ChevronLeft, ExternalLink, Folders, Landmark, LogOut, Menu as MenuIcon, Store as StoreIcon } from 'lucide-react';
+import { BarChart3, Building2, ChevronLeft, ExternalLink, Folders, Landmark, LogOut, Menu as MenuIcon, Package, Settings, ShoppingCart, SlidersHorizontal, Store as StoreIcon } from 'lucide-react';
 import { clearSession, getSession, hasRole, login, logout, onExpired, restore, type User } from './lib/api';
 import './styles.css';
 import { Notifications } from './components/Notifications';
@@ -57,24 +57,28 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
     { key: 'master', label: '基础资料', icon: <StoreIcon size={17} />, children: [
       { key: '/stores', label: '门店管理', icon: <StoreIcon size={16} /> },
       { key: '/store-groups', label: '门店分组', icon: <Folders size={16} /> },
-      ...(['products', 'suppliers', 'categories', 'brands', 'units'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> }))),
-      ...(hasRole(user, 'ADMIN', 'PURCHASER') ? ['templates', 'prices'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) : []),
+      { key: '/suppliers', label: '供应商管理', icon: <Building2 size={16} /> },
     ] },
-    { key: 'procurement', label: '采购管理', icon: <Folders size={17} />, children: ['purchase-requests', 'supplier-orders', ...(hasRole(user, 'ADMIN') ? ['discrepancies'] : [])].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) },
-    ...(central ? [{ key: 'finance', label: '财务管理', icon: <Landmark size={17} />, children: [{ key: '/store-finance', label: '门店财务', icon: <Landmark size={16} /> }, { key: '/finance', label: '账单与付款', icon: <Landmark size={16} /> }, { key: '/collection-accounts', label: '收款账户', icon: <Landmark size={16} /> }] }] : []),
+    { key: 'catalog', label: '商品资料', icon: <Package size={17} />, children: ['products', 'categories', 'brands', 'units'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) },
+    ...(hasRole(user, 'ADMIN', 'PURCHASER') ? [{ key: 'ordering', label: '订货配置', icon: <SlidersHorizontal size={17} />, children: ['templates', 'prices'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) }] : []),
+    { key: 'procurement', label: '采购履约', icon: <ShoppingCart size={17} />, children: ['purchase-requests', 'supplier-orders', ...(hasRole(user, 'ADMIN') ? ['discrepancies'] : [])].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) },
+    ...(central ? [{ key: 'finance', label: '财务结算', icon: <Landmark size={17} />, children: [{ key: '/store-finance', label: '门店财务', icon: <Landmark size={16} /> }, { key: '/finance', label: '账单与付款', icon: <Landmark size={16} /> }, { key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> }, { key: '/collection-accounts', label: '收款账户', icon: <Landmark size={16} /> }] }] : []),
   ];
   if (storeRole) items.push({ key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> });
-  if (central && !storeRole) items.find(item => item.key === 'finance')?.children?.push({ key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> });
   if (supplierRole) items.splice(0, items.length, { key: '/supplier-orders', label: '供应商工作台', icon: <Folders size={16} /> }, { key: '/discrepancies', label: '收货差异', icon: <Folders size={16} /> }, { key: 'finance', label: '财务管理', icon: <Landmark size={17} />, children: [{ key: '/finance', label: '账单与收款', icon: <Landmark size={16} /> }, { key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> }] }, { key: '/reports', label: '业务报表', icon: <Folders size={16} /> });
-  else items.push({ key: '/reports', label: '业务报表', icon: <Folders size={16} /> });
-  if (!storeRole && !supplierRole && hasRole(user, 'ADMIN')) items.push({ key: '/commands', label: '命令诊断', icon: <Folders size={16} /> });
-  const navigation = <Menu mode="inline" selectedKeys={[location.pathname]} defaultOpenKeys={['master', 'procurement', 'finance']} items={items}
+  else if (storeRole) items.push({ key: '/reports', label: '业务报表', icon: <BarChart3 size={16} /> });
+  else items.push({ key: 'statistics', label: '统计报表', icon: <BarChart3 size={17} />, children: [{ key: '/reports', label: '业务报表', icon: <BarChart3 size={16} /> }] });
+  if (!storeRole && !supplierRole && hasRole(user, 'ADMIN')) items.push({ key: 'system', label: '系统管理', icon: <Settings size={17} />, children: [{ key: '/commands', label: '命令诊断', icon: <Settings size={16} /> }] });
+  const activeGroup = items.find(item => item.children?.some(child => child.key === location.pathname))?.key;
+  const [openKeys, setOpenKeys] = useState<string[]>([]);
+  useEffect(() => { setOpenKeys(activeGroup ? [activeGroup] : []); }, [activeGroup]);
+  const navigation = <Menu mode="inline" selectedKeys={[location.pathname]} openKeys={collapsed ? undefined : openKeys} onOpenChange={setOpenKeys} items={items}
     onClick={({ key }) => { navigate(key); setMobileOpen(false); }} inlineCollapsed={collapsed} />;
   if (!supported) return <Result status="403" title="当前账号暂未迁移" extra={<div className="actions"><a href={legacyUrl}><Button>打开原后台</Button></a><Button onClick={async () => { try { await logout(); } finally { signedOut(); } }}>退出登录</Button></div>} />;
   const authorized = storeRole ? ['/', '/store-orders', '/store-finance', '/finance', '/settlement-differences', '/reports'].includes(location.pathname) : location.pathname !== '/store-orders' && (!['/collection-accounts', '/store-finance', '/finance', '/settlement-differences'].includes(location.pathname) || central) && (location.pathname !== '/discrepancies' || hasRole(user, 'ADMIN')) && (!['/templates', '/prices'].includes(location.pathname) || hasRole(user, 'ADMIN', 'PURCHASER'));
   return <div className={`admin-shell ${collapsed ? 'is-collapsed' : ''}`}>
     <aside className="sidebar"><Link className="brand" to={home}><Building2 size={24} /><span>ProcureX<small>采购协同</small></span></Link>{navigation}</aside>
-    <Drawer title="ProcureX" placement="left" open={mobileOpen} onClose={() => setMobileOpen(false)} width={250}><Menu mode="inline" selectedKeys={[location.pathname]} defaultOpenKeys={['master', 'procurement', 'finance']} items={items} onClick={({ key }) => { navigate(key); setMobileOpen(false); }} /></Drawer>
+    <Drawer title="ProcureX" placement="left" open={mobileOpen} onClose={() => setMobileOpen(false)} width={250}><Menu mode="inline" selectedKeys={[location.pathname]} openKeys={openKeys} onOpenChange={setOpenKeys} items={items} onClick={({ key }) => { navigate(key); setMobileOpen(false); }} /></Drawer>
     <div className="main-column"><header className="topbar"><div className="actions">
       <Tooltip title={collapsed ? '展开菜单' : '收起菜单'}><Button className="desktop-menu" type="text" aria-label={collapsed ? '展开菜单' : '收起菜单'} icon={<ChevronLeft size={18} style={{ transform: collapsed ? 'rotate(180deg)' : undefined }} />} onClick={() => setCollapsed(!collapsed)} /></Tooltip>
       <Button className="mobile-menu" type="text" aria-label="打开菜单" icon={<MenuIcon size={18} />} onClick={() => setMobileOpen(true)} />

@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { chromium } from 'playwright';
+
+await mkdir('var/admin-navigation-evidence', { recursive: true });
+const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await page.goto('http://127.0.0.1:4174/categories');
+  await page.getByLabel('用户名').fill('pxflow_user');
+  await page.getByLabel('密码', { exact: true }).fill('correct-password');
+  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await page.getByRole('heading', { name: '商品分类', exact: true }).waitFor();
+  const sidebar = page.locator('.sidebar');
+  assert.deepEqual(await sidebar.locator('.ant-menu-submenu-title').allTextContents(), ['基础资料', '商品资料', '订货配置', '采购履约', '财务结算', '统计报表', '系统管理']);
+  assert.ok(await sidebar.getByRole('menuitem', { name: '单位管理', exact: true }).isVisible());
+  await sidebar.getByRole('menuitem', { name: '单位管理', exact: true }).click();
+  await page.getByRole('heading', { name: '单位管理', exact: true }).waitFor();
+  await sidebar.locator('.ant-menu-submenu-title').filter({ hasText: '订货配置' }).click();
+  await sidebar.getByRole('menuitem', { name: '订货模板', exact: true }).click();
+  await page.getByRole('heading', { name: '订货模板', exact: true }).waitFor();
+  await page.getByRole('button', { name: '收起菜单', exact: true }).click();
+  await page.getByRole('button', { name: '展开菜单', exact: true }).click();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: 'var/admin-navigation-evidence/desktop.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '打开菜单', exact: true }).click();
+  const drawer = page.getByRole('dialog');
+  await drawer.waitFor();
+  await drawer.locator('.ant-menu-submenu-title').filter({ hasText: '商品资料' }).click();
+  await drawer.getByRole('menuitem', { name: '商品分类', exact: true }).click();
+  await drawer.waitFor({ state: 'hidden' });
+  await page.getByRole('heading', { name: '商品分类', exact: true }).waitFor();
+  await page.getByRole('button', { name: '打开菜单', exact: true }).click();
+  await drawer.waitFor();
+  assert.ok(await drawer.getByRole('menuitem', { name: '单位管理', exact: true }).isVisible());
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: 'var/admin-navigation-evidence/mobile.png' });
+  assert.deepEqual(errors, []);
+  console.log('PASS: menu order, grouped navigation, active group expansion, sidebar collapse and mobile drawer navigation');
+} finally { await browser.close(); }
