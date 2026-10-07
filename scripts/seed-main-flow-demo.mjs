@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { assertLocalFixtureDatabase } from './local-fixture-guard.mjs';
+import { sharedFixtureUnit } from './shared-fixture-unit.mjs';
 import { resolve } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { DeliveryMode, SettlementMode } from '../dist/packages/backend/generated/prisma/enums.js';
@@ -69,7 +70,7 @@ async function cleanup() {
   await prisma.supplierProduct.deleteMany({ where: { supplierId: { in: suppliers.map((supplier) => supplier.id) } } });
   await prisma.product.deleteMany({ where: { sku: { startsWith: prefix } } });
   await prisma.category.deleteMany({ where: { code: { startsWith: prefix } } });
-  await prisma.unit.deleteMany({ where: { code: { startsWith: prefix } } });
+  // Units are shared master data and may be referenced outside this fixture.
   await prisma.userSession.deleteMany({ where: { userId: { in: users.map((user) => user.id) } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: users.map((user) => user.id) } } });
   await prisma.userScope.deleteMany({ where: { userId: { in: users.map((user) => user.id) } } });
@@ -88,7 +89,7 @@ async function run() {
     prisma.supplier.create({ data: { code: `${prefix}-SUP2`, name: '主流程备用供应商', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.STORED_VALUE, defaultSettlementCycle: 'MONTHLY' } }),
     prisma.orderTemplate.create({ data: { code: `${prefix}-TPL`, name: '主流程订货模板' } }),
     prisma.category.create({ data: { code: `${prefix}-CAT`, name: '主流程商品分类' } }),
-    prisma.unit.create({ data: { code: `${prefix}-UNIT`, name: '件' } }),
+    sharedFixtureUnit(prisma, '件', `${prefix}-UNIT`),
   ]);
   const product = await prisma.product.create({ data: { sku: `${prefix}-SKU`, name: '主流程演示商品', categoryId: category.id, baseUnitId: unit.id } });
   await prisma.user.create({

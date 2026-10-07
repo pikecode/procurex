@@ -1,12 +1,35 @@
 # M6 Storage Policy Guide
 
-Last updated: 2026-09-29
+Last updated: 2026-10-06
 
 This guide is the operator checklist for the `STORAGE_POLICY` blocker. It covers private payment evidence files: upload artifacts, downloads, retention, access review, backup policy, restore reference, and owner sign-off.
 
 ## Current Position
 
-The application has local private-file behavior and download authorization checks. The intended production attachment bucket is now recorded as Alibaba Cloud OSS `moshuo-attachment-2026`, but the production private-file policy has not been signed. M6 must stay `NOT_READY` until the policy is complete.
+The application supports local private files and an opt-in OSS adapter, preserving download authorization checks. The attachment bucket is Alibaba Cloud OSS `moshuo-attachment-2026`. Following RAM authorization on 2026-10-06, real uploads/downloads, byte/SHA256 comparison, anonymous OSS rejection (403), API authentication (401), unrelated-supplier rejection (404), and precise test-version cleanup passed. The local API at port 3114 now uses FILE_STORAGE=oss with OSS_PREFIX=procurex-test/. This is a test namespace, not production acceptance. Production policy is not signed; M6 remains NOT_READY.
+
+## Adapter Configuration
+
+Keep credentials only in the untracked local `.env` or server secret store. `FILE_STORAGE=local` is the default, including when OSS credentials exist. Set `FILE_STORAGE=oss` only after verifying RAM permissions and connectivity. Required fields: `OSS_BUCKET`, `OSS_REGION`, `OSS_ENDPOINT` (HTTPS origin), `OSS_ACCESS_KEY_ID`, `OSS_ACCESS_KEY_SECRET`, and a non-empty `OSS_PREFIX` ending in `/`. Use `OSS_CNAME=true` only for a bound custom-domain endpoint.
+
+New OSS metadata keys carry `oss:` plus the configured prefix and a UUID. Existing local UUID keys remain readable; there is no automatic historical migration. Do not change the bucket or prefix with existing OSS records without a migration plan. Downloads continue through the authenticated API; clients never receive OSS credentials or public object URLs. Storage errors propagate rather than marking files as invalid content, and failed cleanup retains database metadata for retry.
+
+For local acceptance, restrict RAM object actions to the test namespace:
+
+```json
+{
+  "Version": "1",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["oss:PutObject", "oss:GetObject", "oss:DeleteObject"],
+    "Resource": ["acs:oss:*:*:moshuo-attachment-2026/procurex-test/*"]
+  }]
+}
+```
+
+Attach this custom policy to the dedicated RAM user, not the root account. Deny policies can override it. This bucket has versioning enabled: ordinary deletion creates a delete marker and does not remove retained historical versions. The adapter does not purge versions or change lifecycle settings; production cleanup/retention acceptance must account for this. OSS's overwrite-prevention header is not effective on versioned buckets, so this header is not an atomic duplicate-upload guarantee. The acceptance script deletes only the exact version it uploaded and verifies it is missing before deleting its own database record; it does not bulk-list or purge existing objects.
+
+Local cloud acceptance can be rerun with `node --env-file=.env scripts/check-oss-attachment.mjs` after building. To verify the running service, prefix the command with `OSS_CHECK_API=http://127.0.0.1:3114/api/v1`. The script refuses non-local databases/APIs and any bucket/prefix other than this test namespace. It uses demo accounts, performs login session writes and one unattached PAYMENT file session, and records sanitized evidence at `var/oss-attachment-evidence/manifest.json`. Current live-service verification: PASSED, cleanup PASSED; log `/tmp/procurex-oss-live-http.log`. It is not production policy, retention, or recovery acceptance.
 
 ## Required Evidence
 

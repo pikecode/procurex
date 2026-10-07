@@ -1,0 +1,16 @@
+.profile-page { padding: 24rpx; }
+.profile-heading, .catalog-row-head { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; }
+.profile-title { font-size: 36rpx; font-weight: 600; overflow-wrap: anywhere; flex: 1; }
+.profile-heading button { flex-shrink: 0; }
+.profile-field { display: grid; grid-template-columns: 180rpx minmax(0, 1fr); gap: 20rpx; padding: 26rpx 0; border-bottom: 1rpx solid #e1e7e3; }
+.profile-value, .catalog-name { overflow-wrap: anywhere; }
+.catalog-search { display: flex; align-items: center; gap: 16rpx; padding: 20rpx; background: white; border-bottom: 1rpx solid #dfe5e1; }
+.catalog-search input { min-width: 0; flex: 1; }
+.catalog-row { padding: 26rpx 0; border-bottom: 1rpx solid #dfe5e1; }
+.catalog-row > text { display: block; margin-top: 12rpx; overflow-wrap: anywhere; }
+.catalog-name { font-weight: 600; min-width: 0; }
+.supply-price { color: #176345; }
+.loading-state { padding: 40rpx 0; text-align: center; }
+.business-nav { display: flex; border-bottom: 1rpx solid #dfe5e1; margin: 20rpx 0; }
+.nav-item { flex: 1; text-align: center; padding: 24rpx 0; color: #66746c; border-bottom: 4rpx solid transparent; }
+.nav-item.is-active { color: #137951; border-bottom-color: #137951; font-weight: 600; }

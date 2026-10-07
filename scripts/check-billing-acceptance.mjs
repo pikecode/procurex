@@ -130,15 +130,17 @@ async function run() {
     const creditStore = await request(`${baseUrl}/store-statements?storeId=${ids.store.id}&supplierId=${ids.credit.id}`, {
       headers: authHeaders(token),
     });
-    assert.equal(creditStore.length, 1);
-    assert.deepEqual([creditStore[0].cycle, creditStore[0].periodStart, creditStore[0].totalAmount], ['HALF_MONTHLY', '2026-09-16', '215.00']);
-    record('2. Credit-backed store statement uses half-month period', {
-      cycle: creditStore[0].cycle,
-      periodStart: creditStore[0].periodStart,
-      totalAmount: creditStore[0].totalAmount,
+    assert.deepEqual(creditStore, []);
+    const creditSupplier = await request(`${baseUrl}/supplier-statements?supplierId=${ids.credit.id}`, { headers: authHeaders(token) });
+    assert.equal(creditSupplier.length, 1);
+    assert.deepEqual([creditSupplier[0].cycle, creditSupplier[0].periodStart, creditSupplier[0].totalAmount], ['HALF_MONTHLY', '2026-09-16', '185.00']);
+    record('2. Credit uses its account, while supplier payable retains the half-month period', {
+      cycle: creditSupplier[0].cycle,
+      periodStart: creditSupplier[0].periodStart,
+      totalAmount: creditSupplier[0].totalAmount,
+      storeReceivableCount: creditStore.length,
     }, [
       { gateId: 'DEV-402', evidenceId: 'credit-period' },
-      { gateId: 'DEV-403', evidenceId: 'store-view' },
     ]);
 
     const directStatements = await request(`${baseUrl}/direct-statements?storeId=${ids.store.id}&supplierId=${ids.direct.id}`, {
@@ -206,6 +208,9 @@ async function run() {
       headers: authHeaders(token),
     });
     assert.equal(companySupplier.length, 1);
+    const companyStore = await request(`${baseUrl}/store-statements?storeId=${ids.store.id}&supplierId=${ids.company.id}`, { headers: authHeaders(token) });
+    assert.equal(companyStore.length, 1);
+    assert.equal(companyStore[0].payableAmount, '130.00');
     const companyDetail = await request(`${baseUrl}/supplier-statements/${encodeURIComponent(companySupplier[0].id)}`, {
       headers: authHeaders(token),
     });
@@ -219,8 +224,10 @@ async function run() {
       blockedStatus: blockedPreview.status,
       supplierTotalAmount: companySupplier[0].totalAmount,
       payableAmount: companySupplier[0].payableAmount,
+      storeReceivableAmount: companyStore[0].payableAmount,
     }, [
       { gateId: 'DEV-402', evidenceId: 'company-term-block' },
+      { gateId: 'DEV-403', evidenceId: 'store-view' },
     ]);
 
     const payments = await request(`${baseUrl}/payment-records?supplierId=${ids.stored.id}&direction=COMPANY_TO_SUPPLIER`, {

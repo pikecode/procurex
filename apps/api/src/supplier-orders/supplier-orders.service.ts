@@ -1,8 +1,12 @@
 import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
+import { readUnitDisplayNames, transactionUnitView } from '../catalog/transaction-units.js';
 import { evaluateStoredValueFunding } from '../../../../packages/domain/src/funding.js';
-import { toMoney } from '../../../../packages/domain/src/money.js';
+import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
+import { effectiveOrderItemQuantity, remainingNormalShipmentQuantity } from './fulfillment-status.js';
+import { applyEffectiveOrderPrices, lockPricePublication } from '../pricing/price-checkpoint.js';
+import { createReductionDocuments, createFrozenFreightDocuments } from './reduction-adjustments.js';
 import {
   FreightConfirmationStatus,
   FulfillmentStatus,
@@ -15,6 +19,7 @@ import {
   UserStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
 import type {
+  Prisma,
   OrderItem,
   ReplenishmentGap,
   Shipment,
@@ -23,6 +28,9 @@ import type {
   SupplierOrder,
 } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { storeDestination } from '../common/master-data-profile.js';
+import { lockFundingRequest, synchronizeRequestFunding } from '../purchase-requests/request-funding.js';
+import { toFreightConfirmationView, type FreightConfirmationView } from '../freight-confirmations/freight-confirmations.service.js';
 
 export type ListSupplierOrdersInput = {
   storeId?: string;
@@ -31,6 +39,7 @@ export type ListSupplierOrdersInput = {
 };
 
 export type SupplierOrderSummaryView = {
+  storeName?: string;
   id: string;
   supplierOrderNo: string;
   requestId: string;
@@ -49,12 +58,20 @@ export type SupplierOrderSummaryView = {
 };
 
 export type SupplierOrderDetailView = SupplierOrderSummaryView & {
+  requiresFreightSnapshot?: boolean | null;
+  destination?: { name: string; address: string | null; contactName: string | null; contactPhone: string | null };
   items: SupplierOrderItemView[];
+  freightConfirmations?: FreightConfirmationView[];
 };
 
-export type SupplierOrderItemView = {
+export type SupplierOrderItemView = ReturnType<typeof transactionUnitView> & {
+  remainingToShipQuantity?: string;
+  salesPriceVersionId: string | null;
+  supplyPriceVersionId: string | null;
   id: string;
   productId: string;
+  productName?: string;
+  replenishmentGaps?: Array<{ id: string; quantity: string; remainingQuantity: string; status: ReplenishmentGapStatus }>;
   quantity: string;
   shippedQuantity: string;
   receivedQuantity: string;
@@ -190,15 +207,20 @@ export class SupplierOrdersService {
         status: input.status,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: { store: { select: { name: true } } },
     });
 
-    return orders.map(toSupplierOrderSummaryView);
+    return orders.map(order => ({ ...toSupplierOrderSummaryView(order), storeName: order.store.name }));
   }
 
   async get(id: string, scope?: { type: string; supplierId?: string }): Promise<SupplierOrderDetailView> {
     const order = await this.database.client.supplierOrder.findUnique({
       where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
-      include: { items: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        store: { select: { name: true, address: true, contactName: true, contactPhone: true, receiptAddress: true, receiptContactName: true, receiptContactPhone: true } },
+        items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true } }, shipmentItems: { select: { permanentlyReduced: true, gapAllocations: { select: { quantity: true } } } }, replenishmentGaps: { orderBy: { createdAt: 'asc' } } } },
+        freightConfirmations: { orderBy: { createdAt: 'desc' } },
+      },
     });
     if (!order) {
       throw new NotFoundException({
@@ -207,13 +229,28 @@ export class SupplierOrdersService {
       });
     }
 
-    return toSupplierOrderDetailView(order);
+    const names = await readUnitDisplayNames(this.database.client as Prisma.TransactionClient, order.items.map(item => item.unitSnapshot));
+    return {
+      ...toSupplierOrderDetailView(order),
+      storeName: order.store.name,
+      destination: storeDestination(order.store),
+      requiresFreightSnapshot: order.requiresFreightSnapshot,
+      items: order.items.map(item => ({ ...toSupplierOrderItemView(item), ...transactionUnitView(item.unitSnapshot, item.salesUnitPrice.toString(), item.supplyUnitPrice.toString(), names), productName: item.product.name,
+        remainingToShipQuantity: remainingNormalShipmentQuantity(item).toString(),
+        replenishmentGaps: item.replenishmentGaps.map(gap => ({ id: gap.id, quantity: gap.quantity.toString(), remainingQuantity: gap.remainingQuantity.toString(), status: gap.status })) })),
+      freightConfirmations: order.freightConfirmations.map(toFreightConfirmationView),
+    };
   }
 
   async shipmentPreview(id: string, expectedVersion: number, input: ShipmentPreviewInput, scope?: { type: string; supplierId?: string }): Promise<ShipmentPreviewView> {
     const order = await this.database.client.supplierOrder.findUnique({
       where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
-      include: { items: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        items: {
+          orderBy: { createdAt: 'asc' },
+          include: { shipmentItems: { include: { gapAllocations: { select: { quantity: true } } } } },
+        },
+      },
     });
     if (!order) {
       throw new NotFoundException({
@@ -233,7 +270,8 @@ export class SupplierOrdersService {
     if (
       order.status !== SupplierOrderStatus.PUSHED &&
       order.status !== SupplierOrderStatus.ACCEPTED &&
-      order.status !== SupplierOrderStatus.PARTIAL_SHIPPED
+      order.status !== SupplierOrderStatus.PARTIAL_SHIPPED &&
+      order.status !== SupplierOrderStatus.SHIPPED
     ) {
       throw new ConflictException({
         code: 'SUPPLIER_ORDER_NOT_SHIPPABLE',
@@ -242,9 +280,15 @@ export class SupplierOrdersService {
       });
     }
 
+    if (order.requiresFreightSnapshot === false && new Decimal(input.freight).gt(0)) {
+      throw new ConflictException({ code: 'FREIGHT_NOT_ALLOWED', message: 'This order does not allow freight charges' });
+    }
     const freightConfirmationId = await this.validateFreightConfirmation(order.id, input.freight, input.freightConfirmationId);
     const orderItemsById = new Map(order.items.map((item) => [item.id, item]));
     const requestedGapIds = input.items.flatMap((item) => item.gapAllocations?.map((allocation) => allocation.gapId) ?? []);
+    if (new Set(requestedGapIds).size !== requestedGapIds.length) {
+      throw new ConflictException({ code: 'INVALID_REPLENISHMENT_GAP_QUANTITY', message: 'Each replenishment gap may be allocated only once per shipment' });
+    }
     const gaps = requestedGapIds.length
       ? await this.database.client.replenishmentGap.findMany({ where: { id: { in: requestedGapIds } } })
       : [];
@@ -261,9 +305,9 @@ export class SupplierOrdersService {
 
       const shipQuantity = new Decimal(inputItem.shipQuantity);
       const permanentlyReduceQuantity = new Decimal(inputItem.permanentlyReduceQuantity);
-      const remainingBefore = new Decimal(item.quantity).minus(item.shippedQuantity);
+      const remainingBefore = remainingNormalShipmentQuantity(item);
       const handledQuantity = shipQuantity.plus(permanentlyReduceQuantity);
-      if (shipQuantity.lt(0) || permanentlyReduceQuantity.lt(0) || handledQuantity.lte(0) || handledQuantity.gt(remainingBefore)) {
+      if (shipQuantity.lt(0) || permanentlyReduceQuantity.lt(0) || handledQuantity.lte(0)) {
         throw new ConflictException({
           code: 'INVALID_SHIPMENT_QUANTITY',
           message: 'Shipment quantities must be positive and cannot exceed remaining quantity',
@@ -322,7 +366,10 @@ export class SupplierOrdersService {
         });
       }
 
-      const remainingAfter = remainingBefore.minus(handledQuantity);
+      if (handledQuantity.minus(allocatedGapQuantity).gt(remainingBefore)) {
+        throw new ConflictException({ code: 'INVALID_SHIPMENT_QUANTITY', message: 'Shipment quantities cannot exceed remaining quantity plus allocated replenishment gaps' });
+      }
+      const remainingAfter = Decimal.max(0, remainingBefore.minus(handledQuantity).plus(allocatedGapQuantity));
       return {
         orderItemId: item.id,
         productId: item.productId,
@@ -361,7 +408,7 @@ export class SupplierOrdersService {
     };
   }
 
-  async createShipment(id: string, expectedVersion: number, input: ShipmentPreviewInput, scope?: { type: string; supplierId?: string }): Promise<ShipmentView> {
+  async createShipment(id: string, expectedVersion: number, input: ShipmentPreviewInput, scope?: { type: string; supplierId?: string }, transaction?: Prisma.TransactionClient): Promise<ShipmentView> {
     const preview = await this.shipmentPreview(id, expectedVersion, input, scope);
     const order = await this.database.client.supplierOrder.findUniqueOrThrow({
       where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
@@ -372,7 +419,24 @@ export class SupplierOrdersService {
     const kind = sequence === 1 ? ShipmentKind.INITIAL : ShipmentKind.REPLENISHMENT;
     const hasRemainingAfter = preview.items.some((item) => new Decimal(item.remainingQuantityAfter).gt(0));
 
-    const shipment = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockPricePublication(tx);
+      await lockFundingRequest(tx, order.storeId, order.requestId);
+      const current = await tx.supplierOrder.findUniqueOrThrow({ where: { id: order.id } });
+      if (current.version !== expectedVersion) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Supplier order changed during shipment submission' });
+      if (preview.freightConfirmationId) {
+        const confirmation = await tx.freightConfirmation.findUniqueOrThrow({ where: { id: preview.freightConfirmationId } });
+        if (confirmation.status !== FreightConfirmationStatus.CONFIRMED || !new Decimal(confirmation.amount).eq(preview.totals.freight)) {
+          throw new ConflictException({ code: 'FREIGHT_CONFIRMATION_NOT_AVAILABLE', message: 'Freight confirmation changed before shipment submission' });
+        }
+      }
+      const hasReduction = preview.items.some(item => new Decimal(item.permanentlyReduceQuantity).gt(0));
+      const firstShippedAt = current.firstShippedAt ?? new Date();
+      if (!current.firstShippedAt) {
+        await applyEffectiveOrderPrices(tx, order.id, firstShippedAt);
+        const pricedItems = await tx.orderItem.findMany({ where: { supplierOrderId: order.id } });
+        for (const item of pricedItems) orderItemsById.set(item.id, item);
+      }
       const created = await tx.shipment.create({
         data: {
           shipmentNo: makeShipmentNo(),
@@ -406,8 +470,8 @@ export class SupplierOrdersService {
             permanentlyReduced: previewItem.permanentlyReduceQuantity,
             salesPriceSnapshot: orderItem.salesUnitPrice,
             supplyPriceSnapshot: orderItem.supplyUnitPrice,
-            salesLineAmount: previewItem.salesLineAmount,
-            supplyLineAmount: previewItem.supplyLineAmount,
+            salesLineAmount: lineAmount(previewItem.shipQuantity, orderItem.salesUnitPrice),
+            supplyLineAmount: lineAmount(previewItem.shipQuantity, orderItem.supplyUnitPrice),
           },
         });
         for (const allocation of previewItem.gapAllocations) {
@@ -437,12 +501,48 @@ export class SupplierOrdersService {
         });
       }
 
+      if (hasReduction) {
+        const reducedItems = await tx.orderItem.findMany({ where: { supplierOrderId: order.id }, include: {
+          shipmentItems: true, discrepancies: { include: { returnRecord: true } },
+        } });
+        let salesDelta = new Decimal(0);
+        let supplyDelta = new Decimal(0);
+        const reductionLines: Parameters<typeof createReductionDocuments>[1]['lines'] = [];
+        for (const item of reducedItems) {
+          const quantity = effectiveOrderItemQuantity(item);
+          const sales = lineAmount(quantity, item.salesUnitPrice);
+          const supply = lineAmount(quantity, item.supplyUnitPrice);
+          const salesChange = sales.minus(item.salesLineAmount);
+          const supplyChange = supply.minus(item.supplyLineAmount);
+          salesDelta = salesDelta.plus(salesChange);
+          supplyDelta = supplyDelta.plus(supplyChange);
+          const reductionQuantity = new Decimal(preview.items.find(line => line.orderItemId === item.id)?.permanentlyReduceQuantity ?? 0);
+          if (reductionQuantity.gt(0)) reductionLines.push({ itemId: item.id, quantity: reductionQuantity, salesChange, supplyChange,
+            salesPrice: new Decimal(item.salesUnitPrice), supplyPrice: new Decimal(item.supplyUnitPrice) });
+          await tx.orderItem.update({ where: { id: item.id }, data: { salesLineAmount: sales, supplyLineAmount: supply } });
+          await tx.requestItem.updateMany({ where: { requestId: order.requestId, supplierId: order.supplierId, productId: item.productId }, data: {
+            salesLineAmount: { increment: salesChange }, supplyLineAmount: { increment: supplyChange },
+          } });
+        }
+        await tx.supplierOrder.update({ where: { id: order.id }, data: {
+          salesGoodsAmount: { increment: salesDelta }, supplyGoodsAmount: { increment: supplyDelta },
+        } });
+        await tx.purchaseRequest.update({ where: { id: order.requestId }, data: {
+          salesGoodsAmount: { increment: salesDelta }, supplyGoodsAmount: { increment: supplyDelta }, version: { increment: 1 },
+        } });
+        await createReductionDocuments(tx, { order: current, shipmentId: created.id, baseline: firstShippedAt, lines: reductionLines });
+        // Release the goods reduction before booking this shipment's freight, preserving refund provenance.
+        await synchronizeRequestFunding(tx, order.requestId, { sourceId: created.id, excludeShipmentFreightId: created.id });
+      }
+      await createFrozenFreightDocuments(tx, { order: current, shipmentId: created.id, baseline: firstShippedAt, freight: new Decimal(preview.totals.freight) });
+      await synchronizeRequestFunding(tx, order.requestId, { requireFull: true, sourceId: created.id });
+
       await tx.supplierOrder.update({
         where: { id: order.id },
         data: {
           status: hasRemainingAfter ? SupplierOrderStatus.PARTIAL_SHIPPED : SupplierOrderStatus.SHIPPED,
           fulfillmentStatus: hasRemainingAfter ? FulfillmentStatus.PARTIAL_SHIPPED : FulfillmentStatus.SHIPPED,
-          firstShippedAt: order.firstShippedAt ?? new Date(),
+          firstShippedAt,
           version: { increment: 1 },
         },
       });
@@ -479,12 +579,12 @@ export class SupplierOrdersService {
         where: { id: created.id },
         include: { items: { include: { orderItem: true, gapAllocations: true }, orderBy: { createdAt: 'asc' } } },
       });
-    });
-
+    };
+    const shipment = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
     return toShipmentView(shipment);
   }
 
-  async reject(id: string, expectedVersion: number, reason: string, scope?: { type: string; supplierId?: string }): Promise<RejectSupplierOrderResult> {
+  async reject(id: string, expectedVersion: number, reason: string, scope?: { type: string; supplierId?: string }, transaction?: Prisma.TransactionClient): Promise<RejectSupplierOrderResult> {
     const order = await this.database.client.supplierOrder.findUnique({ where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined } });
     if (!order) {
       throw new NotFoundException({
@@ -517,7 +617,12 @@ export class SupplierOrdersService {
       });
     }
 
-    const rejected = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockFundingRequest(tx, order.storeId, order.requestId);
+      const current = await tx.supplierOrder.findUniqueOrThrow({ where: { id: order.id } });
+      if (current.version !== expectedVersion || current.firstShippedAt || current.status !== order.status) {
+        throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Supplier order changed during rejection' });
+      }
       const updated = await tx.supplierOrder.update({
         where: { id: order.id },
         data: {
@@ -536,6 +641,7 @@ export class SupplierOrdersService {
           version: { increment: 1 },
         },
       });
+      await synchronizeRequestFunding(tx, order.requestId);
 
       const recipients = await tx.user.findMany({
         where: {
@@ -566,12 +672,12 @@ export class SupplierOrdersService {
       }
 
       return updated;
-    });
-
+    };
+    const rejected = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
     return toRejectSupplierOrderResult(rejected);
   }
 
-  async reconcileFunding(id: string, expectedVersion: number): Promise<ReconcileSupplierOrderFundingResult> {
+  async reconcileFunding(id: string, expectedVersion: number, transaction?: Prisma.TransactionClient): Promise<ReconcileSupplierOrderFundingResult> {
     const order = await this.database.client.supplierOrder.findUnique({
       where: { id },
       include: { request: true },
@@ -599,22 +705,15 @@ export class SupplierOrdersService {
       });
     }
 
-    const account = await this.database.client.storeAccount.findUnique({ where: { storeId: order.request.storeId } });
-    const available = toMoney(account?.balance ?? 0);
-    const funding = evaluateStoredValueFunding(available, order.request.salesGoodsAmount);
-    const nextRequestStatus =
-      funding.canConfirm && order.request.status === PurchaseRequestStatus.PENDING_FUNDS
-        ? PurchaseRequestStatus.CONFIRMED
-        : order.request.status;
-
-    const updated = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockFundingRequest(tx, order.storeId, order.requestId);
+      const current = await tx.supplierOrder.findUniqueOrThrow({ where: { id: order.id } });
+      if (current.version !== expectedVersion) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Supplier order changed during funding reconciliation' });
+      const funding = await synchronizeRequestFunding(tx, order.requestId);
       const request = await tx.purchaseRequest.update({
         where: { id: order.requestId },
         data: {
-          status: nextRequestStatus,
-          paymentStatus: funding.canConfirm ? PaymentStatus.PAID : PaymentStatus.UNPAID,
-          paidAmount: funding.paidAmount.toFixed(2),
-          shortfallAmount: funding.shortfallAmount.toFixed(2),
+          status: funding.canConfirm && order.request.status === PurchaseRequestStatus.PENDING_FUNDS ? PurchaseRequestStatus.CONFIRMED : order.request.status,
           version: { increment: 1 },
         },
       });
@@ -624,10 +723,13 @@ export class SupplierOrdersService {
         data: { version: { increment: 1 } },
       });
 
-      return { request, supplierOrder };
-    });
-
-    return toReconcileSupplierOrderFundingResult(updated.supplierOrder, updated.request, available);
+      return { request, supplierOrder, funding };
+    };
+    const updated = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
+    return { ...toReconcileSupplierOrderFundingResult(updated.supplierOrder, updated.request, updated.funding.available), funding: {
+      stored: { required: updated.funding.storedRequired.toFixed(2), paid: updated.funding.storedPaid.toFixed(2), available: updated.funding.available.toFixed(2), shortfall: updated.funding.shortfallAmount.toFixed(2) },
+      canConfirm: updated.funding.canConfirm,
+    } };
   }
 
   private async validateFreightConfirmation(
@@ -754,6 +856,8 @@ function toSupplierOrderDetailView(order: SupplierOrder & { items: OrderItem[] }
 
 function toSupplierOrderItemView(item: OrderItem): SupplierOrderItemView {
   return {
+    salesPriceVersionId: item.salesPriceVersionId, supplyPriceVersionId: item.supplyPriceVersionId,
+    ...transactionUnitView(item.unitSnapshot, item.salesUnitPrice.toString(), item.supplyUnitPrice.toString()),
     id: item.id,
     productId: item.productId,
     quantity: item.quantity.toString(),

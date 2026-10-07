@@ -68,6 +68,7 @@ export type PaymentRecordView = {
   overpaymentAmount: string;
   overpayments: OverpaymentView[];
   evidenceFileIds: string[];
+  evidenceFiles?: Array<{ id: string; filename: string; mimeType: string; sizeBytes: string }>;
 };
 
 export type OverpaymentView = {
@@ -83,6 +84,7 @@ export type PaymentAllocationView = {
   id: string;
   settlementItemId: string;
   supplierOrderId: string;
+  supplierOrderNo?: string;
   amount: string;
   sourceVersion: number;
   state: PaymentAllocationState;
@@ -118,9 +120,9 @@ type DecodedSettlementItemId = {
 
 type PreviewOrder = SupplierOrder & { shipments: Shipment[] };
 
-function matchesPaymentScope(value: { storeId: string | null; supplierId: string | null }, scope?: PaymentScope): boolean {
-  if (isStoreScope(scope?.type)) return value.storeId === scope?.storeId;
-  if (scope?.type === 'SUPPLIER') return value.supplierId === scope.supplierId;
+function matchesPaymentScope(value: { storeId: string | null; supplierId: string | null; direction?: PaymentRecordDirection }, scope?: PaymentScope): boolean {
+  if (isStoreScope(scope?.type)) return value.storeId === scope?.storeId && value.direction !== 'COMPANY_TO_SUPPLIER';
+  if (scope?.type === 'SUPPLIER') return value.supplierId === scope.supplierId && value.direction !== 'STORE_TO_COMPANY';
   return true;
 }
 
@@ -132,6 +134,8 @@ export class PaymentRecordsService {
     const payments = await this.database.client.paymentRecord.findMany({
       where: {
         direction: input.direction,
+        AND: isStoreScope(scope?.type) ? [{ direction: { not: 'COMPANY_TO_SUPPLIER' } }]
+          : scope?.type === 'SUPPLIER' ? [{ direction: { not: 'STORE_TO_COMPANY' } }] : undefined,
         status: input.status,
         storeId: isStoreScope(scope?.type) ? scope?.storeId : input.storeId,
         supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : input.supplierId,
@@ -146,7 +150,10 @@ export class PaymentRecordsService {
   async get(id: string, scope?: PaymentScope): Promise<PaymentRecordView> {
     const payment = await this.database.client.paymentRecord.findUnique({
       where: { id },
-      include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
+      include: {
+        allocations: { orderBy: { createdAt: 'asc' }, include: { supplierOrder: { select: { supplierOrderNo: true } } } },
+        overpayments: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true, filename: true, mimeType: true, sizeBytes: true } },
+      },
     });
     if (!payment || !matchesPaymentScope(payment, scope)) {
       throw new NotFoundException({
@@ -155,12 +162,19 @@ export class PaymentRecordsService {
       });
     }
 
-    return toPaymentRecordView(payment);
+    return { ...toPaymentRecordView(payment),
+      allocations: payment.allocations.map(allocation => ({ ...toPaymentAllocationView(allocation), supplierOrderNo: allocation.supplierOrder.supplierOrderNo })),
+      evidenceFiles: payment.evidenceFiles.map(file => ({ ...file, sizeBytes: file.sizeBytes.toString() })) };
   }
 
   async preview(settlementItemIds: string[], client: DatabaseService['client'] | Prisma.TransactionClient = this.database.client, scope?: PaymentScope): Promise<PaymentPreviewView> {
     const uniqueIds = [...new Set(settlementItemIds)];
     const decoded = uniqueIds.map((id) => ({ id, decoded: decodeSettlementItemId(id) }));
+    if (decoded.some(({ decoded: item }) => isStoreScope(scope?.type)
+      ? item.kind === 'SUPPLIER_PAYABLE' || item.kind === 'ADJUSTMENT' && item.adjustmentSide === 'SUPPLIER'
+      : scope?.type === 'SUPPLIER' && (item.kind === 'STORE_RECEIVABLE' || item.kind === 'ADJUSTMENT' && item.adjustmentSide === 'STORE'))) {
+      throw new NotFoundException({ code: 'PAYMENT_RECORD_NOT_FOUND', message: 'Payment items were not found' });
+    }
     const supplierOrderIds = decoded.map((item) => item.decoded.supplierOrderId);
     const orders = await client.supplierOrder.findMany({
       where: { id: { in: supplierOrderIds } },
@@ -189,9 +203,13 @@ export class PaymentRecordsService {
         ? [encodeSettlementItemId('STORE_RECEIVABLE', item.supplierOrderId)]
         : [];
     });
+    const storeSnapshots = storeReceivableIds.length ? await client.settlementItemSnapshot.findMany({
+      where: { settlementItemId: { in: storeReceivableIds } },
+    }) : [];
+    const storeSnapshotsById = new Map(storeSnapshots.map(snapshot => [snapshot.settlementItemId, snapshot]));
     const storeAdjustmentIds = storeAdjustmentDocuments
       .filter((document) => new Decimal(document.amount).gt(0))
-      .map((document) => encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'STORE'));
+      .flatMap((document) => adjustmentSettlementItemIds(document.id, document.supplierOrderId, 'STORE'));
     const allocations = await client.paymentAllocation.findMany({
       where: {
         settlementItemId: { in: [...uniqueIds, ...storeReceivableIds, ...storeAdjustmentIds] },
@@ -240,6 +258,11 @@ export class PaymentRecordsService {
         blockedItems.push({ settlementItemId: item.id, code: 'SETTLEMENT_CHANNEL_MISMATCH', message: 'Settlement item does not match its order settlement mode' });
         continue;
       }
+      if ((item.decoded.kind === 'STORE_RECEIVABLE' || (item.decoded.kind === 'ADJUSTMENT' && item.decoded.adjustmentSide === 'STORE'))
+        && (order.settlementMode === 'STORED_VALUE' || order.settlementMode === 'CREDIT')) {
+        blockedItems.push({ settlementItemId: item.id, code: 'ACCOUNT_SETTLEMENT_NOT_PAYABLE', message: 'Stored value and credit must settle through their account, not a second store payment' });
+        continue;
+      }
       if (new Decimal(order.request.shortfallAmount).greaterThan(0)) {
         blockedItems.push({
           settlementItemId: item.id,
@@ -250,13 +273,15 @@ export class PaymentRecordsService {
       }
       if ((item.decoded.kind === 'SUPPLIER_PAYABLE' || (item.decoded.kind === 'ADJUSTMENT' && item.decoded.adjustmentSide === 'SUPPLIER')) && order.settlementMode === 'COMPANY_TERM') {
         const receivableId = encodeSettlementItemId('STORE_RECEIVABLE', order.id);
-        const storeAmount = new Decimal(order.salesGoodsAmount).plus(order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0)));
+        const storeAmount = storeSnapshotsById.get(receivableId)?.totalAmount
+          ?? new Decimal(order.salesGoodsAmount).plus(order.shipments.reduce((sum, shipment) => sum.plus(shipment.freight), new Decimal(0)));
         const storeAdjustmentAmount = storeAdjustmentDocuments
           .filter((document) => document.supplierOrderId === order.id && new Decimal(document.amount).gt(0))
           .reduce((sum, document) => sum.plus(document.amount), new Decimal(0));
         const confirmedStoreAdjustments = storeAdjustmentDocuments
           .filter((document) => document.supplierOrderId === order.id && new Decimal(document.amount).gt(0))
-          .reduce((sum, document) => sum.plus(allocationSummary.get(encodeAdjustmentSettlementItemId(document.id, order.id, 'STORE'))?.confirmedAmount ?? new Decimal(0)), new Decimal(0));
+          .reduce((sum, document) => adjustmentSettlementItemIds(document.id, order.id, 'STORE')
+            .reduce((amount, itemId) => amount.plus(allocationSummary.get(itemId)?.confirmedAmount ?? new Decimal(0)), sum), new Decimal(0));
         if ((allocationSummary.get(receivableId)?.confirmedAmount ?? new Decimal(0)).plus(confirmedStoreAdjustments).lessThan(storeAmount.plus(storeAdjustmentAmount))) {
           blockedItems.push({
             settlementItemId: item.id,
@@ -324,8 +349,8 @@ export class PaymentRecordsService {
     };
   }
 
-  async create(input: CreatePaymentRecordInput, scope?: PaymentScope): Promise<PaymentRecordView> {
-    return this.database.client.$transaction(async (tx) => {
+  async create(input: CreatePaymentRecordInput, scope?: PaymentScope, transaction?: Prisma.TransactionClient): Promise<PaymentRecordView> {
+    const execute = async (tx: Prisma.TransactionClient) => {
     const settlementItemIds = input.items.map((item) => item.settlementItemId);
     for (const id of [...settlementItemIds].sort()) {
       await waitForSettlementLock(tx, id);
@@ -393,7 +418,6 @@ export class PaymentRecordsService {
         amount: amount.toFixed(2),
         businessDate: input.businessDate,
         remark: input.remark,
-        evidenceFiles: { connect: input.evidenceFileIds.map((id) => ({ id })) },
         allocations: {
           create: input.items.map((item) => {
             const previewItem = previewItemsById.get(item.settlementItemId)!;
@@ -409,16 +433,25 @@ export class PaymentRecordsService {
       include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
     });
 
-    return toPaymentRecordView(payment);
+    const linked = await tx.fileObject.updateMany({
+      where: { id: { in: input.evidenceFileIds }, ownerId: scope?.userId, purpose: 'PAYMENT', status: 'READY', paymentId: null },
+      data: { paymentId: payment.id },
     });
+    if (linked.count !== input.evidenceFileIds.length) {
+      throw new ConflictException({ code: 'PAYMENT_EVIDENCE_INVALID', message: 'Payment evidence has already been linked' });
+    }
+    return toPaymentRecordView({ ...payment, evidenceFiles: input.evidenceFileIds.map(id => ({ id })) });
+    };
+    return transaction ? execute(transaction) : this.database.client.$transaction(execute);
   }
 
-  async confirm(id: string, expectedVersion: number, scope?: PaymentScope): Promise<PaymentRecordView> {
-    const payment = await this.database.client.paymentRecord.findUnique({
+  async confirm(id: string, expectedVersion: number, scope?: PaymentScope, transaction?: Prisma.TransactionClient): Promise<PaymentRecordView> {
+    const payment = await (transaction ?? (this.database.client as Prisma.TransactionClient)).paymentRecord.findUnique({
       where: { id },
       include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
     });
-    if (!payment || !matchesPaymentScope(payment, scope)) {
+    if (!payment || !matchesPaymentScope(payment, scope)
+      || (scope?.type === 'SUPPLIER' && payment.direction === 'STORE_TO_COMPANY')) {
       throw new NotFoundException({
         code: 'PAYMENT_RECORD_NOT_FOUND',
         message: 'Payment record was not found',
@@ -439,7 +472,7 @@ export class PaymentRecordsService {
       });
     }
 
-    const confirmed = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
       const changed = await tx.paymentRecord.updateMany({
         where: { id, version: expectedVersion, status: PaymentRecordStatus.PENDING },
         data: {
@@ -458,6 +491,10 @@ export class PaymentRecordsService {
       for (const allocation of result.allocations) {
         const order = ordersById.get(allocation.supplierOrderId)!;
         const decoded = decodeSettlementItemId(allocation.settlementItemId);
+        if ((decoded.kind === 'STORE_RECEIVABLE' || (decoded.kind === 'ADJUSTMENT' && decoded.adjustmentSide === 'STORE'))
+          && (order.settlementMode === 'STORED_VALUE' || order.settlementMode === 'CREDIT')) {
+          throw new ConflictException({ code: 'ACCOUNT_SETTLEMENT_NOT_PAYABLE', message: 'Account-backed orders cannot confirm a second store payment' });
+        }
         if (decoded.kind === 'ADJUSTMENT') continue;
         const kind = decoded.kind;
         const goodsAmount = kind !== 'SUPPLIER_PAYABLE' ? new Decimal(order.salesGoodsAmount) : new Decimal(order.supplyGoodsAmount);
@@ -497,17 +534,19 @@ export class PaymentRecordsService {
         skipDuplicates: true,
       });
       return await tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
-    });
+    };
+    const confirmed = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
 
     return toPaymentRecordView(confirmed);
   }
 
-  async reject(id: string, expectedVersion: number, reason: string, scope?: PaymentScope): Promise<PaymentRecordView> {
-    const payment = await this.database.client.paymentRecord.findUnique({
+  async reject(id: string, expectedVersion: number, reason: string, scope?: PaymentScope, transaction?: Prisma.TransactionClient): Promise<PaymentRecordView> {
+    const payment = await (transaction ?? (this.database.client as Prisma.TransactionClient)).paymentRecord.findUnique({
       where: { id },
       include: { allocations: { orderBy: { createdAt: 'asc' } }, overpayments: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
     });
-    if (!payment || !matchesPaymentScope(payment, scope)) {
+    if (!payment || !matchesPaymentScope(payment, scope)
+      || (scope?.type === 'SUPPLIER' && payment.direction === 'STORE_TO_COMPANY')) {
       throw new NotFoundException({
         code: 'PAYMENT_RECORD_NOT_FOUND',
         message: 'Payment record was not found',
@@ -528,7 +567,7 @@ export class PaymentRecordsService {
       });
     }
 
-    const rejected = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
       const changed = await tx.paymentRecord.updateMany({
         where: { id, version: expectedVersion, status: PaymentRecordStatus.PENDING },
       data: {
@@ -541,13 +580,14 @@ export class PaymentRecordsService {
       if (changed.count !== 1) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Payment record has already changed' });
       await tx.paymentAllocation.updateMany({ where: { paymentId: id, state: PaymentAllocationState.RESERVED }, data: { state: PaymentAllocationState.RELEASED } });
       return await tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
-    });
+    };
+    const rejected = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
 
     return toPaymentRecordView(rejected);
   }
 
-  async cancel(id: string, expectedVersion: number, reason: string, scope?: PaymentScope): Promise<PaymentRecordView> {
-    const payment = await this.database.client.paymentRecord.findUnique({
+  async cancel(id: string, expectedVersion: number, reason: string, scope?: PaymentScope, transaction?: Prisma.TransactionClient): Promise<PaymentRecordView> {
+    const payment = await (transaction ?? (this.database.client as Prisma.TransactionClient)).paymentRecord.findUnique({
       where: { id },
       include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } },
     });
@@ -572,7 +612,7 @@ export class PaymentRecordsService {
       });
     }
 
-    const cancelled = await this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
       const changed = await tx.paymentRecord.updateMany({
         where: { id, version: expectedVersion, status: PaymentRecordStatus.PENDING },
       data: {
@@ -585,7 +625,8 @@ export class PaymentRecordsService {
       if (changed.count !== 1) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Payment record has already changed' });
       await tx.paymentAllocation.updateMany({ where: { paymentId: id, state: PaymentAllocationState.RESERVED }, data: { state: PaymentAllocationState.RELEASED } });
       return await tx.paymentRecord.findUniqueOrThrow({ where: { id }, include: { allocations: { orderBy: { createdAt: 'asc' } }, evidenceFiles: { select: { id: true } } } });
-    });
+    };
+    const cancelled = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
 
     return toPaymentRecordView(cancelled);
   }
@@ -713,8 +754,12 @@ function encodeSettlementItemId(kind: SettlementItemKind, supplierOrderId: strin
   return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
 }
 
-function encodeAdjustmentSettlementItemId(adjustmentDocumentId: string, supplierOrderId: string, adjustmentSide: 'STORE' | 'SUPPLIER'): string {
-  return Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', adjustmentDocumentId, supplierOrderId, adjustmentSide })).toString('base64url');
+function adjustmentSettlementItemIds(adjustmentDocumentId: string, supplierOrderId: string, adjustmentSide: 'STORE' | 'SUPPLIER'): string[] {
+  // Statement IDs use order-first encoding; older payment callers may have used document-first.
+  return [
+    Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', supplierOrderId, adjustmentDocumentId, adjustmentSide })).toString('base64url'),
+    Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', adjustmentDocumentId, supplierOrderId, adjustmentSide })).toString('base64url'),
+  ];
 }
 
 function toPaymentRecordView(payment: PaymentRecord & { allocations: PaymentAllocation[]; overpayments?: Overpayment[]; evidenceFiles?: { id: string }[] }): PaymentRecordView {

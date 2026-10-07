@@ -1,6 +1,9 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { StorePricePrivacyInterceptor } from '../common/store-price-privacy.interceptor.js';
+import { UseInterceptors } from '@nestjs/common';
+import { Body, ConflictException, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -20,10 +23,12 @@ type CreateReceiptBody = {
   expectedOrderVersion?: unknown;
   expectedReceiptRevision?: unknown;
   items?: unknown;
+  evidenceFileIds?: unknown;
 };
 
 @Controller('shipments')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
+@UseInterceptors(StorePricePrivacyInterceptor)
 export class ShipmentsController {
   constructor(
     private readonly shipmentsService: ShipmentsService,
@@ -32,7 +37,7 @@ export class ShipmentsController {
   ) {}
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
   async get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<ShipmentDetailView> {
     throwIfInvalid(validateUuid('id', id));
     return this.shipmentsService.get(id, storeScope(request));
@@ -56,33 +61,37 @@ export class ShipmentsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
+      if (storeScope(request)) await this.shipmentsService.get(input.id, storeScope(request));
       return command.command.responseBody as ReceiptView;
     }
+    if (command.state === 'processing') throw new ConflictException({ code: 'COMMAND_PROCESSING', message: 'Receipt submission is still processing; check again with the same idempotency key' });
 
-    const result = await this.shipmentsService.createReceipt(input.id, input.receipt, storeScope(request));
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'Receipt',
-      resourceId: result.id,
-      responseBody: result as never,
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.shipmentsService.createReceipt(input.id, input.receipt, storeScope(request), auth.user.id, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'Receipt',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'shipment.receipt.create',
+        entityType: 'Receipt',
+        entityId: result.id,
+        traceId,
+        after: {
+          shipmentId: result.shipmentId,
+          receiptNo: result.receiptNo,
+          revision: result.revision,
+          itemCount: result.items.length,
+          evidenceFileIds: result.evidenceFiles.map(file => file.id),
+        },
+      }, tx);
+      return result;
     });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'shipment.receipt.create',
-      entityType: 'Receipt',
-      entityId: result.id,
-      traceId,
-      after: {
-        shipmentId: result.shipmentId,
-        receiptNo: result.receiptNo,
-        revision: result.revision,
-        itemCount: result.items.length,
-      },
-    });
-
-    return result;
   }
 }
 
@@ -136,6 +145,18 @@ function parseCreateReceiptBody(id: string, body: CreateReceiptBody): { id: stri
     }
   }
 
+  const evidenceFileIds: string[] | undefined = body.evidenceFileIds === undefined ? undefined : [];
+  if (body.evidenceFileIds !== undefined) {
+    if (!Array.isArray(body.evidenceFileIds) || body.evidenceFileIds.length < 1 || body.evidenceFileIds.length > 6) {
+      issues.push({ field: 'evidenceFileIds', code: 'INVALID_EVIDENCE', message: 'Provide one to six receipt images' });
+    } else {
+      for (const [index, fileId] of body.evidenceFileIds.entries()) {
+        issues.push(...validateUuid(`evidenceFileIds.${index}`, fileId));
+        if (typeof fileId === 'string') evidenceFileIds!.push(fileId);
+      }
+      if (new Set(evidenceFileIds).size !== evidenceFileIds!.length) issues.push({ field: 'evidenceFileIds', code: 'DUPLICATE_EVIDENCE', message: 'Receipt images must not repeat' });
+    }
+  }
   throwIfInvalid(issues);
   return {
     id,
@@ -143,6 +164,7 @@ function parseCreateReceiptBody(id: string, body: CreateReceiptBody): { id: stri
       expectedOrderVersion: body.expectedOrderVersion as number,
       expectedReceiptRevision: body.expectedReceiptRevision as number,
       items,
+      evidenceFileIds,
     },
   };
 }

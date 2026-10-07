@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -57,7 +58,7 @@ type CancelBody = {
 };
 
 @Controller('payment-records')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class PaymentRecordsController {
   constructor(
     private readonly paymentRecordsService: PaymentRecordsService,
@@ -101,29 +102,32 @@ export class PaymentRecordsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
+      if (auth.user.scope) await this.paymentRecordsService.get((command.command.responseBody as PaymentRecordView).id, auth.user.scope);
       return command.command.responseBody as PaymentRecordView;
     }
 
-    const result = await this.paymentRecordsService.create(input, { ...auth.user.scope, userId: auth.user.id });
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'PaymentRecord',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'payment-record.create',
-      entityType: 'PaymentRecord',
-      entityId: result.id,
-      traceId,
-      reason: result.remark ?? undefined,
-      after: paymentAuditSnapshot(result),
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.paymentRecordsService.create(input, { ...auth.user.scope, userId: auth.user.id }, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'PaymentRecord',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'payment-record.create',
+        entityType: 'PaymentRecord',
+        entityId: result.id,
+        traceId,
+        reason: result.remark ?? undefined,
+        after: paymentAuditSnapshot(result),
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Post(':id/confirm')
@@ -144,28 +148,31 @@ export class PaymentRecordsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
+      if (auth.user.scope) await this.paymentRecordsService.get(input.id, auth.user.scope);
       return command.command.responseBody as PaymentRecordView;
     }
 
-    const result = await this.paymentRecordsService.confirm(input.id, input.expectedVersion, auth.user.scope);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'PaymentRecord',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'payment-record.confirm',
-      entityType: 'PaymentRecord',
-      entityId: result.id,
-      traceId,
-      after: paymentAuditSnapshot(result),
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.paymentRecordsService.confirm(input.id, input.expectedVersion, auth.user.scope, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'PaymentRecord',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'payment-record.confirm',
+        entityType: 'PaymentRecord',
+        entityId: result.id,
+        traceId,
+        after: paymentAuditSnapshot(result),
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Post(':id/reject')
@@ -186,29 +193,32 @@ export class PaymentRecordsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
+      if (auth.user.scope) await this.paymentRecordsService.get(input.id, auth.user.scope);
       return command.command.responseBody as PaymentRecordView;
     }
 
-    const result = await this.paymentRecordsService.reject(input.id, input.expectedVersion, input.reason, auth.user.scope);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'PaymentRecord',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'payment-record.reject',
-      entityType: 'PaymentRecord',
-      entityId: result.id,
-      traceId,
-      reason: input.reason,
-      after: paymentAuditSnapshot(result),
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.paymentRecordsService.reject(input.id, input.expectedVersion, input.reason, auth.user.scope, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'PaymentRecord',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'payment-record.reject',
+        entityType: 'PaymentRecord',
+        entityId: result.id,
+        traceId,
+        reason: input.reason,
+        after: paymentAuditSnapshot(result),
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Post(':id/cancel')
@@ -229,29 +239,32 @@ export class PaymentRecordsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
+      if (auth.user.scope) await this.paymentRecordsService.get(input.id, auth.user.scope);
       return command.command.responseBody as PaymentRecordView;
     }
 
-    const result = await this.paymentRecordsService.cancel(input.id, input.expectedVersion, input.reason, auth.user.scope);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'PaymentRecord',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'payment-record.cancel',
-      entityType: 'PaymentRecord',
-      entityId: result.id,
-      traceId,
-      reason: input.reason,
-      after: paymentAuditSnapshot(result),
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.paymentRecordsService.cancel(input.id, input.expectedVersion, input.reason, auth.user.scope, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'PaymentRecord',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'payment-record.cancel',
+        entityType: 'PaymentRecord',
+        entityId: result.id,
+        traceId,
+        reason: input.reason,
+        after: paymentAuditSnapshot(result),
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 }
 

@@ -5,6 +5,7 @@ import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { CommandsService } from '../commands/commands.service.js';
 import { getOrCreateTraceId } from '../common/request-context.js';
 import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contract.js';
@@ -35,7 +36,7 @@ type ConfirmBody = {
 };
 
 @Controller('difference-disposals')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class DifferenceDisposalsController {
   constructor(
     private readonly differenceDisposalsService: DifferenceDisposalsService,
@@ -67,36 +68,38 @@ export class DifferenceDisposalsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
       return command.command.responseBody as DifferenceDisposalView;
     }
 
-    const result = await this.differenceDisposalsService.create(input);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'DifferenceDisposal',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'difference-disposal.create',
-      entityType: 'DifferenceDisposal',
-      entityId: result.id,
-      traceId,
-      reason: input.reason,
-      after: {
-        disposalNo: result.disposalNo,
-        direction: result.direction,
-        method: result.method,
-        status: result.status,
-        amount: result.amount,
-        itemCount: result.items.length,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.differenceDisposalsService.create(input, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'DifferenceDisposal',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'difference-disposal.create',
+        entityType: 'DifferenceDisposal',
+        entityId: result.id,
+        traceId,
+        reason: input.reason,
+        after: {
+          disposalNo: result.disposalNo,
+          direction: result.direction,
+          method: result.method,
+          status: result.status,
+          amount: result.amount,
+          itemCount: result.items.length,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Post(':id/confirm')
@@ -117,35 +120,38 @@ export class DifferenceDisposalsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
+      if (auth.user.scope) await this.differenceDisposalsService.get(input.id, auth.user.scope);
       return command.command.responseBody as DifferenceDisposalView;
     }
 
-    const result = await this.differenceDisposalsService.confirm(input.id, { expectedVersion: input.expectedVersion }, auth.user.scope);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'DifferenceDisposal',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'difference-disposal.confirm',
-      entityType: 'DifferenceDisposal',
-      entityId: result.id,
-      traceId,
-      after: {
-        disposalNo: result.disposalNo,
-        direction: result.direction,
-        method: result.method,
-        status: result.status,
-        amount: result.amount,
-        confirmedAt: result.confirmedAt,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.differenceDisposalsService.confirm(input.id, { expectedVersion: input.expectedVersion }, auth.user.scope, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'DifferenceDisposal',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'difference-disposal.confirm',
+        entityType: 'DifferenceDisposal',
+        entityId: result.id,
+        traceId,
+        after: {
+          disposalNo: result.disposalNo,
+          direction: result.direction,
+          method: result.method,
+          status: result.status,
+          amount: result.amount,
+          confirmedAt: result.confirmedAt,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 }
 

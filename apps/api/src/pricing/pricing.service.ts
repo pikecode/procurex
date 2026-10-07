@@ -1,13 +1,18 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { evaluateStoredValueFunding } from '../../../../packages/domain/src/funding.js';
 import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
-import { settlementPeriod } from '../../../../packages/domain/src/settlement-period.js';
-import { PaymentStatus, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import { effectiveOrderItemQuantity } from '../supplier-orders/fulfillment-status.js';
+import { lockFundingRequest, requestFundingWhere, synchronizeRequestFunding } from '../purchase-requests/request-funding.js';
+import { SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { Prisma } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { lockPricePublication } from './price-checkpoint.js';
+import { createFrozenPriceDocuments } from './frozen-price-adjustments.js';
+import { effectivePriceVersion } from './effective-price.js';
 
 export type PriceQuote = {
+  supplyVersionId: string | null;
+  templateId: string | null;
   scopeId: string;
   versionId: string;
   productId: string;
@@ -51,6 +56,7 @@ export type PriceChangeAdjustmentView = {
 };
 
 export type PublishPriceInput = {
+  templateId?: string;
   productId: string;
   supplierId: string;
   salesPrice: string;
@@ -75,15 +81,12 @@ export class PricingService {
   constructor(private readonly database: DatabaseService) {}
 
   async previewImpact(input: PriceImpactPreviewInput): Promise<PriceImpactPreview> {
+    await this.requireTemplatePair(this.database.client, input);
     const scope = await this.database.client.priceScope.findUnique({
-      where: { productId_supplierId: { productId: input.productId, supplierId: input.supplierId } },
+      where: { productId_supplierId_templateKey: { productId: input.productId, supplierId: input.supplierId, templateKey: input.templateId ?? '' } },
       include: { versions: { orderBy: [{ effectiveAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }] } },
     });
-    if (!scope) {
-      throw new NotFoundException({ code: 'PRICE_SCOPE_NOT_FOUND', message: 'Price scope was not found' });
-    }
-
-    const nextVersion = scope.versions.find((version) => version.effectiveAt > input.effectiveAt);
+    const nextVersion = scope?.versions.find((version) => version.effectiveAt > input.effectiveAt);
     const orders = await this.database.client.supplierOrder.findMany({
       where: {
         supplierId: input.supplierId,
@@ -91,24 +94,30 @@ export class PricingService {
         items: { some: { productId: input.productId } },
       },
       include: {
-        request: { select: { submittedAt: true } },
-        items: { where: { productId: input.productId } },
+        request: { select: { submittedAt: true, templateId: true } },
+        items: { where: { productId: input.productId }, include: { shipmentItems: true, discrepancies: { include: { returnRecord: true } } } },
       },
     });
-    const impacted = orders.flatMap((order) => {
+    const impacted = (await Promise.all(orders.map(async (order) => {
       const baseline = order.firstShippedAt ?? order.request.submittedAt;
       if (baseline < input.effectiveAt || (nextVersion && baseline >= nextVersion.effectiveAt)) return [];
+      if (input.templateId && order.request.templateId !== input.templateId) return [];
+      const current = await effectivePriceVersion(this.database.client, input.productId, input.supplierId, baseline, order.request.templateId);
       const item = order.items[0];
       if (!item) return [];
+      const salesPrice = input.templateId || !current?.scope.templateKey ? input.salesPrice : current.salesPrice;
+      const supplyPrice = input.templateId ? current?.supplyPrice ?? input.supplyPrice : input.supplyPrice;
+      if (!input.templateId && current?.scope.templateKey && lineAmount(effectiveOrderItemQuantity(item), salesPrice).eq(item.salesLineAmount) && lineAmount(effectiveOrderItemQuantity(item), supplyPrice).eq(item.supplyLineAmount)) return [];
+      if (order.settlementMode === 'SUPPLIER_TERM' && !new Decimal(salesPrice).equals(supplyPrice)) throw new ConflictException({ code: 'DIRECT_TERM_PRICES_MUST_MATCH', message: 'Historical direct supplier-term orders require equal prices' });
       return [{
         supplierOrderId: order.id,
         supplierOrderNo: order.supplierOrderNo,
-        salesDelta: lineAmount(item.quantity, input.salesPrice).minus(item.salesLineAmount).toFixed(2),
-        supplyDelta: lineAmount(item.quantity, input.supplyPrice).minus(item.supplyLineAmount).toFixed(2),
+        salesDelta: lineAmount(effectiveOrderItemQuantity(item), salesPrice).minus(item.salesLineAmount).toFixed(2),
+        supplyDelta: lineAmount(effectiveOrderItemQuantity(item), supplyPrice).minus(item.supplyLineAmount).toFixed(2),
       }];
-    });
+    }))).flat();
     return {
-      scopeId: scope.id,
+      scopeId: scope?.id ?? '',
       effectiveAt: input.effectiveAt.toISOString(),
       affectedOrderCount: impacted.length,
       salesDelta: impacted.reduce((sum, order) => sum.plus(order.salesDelta), toMoney(0)).toFixed(2),
@@ -117,20 +126,24 @@ export class PricingService {
     };
   }
 
-  async publishPrice(input: PublishPriceInput): Promise<PriceQuote> {
-    return this.database.client.$transaction(async (tx) => {
+  async publishPrice(input: PublishPriceInput, transaction?: Prisma.TransactionClient): Promise<PriceQuote> {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockPricePublication(tx, true);
+      await this.requireTemplatePair(tx, input);
+      if (input.templateId) await tx.$queryRaw`SELECT id FROM "OrderTemplate" WHERE id = ${input.templateId}::uuid FOR UPDATE`;
       const scope = await tx.priceScope.upsert({
-        where: { productId_supplierId: { productId: input.productId, supplierId: input.supplierId } },
+        where: { productId_supplierId_templateKey: { productId: input.productId, supplierId: input.supplierId, templateKey: input.templateId ?? '' } },
         update: {},
-        create: { productId: input.productId, supplierId: input.supplierId },
+        create: { productId: input.productId, supplierId: input.supplierId, templateKey: input.templateId ?? '' },
       });
-      if (input.salesPrice !== input.supplyPrice) {
+      if (!new Decimal(input.salesPrice).equals(input.supplyPrice)) {
         const supplier = await tx.supplier.findUnique({
           where: { id: input.supplierId },
           select: { defaultSettlementMode: true, templateSupplierSettings: { select: { settlementMode: true } } },
         });
-        const hasDirectSettlement = supplier?.defaultSettlementMode === 'SUPPLIER_TERM'
-          || supplier?.templateSupplierSettings.some((setting) => setting.settlementMode === 'SUPPLIER_TERM');
+        const setting = input.templateId ? await tx.templateSupplierSetting.findUnique({ where: { templateId_supplierId: { templateId: input.templateId, supplierId: input.supplierId } } }) : null;
+        const hasDirectSettlement = input.templateId ? (setting?.settlementMode ?? supplier?.defaultSettlementMode) === 'SUPPLIER_TERM'
+          : supplier?.defaultSettlementMode === 'SUPPLIER_TERM';
         if (hasDirectSettlement) {
           throw new ConflictException({
             code: 'DIRECT_TERM_PRICES_MUST_MATCH',
@@ -139,8 +152,10 @@ export class PricingService {
         }
       }
       const latest = await tx.priceVersion.findFirst({ where: { scopeId: scope.id }, orderBy: { revision: 'desc' }, select: { revision: true } });
+      const supplySource = input.templateId ? await effectivePriceVersion(tx, input.productId, input.supplierId, input.effectiveAt) : null;
       const version = await tx.priceVersion.create({
         data: {
+          supplySourceVersionId: supplySource?.supplyVersionId,
           scopeId: scope.id,
           salesPrice: input.salesPrice,
           supplyPrice: input.supplyPrice,
@@ -149,6 +164,7 @@ export class PricingService {
           revision: (latest?.revision ?? 0) + 1,
         },
       });
+      await this.requireDirectSchedulesCompatible(tx, input);
       const nextVersion = await tx.priceVersion.findFirst({
         where: { scopeId: scope.id, effectiveAt: { gt: input.effectiveAt } },
         orderBy: { effectiveAt: 'asc' },
@@ -159,18 +175,24 @@ export class PricingService {
           status: { notIn: [SupplierOrderStatus.COMPLETED, SupplierOrderStatus.CANCELED, SupplierOrderStatus.REJECTED] },
           items: { some: { productId: input.productId } },
         },
-        include: { request: { select: { submittedAt: true } }, items: { where: { productId: input.productId } } },
+        include: { request: { select: { submittedAt: true, templateId: true } }, items: { where: { productId: input.productId }, include: { shipmentItems: true, discrepancies: { include: { returnRecord: true } } } } },
       });
-      const impacted = orders.flatMap((order) => {
+      const impacted = (await Promise.all(orders.map(async (order) => {
         const baseline = order.firstShippedAt ?? order.request.submittedAt;
         const item = order.items[0];
         if (!item || baseline < input.effectiveAt || (nextVersion && baseline >= nextVersion.effectiveAt)) return [];
+        if (input.templateId && order.request.templateId !== input.templateId) return [];
+        const current = await effectivePriceVersion(tx, input.productId, input.supplierId, baseline, order.request.templateId);
+        const salesPrice = input.templateId || !current?.scope.templateKey ? input.salesPrice : current.salesPrice;
+        const supplyPrice = input.templateId ? current?.supplyPrice ?? input.supplyPrice : input.supplyPrice;
+        if (!input.templateId && current?.scope.templateKey && lineAmount(effectiveOrderItemQuantity(item), salesPrice).eq(item.salesLineAmount) && lineAmount(effectiveOrderItemQuantity(item), supplyPrice).eq(item.supplyLineAmount)) return [];
+        if (order.settlementMode === 'SUPPLIER_TERM' && !new Decimal(salesPrice).equals(supplyPrice)) throw new ConflictException({ code: 'DIRECT_TERM_PRICES_MUST_MATCH', message: 'Historical direct supplier-term orders require equal prices' });
         return [{
           supplierOrderId: order.id,
-          salesDelta: lineAmount(item.quantity, input.salesPrice).minus(item.salesLineAmount).toFixed(2),
-          supplyDelta: lineAmount(item.quantity, input.supplyPrice).minus(item.supplyLineAmount).toFixed(2),
+          salesDelta: lineAmount(effectiveOrderItemQuantity(item), salesPrice).minus(item.salesLineAmount).toFixed(2),
+          supplyDelta: lineAmount(effectiveOrderItemQuantity(item), supplyPrice).minus(item.supplyLineAmount).toFixed(2),
         }];
-      });
+      }))).flat();
       const run = await tx.priceChangeRun.create({
         data: {
           affectedOrderCount: impacted.length,
@@ -180,16 +202,23 @@ export class PricingService {
           orders: { create: impacted },
         },
       });
+      if (input.templateId) {
+        const template = await tx.orderTemplate.findUniqueOrThrow({ where: { id: input.templateId }, select: { updatedAt: true } });
+        await tx.orderTemplate.update({ where: { id: input.templateId }, data: { updatedAt: new Date(Math.max(Date.now(), template.updatedAt.getTime() + 1)) } });
+      }
       return {
+        supplyVersionId: input.templateId ? version.supplySourceVersionId : version.id,
+        templateId: scope.templateKey || null,
         scopeId: scope.id, versionId: version.id, productId: scope.productId, supplierId: scope.supplierId,
         salesPrice: version.salesPrice.toString(), supplyPrice: version.supplyPrice.toString(),
         effectiveAt: version.effectiveAt.toISOString(), reason: version.reason, revision: version.revision, runId: run.id,
       };
-    });
+    };
+    return transaction ? execute(transaction) : this.database.client.$transaction(execute);
   }
 
-  async getRun(id: string): Promise<PriceChangeRunView> {
-    const run = await this.database.client.priceChangeRun.findUnique({
+  async getRun(id: string, transaction?: Prisma.TransactionClient): Promise<PriceChangeRunView> {
+    const run = await (transaction ?? (this.database.client as Prisma.TransactionClient)).priceChangeRun.findUnique({
       where: { id },
       include: {
         versions: { select: { priceVersionId: true } },
@@ -223,8 +252,9 @@ export class PricingService {
     };
   }
 
-  async processRun(id: string): Promise<PriceChangeRunView> {
-    await this.database.client.$transaction(async (tx) => {
+  async processRun(id: string, transaction?: Prisma.TransactionClient): Promise<PriceChangeRunView> {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockPricePublication(tx);
       const run = await tx.priceChangeRun.findUnique({
         where: { id },
         include: {
@@ -239,9 +269,13 @@ export class PricingService {
 
       for (const runOrder of run.orders) {
         await lockSupplierOrder(tx, runOrder.supplierOrderId);
+        const lockedRunOrder = await tx.priceChangeRunOrder.findUniqueOrThrow({ where: {
+          runId_supplierOrderId: { runId: id, supplierOrderId: runOrder.supplierOrderId },
+        } });
+        if (lockedRunOrder.status !== 'PENDING') continue;
         const order = await tx.supplierOrder.findUnique({
           where: { id: runOrder.supplierOrderId },
-          include: { items: { where: { productId: version.scope.productId } }, request: { select: { submittedAt: true } } },
+          include: { items: { where: { productId: version.scope.productId }, include: { shipmentItems: true, discrepancies: { include: { returnRecord: true } } } }, request: { select: { submittedAt: true, templateId: true } } },
         });
         const item = order?.items[0];
         if (!order || !item || order.status === SupplierOrderStatus.COMPLETED || order.status === SupplierOrderStatus.CANCELED || order.status === SupplierOrderStatus.REJECTED) {
@@ -249,27 +283,25 @@ export class PricingService {
           continue;
         }
         const baseline = order.firstShippedAt ?? order.request.submittedAt;
-        const currentVersion = await tx.priceVersion.findFirst({
-          where: { scopeId: version.scopeId, effectiveAt: { lte: baseline } },
-          orderBy: [{ effectiveAt: 'desc' }, { revision: 'desc' }],
-          select: { id: true },
-        });
-        if (currentVersion?.id !== version.id) {
+        const currentVersion = await effectivePriceVersion(tx, item.productId, order.supplierId, baseline, order.request.templateId);
+        if (!currentVersion || (version.scope.templateKey ? currentVersion.id : currentVersion.supplyVersionId) !== version.id) {
           await tx.priceChangeRunOrder.update({
             where: { runId_supplierOrderId: { runId: id, supplierOrderId: runOrder.supplierOrderId } },
             data: { status: 'SUCCEEDED', salesDelta: 0, supplyDelta: 0 },
           });
           continue;
         }
-        const salesDelta = lineAmount(item.quantity, version.salesPrice).minus(item.salesLineAmount);
-        const supplyDelta = lineAmount(item.quantity, version.supplyPrice).minus(item.supplyLineAmount);
+        const quantity = effectiveOrderItemQuantity(item);
+        const salesDelta = lineAmount(quantity, currentVersion.salesPrice).minus(item.salesLineAmount);
+        const supplyDelta = lineAmount(quantity, currentVersion.supplyPrice).minus(item.supplyLineAmount);
         await tx.orderItem.update({
           where: { id: item.id },
           data: {
-            salesUnitPrice: version.salesPrice,
-            supplyUnitPrice: version.supplyPrice,
-            salesLineAmount: lineAmount(item.quantity, version.salesPrice),
-            supplyLineAmount: lineAmount(item.quantity, version.supplyPrice),
+            salesPriceVersionId: currentVersion.id, supplyPriceVersionId: currentVersion.supplyVersionId,
+            salesUnitPrice: currentVersion.salesPrice,
+            supplyUnitPrice: currentVersion.supplyPrice,
+            salesLineAmount: lineAmount(quantity, currentVersion.salesPrice),
+            supplyLineAmount: lineAmount(quantity, currentVersion.supplyPrice),
           },
         });
         await tx.supplierOrder.update({
@@ -278,62 +310,36 @@ export class PricingService {
         });
         const request = await tx.purchaseRequest.update({
           where: { id: order.requestId },
-          data: { salesGoodsAmount: { increment: salesDelta }, supplyGoodsAmount: { increment: supplyDelta } },
+          data: { salesGoodsAmount: { increment: salesDelta }, supplyGoodsAmount: { increment: supplyDelta }, version: { increment: 1 } },
         });
-        const account = await tx.storeAccount.findUnique({ where: { storeId: request.storeId } });
-        const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), request.salesGoodsAmount);
-        await tx.purchaseRequest.update({
-          where: { id: request.id },
-          data: {
-            paymentStatus: funding.canConfirm ? PaymentStatus.PAID : PaymentStatus.UNPAID,
-            paidAmount: funding.paidAmount.toFixed(2),
-            shortfallAmount: funding.shortfallAmount.toFixed(2),
-          },
-        });
+        await tx.requestItem.updateMany({ where: { requestId: request.id, supplierId: order.supplierId, productId: item.productId }, data: {
+          priceVersionId: currentVersion.id, supplyPriceVersionId: currentVersion.supplyVersionId, salesUnitPrice: currentVersion.salesPrice, supplyUnitPrice: currentVersion.supplyPrice,
+          salesLineAmount: lineAmount(quantity, currentVersion.salesPrice), supplyLineAmount: lineAmount(quantity, currentVersion.supplyPrice),
+        } });
         const adjustment = await tx.priceChangeAdjustment.create({
           data: {
             runId: id,
             supplierOrderId: order.id,
             orderItemId: item.id,
             previousSalesPrice: item.salesUnitPrice,
-            newSalesPrice: version.salesPrice,
+            newSalesPrice: currentVersion.salesPrice,
             previousSupplyPrice: item.supplyUnitPrice,
-            newSupplyPrice: version.supplyPrice,
+            newSupplyPrice: currentVersion.supplyPrice,
             salesDelta,
             supplyDelta,
           },
         });
-        const snapshots = await tx.settlementItemSnapshot.findMany({
-          where: { settlementItemId: { in: [
-            settlementItemId(order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE', order.id),
-            settlementItemId(order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'SUPPLIER_PAYABLE', order.id),
-          ] } },
-        });
-        const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.settlementItemId));
-        const originalPeriod = settlementPeriod(order.settlementCycleSnapshot as 'WEEKLY' | 'HALF_MONTHLY' | 'MONTHLY' | 'IMMEDIATE', order.firstShippedAt ?? order.request.submittedAt);
-        const currentPeriod = settlementPeriod(order.settlementCycleSnapshot as 'WEEKLY' | 'HALF_MONTHLY' | 'MONTHLY' | 'IMMEDIATE', new Date());
-        const originalPeriodKey = `${order.settlementCycleSnapshot}:${originalPeriod.startDate}:${addOneDay(originalPeriod.endDate)}`;
-        const settlementPeriodKey = `${order.settlementCycleSnapshot}:${currentPeriod.startDate}:${addOneDay(currentPeriod.endDate)}`;
-        const documents = [
-          { side: 'STORE', amount: salesDelta, kind: order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'STORE_RECEIVABLE' },
-          { side: 'SUPPLIER', amount: supplyDelta, kind: order.settlementMode === 'SUPPLIER_TERM' ? 'DIRECT' : 'SUPPLIER_PAYABLE' },
-        ].filter(({ amount, kind }) => !amount.isZero() && snapshotIds.has(settlementItemId(kind as 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT', order.id)));
-        for (const document of documents) {
-          await tx.adjustmentDocument.create({
-            data: {
-              sourcePriceChangeId: adjustment.id,
-              supplierOrderId: order.id,
-              storeId: order.storeId,
-              supplierId: order.supplierId,
-              side: document.side,
-              amount: document.amount.toFixed(2),
-              originalPeriodKey,
-              settlementPeriodKey,
-              sourceRevision: order.version + 1,
-              items: { create: { orderItemId: item.id, amount: document.amount.toFixed(2) } },
-            },
-          });
+        const hasFunding = await tx.fundingAllocation.count({ where: requestFundingWhere(request.id) });
+        if (hasFunding) {
+          await synchronizeRequestFunding(tx, request.id, { sourceId: adjustment.id, priceAdjustmentId: adjustment.id });
+        } else {
+          // Legacy orders without booked funds must not acquire fictional payment through repricing.
+          await tx.purchaseRequest.update({ where: { id: request.id }, data: {
+            shortfallAmount: order.settlementMode === 'STORED_VALUE' ? Decimal.max(0, new Decimal(request.salesGoodsAmount).minus(request.paidAmount)) : 0,
+          } });
         }
+        await createFrozenPriceDocuments(tx, { order, baseline, adjustmentId: adjustment.id, itemId: item.id, quantity,
+          salesDelta, supplyDelta, salesPrice: new Decimal(currentVersion.salesPrice), supplyPrice: new Decimal(currentVersion.supplyPrice) });
         await tx.priceChangeRunOrder.update({
           where: { runId_supplierOrderId: { runId: id, supplierOrderId: order.id } },
           data: { status: 'SUCCEEDED', salesDelta, supplyDelta },
@@ -341,8 +347,9 @@ export class PricingService {
       }
       const failedOrders = await tx.priceChangeRunOrder.count({ where: { runId: id, status: 'FAILED' } });
       await tx.priceChangeRun.update({ where: { id }, data: { status: failedOrders ? 'FAILED' : 'SUCCEEDED' } });
-    });
-    return this.getRun(id);
+      return this.getRun(id, tx);
+    };
+    return transaction ? execute(transaction) : this.database.client.$transaction(execute);
   }
 
   async listAdjustments(runId: string): Promise<PriceChangeAdjustmentView[]> {
@@ -363,25 +370,9 @@ export class PricingService {
     }));
   }
 
-  async getEffectivePrice(productId: string, supplierId: string, at: Date): Promise<PriceQuote> {
-    const scope = await this.database.client.priceScope.findUnique({
-      where: { productId_supplierId: { productId, supplierId } },
-    });
-
-    if (!scope) {
-      throw new NotFoundException({
-        code: 'PRICE_SCOPE_NOT_FOUND',
-        message: 'Price scope was not found',
-      });
-    }
-
-    const version = await this.database.client.priceVersion.findFirst({
-      where: {
-        scopeId: scope.id,
-        effectiveAt: { lte: at },
-      },
-      orderBy: [{ effectiveAt: 'desc' }, { revision: 'desc' }],
-    });
+  async getEffectivePrice(productId: string, supplierId: string, at: Date, templateId?: string, transaction?: Prisma.TransactionClient): Promise<PriceQuote> {
+    const client = transaction ?? (this.database.client as Prisma.TransactionClient);
+    const version = await effectivePriceVersion(client, productId, supplierId, at, templateId);
 
     if (!version) {
       throw new NotFoundException({
@@ -391,16 +382,39 @@ export class PricingService {
     }
 
     return {
-      scopeId: scope.id,
+      supplyVersionId: version.supplyVersionId,
+      templateId: version.scope.templateKey || null,
+      scopeId: version.scopeId,
       versionId: version.id,
-      productId: scope.productId,
-      supplierId: scope.supplierId,
+      productId: version.scope.productId,
+      supplierId: version.scope.supplierId,
       salesPrice: version.salesPrice.toString(),
       supplyPrice: version.supplyPrice.toString(),
       effectiveAt: version.effectiveAt.toISOString(),
       reason: version.reason,
       revision: version.revision,
     };
+  }
+
+  async quotePrice(input: { productId: string; supplierId: string; effectiveAt: Date; templateId?: string }): Promise<PriceQuote> {
+    await this.requireTemplatePair(this.database.client, input);
+    return this.getEffectivePrice(input.productId, input.supplierId, input.effectiveAt, input.templateId);
+  }
+
+  private async requireDirectSchedulesCompatible(tx: Prisma.TransactionClient, input: PublishPriceInput) {
+    const supplier = await tx.supplier.findUniqueOrThrow({ where: { id: input.supplierId } });
+    const items = await tx.templateItem.findMany({ where: { productId: input.productId, template: { isArchived: false }, suppliers: { some: { supplierId: input.supplierId } } },
+      include: { template: { include: { settings: { where: { supplierId: input.supplierId } } } } } });
+    const start = new Date(Math.max(Date.now(), input.effectiveAt.getTime()));
+    for (const item of items) {
+      if (input.templateId && item.templateId !== input.templateId) continue;
+      if ((item.template.settings[0]?.settlementMode ?? supplier.defaultSettlementMode) !== 'SUPPLIER_TERM') continue;
+      const future = await tx.priceVersion.findMany({ where: { scope: { productId: input.productId, supplierId: input.supplierId, templateKey: { in: ['', item.templateId] } }, effectiveAt: { gt: start } }, select: { effectiveAt: true } });
+      for (const at of [start, ...future.map(version => version.effectiveAt)]) {
+        const quote = await effectivePriceVersion(tx, input.productId, input.supplierId, at, item.templateId);
+        if (quote && !quote.salesPrice.equals(quote.supplyPrice)) throw new ConflictException({ code: 'DIRECT_TERM_PRICES_MUST_MATCH', message: 'Supplier cost change would unbalance a current or scheduled direct template price' });
+      }
+    }
   }
 
   async listVersions(scopeId: string): Promise<PriceQuote[]> {
@@ -418,6 +432,8 @@ export class PricingService {
     });
 
     return versions.map((version) => ({
+      supplyVersionId: scope.templateKey ? version.supplySourceVersionId : version.id,
+      templateId: scope.templateKey || null,
       scopeId: scope.id,
       versionId: version.id,
       productId: scope.productId,
@@ -429,18 +445,27 @@ export class PricingService {
       revision: version.revision,
     }));
   }
+
+  private async requireTemplatePair(client: Prisma.TransactionClient, input: { templateId?: string; productId: string; supplierId: string; effectiveAt: Date; supplyPrice?: string }) {
+    if (!input.templateId) return;
+    const item = await client.templateItem.findFirst({ where: { templateId: input.templateId, productId: input.productId,
+      template: { isArchived: false }, suppliers: { some: { supplierId: input.supplierId } } } });
+    if (!item) throw new ConflictException({ code: 'TEMPLATE_PRICE_PAIR_NOT_ALLOWED', message: 'Product and supplier must be associated with an active template' });
+    if (input.supplyPrice !== undefined) {
+      const supply = await effectivePriceVersion(client, input.productId, input.supplierId, input.effectiveAt);
+      if (!supply || !supply.supplyPrice.equals(input.supplyPrice)) throw new ConflictException({ code: 'TEMPLATE_SUPPLY_PRICE_READ_ONLY', message: 'Template prices must use the effective shared supplier cost; publish cost changes in the shared scope' });
+    }
+  }
 }
 
 async function lockSupplierOrder(tx: Prisma.TransactionClient, supplierOrderId: string): Promise<void> {
+  const order = await tx.supplierOrder.findUniqueOrThrow({ where: { id: supplierOrderId }, select: { storeId: true, requestId: true } });
+  await lockFundingRequest(tx, order.storeId, order.requestId);
+  const ids = (['DIRECT', 'STORE_RECEIVABLE', 'SUPPLIER_PAYABLE'] as const).map(kind => settlementItemId(kind, supplierOrderId)).sort();
+  for (const id of ids) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id}::text, 0))`;
   await tx.$queryRaw`SELECT id FROM "SupplierOrder" WHERE id = ${supplierOrderId}::uuid FOR UPDATE`;
 }
 
 function settlementItemId(kind: 'STORE_RECEIVABLE' | 'SUPPLIER_PAYABLE' | 'DIRECT', supplierOrderId: string): string {
   return Buffer.from(JSON.stringify({ kind, supplierOrderId })).toString('base64url');
-}
-
-function addOneDay(value: string): string {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + 1);
-  return date.toISOString().slice(0, 10);
 }

@@ -20,6 +20,7 @@ test('reports use final received quantities, split freight, and exclude direct o
   const amounts = await service.orderAmounts({ from: '2026-09-01', to: '2026-09-30' });
   assert.equal(amounts.dateBasis, 'completedAt');
   assert.deepEqual(amounts.months[0], { month: '2026-09', orderCount: 1, goodsAmount: '96.00', freightAmount: '5.00', totalAmount: '101.00' });
+  assert.equal(queries[0].where.completedAt.not, null);
 
   const quantities = await service.productQuantities({ from: '2026-09-01', to: '2026-09-30' });
   assert.equal(quantities.products[0]?.quantity, '8.000000');
@@ -31,6 +32,22 @@ test('reports use final received quantities, split freight, and exclude direct o
   assert.equal(profit.totals.freightAmount, '5.00');
   assert.equal(queries[2]?.where.settlementMode.not, 'SUPPLIER_TERM');
   assert.equal(queries[2]?.where.firstShippedAt.gte.toISOString(), '2026-08-31T16:00:00.000Z');
+});
+
+test('supplier order reports use supply amounts and preserve freight rather than revealing sales', async () => {
+  const service = new ReportsService({ client: { supplierOrder: { findMany: async () => [{ id: 'order', storeId: 'store', supplierId: 'supplier',
+    completedAt: new Date('2026-09-10'), shipments: [{ freight: '5' }], items: [{ receivedQuantity: '10', salesUnitPrice: '12', supplyUnitPrice: '9' }] }] } } } as any);
+  const result = await service.orderAmounts({ amountBasis: 'SUPPLY' });
+  assert.equal(result.amountBasis, 'SUPPLY'); assert.equal(result.orders[0]!.goodsAmount, '90.00'); assert.equal(result.orders[0]!.totalAmount, '95.00');
+  assert.equal(result.months[0]!.totalAmount, '95.00'); assert.doesNotMatch(result.metric, /sales/);
+});
+
+test('old supplier sales exports remain unavailable even when saved and current scopes match', async () => {
+  const scope = { type: 'SUPPLIER', supplierId: 'supplier' };
+  const row = { reportType: 'order-amounts', permissionScope: scope, filters: {}, status: 'READY', csvContent: 'sales-private', expiresAt: new Date(Date.now() + 60000) };
+  const service = new ReportsService({ client: { exportJob: { findFirst: async () => row } } } as any);
+  assert.equal(await service.exportContent('job', 'user', ['SUPPLIER'], scope), null);
+  assert.equal(await service.exportStatus('job', 'user', ['SUPPLIER'], scope), null);
 });
 
 test('report filters reject impossible dates and product quantity ranges beyond three months', () => {

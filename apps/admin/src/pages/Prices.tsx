@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alert, App, Button, Descriptions, Form, Input, InputNumber, Popconfirm, Select, Table, Tooltip } from 'antd';
 import { Check, Eye, Play, RotateCcw } from 'lucide-react';
 import { ApiError, request, type User } from '../lib/api';
@@ -15,6 +16,7 @@ const statuses: Record<string, string> = { PENDING: '待执行', PROCESSING: '�
 const time = (value: string) => new Date(value).toLocaleString('zh-CN');
 const initialTime = () => { const date = new Date(); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 export default function Prices({ user }: { user: User }) {
+  const [searchParams] = useSearchParams(); const initialProductId = searchParams.get('productId');
   const products = useRows<CatalogProduct>('/products'); const suppliers = useRows<CatalogSupplier>('/suppliers'); const templates = useRows<Template>('/templates'); const submissions = useRows<Submission>('/commands?limit=100');
   const [form] = Form.useForm(); const templateId = Form.useWatch('templateId', form); const productId = Form.useWatch('productId', form);
   const [template, setTemplate] = useState<TemplateDetail | null>(null); const [templateLoading, setTemplateLoading] = useState(false); const [templateError, setTemplateError] = useState('');
@@ -23,6 +25,7 @@ export default function Prices({ user }: { user: User }) {
   const [job, setJob] = useState<Job | null>(null); const [jobInput, setJobInput] = useState(''); const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const lock = useRef(false); const sequence = useRef(0); const jobSequence = useRef(0); const { message } = App.useApp();
   const referencesError = products.error || suppliers.error || templates.error || templateError;
+  useEffect(() => { if (initialProductId && products.rows.some(row => row.id === initialProductId)) form.setFieldValue('productId', initialProductId); }, [initialProductId, products.rows, form]);
   useEffect(() => {
     try { setPending(readPriceCommand(user.id)); } catch (failure) { setStorageError((failure as Error).message); }
     try { setJobInput(localStorage.getItem(`procurex-admin-price-job:${user.id}`) || ''); } catch { /* Job ID can also be entered manually. */ }

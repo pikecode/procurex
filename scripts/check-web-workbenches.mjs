@@ -127,6 +127,13 @@ for (const path of [
 checkSyntax('apps/web/billing.js');
 checkSyntax('apps/web/app.js');
 checkSyntax('apps/web/product-app/main.js');
+for (const name of ['workspace', 'workspace-session', 'workspace-management', 'workspace-operations', 'workspace-purchasing', 'workspace-supplier', 'workspace-store', 'workspace-finance', 'workspace-payments', 'workspace-differences', 'workspace-media']) {
+  checkSyntax(`apps/web/product-app/${name}.js`);
+}
+assertExists('apps/web/product-app/workspace.css', 'formal workspace styles');
+assertExists('apps/web/vendor/lucide.min.js', 'self-hosted workspace icons');
+assertIncludes(productAppMain, 'startWorkspace', 'formal workspace entry');
+assertIncludes(productAppMain, "get('demo') === '1'", 'explicit local demo mode');
 checkSyntax('apps/web/product-app/api.js');
 checkSyntax('apps/web/product-app/shell.js');
 checkSyntax('apps/web/product-app/state.js');

@@ -163,8 +163,10 @@ test('pricing service returns latest version effective at business time', async 
     assert.equal(frozenSupplierSnapshot.totalAmount.toFixed(2), '80.00');
     await prisma.supplierOrder.update({ where: { id: order.id }, data: { status: SupplierOrderStatus.COMPLETED } });
     const repricedRequest = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id: request.id } });
-    assert.equal(repricedRequest.shortfallAmount.toFixed(2), '130.00');
+    assert.equal(repricedRequest.shortfallAmount.toFixed(2), '0.00');
     assert.equal(repricedRequest.paymentStatus, 'UNPAID');
+    // A distinct blocked-funding fixture verifies the payment guard; company-term repricing itself is not a stored shortfall.
+    await prisma.purchaseRequest.update({ where: { id: request.id }, data: { shortfallAmount: '130.00' } });
     const storeSettlementItemId = Buffer.from(JSON.stringify({ kind: 'STORE_RECEIVABLE', supplierOrderId: order.id })).toString('base64url');
     await assert.rejects(
       new PaymentRecordsService({ client: prisma } as never).preview([storeSettlementItemId]),
@@ -175,14 +177,24 @@ test('pricing service returns latest version effective at business time', async 
       new PaymentRecordsService({ client: prisma } as never).preview([supplierSettlementItemId]),
       (error: unknown) => error instanceof NotFoundException && JSON.stringify(error.getResponse()).includes('STORE_RECEIVABLE_UNSETTLED'),
     );
-    const statement = (await new SupplierStatementsService({ client: prisma } as never).list({ supplierId: supplier.id }))[0];
-    assert.ok(statement);
-    const statementDetail = await new SupplierStatementsService({ client: prisma } as never).get(statement.id);
-    const statementLine = statementDetail.lines.find((line) => line.supplierOrderId === order.id);
+    const statements = await new SupplierStatementsService({ client: prisma } as never).list({ supplierId: supplier.id });
+    assert.ok(statements.length);
+    const statementDetails = await Promise.all(statements.map(statement => new SupplierStatementsService({ client: prisma } as never).get(statement.id)));
+    // New adjustments belong to their actual period, which can differ from the historical base bill.
+    const statementLine = statementDetails.flatMap(detail => detail.lines).find((line) => line.supplierOrderId === order.id);
     assert.equal(statementLine?.goodsAmount, '80.00');
     assert.equal(statementLine?.priceAdjustments.reduce((sum, adjustment) => sum + Number(adjustment.supplyDelta), 0).toFixed(2), '30.00');
-    assert.equal(statementDetail.adjustmentAmount, '30.00');
-    assert.equal(statementDetail.payableAmount, '118.00');
+    assert.equal(statementDetails.reduce((sum, detail) => sum + Number(detail.adjustmentAmount), 0).toFixed(2), '30.00');
+    assert.equal(statementDetails.reduce((sum, detail) => sum + Number(detail.payableAmount), 0).toFixed(2), '118.00');
+    const sourceLinks = statementDetails.flatMap(detail => detail.adjustmentItems).filter(item => item.adjustmentId);
+    assert.ok(sourceLinks.length);
+    for (const source of sourceLinks) {
+      const linked = await new AdjustmentsService({ client: prisma } as never).get(source.adjustmentId!, { type: 'SUPPLIER', supplierId: supplier.id });
+      assert.equal(linked.supplierOrderId, source.supplierOrderId);
+      assert.equal(linked.adjustmentAmount, source.amount);
+      assert.ok(linked.direction.startsWith('SUPPLIER_'));
+      await assert.rejects(new AdjustmentsService({ client: prisma } as never).get(source.adjustmentId!, { type: 'SUPPLIER', supplierId: '00000000-0000-4000-8000-000000000000' }), NotFoundException);
+    }
     const persistedB05 = await new AdjustmentsService({ client: prisma } as never).list({ storeId: store.id, supplierId: supplier.id });
     const supplierAdjustment = persistedB05.find((item) => item.supplierOrderId === order.id && item.direction === 'SUPPLIER_PAYABLE_INCREASE');
     assert.ok(supplierAdjustment);
@@ -225,6 +237,7 @@ test('pricing service returns latest version effective at business time', async 
     await prisma.supplierOrder.deleteMany({ where: { supplier: { code: supplierCode } } });
     await prisma.purchaseRequest.deleteMany({ where: { requestNo: `PRICEREQ${runId}` } });
     await prisma.orderTemplate.deleteMany({ where: { code: `PRICETPL${runId}` } });
+    await prisma.storeAccount.deleteMany({ where: { store: { code: `PRICESTORE${runId}` } } });
     await prisma.store.deleteMany({ where: { code: `PRICESTORE${runId}` } });
     await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });
     await prisma.product.deleteMany({ where: { sku } });
@@ -288,6 +301,7 @@ test('an older price run cannot overwrite a newer effective price when processed
     await prisma.supplierOrder.deleteMany({ where: { supplier: { code: supplierCode } } });
     await prisma.purchaseRequest.deleteMany({ where: { requestNo } });
     await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
+    await prisma.storeAccount.deleteMany({ where: { store: { code: storeCode } } });
     await prisma.store.deleteMany({ where: { code: storeCode } });
     await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });
     await prisma.product.deleteMany({ where: { sku } });

@@ -341,25 +341,24 @@ function auditScope(auth: AuthenticatedSession) {
 }
 
 function parseCreateStoreBody(body: CreateStoreBody): StoreProfile & {
-  code: string;
+  code?: string;
   name: string;
   contactName?: string;
   contactPhone?: string;
   address?: string;
 } {
   const issues: ValidationIssue[] = [];
-  const code = requiredTrimmedString('code', body.code, issues);
+  const code = profileText('code', body.code, 80, false, false, issues) ?? undefined;
   const name = requiredTrimmedString('name', body.name, issues);
   const contactName = profileText('contactName', body.contactName, 120, true, false, issues) ?? undefined;
   const contactPhone = profileText('contactPhone', body.contactPhone, 32, true, false, issues) ?? undefined;
   const address = profileText('address', body.address, 300, true, false, issues) ?? undefined;
   const profile = parseStoreProfile(body, true, issues);
-  profileText('code', body.code, 80, true, false, issues);
   profileText('name', body.name, 200, true, false, issues);
 
   throwIfInvalid(issues);
 
-  return { ...profile, code: code!, name: name!, contactName, contactPhone, address };
+  return { ...profile, code, name: name!, contactName, contactPhone, address };
 }
 
 function parsePatchStoreBody(id: string, body: PatchStoreBody): StoreProfile & {

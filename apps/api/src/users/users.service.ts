@@ -2,6 +2,8 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { UserScopeType, UserStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import type { User } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { AuditService } from '../audit/audit.service.js';
+import { auditedMasterDataTransaction, type MasterDataAuditContext } from '../audit/master-data-audit.js';
 
 export type UserView = {
   id: string;
@@ -25,7 +27,7 @@ export type UpdateUserInput = {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly database: DatabaseService, private readonly audit: AuditService = new AuditService(database)) {}
 
   async listUsers(): Promise<UserView[]> {
     const users = await this.database.client.user.findMany({
@@ -36,7 +38,7 @@ export class UsersService {
     return users.map(toUserView);
   }
 
-  async updateUser(id: string, input: UpdateUserInput): Promise<UserView> {
+  async updateUser(id: string, input: UpdateUserInput, context?: MasterDataAuditContext): Promise<UserView> {
     const existing = await this.database.client.user.findUnique({
       where: { id },
       include: { roles: { include: { role: true } }, scopes: true },
@@ -58,10 +60,12 @@ export class UsersService {
       });
     }
 
-    const updated = await this.database.client.user.update({
-      where: { id },
-      data: { status: input.status, displayName: input.displayName, ...(input.scope ? { scopes: { upsert: { where: { userId: id }, create: scopeData(input.scope), update: scopeData(input.scope) } } } : {}) },
-      include: { roles: { include: { role: true } }, scopes: true },
+    const updated = await auditedMasterDataTransaction(this.database, this.audit, context, 'user.update', 'User', async tx => {
+      const changed = await tx.user.updateMany({ where: { id, updatedAt: { gte: new Date(version), lt: new Date(version + 1) } },
+        data: { status: input.status, displayName: input.displayName, updatedAt: new Date(Math.max(Date.now(), version + 1)) } });
+      if (!changed.count) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'User version has changed' });
+      if (input.scope) await tx.userScope.upsert({ where: { userId: id }, create: { userId: id, ...scopeData(input.scope) }, update: scopeData(input.scope) });
+      return tx.user.findUniqueOrThrow({ where: { id }, include: { roles: { include: { role: true } }, scopes: true } });
     });
 
     return toUserView(updated);

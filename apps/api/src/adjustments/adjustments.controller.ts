@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query, Req, UseGuards, ForbiddenException } fro
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
 import { validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
 import {
@@ -21,7 +22,7 @@ type ListQuery = {
 };
 
 @Controller('adjustments')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class AdjustmentsController {
   constructor(private readonly adjustmentsService: AdjustmentsService) {}
 

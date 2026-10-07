@@ -1,0 +1,19 @@
+Source: https://github.com/modood/Administrative-divisions-of-China
+Commit: c49d495b40ac73eb1a66f6eeae5f8fd10696f035
+File: dist/pca-code.json
+Data: 2023 statistical divisions snapshot, mainland coverage. Upstream no longer updates.
+Do not treat this snapshot as a current legal administrative register.
+
+        DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+                    Version 2, December 2004
+
+ Copyright (C) 2004 Sam Hocevar <sam@hocevar.net>
+
+ Everyone is permitted to copy and distribute verbatim or modified
+ copies of this license document, and changing it is allowed as long
+ as the name is changed.
+
+            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+  0. You just DO WHAT THE FUCK YOU WANT TO.

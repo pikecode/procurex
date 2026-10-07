@@ -1,0 +1,14 @@
+.prices-page { padding: 24rpx; }
+.prices-title { display: block; font-size: 36rpx; font-weight: 600; padding: 12rpx 0 24rpx; }
+.price-form, .price-section { padding: 24rpx 0; border-bottom: 1rpx solid #dfe5e1; }
+.price-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20rpx; }
+.price-pair .field, .price-pair picker { min-width: 0; }
+.picker-value { overflow-wrap: anywhere; min-height: 48rpx; padding: 16rpx; background: #fff; border: 1rpx solid #d5ded8; border-radius: 6rpx; }
+.price-form input, .price-form textarea { box-sizing: border-box; width: 100%; min-width: 0; }
+.price-form textarea { height: 140rpx; background: #fff; border: 1rpx solid #d5ded8; border-radius: 6rpx; padding: 16rpx; }
+.price-summary, .price-record { display: flex; flex-direction: column; gap: 12rpx; padding: 20rpx 0; overflow-wrap: anywhere; }
+.price-record { border-bottom: 1rpx solid #e5eae7; }
+.price-section-head { display: flex; align-items: center; justify-content: space-between; }
+.price-notice { padding: 20rpx; background: #e1f3e8; color: #175f40; }
+.price-pending { padding: 20rpx 0; border-bottom: 1rpx solid #c2d1c7; }
+.price-pending > text { display: block; padding-bottom: 16rpx; }

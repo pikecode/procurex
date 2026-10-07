@@ -6,6 +6,7 @@ test('price impact preview limits the effective interval and excludes completed 
   let query: any;
   const service = new PricingService({
     client: {
+      priceVersion: { findFirst: async () => null },
       priceScope: { findUnique: async () => ({
         id: 'scope-1',
         versions: [
@@ -19,7 +20,7 @@ test('price impact preview limits the effective interval and excludes completed 
           {
             id: 'order-1', supplierOrderNo: 'SO-1', firstShippedAt: null,
             request: { submittedAt: new Date('2026-09-15T00:00:00Z') },
-            items: [{ quantity: '10', salesUnitPrice: '10', supplyUnitPrice: '8', salesLineAmount: '100', supplyLineAmount: '80' }],
+            items: [{ quantity: '10', salesUnitPrice: '10', supplyUnitPrice: '8', salesLineAmount: '100', supplyLineAmount: '80', shipmentItems: [], discrepancies: [] }],
           },
           {
             id: 'order-after-next-price', supplierOrderNo: 'SO-2', firstShippedAt: null,

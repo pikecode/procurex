@@ -1,3 +1,4 @@
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { Controller, ForbiddenException, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
@@ -9,7 +10,7 @@ import { DirectStatementsService, type DirectStatementDetailView, type DirectSta
 type ListQuery = { storeId?: unknown; supplierId?: unknown; cycle?: unknown; settlementStatus?: unknown };
 
 @Controller('direct-statements')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class DirectStatementsController {
   constructor(private readonly service: DirectStatementsService) {}
 

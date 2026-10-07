@@ -1,4 +1,6 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
+import { SupplierPricePrivacyInterceptor } from './supplier-price-privacy.interceptor.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
@@ -61,7 +63,8 @@ type CreateFreightConfirmationBody = {
 };
 
 @Controller('supplier-orders')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
+@UseInterceptors(SupplierPricePrivacyInterceptor)
 export class SupplierOrdersController {
   constructor(
     private readonly supplierOrdersService: SupplierOrdersService,
@@ -71,7 +74,7 @@ export class SupplierOrdersController {
   ) {}
 
   @Get()
-  @RequireRoles('ADMIN', 'PURCHASER', 'SUPPLIER')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER')
   list(@Req() request: AuthenticatedRequest, @Query() query: ListQuery): Promise<SupplierOrderSummaryView[]> {
     const scope = supplierScope(request);
     const input = parseListQuery(query);
@@ -84,7 +87,7 @@ export class SupplierOrdersController {
   }
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'PURCHASER', 'SUPPLIER')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER')
   get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<SupplierOrderDetailView> {
     throwIfInvalid(validateUuid('id', id));
     const scope = supplierScope(request);
@@ -117,34 +120,36 @@ export class SupplierOrdersController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
+      if (supplierScope(request)) await this.supplierOrdersService.get(input.id, supplierScope(request));
       return command.command.responseBody as ShipmentView;
     }
 
-    const result = await this.supplierOrdersService.createShipment(input.id, input.expectedVersion, input.preview, supplierScope(request));
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'Shipment',
-      resourceId: result.id,
-      responseBody: result as never,
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.supplierOrdersService.createShipment(input.id, input.expectedVersion, input.preview, supplierScope(request), tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'Shipment',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'supplier-order.shipment.create',
+        entityType: 'Shipment',
+        entityId: result.id,
+        traceId,
+        after: {
+          supplierOrderId: result.supplierOrderId,
+          shipmentNo: result.shipmentNo,
+          kind: result.kind,
+          itemCount: result.items.length,
+          freight: result.freight,
+        },
+      }, tx);
+      return result;
     });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'supplier-order.shipment.create',
-      entityType: 'Shipment',
-      entityId: result.id,
-      traceId,
-      after: {
-        supplierOrderId: result.supplierOrderId,
-        shipmentNo: result.shipmentNo,
-        kind: result.kind,
-        itemCount: result.items.length,
-        freight: result.freight,
-      },
-    });
-
-    return result;
   }
 
   @Post(':id/freight-confirmations')
@@ -165,33 +170,36 @@ export class SupplierOrdersController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
+      if (supplierScope(request)) await this.supplierOrdersService.get(input.id, supplierScope(request));
       return command.command.responseBody as FreightConfirmationView;
     }
 
-    const result = await this.freightConfirmationsService.createForSupplierOrder(input.id, input.confirmation, supplierScope(request));
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'FreightConfirmation',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'supplier-order.freight-confirmation.create',
-      entityType: 'FreightConfirmation',
-      entityId: result.id,
-      traceId,
-      reason: input.confirmation.reason,
-      after: {
-        supplierOrderId: result.supplierOrderId,
-        amount: result.amount,
-        status: result.status,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.freightConfirmationsService.createForSupplierOrder(input.id, input.confirmation, supplierScope(request), tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'FreightConfirmation',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'supplier-order.freight-confirmation.create',
+        entityType: 'FreightConfirmation',
+        entityId: result.id,
+        traceId,
+        reason: input.confirmation.reason,
+        after: {
+          supplierOrderId: result.supplierOrderId,
+          amount: result.amount,
+          status: result.status,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Post(':id/reject')
@@ -212,34 +220,37 @@ export class SupplierOrdersController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
+      if (supplierScope(request)) await this.supplierOrdersService.get(input.id, supplierScope(request));
       return command.command.responseBody as RejectSupplierOrderResult;
     }
 
-    const result = await this.supplierOrdersService.reject(input.id, input.expectedVersion, input.reason, supplierScope(request));
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'SupplierOrder',
-      resourceId: result.supplierOrderId,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'supplier-order.reject',
-      entityType: 'SupplierOrder',
-      entityId: result.supplierOrderId,
-      traceId,
-      reason: input.reason,
-      after: {
-        requestId: result.requestId,
-        status: result.status,
-        fulfillmentStatus: result.fulfillmentStatus,
-        rejectedAt: result.rejectedAt,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.supplierOrdersService.reject(input.id, input.expectedVersion, input.reason, supplierScope(request), tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'SupplierOrder',
+        resourceId: result.supplierOrderId,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'supplier-order.reject',
+        entityType: 'SupplierOrder',
+        entityId: result.supplierOrderId,
+        traceId,
+        reason: input.reason,
+        after: {
+          requestId: result.requestId,
+          status: result.status,
+          fulfillmentStatus: result.fulfillmentStatus,
+          rejectedAt: result.rejectedAt,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Post(':id/reconcile-funding')
@@ -260,34 +271,36 @@ export class SupplierOrdersController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
       return command.command.responseBody as ReconcileSupplierOrderFundingResult;
     }
 
-    const result = await this.supplierOrdersService.reconcileFunding(input.id, input.expectedVersion);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'SupplierOrder',
-      resourceId: result.supplierOrderId,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'supplier-order.funding.reconcile',
-      entityType: 'SupplierOrder',
-      entityId: result.supplierOrderId,
-      traceId,
-      after: {
-        requestId: result.requestId,
-        requestStatus: result.requestStatus,
-        paymentStatus: result.paymentStatus,
-        shortfallAmount: result.shortfallAmount,
-        availableAmount: result.funding.stored.available,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.supplierOrdersService.reconcileFunding(input.id, input.expectedVersion, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'SupplierOrder',
+        resourceId: result.supplierOrderId,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'supplier-order.funding.reconcile',
+        entityType: 'SupplierOrder',
+        entityId: result.supplierOrderId,
+        traceId,
+        after: {
+          requestId: result.requestId,
+          requestStatus: result.requestStatus,
+          paymentStatus: result.paymentStatus,
+          shortfallAmount: result.shortfallAmount,
+          availableAmount: result.funding.stored.available,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 }
 

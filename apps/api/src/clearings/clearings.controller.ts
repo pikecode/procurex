@@ -1,3 +1,4 @@
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -7,7 +8,7 @@ import { validateUuid } from '../../../../packages/domain/src/validation.js';
 import { type ClearingDocumentDetailView, ClearingsService } from './clearings.service.js';
 
 @Controller('clearings')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class ClearingsController {
   constructor(private readonly clearingsService: ClearingsService) {}
 

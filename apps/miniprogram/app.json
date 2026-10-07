@@ -3,7 +3,10 @@
     "pages/login/index",
     "pages/store/index",
     "pages/supplier/index",
-    "pages/purchaser/index"
+    "pages/purchaser/index",
+    "pages/products/index",
+    "pages/profile/index",
+    "pages/prices/index"
   ],
   "window": {
     "navigationBarTitleText": "ProcureX",

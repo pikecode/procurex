@@ -1,3 +1,4 @@
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { Controller, ForbiddenException, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -19,7 +20,7 @@ type ListQuery = {
 };
 
 @Controller('supplier-store-statements')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class SupplierStoreStatementsController {
   constructor(private readonly supplierStoreStatementsService: SupplierStoreStatementsService) {}
 

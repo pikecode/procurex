@@ -25,7 +25,8 @@ test('private payment evidence uploads, completes and downloads only for its own
   ]);
   const supplier = await prisma.supplier.create({ data: { code: `ITFILE${suffix}`, name: 'Evidence supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } });
   const otherSupplier = await prisma.supplier.create({ data: { code: `ITFILEOTHER${suffix}`, name: 'Other evidence supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } });
-  const user = await prisma.user.create({ data: { username, displayName: username, passwordHash: await hashPassword('correct-password'), roles: { create: [{ roleId: role.id }] } } });
+  const store = await prisma.store.create({ data: { code: `ITFILESTORE${suffix}`, name: 'Evidence owner store' } });
+  const user = await prisma.user.create({ data: { username, displayName: username, passwordHash: await hashPassword('correct-password'), roles: { create: [{ roleId: role.id }] }, scopes: { create: { scopeType: 'STORE', storeId: store.id } } } });
   const supplierUsername = `it_file_supplier_${suffix}`;
   const supplierUser = await prisma.user.create({ data: { username: supplierUsername, displayName: supplierUsername, passwordHash: await hashPassword('correct-password'), roles: { create: [{ roleId: supplierRole.id }] }, scopes: { create: { scopeType: 'SUPPLIER', supplierId: supplier.id } } } });
   const app: INestApplication = await NestFactory.create(AppModule, { logger: false });
@@ -65,6 +66,10 @@ test('private payment evidence uploads, completes and downloads only for its own
     await prisma.fileObject.update({ where: { id: session.id }, data: { paymentId: payment.id } });
     const supplierLogin = await fetch(`${url}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: supplierUsername, password: 'correct-password', client: 'web' }) });
     const supplierToken = ((await supplierLogin.json()) as { data: { accessToken: string } }).data.accessToken;
+    const paymentDetail = await fetch(`${url}/payment-records/${payment.id}`, { headers: { authorization: `Bearer ${supplierToken}` } });
+    assert.equal(paymentDetail.status, 200);
+    const paymentBody = await paymentDetail.json() as { data: { evidenceFiles: Array<{ id: string; filename: string; mimeType: string; sizeBytes: string }> } };
+    assert.deepEqual(paymentBody.data.evidenceFiles, [{ id: session.id, filename: 'proof.jpg', mimeType: 'image/jpeg', sizeBytes: String(bytes.length) }]);
     const supplierDownload = await fetch(`${url}/files/${session.id}/download`, { headers: { authorization: `Bearer ${supplierToken}` } });
     assert.equal(supplierDownload.status, 200);
     assert.deepEqual(Buffer.from(await supplierDownload.arrayBuffer()), bytes);
@@ -74,6 +79,8 @@ test('private payment evidence uploads, completes and downloads only for its own
     const otherToken = ((await otherLogin.json()) as { data: { accessToken: string } }).data.accessToken;
     const deniedDownload = await fetch(`${url}/files/${session.id}/download`, { headers: { authorization: `Bearer ${otherToken}` } });
     assert.equal(deniedDownload.status, 404);
+    const deniedDetail = await fetch(`${url}/payment-records/${payment.id}`, { headers: { authorization: `Bearer ${otherToken}` } });
+    assert.equal(deniedDetail.status, 404);
     await prisma.user.delete({ where: { id: otherSupplierUser.id } });
     await prisma.paymentRecord.delete({ where: { id: payment.id } });
   } finally {
@@ -83,6 +90,7 @@ test('private payment evidence uploads, completes and downloads only for its own
     await prisma.fileObject.deleteMany({ where: { ownerId: user.id } });
     await prisma.user.delete({ where: { id: user.id } });
     await prisma.user.delete({ where: { id: supplierUser.id } });
+    await prisma.store.delete({ where: { id: store.id } });
     await prisma.supplier.delete({ where: { id: supplier.id } });
     await prisma.supplier.delete({ where: { id: otherSupplier.id } });
     await prisma.$disconnect();

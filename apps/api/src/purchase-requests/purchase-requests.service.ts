@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { lockCatalog } from '../catalog/catalog-registries.service.js';
-import { readTransactionUnits, requireTransactionUnitsUnchanged, transactionUnitView } from '../catalog/transaction-units.js';
+import { readTransactionUnits, readUnitDisplayNames, requireTransactionUnitsUnchanged, transactionUnitView } from '../catalog/transaction-units.js';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import { evaluateStoredValueFunding } from '../../../../packages/domain/src/funding.js';
@@ -183,10 +183,11 @@ export class PurchaseRequestsService {
       });
     }
 
+    const names = await readUnitDisplayNames(transaction ?? (this.database.client as Prisma.TransactionClient), request.items.map(item => item.unitSnapshot));
     const reservations = await (transaction ?? (this.database.client as Prisma.TransactionClient)).fundingAllocation.aggregate({
       where: { requestId: request.id, active: true, method: 'STORED_VALUE' }, _sum: { reservedAmount: true },
     });
-    return { ...toPurchaseRequestDetailView(request), storedReservedAmount: reservations._sum.reservedAmount?.toFixed(2) ?? '0.00', ...requestProgress(request), items: request.items.map(item => ({ ...toPurchaseRequestItemView(item), productName: item.product.name })),
+    return { ...toPurchaseRequestDetailView(request), storedReservedAmount: reservations._sum.reservedAmount?.toFixed(2) ?? '0.00', ...requestProgress(request), items: request.items.map(item => ({ ...toPurchaseRequestItemView(item), ...transactionUnitView(item.unitSnapshot, item.salesUnitPrice.toString(), item.supplyUnitPrice.toString(), names), productName: item.product.name })),
       supplierOrders: request.supplierOrders.map(order => ({ ...toSupplierOrderSummaryView(order), supplierName: order.supplier.name, rejectionHandled: isHistoricalRejection(request, order),
         shipments: order.shipments.map(shipment => ({ id: shipment.id, shipmentNo: shipment.shipmentNo, kind: shipment.kind, shippedAt: shipment.shippedAt.toISOString(), trackingNo: shipment.trackingNo,
           receivedAt: shipment.receipts[0]?.submittedAt.toISOString() ?? null, receiptRevision: shipment.receipts[0]?.revision ?? 0 })) })) };

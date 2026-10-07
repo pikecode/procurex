@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { NestFactory } from '@nestjs/core';
@@ -84,8 +85,30 @@ async function measure(name, thresholdMs, iterations, fn) {
   return { name, ...summarize(samples, thresholdMs) };
 }
 
+async function measureConcurrent(name, thresholdMs, iterations, concurrency, fn) {
+  const samples = [];
+  let next = 0;
+  const started = performance.now();
+  await Promise.all(Array.from({ length: concurrency }, async () => {
+    while (next < iterations) {
+      const index = next++;
+      const requestStarted = performance.now();
+      try {
+        await fn(index);
+        samples.push({ durationMs: performance.now() - requestStarted });
+      } catch (error) {
+        samples.push({ durationMs: performance.now() - requestStarted, error: error.message });
+      }
+    }
+  }));
+  const elapsedMs = performance.now() - started;
+  return { name, concurrency, elapsedMs: Number(elapsedMs.toFixed(2)),
+    requestsPerSecond: Number((iterations * 1000 / elapsedMs).toFixed(2)), ...summarize(samples, thresholdMs) };
+}
+
 async function pollExport(baseUrl, token, jobId) {
-  for (let i = 0; i < 40; i += 1) {
+  // The maintenance worker ticks every five seconds; cover a full cycle.
+  for (let i = 0; i < 100; i += 1) {
     const status = await request(`${baseUrl}/exports/${jobId}`, { headers: authHeaders(token) });
     if (status.status === 'READY' || status.status === 'FAILED') return status;
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -124,6 +147,10 @@ async function run() {
     const range = 'from=2026-09-01&to=2026-09-30';
 
     const checks = [];
+    checks.push(await measureConcurrent('Concurrent store purchase-request list', 1000, 100, 10, () =>
+      request(`${baseUrl}/purchase-requests`, { headers: authHeaders(storeToken) })));
+    checks.push(await measureConcurrent('Concurrent admin profit report', 3000, 50, 5, () =>
+      request(`${baseUrl}/reports/profit?${range}&storeId=${storeId}`, { headers: authHeaders(adminToken) })));
     checks.push(await measure('Store purchase-request list', 1000, 12, () =>
       request(`${baseUrl}/purchase-requests`, { headers: authHeaders(storeToken) })));
     checks.push(await measure('Store order-amount report', 3000, 10, () =>
@@ -146,6 +173,13 @@ async function run() {
       });
       const ready = await pollExport(baseUrl, adminToken, job.jobId);
       assert.equal(ready.status, 'READY');
+      const download = await fetch(`${baseUrl}/exports/${job.jobId}/download`, { headers: authHeaders(adminToken) });
+      assert.equal(download.status, 200);
+      const csv = await download.text();
+      assert.match(csv, /supplierOrderId/);
+      assert.ok(csv.includes(storeId), 'Downloaded order-amount CSV must contain the requested store');
+      assert.equal(csv.trim().split('\r\n').length, 3, 'Expected header and two order-amount rows');
+      assert.ok(Buffer.byteLength(csv) > 0);
     }));
 
     const status = checks.every((check) => check.status === 'PASS') ? 'LOCAL_READY' : 'WARN';
@@ -159,7 +193,7 @@ async function run() {
       environment: {
         node: process.version,
         databaseUrl: connectionString.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:***@'),
-        note: 'Local single-process Nest API against the configured PostgreSQL database; not production load evidence.',
+        note: 'Local single-process Nest API with bounded concurrency on a small fixture; not production 200 QPS or 100,000-row export evidence. Export timing includes polling and actual CSV download.',
       },
       dataset: await datasetStats(),
       thresholds: {
@@ -172,15 +206,16 @@ async function run() {
       checks,
     };
 
-    await mkdir('var', { recursive: true });
-    await writeFile('var/m6-performance-report.json', `${JSON.stringify(result, null, 2)}\n`);
+    const output = process.env.PERFORMANCE_ACCEPTANCE_OUTPUT ?? 'var/m6-performance-report.json';
+    await mkdir(dirname(output), { recursive: true });
+    await writeFile(output, `${JSON.stringify(result, null, 2)}\n`);
 
     console.log('M6 local performance check complete.');
     console.log(`  Status: ${status}`);
     for (const check of checks) {
       console.log(`  ${check.status.padEnd(4)} ${check.name}: p50 ${check.p50Ms}ms, p95 ${check.p95Ms}ms, errors ${check.errorCount}`);
     }
-    console.log('  Wrote: var/m6-performance-report.json');
+    console.log(`  Wrote: ${output}`);
     if (status !== 'LOCAL_READY') process.exitCode = 1;
   } finally {
     await app.close();

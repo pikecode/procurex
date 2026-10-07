@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -19,13 +20,19 @@ type ResolveBody = {
 };
 
 @Controller('discrepancies')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class DiscrepanciesController {
   constructor(
     private readonly discrepanciesService: DiscrepanciesService,
     private readonly commandsService: CommandsService,
     private readonly audit: AuditService,
   ) {}
+
+  @Get()
+  @RequireRoles('ADMIN', 'SUPPLIER')
+  list(@Req() request: AuthenticatedRequest) {
+    return this.discrepanciesService.list(supplierScope(request));
+  }
 
   @Get(':id')
   @RequireRoles('ADMIN', 'SUPPLIER')
@@ -52,40 +59,44 @@ export class DiscrepanciesController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
+      if (supplierScope(request)) await this.discrepanciesService.get(input.id, supplierScope(request));
       return command.command.responseBody as DiscrepancyView;
     }
 
-    const result = await this.discrepanciesService.resolve(input.id, input.resolve, supplierScope(request));
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'Discrepancy',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'discrepancy.resolve',
-      entityType: 'Discrepancy',
-      entityId: result.id,
-      traceId,
-      reason: input.resolve.reason,
-      after: {
-        action: input.resolve.action,
-        status: result.status,
-        missingQuantity: result.missingQuantity,
-        replenishmentGapId: result.replenishmentGap?.id ?? null,
-        returnRecordId: result.returnRecord?.id ?? null,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.discrepanciesService.resolve(input.id, input.resolve, supplierScope(request), tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'Discrepancy',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'discrepancy.resolve',
+        entityType: 'Discrepancy',
+        entityId: result.id,
+        traceId,
+        reason: input.resolve.reason,
+        after: {
+          action: input.resolve.action,
+          status: result.status,
+          missingQuantity: result.missingQuantity,
+          replenishmentGapId: result.replenishmentGap?.id ?? null,
+          returnRecordId: result.returnRecord?.id ?? null,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 }
 
 function supplierScope(request: AuthenticatedRequest): { type: string; supplierId?: string } | undefined {
   const scope = request.auth?.user.scope;
+  if (scope?.type === 'SUPPLIER' && !scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
   return scope?.type === 'SUPPLIER' ? scope : undefined;
 }
 

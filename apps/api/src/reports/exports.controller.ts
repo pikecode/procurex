@@ -1,3 +1,4 @@
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -6,7 +7,7 @@ import type { ReportFilters, ReportType } from './reports.service.js';
 import { ReportsService } from './reports.service.js';
 
 @Controller('exports')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
 export class ExportsController {
   constructor(private readonly reports: ReportsService) {}
@@ -67,8 +68,9 @@ function date(value: unknown): string | undefined { if (value === undefined) ret
 function id(value: unknown): string | undefined { if (value === undefined) return; if (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) return value; throw new BadRequestException({ code: 'INVALID_REPORT_FILTER', message: 'Filters must be UUIDs' }); }
 function applyScope(filters: ReportFilters, request: AuthenticatedRequest): ReportFilters {
   const roles = request.auth!.user.roles;
+  if (roles.some(role => ['ADMIN', 'HQ_FINANCE', 'PURCHASER'].includes(role))) return filters;
   if (roles.some((r) => ['STORE', 'STORE_FINANCE'].includes(r))) { const storeId = request.auth!.user.scope?.storeId; if (!storeId || (filters.storeId && filters.storeId !== storeId)) throw new ForbiddenException(); return { ...filters, storeId }; }
-  if (roles.includes('SUPPLIER')) { const supplierId = request.auth!.user.scope?.supplierId; if (!supplierId || (filters.supplierId && filters.supplierId !== supplierId)) throw new ForbiddenException(); return { ...filters, supplierId }; }
+  if (roles.includes('SUPPLIER')) { const supplierId = request.auth!.user.scope?.supplierId; if (!supplierId || (filters.supplierId && filters.supplierId !== supplierId)) throw new ForbiddenException(); return { ...filters, supplierId, amountBasis: 'SUPPLY' }; }
   return filters;
 }
 function addMonths(date: string, months: number): string { const result = new Date(`${date}T00:00:00Z`); result.setUTCMonth(result.getUTCMonth() + months); return result.toISOString().slice(0, 10); }

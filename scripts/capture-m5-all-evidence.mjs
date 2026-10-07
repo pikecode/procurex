@@ -67,7 +67,7 @@ async function withService(url, label, command, args, callback) {
 
 async function main() {
   await withService(apiReadyUrl, 'API', 'npm', ['run', 'start:api'], async (startedApi) => {
-    await withService(`${webBaseUrl}/ops.html`, 'Web server', 'npm', ['run', 'start:web'], async (startedWeb) => {
+    await withService(`${webBaseUrl}/ops.html`, 'Web server', 'npm', ['run', 'start:web:legacy'], async (startedWeb) => {
       console.log('Refreshing M5 browser evidence...');
       console.log(`  API started by script: ${startedApi ? 'yes' : 'no'}`);
       console.log(`  Web started by script: ${startedWeb ? 'yes' : 'no'}`);

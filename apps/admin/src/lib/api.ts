@@ -20,6 +20,9 @@ function persist(next: Session) {
   try { sessionStorage.setItem(sessionKey, JSON.stringify(next)); } catch { /* This login still works in memory. */ }
 }
 const messages: Record<string, string> = {
+  COMMAND_NOT_FOUND: '命令不存在，请刷新核对。', COMMAND_STATE_CHANGED: '命令状态已变化，请保留原提交记录并核对。',
+  COMMAND_REVIEW_NOT_ALLOWED: '复核命令不能再次复核。', COMMAND_ROLLBACK_NOT_PROVEN: '尚无服务端回滚证明，不能关闭此命令。',
+  COMMAND_ATOMIC_CONTRACT_REQUIRED: '此命令不满足原子价格未提交条件，不能关闭。', INVALID_COMMAND_REVIEW: '请输入有效复核原因，最多500字。',
   ADJUSTMENT_NOT_FOUND: '结算差异不存在或不在当前范围。', DIFFERENCE_DISPOSAL_NOT_FOUND: '差额处置单不存在或不在当前范围。',
   DIFFERENCE_DISPOSAL_NOT_CONFIRMABLE: '处置单已处理，不能重复确认。', DIFFERENCE_DISPOSAL_AMOUNT_CHANGED: '差额金额已变化，请重新核对。',
   DIFFERENCE_CREDIT_ALREADY_DISPOSED: '所选差额已登记处置，请刷新核对。', DIFFERENCE_CREDIT_ITEM_NOT_FOUND: '差额来源已变更或不存在，请重新读取。',
@@ -66,6 +69,7 @@ const messages: Record<string, string> = {
   UNIT_HISTORY_SNAPSHOT_REQUIRED: '历史订单仍引用此单位名称，暂不能更名。',
   PRODUCT_NOT_FOUND: '商品不存在，请刷新列表。', SUPPLIER_NOT_FOUND: '供应商不存在，请刷新列表。',
   UNIT_CONVERSION_INVALID: '采购单位换算不符合规则，请检查单位与换算数量。',
+  SUPPLIER_UNAVAILABLE: '所选供应商已停用或归档，请刷新后重新选择。',
   SUPPLIER_ARCHIVED: '供应商已归档，请刷新列表。',
   TEMPLATE_NAME_EXISTS: '模板名称已存在。', TEMPLATE_NOT_FOUND: '模板不存在或已归档，请刷新。',
   STORE_ALREADY_BOUND: '所选门店已绑定其他有效模板，请刷新后检查。', DUPLICATE_TEMPLATE_ITEM: '商品和供货方不能重复。',

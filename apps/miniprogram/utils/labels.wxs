@@ -1,0 +1,19 @@
+var names = {
+  SUCCEEDED: '已确认', FAILED: '未成功', PROCESSING: '待确认',
+  AMBIENT: '常温', CHILLED: '冷藏', FROZEN: '冷冻', WARM: '保温',
+  RESERVED: '待确认', RELEASED: '已释放', PENDING_DISPOSAL: '待处理', DISPOSED: '已处理',
+  PRICE_CHANGE: '价格调整', ACCEPTED_SHORTAGE: '少收调整', PERMANENT_REDUCTION: '减量调整', FREIGHT_CHANGE: '运费调整', RETURN_SHORTAGE: '历史差异调整', ORDER_REJECTION: '拒单退款调整',
+  WEEKLY: '周结', HALF_MONTHLY: '半月结', MONTHLY: '月结', IMMEDIATE: '即时结算',
+  STORE: '门店', STORE_FINANCE: '门店财务', SUPPLIER: '供应商', PURCHASER: '采购', ADMIN: '管理员',
+  PENDING_FUNDS: '待补足资金', PENDING_PROCUREMENT: '待采购确认', CONFIRMED: '已确认',
+  PARTIAL_PUSHED: '部分推送', COMPLETED: '已完成', CANCELED: '已取消', CANCELLED: '已取消',
+  DRAFT: '草稿', PUSHED: '待发货', ACCEPTED: '已接单', REJECTED: '已驳回',
+  PARTIAL_SHIPPED: '部分发货', SHIPPED: '已发货', RECEIVED: '已收货', SHORT_RECEIVED: '存在收货差异',
+  PENDING: '待处理', OPEN: '待处理', UNPAID: '未付款', PAID: '已付款', UNKNOWN: '待确认',
+  DEBIT: '支出', CREDIT: '收入', REALLOCATED: '已改派', RESOLVED: '已处理', REPLENISH_PENDING: '待补发', SUPERSEDED: '已替换',
+  COMPANY_TO_SUPPLIER: '公司付款', STORE_TO_COMPANY: '门店付款', STORE_TO_SUPPLIER: '门店直付'
+};
+function status(value) { return names[value] || value || '待确认'; }
+var sources = { RECHARGE: '账户充值', PURCHASE_REQUEST: '订货扣款', ADJUSTMENT: '订单金额调整', CLEARING: '挂账清账', REFUND: '退款', CREDIT_LIMIT_CHANGE: '授信调整' };
+function source(value) { return sources[value] || '账户变动'; }
+module.exports = { status: status, source: source };

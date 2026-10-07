@@ -6,6 +6,7 @@ import zhCN from 'antd/locale/zh_CN';
 import { Building2, ChevronLeft, ExternalLink, Folders, Landmark, LogOut, Menu as MenuIcon, Store as StoreIcon } from 'lucide-react';
 import { clearSession, getSession, hasRole, login, logout, onExpired, restore, type User } from './lib/api';
 import './styles.css';
+import { Notifications } from './components/Notifications';
 
 const Stores = lazy(() => import('./pages/Stores'));
 const Directories = lazy(() => import('./pages/Directories'));
@@ -23,6 +24,7 @@ const StoreFinance = lazy(() => import('./pages/StoreFinance'));
 const Billing = lazy(() => import('./pages/Billing'));
 const SettlementDifferences = lazy(() => import('./pages/SettlementDifferences'));
 const Reports = lazy(() => import('./pages/Reports'));
+const Commands = lazy(() => import('./pages/Commands'));
 const legacyUrl = import.meta.env.VITE_LEGACY_URL || (import.meta.env.DEV ? 'http://127.0.0.1:4173/app.html' : '/legacy/');
 
 function Login({ authenticated }: { authenticated: (user: User) => void }) {
@@ -44,6 +46,7 @@ function Login({ authenticated }: { authenticated: (user: User) => void }) {
 }
 const labels: Record<string, string> = { '/stores': '门店管理', '/store-groups': '门店分组', '/collection-accounts': '收款账户', '/categories': '商品分类', '/brands': '品牌管理', '/units': '单位管理', '/products': '商品管理', '/suppliers': '供应商管理', '/templates': '订货模板', '/prices': '价格管理', '/purchase-requests': '采购申请', '/supplier-orders': '供应商订单', '/discrepancies': '收货差异' };
 labels['/reports'] = '业务报表'; labels['/settlement-differences'] = '结算差异';
+labels['/commands'] = '命令诊断';
 function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
   const [collapsed, setCollapsed] = useState(false); const [mobileOpen, setMobileOpen] = useState(false); const [leaving, setLeaving] = useState(false);
   const { message } = AntApp.useApp(); const location = useLocation(); const navigate = useNavigate();
@@ -64,6 +67,7 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
   if (central && !storeRole) items.find(item => item.key === 'finance')?.children?.push({ key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> });
   if (supplierRole) items.splice(0, items.length, { key: '/supplier-orders', label: '供应商工作台', icon: <Folders size={16} /> }, { key: '/discrepancies', label: '收货差异', icon: <Folders size={16} /> }, { key: 'finance', label: '财务管理', icon: <Landmark size={17} />, children: [{ key: '/finance', label: '账单与收款', icon: <Landmark size={16} /> }, { key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> }] }, { key: '/reports', label: '业务报表', icon: <Folders size={16} /> });
   else items.push({ key: '/reports', label: '业务报表', icon: <Folders size={16} /> });
+  if (!storeRole && !supplierRole && hasRole(user, 'ADMIN')) items.push({ key: '/commands', label: '命令诊断', icon: <Folders size={16} /> });
   const navigation = <Menu mode="inline" selectedKeys={[location.pathname]} defaultOpenKeys={['master', 'procurement', 'finance']} items={items}
     onClick={({ key }) => { navigate(key); setMobileOpen(false); }} inlineCollapsed={collapsed} />;
   if (!supported) return <Result status="403" title="当前账号暂未迁移" extra={<div className="actions"><a href={legacyUrl}><Button>打开原后台</Button></a><Button onClick={async () => { try { await logout(); } finally { signedOut(); } }}>退出登录</Button></div>} />;
@@ -75,12 +79,13 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
       <Tooltip title={collapsed ? '展开菜单' : '收起菜单'}><Button className="desktop-menu" type="text" aria-label={collapsed ? '展开菜单' : '收起菜单'} icon={<ChevronLeft size={18} style={{ transform: collapsed ? 'rotate(180deg)' : undefined }} />} onClick={() => setCollapsed(!collapsed)} /></Tooltip>
       <Button className="mobile-menu" type="text" aria-label="打开菜单" icon={<MenuIcon size={18} />} onClick={() => setMobileOpen(true)} />
       <span className="breadcrumb">{location.pathname === '/finance' ? (supplierRole ? '账单与收款' : '账单与付款') : location.pathname === '/store-finance' ? (storeRole ? '门店账户' : '门店财务') : location.pathname === '/store-orders' ? '门店订单' : labels[location.pathname] || '后台管理'}</span></div>
-      <div className="actions"><a className="legacy-link" href={legacyUrl} target="_blank" rel="noreferrer">原后台<ExternalLink size={13} /></a>
+      <div className="actions"><Notifications key={user.id} userId={user.id} /><a className="legacy-link" href={legacyUrl} target="_blank" rel="noreferrer">原后台<ExternalLink size={13} /></a>
         <span className="user-name">{user.displayName || user.username || '管理员'}</span>
         <Tooltip title="退出登录"><Button type="text" aria-label="退出登录" loading={leaving} icon={<LogOut size={17} />} onClick={async () => {
           setLeaving(true); try { await logout(); } catch (failure) { message.warning((failure as Error).message); } finally { signedOut(); setLeaving(false); }
         }} /></Tooltip></div>
     </header><main className="page-content">{(supplierRole ? ['/', '/supplier-orders', '/discrepancies', '/finance', '/settlement-differences', '/reports'].includes(location.pathname) : authorized) ? <Suspense fallback={<Spin />}><Routes>
+      <Route path="/commands" element={hasRole(user, 'ADMIN') ? <Commands user={user} /> : <Result status="403" title="无权访问此页面" />} />
       <Route path="/stores" element={<Stores user={user} />} />
       <Route path="/store-orders" element={<StoreOrders user={user} />} />
       <Route path="/store-finance" element={<StoreFinance user={user} />} />

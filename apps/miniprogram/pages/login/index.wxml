@@ -1,38 +1,11 @@
-<view class="page">
-  <view class="hero">
-    <text class="eyebrow">PROCUREX</text>
-    <text class="title">采购协同登录</text>
-    <view class="subtitle">使用已绑定的业务账号进入门店、供应商或采购工作台。微信主体和订阅消息待真实账号联调后启用。</view>
-  </view>
-
-  <view class="card">
-    <text class="card-title">业务账号</text>
-    <view class="field">
-      <text class="field-label">API 地址</text>
-      <input value="{{apiBase}}" data-field="apiBase" bindinput="onInput" placeholder="http://127.0.0.1:3100/api/v1" />
-    </view>
-    <view class="field">
-      <text class="field-label">用户名</text>
-      <input value="{{username}}" data-field="username" bindinput="onInput" placeholder="pxflow_store / pxflow_supplier / pxflow_user" />
-    </view>
-    <view class="field">
-      <text class="field-label">密码</text>
-      <input password value="{{password}}" data-field="password" bindinput="onInput" placeholder="correct-password" />
-    </view>
-    <view class="button-row">
-      <button class="secondary" bindtap="fillDemo">填入门店演示账号</button>
-      <button class="primary" loading="{{loading}}" bindtap="submit">登录</button>
-    </view>
-    <view wx:if="{{loadingText}}" class="row"><text class="tag">{{loadingText}}</text></view>
-    <view wx:if="{{error}}" class="row"><text class="tag tag-fail">{{error}}</text></view>
-  </view>
-
-  <view class="card">
-    <text class="card-title">角色入口</text>
-    <view class="list">
-      <view class="row"><view class="row-title"><text>门店</text><text class="tag">订货 / 收货</text></view><view class="muted">S01-S05，移动端首要操作入口。</view></view>
-      <view class="row"><view class="row-title"><text>供应商</text><text class="tag">发货 / 差异</text></view><view class="muted">S06-S08，处理待发、拒单和收货差异。</view></view>
-      <view class="row"><view class="row-title"><text>采购</text><text class="tag">确认 / 改派</text></view><view class="muted">S09-S10，确认采购申请和处理拒单改派。</view></view>
-    </view>
+<view class="page login-page">
+  <view class="hero"><text class="eyebrow">PROCUREX · 采购协同</text><text class="title">登录</text></view>
+  <view class="field"><text class="field-label">账号</text><input value="{{username}}" data-field="username" bindinput="onInput" placeholder="请输入业务账号" /></view>
+  <view class="field"><text class="field-label">密码</text><input password value="{{password}}" data-field="password" bindinput="onInput" placeholder="请输入密码" bindconfirm="submit" /></view>
+  <view class="button-row"><button class="primary" disabled="{{loading}}" loading="{{loading}}" bindtap="submit">{{loadingText || '登录'}}</button></view>
+  <view wx:if="{{error}}" class="error-message">{{error}}</view>
+  <view class="login-footer"><text bindtap="toggleSettings">连接设置</text></view>
+  <view wx:if="{{showSettings}}" class="settings-panel">
+    <view class="field"><text class="field-label">服务地址</text><input value="{{apiBase}}" data-field="apiBase" bindinput="onInput" /></view>
   </view>
 </view>

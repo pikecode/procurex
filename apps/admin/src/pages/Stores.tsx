@@ -48,7 +48,7 @@ export default function Stores({ user }: { user: User }) {
         receiptAddress: values.independent ? composeAddress(values.receiptRegion, values.receiptDetail || '', Boolean(editing?.receiptAddress && !splitAddress(editing.receiptAddress).region)) : null,
         receiptContactName: values.independent ? values.receiptContactName!.trim() : null,
         receiptContactPhone: values.independent ? values.receiptContactPhone!.trim() : null,
-        ...(editing ? { expectedVersion: editing.version, status: values.status } : { code: values.code.trim() }),
+        ...(editing ? { expectedVersion: editing.version, status: values.status } : {}),
       };
       await request(`/stores${editing ? `/${editing.id}` : ''}`, { method: editing ? 'PATCH' : 'POST', body });
       setEditing(undefined); data.reload(); message.success('门店资料已保存');
@@ -72,7 +72,7 @@ export default function Stores({ user }: { user: User }) {
       {error && <Alert type="error" showIcon title={error} />}
       <Form form={form} layout="vertical" disabled={saving} className="compact-form">
         <div className="form-grid">
-          <Form.Item name="code" label="门店编号" rules={required}><Input maxLength={80} disabled={Boolean(editing)} /></Form.Item>
+          {editing && <Form.Item name="code" label="门店编号"><Input disabled /></Form.Item>}
           <Form.Item name="name" label="门店名称" rules={required}><Input maxLength={200} /></Form.Item>
           <Form.Item name="groupName" label="所属分组"><Select allowClear placeholder="未分组" loading={groups.loading} options={groups.rows.filter(group => group.status === 'ACTIVE' || group.name === editing?.groupName).map(group => ({ value: group.name, label: group.name + (group.status === 'ACTIVE' ? '' : '（已停用）') }))} /></Form.Item>
           <Form.Item name="storeType" label="门店类型" rules={[{ required: true, message: '请选择门店类型' }]}><Select options={types} /></Form.Item>

@@ -18,14 +18,14 @@ page {
   color: #167e5a;
   font-size: 22rpx;
   font-weight: 700;
-  letter-spacing: 1rpx;
+  letter-spacing: 0;
 }
 
 .title {
   display: block;
   margin-top: 10rpx;
   color: #1d2c24;
-  font-size: 46rpx;
+  font-size: 36rpx;
   font-weight: 800;
   line-height: 1.18;
 }
@@ -40,10 +40,11 @@ page {
 .card {
   margin-top: 18rpx;
   padding: 26rpx;
-  border: 1rpx solid #e8eeea;
-  border-radius: 16rpx;
+  border: 0;
+  border-bottom: 1rpx solid #e8eeea;
+  border-radius: 0;
   background: #fff;
-  box-shadow: 0 4rpx 18rpx rgba(33, 55, 45, .04);
+
 }
 
 .card-title {
@@ -120,6 +121,12 @@ input {
   grid-template-columns: 1fr 1fr;
   gap: 16rpx;
   margin-top: 22rpx;
+}
+
+.button-row button {
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 button {
@@ -209,3 +216,27 @@ button {
   border-top: 1rpx solid #e8eeea;
   background: rgba(255, 255, 255, .96);
 }
+
+.view-tabs { display: flex; position: sticky; top: 0; z-index: 2; background: #f7f9f8; border-bottom: 1rpx solid #dce3df; }
+.view-tab { flex: 1; padding: 24rpx 8rpx; text-align: center; font-size: 26rpx; color: #66736c; border-bottom: 4rpx solid transparent; }
+.is-active { color: #167e5a; font-weight: 700; border-bottom-color: #167e5a; }
+.workspace-toolbar { display: flex; justify-content: space-between; padding: 20rpx 0; color: #66736c; font-size: 23rpx; }
+.error-message, .error-banner { margin-top: 24rpx; padding: 22rpx; color: #b34a40; background: #fff0ed; font-size: 25rpx; word-break: break-all; }
+.login-page { padding-top: 100rpx; }
+.login-page .title { font-size: 44rpx; }
+.login-footer { margin-top: 48rpx; text-align: center; color: #66736c; font-size: 24rpx; }
+.settings-panel { margin-top: 24rpx; border-top: 1rpx solid #dce3df; padding-top: 12rpx; }
+.picker-value { padding: 22rpx; background: #f3f6f4; border-bottom: 1rpx solid #dce3df; font-size: 26rpx; }
+.row-title text:first-child { min-width: 0; overflow-wrap: anywhere; }
+.metric-value { overflow-wrap: anywhere; }
+button { line-height: 76rpx; padding: 0 12rpx; }
+button[disabled] { opacity: .5; }
+
+.freight-request { margin-top: 28rpx; padding-top: 24rpx; border-top: 1rpx solid #e8eeea; }
+.detail-line { padding-top: 20rpx; font-size: 28rpx; font-weight: 600; }
+.file-name { display: block; margin-bottom: 16rpx; font-size: 25rpx; overflow-wrap: anywhere; }
+.command-recovery { padding: 24rpx 0; border-bottom: 1rpx solid #dce3df; display: flex; align-items: center; gap: 16rpx; }
+.command-recovery > view { flex: 1; min-width: 0; }
+.command-recovery text { display: block; overflow-wrap: anywhere; }
+.command-recovery button { flex: 0 0 auto; font-size: 24rpx; margin: 0; }
+.command-history { padding: 24rpx 0; }

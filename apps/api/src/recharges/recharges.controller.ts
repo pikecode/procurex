@@ -1,3 +1,4 @@
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { Controller, ForbiddenException, Get, Param, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -7,7 +8,7 @@ import { validateUuid } from '../../../../packages/domain/src/validation.js';
 import { type RechargeDocumentDetailView, RechargesService } from './recharges.service.js';
 
 @Controller('recharges')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class RechargesController {
   constructor(private readonly rechargesService: RechargesService) {}
 

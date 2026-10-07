@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
+import { actualRestorePassed as validateRestoreEvidence } from './restore-drill-evidence.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -65,6 +66,9 @@ const migrationEntries = (await readdir('database/migrations', { withFileTypes: 
 const latestMigration = migrationEntries.at(-1) ?? null;
 const readinessDoc = await readFile('docs/m6-production-readiness.md', 'utf8');
 const readiness = await readJson('apps/web/m6-readiness.json');
+const restoreDrill = await readJson('var/ops-restore-evidence/manifest.json');
+const restoredMigrationCount = Array.isArray(restoreDrill?.checks) ? restoreDrill.checks.find(item => Array.isArray(item?.migrations))?.migrations?.[0]?.count : undefined;
+const actualRestorePassed = validateRestoreEvidence(restoreDrill, migrationEntries.length);
 
 const commands = [
   await runCommand('npx', ['prisma', 'validate']),
@@ -79,6 +83,7 @@ const scripts = [
   requireScript(packageJson, 'mini:flow-check', 'check-miniprogram-flow.mjs'),
 ];
 const artifacts = [
+  { path: 'var/ops-restore-evidence/manifest.json (actual isolated restore matching current migrations)', status: actualRestorePassed ? 'PASS' : 'FAIL' },
   { path: 'database/schema.prisma', status: await fileExists('database/schema.prisma') ? 'PASS' : 'FAIL' },
   { path: 'database/migrations/migration_lock.toml', status: await fileExists('database/migrations/migration_lock.toml') ? 'PASS' : 'FAIL' },
   { path: 'infra/compose/compose.yaml', status: await fileExists('infra/compose/compose.yaml') ? 'PASS' : 'FAIL' },
@@ -119,6 +124,13 @@ const result = {
     migrationCount: migrationEntries.length,
     latestMigration,
     commandOwner: 'Release owner runs npm run db:migrate once per release window.',
+  },
+  actualLocalRestore: {
+    status: actualRestorePassed ? 'PASS' : 'FAIL', path: 'var/ops-restore-evidence/manifest.json',
+    generatedAt: restoreDrill?.generatedAt ?? null, migrationCount: restoredMigrationCount ?? null,
+    recoveryMs: restoreDrill?.measurements?.recoveryMs ?? null,
+    checkpointAgeAtOutageMs: restoreDrill?.measurements?.checkpointAgeAtOutageMs ?? null,
+    limitation: 'Local manual checkpoint age is not production scheduled-backup RPO; previous application build rollback remains separate.',
   },
   commands,
   scripts,

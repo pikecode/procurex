@@ -1,4 +1,6 @@
-import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { FreightConfirmationStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
@@ -21,13 +23,26 @@ type ReviewBody = {
 };
 
 @Controller('freight-confirmations')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class FreightConfirmationsController {
   constructor(
     private readonly freightConfirmationsService: FreightConfirmationsService,
     private readonly commandsService: CommandsService,
     private readonly audit: AuditService,
   ) {}
+
+  @Get()
+  @RequireRoles('ADMIN', 'PURCHASER', 'SUPPLIER')
+  list(@Req() request: AuthenticatedRequest, @Query('supplierOrderId') supplierOrderId?: string, @Query('status') status?: string): Promise<FreightConfirmationView[]> {
+    const issues: ValidationIssue[] = supplierOrderId === undefined ? [] : validateUuid('supplierOrderId', supplierOrderId);
+    if (status !== undefined && !Object.values(FreightConfirmationStatus).includes(status as FreightConfirmationStatus)) {
+      issues.push({ field: 'status', code: 'INVALID_STATUS', message: 'Invalid freight confirmation status' });
+    }
+    throwIfInvalid(issues);
+    const scope = request.auth?.user.scope;
+    if (scope?.type === 'SUPPLIER' && !scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
+    return this.freightConfirmationsService.list({ supplierOrderId, status: status as FreightConfirmationStatus | undefined }, scope?.type === 'SUPPLIER' ? scope : undefined);
+  }
 
   @Post(':id/confirm')
   @RequireRoles('ADMIN', 'PURCHASER')
@@ -68,38 +83,40 @@ export class FreightConfirmationsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
       return command.command.responseBody as FreightConfirmationView;
     }
 
-    const result =
-      action === 'freight-confirmation.confirm'
-        ? await this.freightConfirmationsService.confirm(input.id, input.review)
-        : await this.freightConfirmationsService.reject(input.id, input.review);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'FreightConfirmation',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action,
-      entityType: 'FreightConfirmation',
-      entityId: result.id,
-      traceId,
-      reason: input.review.reason,
-      after: {
-        supplierOrderId: result.supplierOrderId,
-        amount: result.amount,
-        status: result.status,
-        confirmedAt: result.confirmedAt,
-        rejectedAt: result.rejectedAt,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await (
+        action === 'freight-confirmation.confirm'
+          ? this.freightConfirmationsService.confirm(input.id, input.review, tx)
+          : this.freightConfirmationsService.reject(input.id, input.review, tx));
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'FreightConfirmation',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action,
+        entityType: 'FreightConfirmation',
+        entityId: result.id,
+        traceId,
+        reason: input.review.reason,
+        after: {
+          supplierOrderId: result.supplierOrderId,
+          amount: result.amount,
+          status: result.status,
+          confirmedAt: result.confirmedAt,
+          rejectedAt: result.rejectedAt,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 }
 

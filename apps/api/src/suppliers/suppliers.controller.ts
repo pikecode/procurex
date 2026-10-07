@@ -1,13 +1,19 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
+import { masterDataAuditContext } from '../audit/master-data-audit.js';
+import type { AuthenticatedRequest } from '../auth/auth.guard.js';
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { CurrentAuth } from '../auth/current-auth.decorator.js';
+import type { AuthenticatedSession } from '../auth/auth.service.js';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
+import { parseSupplierProfile, profileText, type SupplierProfile } from '../common/master-data-profile.js';
 import { SuppliersService, type SupplierProductsView, type SupplierView } from './suppliers.service.js';
 import { DeliveryMode, SettlementMode, SupplierStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { validateExpectedVersion, validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
 
-type CreateSupplierBody = {
+type CreateSupplierBody = Record<string, unknown> & {
   code?: unknown;
   name?: unknown;
   contactName?: unknown;
@@ -28,9 +34,32 @@ type PutSupplierProductsBody = {
 };
 
 @Controller('suppliers')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class SuppliersController {
   constructor(private readonly suppliersService: SuppliersService) {}
+
+  @Post(':id/archive')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  archive(@Param('id') id: string, @Body() body: { expectedVersion?: unknown }, @Req() request: AuthenticatedRequest): Promise<SupplierView> {
+    throwIfInvalid([...validateUuid('id', id), ...validateExpectedVersion('expectedVersion', body.expectedVersion)]);
+    return this.suppliersService.archiveSupplier(id, body.expectedVersion as number, masterDataAuditContext(request));
+  }
+
+  @Get(':id')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER')
+  getSupplier(@Param('id') id: string, @CurrentAuth() auth: AuthenticatedSession): Promise<SupplierView> {
+    throwIfInvalid(validateUuid('id', id));
+    requireSupplierScope(id, auth);
+    return this.suppliersService.getSupplier(id);
+  }
+
+  @Get(':id/catalog')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER')
+  getCatalog(@Param('id') id: string, @CurrentAuth() auth: AuthenticatedSession) {
+    throwIfInvalid(validateUuid('id', id));
+    requireSupplierScope(id, auth);
+    return this.suppliersService.getSupplierCatalog(id);
+  }
 
   @Get()
   @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE')
@@ -38,28 +67,41 @@ export class SuppliersController {
     return this.suppliersService.listSuppliers();
   }
 
+  @Get(':id/products')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE')
+  getProducts(@Param('id') id: string): Promise<SupplierProductsView> {
+    throwIfInvalid(validateUuid('id', id));
+    return this.suppliersService.getSupplierProducts(id);
+  }
+
   @Post()
   @RequireRoles('ADMIN', 'PURCHASER')
-  createSupplier(@Body() body: CreateSupplierBody): Promise<SupplierView> {
-    return this.suppliersService.createSupplier(parseCreateSupplierBody(body));
+  createSupplier(@Body() body: CreateSupplierBody, @Req() request: AuthenticatedRequest): Promise<SupplierView> {
+    return this.suppliersService.createSupplier(parseCreateSupplierBody(body), masterDataAuditContext(request));
   }
 
   @Patch(':id')
   @RequireRoles('ADMIN', 'PURCHASER')
-  updateSupplier(@Param('id') id: string, @Body() body: PatchSupplierBody): Promise<SupplierView> {
-    return this.suppliersService.updateSupplier(id, parsePatchSupplierBody(id, body));
+  updateSupplier(@Param('id') id: string, @Body() body: PatchSupplierBody, @Req() request: AuthenticatedRequest): Promise<SupplierView> {
+    return this.suppliersService.updateSupplier(id, parsePatchSupplierBody(id, body), masterDataAuditContext(request));
   }
 
   @Put(':id/products')
   @RequireRoles('ADMIN', 'PURCHASER')
-  replaceProducts(@Param('id') id: string, @Body() body: PutSupplierProductsBody): Promise<SupplierProductsView> {
+  replaceProducts(@Param('id') id: string, @Body() body: PutSupplierProductsBody, @Req() request: AuthenticatedRequest): Promise<SupplierProductsView> {
     const input = parsePutSupplierProductsBody(id, body);
-    return this.suppliersService.replaceSupplierProducts(id, input.expectedVersion, input.productIds);
+    return this.suppliersService.replaceSupplierProducts(id, input.expectedVersion, input.productIds, masterDataAuditContext(request));
   }
 }
 
-function parseCreateSupplierBody(body: CreateSupplierBody): {
-  code: string;
+function requireSupplierScope(id: string, auth: AuthenticatedSession): void {
+  if (auth.user.roles.some(role => ['ADMIN', 'PURCHASER', 'HQ_FINANCE'].includes(role))) return;
+  if (!auth.user.scope?.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
+  if (auth.user.scope.supplierId.toLowerCase() !== id.toLowerCase()) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Supplier is outside the current scope' });
+}
+
+function parseCreateSupplierBody(body: CreateSupplierBody): SupplierProfile & {
+  code?: string;
   name: string;
   deliveryMode: DeliveryMode;
   defaultSettlementMode: SettlementMode;
@@ -68,18 +110,21 @@ function parseCreateSupplierBody(body: CreateSupplierBody): {
   contactPhone?: string;
 } {
   const issues: ValidationIssue[] = [];
-  const code = requiredTrimmedString('code', body.code, issues);
+  const code = profileText('code', body.code, 80, false, false, issues) ?? undefined;
   const name = requiredTrimmedString('name', body.name, issues);
   const deliveryMode = requiredDeliveryMode(body.deliveryMode, issues);
   const defaultSettlementMode = requiredSettlementMode(body.defaultSettlementMode, issues);
   const defaultSettlementCycle = requiredTrimmedString('defaultSettlementCycle', body.defaultSettlementCycle, issues);
-  const contactName = optionalTrimmedString('contactName', body.contactName, issues);
-  const contactPhone = optionalTrimmedString('contactPhone', body.contactPhone, issues);
+  const contactName = profileText('contactName', body.contactName, 120, true, false, issues) ?? undefined;
+  const contactPhone = profileText('contactPhone', body.contactPhone, 32, true, false, issues) ?? undefined;
+  const profile = parseSupplierProfile(body, true, issues);
+  profileText('name', body.name, 200, true, false, issues);
 
   throwIfInvalid(issues);
 
   return {
-    code: code!,
+    code,
+    ...profile,
     name: name!,
     deliveryMode: deliveryMode!,
     defaultSettlementMode: defaultSettlementMode!,
@@ -89,7 +134,7 @@ function parseCreateSupplierBody(body: CreateSupplierBody): {
   };
 }
 
-function parsePatchSupplierBody(id: string, body: PatchSupplierBody): {
+function parsePatchSupplierBody(id: string, body: PatchSupplierBody): SupplierProfile & {
   expectedVersion: number;
   name?: string;
   contactName?: string | null;
@@ -105,8 +150,10 @@ function parsePatchSupplierBody(id: string, body: PatchSupplierBody): {
   ];
 
   const name = optionalTrimmedString('name', body.name, issues);
-  const contactName = optionalNullableTrimmedString('contactName', body.contactName, issues);
-  const contactPhone = optionalNullableTrimmedString('contactPhone', body.contactPhone, issues);
+  const contactName = profileText('contactName', body.contactName, 120, false, false, issues);
+  const contactPhone = profileText('contactPhone', body.contactPhone, 32, false, false, issues);
+  const profile = parseSupplierProfile(body, false, issues);
+  profileText('name', body.name, 200, false, false, issues);
   const deliveryMode = optionalDeliveryMode(body.deliveryMode, issues);
   const defaultSettlementMode = optionalSettlementMode(body.defaultSettlementMode, issues);
   const defaultSettlementCycle = optionalTrimmedString('defaultSettlementCycle', body.defaultSettlementCycle, issues);
@@ -116,6 +163,7 @@ function parsePatchSupplierBody(id: string, body: PatchSupplierBody): {
 
   return {
     expectedVersion: body.expectedVersion as number,
+    ...profile,
     name,
     contactName,
     contactPhone,

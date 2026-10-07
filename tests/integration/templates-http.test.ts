@@ -80,7 +80,7 @@ test('templates endpoint creates templates and binds stores atomically', async (
           authorization: `Bearer ${token}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ code, name: code }),
+        body: JSON.stringify({ code, name: code, tag: 'Test' }),
       });
       assert.equal(response.status, 201);
       const body = (await response.json()) as { data: { id: string; version: number } };
@@ -183,6 +183,7 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
       data: {
         sku,
         name: 'Template Product',
+        defaultSalesPrice: '12.5',
         categoryId: category.id,
         baseUnitId: unit.id,
       },
@@ -195,7 +196,7 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
         authorization: `Bearer ${token}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ code: templateCode, name: 'Template Items' }),
+      body: JSON.stringify({ code: templateCode, name: 'Template Items', tag: 'Items' }),
     });
     assert.equal(created.status, 201);
     const createdBody = (await created.json()) as { data: { id: string; version: number } };
@@ -232,10 +233,25 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
     assert.deepEqual(replacedBody.data.items, [
       {
         productId: product.id,
+        initialSalesPrice: '12.5',
+        isEnabled: true,
+        minOrderQty: null,
+        orderMultiple: null,
         sortOrder: 5,
         suppliers: [{ supplierId: supplier.id, priority: 10 }],
       },
     ]);
+
+    await prisma.product.update({ where: { id: product.id }, data: { defaultSalesPrice: '25' } });
+    const repeated = await fetch(`${baseUrl}/templates/${createdBody.data.id}/items`, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedVersion: replacedBody.data.version, items: [{ productId: product.id, sortOrder: 5, suppliers: [{ supplierId: supplier.id, priority: 10 }] }] }),
+    });
+    assert.equal(repeated.status, 200);
+    const repeatedBody = await repeated.json() as { data: { version: number; items: Array<{ initialSalesPrice: string | null }> } };
+    assert.equal(repeatedBody.data.items[0]?.initialSalesPrice, '12.5');
+    replacedBody.data.version = repeatedBody.data.version;
 
     const setting = await fetch(`${baseUrl}/templates/${createdBody.data.id}/supplier-settings/${supplier.id}`, {
       method: 'PUT',

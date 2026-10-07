@@ -1,9 +1,9 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import { SettlementMode, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { DatabaseService } from '../database/database.service.js';
 
-export type ReportFilters = { from?: string; to?: string; storeId?: string; supplierId?: string; productId?: string };
+export type ReportFilters = { from?: string; to?: string; storeId?: string; supplierId?: string; productId?: string; amountBasis?: 'SALES' | 'SUPPLY' };
 export type ReportType = 'order-amounts' | 'product-quantities' | 'profit';
 export type ExportHealthView = {
   generatedAt: string;
@@ -19,17 +19,38 @@ const exportProcessingLeaseMs = 10 * 60 * 1000;
 const exportHealthWindowMs = 24 * 60 * 60 * 1000;
 
 @Injectable()
-export class ReportsService implements OnModuleInit {
+export class ReportsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(ReportsService.name);
+  private timer?: ReturnType<typeof setInterval>;
+  private maintenance?: Promise<void>;
+  private stopped = false;
   constructor(private readonly database: DatabaseService) {}
 
   onModuleInit() {
-    const timer = setInterval(() => { void this.processQueuedExports(); void this.expireExports(); }, 5000);
-    timer.unref();
+    this.timer = setInterval(() => { void this.runMaintenance(true); }, 5000);
+    this.timer.unref();
+  }
+
+  async onModuleDestroy() {
+    this.stopped = true;
+    if (this.timer) clearInterval(this.timer);
+    await this.maintenance;
+  }
+
+  private runMaintenance(expire = false): Promise<void> {
+    if (this.stopped) return Promise.resolve();
+    if (this.maintenance) return this.maintenance;
+    this.maintenance = (async () => {
+      await this.processQueuedExports();
+      if (expire) await this.expireExports();
+    })().catch(() => { this.logger.error('Export maintenance cycle failed'); })
+      .finally(() => { this.maintenance = undefined; });
+    return this.maintenance;
   }
 
   async createExport(userId: string, scope: unknown, reportType: ReportType, filters: ReportFilters) {
     const job = await this.database.client.exportJob.create({ data: { requestedById: userId, reportType, filters, permissionScope: (scope ?? {}) as object, asOf: new Date(), expiresAt: new Date(Date.now() + 7 * 86400000) } });
-    setImmediate(() => { void this.processQueuedExports(); });
+    setImmediate(() => { void this.runMaintenance(); });
     return { jobId: job.id, status: job.status, createdAt: job.createdAt.toISOString() };
   }
 
@@ -69,7 +90,7 @@ export class ReportsService implements OnModuleInit {
     if (job.status !== 'FAILED') return { retryable: false, status: job.status };
     const claimed = await this.database.client.exportJob.updateMany({ where: { id: job.id, status: 'FAILED', expiresAt: { gt: new Date() } }, data: { status: 'QUEUED', csvContent: null, errorMessage: null } });
     if (claimed.count !== 1) return { retryable: false, status: job.status };
-    setImmediate(() => { void this.processQueuedExports(); });
+    setImmediate(() => { void this.runMaintenance(); });
     return { retryable: true, job: { jobId: job.id, reportType: job.reportType, status: 'QUEUED', createdAt: job.createdAt.toISOString(), expiresAt: job.expiresAt.toISOString(), error: null } };
   }
 
@@ -138,7 +159,7 @@ export class ReportsService implements OnModuleInit {
     const orders = await this.database.client.supplierOrder.findMany({ where: where(filters, 'completedAt'), include: { shipments: true, items: true }, orderBy: [{ completedAt: 'desc' }, { id: 'desc' }] });
     const months = new Map<string, { orderCount: number; goodsAmount: Decimal; freightAmount: Decimal }>();
     const rows = orders.map((order) => {
-      const goodsAmount = sum(order.items.map((item) => new Decimal(item.receivedQuantity).mul(item.salesUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2)));
+      const goodsAmount = sum(order.items.map((item) => new Decimal(item.receivedQuantity).mul(filters.amountBasis === 'SUPPLY' ? item.supplyUnitPrice : item.salesUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2)));
       const freightAmount = sum(order.shipments.map((shipment) => shipment.freight));
       const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit' }).format(order.completedAt!);
       const total = months.get(month) ?? { orderCount: 0, goodsAmount: new Decimal(0), freightAmount: new Decimal(0) };
@@ -148,7 +169,8 @@ export class ReportsService implements OnModuleInit {
       months.set(month, total);
       return { supplierOrderId: order.id, storeId: order.storeId, supplierId: order.supplierId, completedAt: order.completedAt!.toISOString(), goodsAmount, freightAmount, totalAmount: new Decimal(goodsAmount).plus(freightAmount).toFixed(2) };
     });
-    return envelope('completedAt', 'Completed order sales goods amount plus freight, including every settlement mode.', {
+    return envelope('completedAt', filters.amountBasis === 'SUPPLY' ? 'Completed order supply goods amount plus freight, including every settlement mode.' : 'Completed order sales goods amount plus freight, including every settlement mode.', {
+      amountBasis: filters.amountBasis === 'SUPPLY' ? 'SUPPLY' : 'SALES',
       months: [...months.entries()].map(([month, totals]) => ({ month, orderCount: totals.orderCount, goodsAmount: totals.goodsAmount.toFixed(2), freightAmount: totals.freightAmount.toFixed(2), totalAmount: totals.goodsAmount.plus(totals.freightAmount).toFixed(2) })),
       orders: rows,
     });
@@ -187,8 +209,11 @@ export class ReportsService implements OnModuleInit {
   }
 }
 
-function authorizedExport(job: { reportType: string; permissionScope: unknown }, roles: string[], scope?: unknown) {
+function authorizedExport(job: { reportType: string; permissionScope: unknown; filters?: unknown }, roles: string[], scope?: unknown) {
   if (job.reportType === 'profit' && !roles.some((role) => ['ADMIN', 'HQ_FINANCE', 'PURCHASER'].includes(role))) return false;
+  // Historical supplier order exports were sales-based; never expose their cached CSV.
+  if (job.reportType === 'order-amounts' && roles.includes('SUPPLIER') && !roles.some(role => ['ADMIN', 'HQ_FINANCE', 'PURCHASER'].includes(role))
+    && (job.filters as ReportFilters | undefined)?.amountBasis !== 'SUPPLY') return false;
   const saved = job.permissionScope as { type?: string; storeId?: string; supplierId?: string };
   const current = (scope ?? {}) as { type?: string; storeId?: string; supplierId?: string };
   return saved.type === current.type && saved.storeId === current.storeId && saved.supplierId === current.supplierId;
@@ -197,7 +222,7 @@ function authorizedExport(job: { reportType: string; permissionScope: unknown },
 function where(filters: ReportFilters, dateField: 'completedAt' | 'firstShippedAt') {
   return {
     status: SupplierOrderStatus.COMPLETED, storeId: filters.storeId, supplierId: filters.supplierId,
-    ...(filters.from && filters.to ? { [dateField]: { gte: shanghaiMidnight(filters.from), lt: shanghaiMidnight(addDays(filters.to)) } } : {}),
+    [dateField]: { not: null, ...(filters.from && filters.to ? { gte: shanghaiMidnight(filters.from), lt: shanghaiMidnight(addDays(filters.to)) } : {}) },
     ...(filters.productId ? { items: { some: { productId: filters.productId } } } : {}),
   };
 }

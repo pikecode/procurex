@@ -59,7 +59,7 @@ function Workspace({ user, supplierId }: { user: User; supplierId: string }) {
           {!['REJECTED', 'CANCELED'].includes(order.status) && order.requiresFreightSnapshot !== false && <Button icon={<Coins size={16} />} disabled={command.blocked} onClick={() => setEditor('freight')}>申请运费</Button>}
           {rejectable(order) && <Button danger icon={<X size={16} />} disabled={command.blocked} onClick={() => { setReason(''); setEditor('reject'); }}>拒单</Button>}
         </div>
-        <Table rowKey="id" size="small" pagination={false} scroll={{ x: 650 }} dataSource={order.items} columns={[{ title: '商品', dataIndex: 'productName' }, { title: '订货数量', dataIndex: 'quantity' }, { title: '单位', render: (_, row) => row.unitSnapshot?.salesUnitName || row.unitName || '-' }, { title: '已发货', dataIndex: 'shippedQuantity' }, { title: '已收货', dataIndex: 'receivedQuantity' }, { title: '待发货', dataIndex: 'remainingToShipQuantity' }, { title: '供货金额', dataIndex: 'supplyLineAmount' }]} />
+        <Table rowKey="id" size="small" pagination={false} scroll={{ x: 650 }} dataSource={order.items} columns={[{ title: '商品', dataIndex: 'productName' }, { title: '订货数量', dataIndex: 'quantity' }, { title: '单位', render: (_, row) => row.unitName || row.unitSnapshot?.salesUnitName || '-' }, { title: '已发货', dataIndex: 'shippedQuantity' }, { title: '已收货', dataIndex: 'receivedQuantity' }, { title: '待发货', dataIndex: 'remainingToShipQuantity' }, { title: '供货金额', dataIndex: 'supplyLineAmount' }]} />
         <h2>运费申请</h2><Table rowKey="id" size="small" pagination={false} dataSource={order.freightConfirmations || []} columns={[{ title: '金额', dataIndex: 'amount' }, { title: '原因', dataIndex: 'reason' }, { title: '状态', dataIndex: 'status', render: workflowName }]} />
       </>}
     </Modal>

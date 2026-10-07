@@ -1,0 +1,8 @@
+<view class="profile-page">
+  <view class="profile-heading"><text class="profile-title">{{profile.name || (kind === 'supplier' ? '我的供应商' : '我的门店')}}</text><button class="ghost" bindtap="loadProfile" loading="{{loading}}" disabled="{{loading}}" aria-label="刷新资料">刷新</button></view>
+  <view class="business-nav" wx:if="{{kind === 'supplier'}}"><view class="nav-item {{activeView === 'profile' ? 'is-active' : ''}}" data-view="profile" bindtap="changeView">自身资料</view><view class="nav-item {{activeView === 'catalog' ? 'is-active' : ''}}" data-view="catalog" bindtap="changeView">供货商品</view></view>
+  <view class="error-banner" wx:if="{{error}}">{{error}}</view>
+  <view class="muted loading-state" wx:if="{{loading}}">正在读取资料</view>
+  <view wx:if="{{activeView === 'profile' && profile}}"><view class="profile-field" wx:for="{{fields}}" wx:key="label"><text class="muted">{{item.label}}</text><text class="profile-value">{{item.value}}</text></view></view>
+  <view wx:if="{{activeView === 'catalog'}}"><view class="catalog-search"><icon type="search" size="18" /><input placeholder="商品名称、货号或规格" value="{{search}}" bindinput="onSearch" /></view><view class="catalog-row" wx:for="{{visibleProducts}}" wx:key="id"><view class="catalog-row-head"><text class="catalog-name">{{item.name}}</text><text class="tag">{{item.isActive ? '启用' : '停用'}}</text></view><text class="muted">{{item.sku}} · {{item.specification || '未填规格'}}</text><text class="supply-price">{{item.supplyPrice === null ? '供货价未发布' : '¥' + item.supplyPrice + ' / ' + item.unitName}}</text></view><view wx:if="{{!loading && !error && !visibleProducts.length}}" class="muted loading-state">{{products.length ? '没有匹配的商品' : '暂无供货商品'}}</view></view>
+</view>

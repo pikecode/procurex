@@ -37,7 +37,7 @@ console.log('Primary reviewer account: pxacc_admin');
 console.log('');
 
 start('api', 'npm', ['run', 'start:api']);
-start('web', 'npm', ['run', 'start:web']);
+start('web', 'npm', ['run', 'start:web:legacy']);
 
 setTimeout(() => {
   console.log('');

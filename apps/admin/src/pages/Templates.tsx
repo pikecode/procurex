@@ -1,24 +1,26 @@
 import { useRef, useState } from 'react';
-import { Alert, App, Button, Form, Input, InputNumber, Modal, Select, Spin, Switch, Table, Tooltip } from 'antd';
-import { Archive, Copy, ListOrdered, Pencil, Plus, Settings2, Store, Trash2 } from 'lucide-react';
+import { Alert, App, Button, Form, Input, Modal, Select, Spin, Switch, Table, Tooltip } from 'antd';
+import { Archive, Copy, ListOrdered, Pencil, Settings2, Store } from 'lucide-react';
+import { TemplateProducts } from '../components/TemplateProducts';
 import { ListPage } from '../components/ListPage';
 import { request } from '../lib/api';
 import { useRows } from '../lib/useRows';
-import { cycleOptions, decimalRule, namedOptions, settlementOptions, type CatalogProduct, type CatalogSupplier, type Named, type Template, type TemplateDetail, type TemplateItem } from '../lib/catalogTypes';
+import { cycleOptions, positiveIntegerRule, namedOptions, settlementOptions, type CatalogProduct, type CatalogSupplier, type Named, type Template, type TemplateDetail, type TemplateItem } from '../lib/catalogTypes';
 
 type Mode = 'metadata' | 'copy' | 'stores' | 'items' | 'settings' | 'archive';
 const titles: Record<Mode, string> = { metadata: '编辑模板', copy: '复制模板', stores: '绑定门店', items: '商品及供货优先级', settings: '结算覆盖', archive: '归档模板' };
 export default function Templates() {
   const data = useRows<Template>('/templates'); const stores = useRows<Named>('/stores'); const products = useRows<CatalogProduct>('/products'); const suppliers = useRows<CatalogSupplier>('/suppliers');
+  const categories = useRows<Named>('/categories');
   const [mode, setMode] = useState<Mode>('metadata'); const [open, setOpen] = useState(false); const [detail, setDetail] = useState<TemplateDetail | null>(null);
   const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState('');
   const [sourceId, setSourceId] = useState<string | null>(null);
   const generation = useRef(0); const lock = useRef(false); const [form] = Form.useForm(); const { message } = App.useApp();
-  const referencesError = stores.error || products.error || suppliers.error;
+  const referencesError = stores.error || products.error || suppliers.error || categories.error;
   const initialize = (next: Mode, value: TemplateDetail | null) => {
     form.resetFields(); setDetail(value);
     if (!value) return;
-    if (next === 'copy') form.setFieldsValue({ code: `${value.code.slice(0, 60)}-copy-${crypto.randomUUID().slice(0, 8)}`, name: `${value.name.slice(0, 196)}副本`, tag: value.tag, remark: value.remark });
+    if (next === 'copy') form.setFieldsValue({ name: `${value.name.slice(0, 196)}副本`, tag: value.tag, remark: value.remark });
     else if (next === 'settings') form.setFieldsValue({ usesDefault: true });
     else form.setFieldsValue({ ...value, items: value.items.map(item => ({ ...item, suppliers: item.suppliers.map(link => ({ supplierId: link.supplierId, priority: link.priority })) })) });
   };
@@ -39,7 +41,7 @@ export default function Templates() {
       const version = { expectedVersion: detail?.version };
       if (mode === 'metadata' || mode === 'copy') {
         body = { name: values.name.trim(), tag: values.tag.trim(), remark: values.remark?.trim() || null,
-          ...(!detail || mode === 'copy' ? { code: values.code.trim() } : {}), ...(detail ? version : {}) };
+          ...(detail ? version : {}) };
         if (detail) { path += `/${detail.id}${mode === 'copy' ? '/copy' : ''}`; method = mode === 'copy' ? 'POST' : 'PATCH'; }
       } else {
         if (!detail) throw new Error('模板读取失败，请关闭后重试'); path += `/${detail.id}`;
@@ -48,6 +50,12 @@ export default function Templates() {
           const items: TemplateItem[] = (values.items || []).map((item: TemplateItem) => ({ productId: item.productId, sortOrder: item.sortOrder ?? 0, isEnabled: item.isEnabled,
             minOrderQty: item.minOrderQty || null, orderMultiple: item.orderMultiple || null, suppliers: item.suppliers.map(link => ({ supplierId: link.supplierId, priority: link.priority })) }));
           if (new Set(items.map(item => item.productId)).size !== items.length || items.some(item => new Set(item.suppliers.map(link => link.supplierId)).size !== item.suppliers.length)) throw new Error('商品和每个商品的供货方不能重复');
+          if (items.some(item => !item.suppliers.length)) throw new Error('每个商品至少选择一个供货方');
+          for (const item of items) {
+            if (!item.productId || !Number.isInteger(item.sortOrder) || item.sortOrder < 0 || item.sortOrder > 2147483647 || item.suppliers.some(link => !link.supplierId || !Number.isInteger(link.priority) || link.priority < 0 || link.priority > 2147483647)) throw new Error('请检查所有商品的供货方、排序和优先级');
+            await positiveIntegerRule('起订量', true).validator(undefined, item.minOrderQty);
+            await positiveIntegerRule('订货倍数', true).validator(undefined, item.orderMultiple);
+          }
           path += '/items'; method = 'PUT'; body = { ...version, items };
         } else if (mode === 'settings') {
           path += `/supplier-settings/${values.supplierId}`; method = values.usesDefault ? 'DELETE' : 'PUT';
@@ -67,42 +75,18 @@ export default function Templates() {
       { title: '操作', width: 208, fixed: 'right', render: (_, row) => <div className="row-actions">{actions.map(action => <Tooltip key={action.mode} title={titles[action.mode]}><Button type="text" danger={action.mode === 'archive'} disabled={row.isArchived} aria-label={`${titles[action.mode]}${row.name}`} icon={<action.icon size={16} />} onClick={() => edit(action.mode, row)} /></Tooltip>)}</div> },
     ]} />
     <Modal title={detail ? `${titles[mode]} · ${detail.name}` : '新增模板'} open={open} width={mode === 'items' ? 960 : 640} onCancel={close} onOk={save} okText={mode === 'archive' ? '确认归档' : '保存'} cancelText="取消"
-      confirmLoading={saving} okButtonProps={{ danger: mode === 'archive', disabled: loading || Boolean(referencesError) || Boolean(sourceId && !detail) || stores.loading || products.loading || suppliers.loading }} closable={!saving} maskClosable={!saving} keyboard={!saving}>
+      confirmLoading={saving} okButtonProps={{ danger: mode === 'archive', disabled: loading || Boolean(referencesError) || Boolean(sourceId && !detail) || stores.loading || products.loading || suppliers.loading || categories.loading }} closable={!saving} maskClosable={!saving} keyboard={!saving}>
       {(error || referencesError) && <Alert type="error" title={error || referencesError} showIcon />}
       {loading ? <Spin /> : <Form form={form} layout="vertical" disabled={saving} className="compact-form">
         {(mode === 'metadata' || mode === 'copy') && <div className="form-grid">
-          {(!detail || mode === 'copy') && <Form.Item name="code" label="模板编号" rules={[{ required: true, whitespace: true, message: '请填写模板编号' }]}><Input maxLength={80} /></Form.Item>}
+          {detail && mode === 'metadata' && <Form.Item name="code" label="模板编号"><Input disabled /></Form.Item>}
           <Form.Item name="name" label="模板名称" rules={[{ required: true, whitespace: true, message: '请填写模板名称' }]}><Input maxLength={200} /></Form.Item>
           <Form.Item name="tag" label="模板标签" rules={[{ required: true, whitespace: true, message: '请填写模板标签' }]}><Input maxLength={120} /></Form.Item>
           <Form.Item name="remark" label="备注" className="full-width"><Input.TextArea rows={2} maxLength={500} /></Form.Item>
         </div>}
         {mode === 'stores' && <Form.Item name="storeIds" label="绑定门店"><Select mode="multiple" showSearch optionFilterProp="label" options={stores.rows.filter(row => !occupied.has(row.id) || detail?.storeIds.includes(row.id)).map(row => ({ value: row.id, label: row.name }))} /></Form.Item>}
         {mode === 'archive' && <Alert type="warning" showIcon title="将取消门店、商品及结算关联，历史订单保留。" />}
-        {mode === 'items' && <Form.List name="items">{(items, { add, remove }) => <>
-          {items.map(item => <div className="template-item" key={item.key}>
-            <div className="form-grid">
-              <Form.Item name={[item.name, 'productId']} label="商品" rules={[{ required: true, message: '请选择商品' }]}><Select showSearch optionFilterProp="label" options={products.rows.map(row => ({ value: row.id, label: `${row.name}${row.sku ? ` (${row.sku})` : ''}` }))} /></Form.Item>
-              <Form.Item name={[item.name, 'sortOrder']} label="排序" rules={[{ required: true }]}><InputNumber precision={0} min={0} max={2147483647} /></Form.Item>
-              <Form.Item name={[item.name, 'minOrderQty']} label="起订量覆盖" rules={[decimalRule('起订量', true, true)]}><InputNumber stringMode precision={6} /></Form.Item>
-              <Form.Item name={[item.name, 'orderMultiple']} label="订货倍数覆盖" rules={[decimalRule('订货倍数', true, true)]}><InputNumber stringMode precision={6} /></Form.Item>
-              <Form.Item name={[item.name, 'isEnabled']} label="启用" valuePropName="checked"><Switch /></Form.Item>
-              <Form.Item noStyle shouldUpdate>{({ getFieldValue }) => {
-                const productId = getFieldValue(['items', item.name, 'productId']); const original = detail?.items.find(row => row.productId === productId);
-                return <div className="template-price">初始售价：{(original ? original.initialSalesPrice : products.rows.find(row => row.id === productId)?.defaultSalesPrice) ?? '未设置'}</div>;
-              }}</Form.Item>
-            </div>
-            <Form.List name={[item.name, 'suppliers']} rules={[{ validator: async (_, value) => { if (!value?.length) throw new Error('每个商品至少选择一个供货方'); } }]}>{(links, controls, meta) => <>
-              {links.map(link => <div key={link.key} className="supplier-line">
-                <Form.Item name={[link.name, 'supplierId']} label="供货方" rules={[{ required: true, message: '请选择供货方' }]}><Select showSearch optionFilterProp="label" options={namedOptions(suppliers.rows.filter(row => !row.isArchived))} /></Form.Item>
-                <Form.Item name={[link.name, 'priority']} label="优先级" rules={[{ required: true }]}><InputNumber min={0} max={2147483647} precision={0} /></Form.Item>
-                <Tooltip title="移除供货方"><Button type="text" danger aria-label="移除供货方" icon={<Trash2 size={16} />} onClick={() => controls.remove(link.name)} /></Tooltip>
-              </div>)}
-              <Form.ErrorList errors={meta.errors} /><Button icon={<Plus size={15} />} onClick={() => controls.add({ priority: 100 })}>添加供货方</Button>
-            </>}</Form.List>
-            <Tooltip title="移除商品"><Button className="template-remove" type="text" danger aria-label="移除商品" icon={<Trash2 size={16} />} onClick={() => remove(item.name)} /></Tooltip>
-          </div>)}
-          <Button icon={<Plus size={16} />} onClick={() => add({ sortOrder: 0, isEnabled: true, suppliers: [{ priority: 100 }] })}>添加商品</Button>
-        </>}</Form.List>}
+        {mode === 'items' && <TemplateProducts products={products.rows} suppliers={suppliers.rows} categories={categories.rows} detail={detail} />}
         {mode === 'settings' && <>
           <Form.Item name="supplierId" label="供应商" rules={[{ required: true, message: '请选择供应商' }]}><Select showSearch optionFilterProp="label" options={namedOptions(suppliers.rows.filter(row => detail?.items.some(item => item.suppliers.some(link => link.supplierId === row.id)) || detail?.settings.some(setting => setting.supplierId === row.id)))} onChange={id => {
             const setting = detail?.settings.find(row => row.supplierId === id); const supplier = suppliers.rows.find(row => row.id === id);
@@ -113,10 +97,14 @@ export default function Templates() {
             <Form.Item name="settlementMode" label="结算方式" rules={[{ required: true }]}><Select options={settlementOptions} /></Form.Item>
             <Form.Item name="settlementCycle" label="结算周期" rules={[{ required: true }]}><Select options={cycleOptions} /></Form.Item>
           </div>}</Form.Item>
-          <Table size="small" rowKey="supplierId" pagination={false} scroll={{ x: 480 }} dataSource={detail?.settings || []} columns={[
+          <Table size="small" rowKey="supplierId" pagination={false} scroll={{ x: 480 }} dataSource={Array.from(new Set(detail?.items.flatMap(item => item.suppliers.map(link => link.supplierId)) || [])).map(supplierId => {
+            const override = detail?.settings.find(setting => setting.supplierId === supplierId); const supplier = suppliers.rows.find(row => row.id === supplierId);
+            return { supplierId, settlementMode: override?.settlementMode || supplier?.defaultSettlementMode, settlementCycle: override?.settlementCycle || supplier?.defaultSettlementCycle, overridden: Boolean(override) };
+          })} columns={[
             { title: '供应商', render: (_, row) => suppliers.rows.find(item => item.id === row.supplierId)?.name || row.supplierId },
             { title: '结算方式', render: (_, row) => settlementOptions.find(item => item.value === row.settlementMode)?.label },
             { title: '周期', render: (_, row) => cycleOptions.find(item => item.value === row.settlementCycle)?.label },
+            { title: '来源', render: (_, row) => row.overridden ? '模板设置' : '供应商默认' },
           ]} />
         </>}
       </Form>}

@@ -135,7 +135,7 @@ Local check:
 npm run m6:rollback-check
 ```
 
-The local check is non-destructive. It validates Prisma schema/migration status, required package scripts, migration artifacts, and this runbook text, then writes `var/m6-rollback-drill.json`.
+The local check is non-destructive. It validates Prisma schema/migration status, required scripts, artifacts and policy text, plus the successful current-migration isolated restore evidence in `var/ops-restore-evidence/manifest.json`, then writes `var/m6-rollback-drill.json`. Run `npm run ops:restore-drill` to create that actual evidence: a disposable PostgreSQL container and private temporary directories are backed up, destroyed and restored without touching the existing business database. Local manual checkpoint age is not production scheduled-backup RPO; previous-application-build rollback compatibility and production rehearsal remain separate. See `docs/local-operations-acceptance.md`.
 
 ## Initialization And Finance Signoff
 

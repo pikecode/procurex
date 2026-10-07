@@ -1,6 +1,12 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { StorePricePrivacyInterceptor } from '../common/store-price-privacy.interceptor.js';
+import { UseInterceptors } from '@nestjs/common';
+import { Body, ConflictException, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
+import { DatabaseService } from '../database/database.service.js';
+import type { Prisma } from '../../../../packages/backend/generated/prisma/client.js';
+import { CatalogService } from '../catalog/catalog.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
@@ -34,6 +40,7 @@ import {
 } from '../../../../packages/domain/src/validation.js';
 
 type PreviewBody = {
+  expectedTemplateId?: unknown;
   storeId?: unknown;
   items?: unknown;
 };
@@ -62,6 +69,7 @@ type ReassignBody = {
   expectedVersion?: unknown;
   itemIds?: unknown;
   supplierId?: unknown;
+  expectedPrices?: unknown;
 };
 
 type ReallocateBody = {
@@ -72,17 +80,20 @@ type ReallocateBody = {
 };
 
 @Controller('purchase-requests')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
+@UseInterceptors(StorePricePrivacyInterceptor)
 export class PurchaseRequestsController {
   constructor(
     private readonly previewService: PurchaseRequestPreviewService,
     private readonly purchaseRequestsService: PurchaseRequestsService,
     private readonly commandsService: CommandsService,
     private readonly audit: AuditService,
+    private readonly catalog: CatalogService,
+    private readonly database: DatabaseService,
   ) {}
 
   @Get()
-  @RequireRoles('ADMIN', 'PURCHASER', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
   list(@Req() request: AuthenticatedRequest, @Query() query: ListQuery): Promise<PurchaseRequestSummaryView[]> {
     const scope = storeScope(request);
     const input = parseListQuery(query);
@@ -94,13 +105,30 @@ export class PurchaseRequestsController {
     return this.purchaseRequestsService.list(input);
   }
 
+  @Get('rejection-todos')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  rejectionTodos() {
+    return this.purchaseRequestsService.rejectionTodos();
+  }
+
   @Get(':id')
-  @RequireRoles('ADMIN', 'PURCHASER', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
   get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<PurchaseRequestDetailView> {
     throwIfInvalid(validateUuid('id', id));
     const scope = storeScope(request);
     if (scope && !scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
     return this.purchaseRequestsService.get(id, scope);
+  }
+
+  @Get(':id/edit-catalog')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  async editCatalog(@Param('id') id: string) {
+    throwIfInvalid(validateUuid('id', id));
+    const detail = await this.purchaseRequestsService.get(id);
+    if (!['PENDING_PROCUREMENT', 'PENDING_FUNDS'].includes(detail.status) || detail.supplierOrders.length) {
+      throw new ConflictException({ code: 'PURCHASE_REQUEST_ITEMS_NOT_EDITABLE', message: 'Purchase request items cannot be edited in its current status' });
+    }
+    return this.catalog.readTemplateCatalog(detail.storeId, detail.templateId);
   }
 
   @Post('preview')
@@ -129,41 +157,52 @@ export class PurchaseRequestsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
       return command.command.responseBody as PurchaseRequestView;
     }
 
-    const result = await this.purchaseRequestsService.create(input);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'PurchaseRequest',
-      resourceId: result.id,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'purchase-request.create',
-      entityType: 'PurchaseRequest',
-      entityId: result.id,
-      traceId,
-      after: {
-        storeId: result.storeId,
-        status: result.status,
-        paymentStatus: result.paymentStatus,
-        itemCount: result.items.length,
-        salesGoodsAmount: result.totals.salesGoodsAmount,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.purchaseRequestsService.create(input, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'PurchaseRequest',
+        resourceId: result.id,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'purchase-request.create',
+        entityType: 'PurchaseRequest',
+        entityId: result.id,
+        traceId,
+        after: {
+          storeId: result.storeId,
+          status: result.status,
+          paymentStatus: result.paymentStatus,
+          itemCount: result.items.length,
+          salesGoodsAmount: result.totals.salesGoodsAmount,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Patch(':id/items')
   @RequireRoles('ADMIN', 'PURCHASER')
-  replaceItems(@Param('id') id: string, @Body() body: PatchItemsBody): Promise<PurchaseRequestDetailView> {
+  async replaceItems(@Param('id') id: string, @Body() body: PatchItemsBody, @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession): Promise<PurchaseRequestDetailView> {
     const input = parsePatchItemsBody(id, body);
-    return this.purchaseRequestsService.replaceItems(input.id, input.expectedVersion, input.items);
+    return this.editCommand(request, auth, 'purchase-request.items.replace', id, body,
+      tx => this.purchaseRequestsService.replaceItems(input.id, input.expectedVersion, input.items, tx));
+  }
+
+  @Post(':id/items-preview')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  previewItems(@Param('id') id: string, @Body() body: PatchItemsBody) {
+    const input = parsePatchItemsBody(id, body);
+    return this.purchaseRequestsService.previewReplacement(input.id, input.expectedVersion, input.items);
   }
 
   @Post(':id/reassign-preview')
@@ -175,16 +214,47 @@ export class PurchaseRequestsController {
 
   @Post(':id/assign')
   @RequireRoles('ADMIN', 'PURCHASER')
-  assign(@Param('id') id: string, @Body() body: ReassignBody): Promise<PurchaseRequestDetailView> {
+  async assign(@Param('id') id: string, @Body() body: ReassignBody, @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession): Promise<PurchaseRequestDetailView> {
     const input = parseReassignBody(id, body);
-    return this.purchaseRequestsService.assign(input.id, input.expectedVersion, input.itemIds, input.supplierId);
+    return this.editCommand(request, auth, 'purchase-request.assign', id, body,
+      tx => this.purchaseRequestsService.assign(input.id, input.expectedVersion, input.itemIds, input.supplierId, input.expectedPrices, tx));
+  }
+
+  private async editCommand(request: AuthenticatedRequest, auth: AuthenticatedSession, action: string,
+    id: string, body: object, operation: (tx?: Prisma.TransactionClient) => Promise<PurchaseRequestDetailView>): Promise<PurchaseRequestDetailView> {
+    const traceId = getOrCreateTraceId(request);
+    const command = request.headers['idempotency-key'] === undefined ? null : await this.commandsService.begin({
+      actorUserId: auth.user.id, action, idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, ...body } as never, traceId,
+    });
+    if (command?.state === 'replay') return command.command.responseBody as PurchaseRequestDetailView;
+    const execute = async (tx: Prisma.TransactionClient) => {
+      const result = await operation(tx);
+      if (command) await this.commandsService.succeed({ commandId: command.command.id, resourceType: 'PurchaseRequest', resourceId: id, responseBody: result as never }, tx);
+      await this.audit.record({ actorUserId: auth.user.id, activeScope: auditScope(auth), action, entityType: 'PurchaseRequest', entityId: id,
+        traceId, reason: 'reason' in body && typeof body.reason === 'string' ? body.reason.trim() : undefined,
+        after: { version: result.version, salesGoodsAmount: result.salesGoodsAmount, items: result.items.map(item => ({ productId: item.productId, supplierId: item.supplierId, quantity: item.quantity })),
+          ...(!command ? { submissionMode: 'LEGACY_HEADERLESS' } : {}) } }, tx);
+      return result;
+    };
+    return command ? this.commandsService.performAtomic(command, execute) : this.database.client.$transaction(execute);
   }
 
   @Post(':id/reallocate')
   @RequireRoles('ADMIN', 'PURCHASER')
-  reallocate(@Param('id') id: string, @Body() body: ReallocateBody): Promise<PurchaseRequestDetailView> {
+  async reallocate(@Req() request: AuthenticatedRequest, @CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string, @Body() body: ReallocateBody): Promise<PurchaseRequestDetailView> {
     const input = parseReallocateBody(id, body);
-    return this.purchaseRequestsService.reallocate(input.id, input.expectedVersion, input.rejectedOrderId, input.assignments);
+    const traceId = getOrCreateTraceId(request);
+    const command = await this.commandsService.begin({ actorUserId: auth.user.id, action: 'purchase-request.reallocate',
+      idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, ...body } as never, traceId });
+    if (command.state === 'replay') return command.command.responseBody as PurchaseRequestDetailView;
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.purchaseRequestsService.reallocate(input.id, input.expectedVersion, input.rejectedOrderId, input.assignments, tx);
+      await this.commandsService.succeed({ commandId: command.command.id, resourceType: 'PurchaseRequest', resourceId: result.id, responseBody: result as never }, tx);
+      await this.audit.record({ actorUserId: auth.user.id, activeScope: auditScope(auth), action: 'purchase-request.reallocate',
+        entityType: 'PurchaseRequest', entityId: result.id, traceId, reason: input.reason, after: { rejectedOrderId: input.rejectedOrderId, assignments: input.assignments } }, tx);
+      return result;
+    });
   }
 
   @Post(':id/confirm')
@@ -205,31 +275,33 @@ export class PurchaseRequestsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
       return command.command.responseBody as ConfirmPurchaseRequestResult;
     }
 
-    const result = await this.purchaseRequestsService.confirm(input.id, input.expectedVersion);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'PurchaseRequest',
-      resourceId: result.requestId,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'purchase-request.confirm',
-      entityType: 'PurchaseRequest',
-      entityId: result.requestId,
-      traceId,
-      after: {
-        status: result.status,
-        supplierOrderIds: result.supplierOrderIds,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.purchaseRequestsService.confirm(input.id, input.expectedVersion, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'PurchaseRequest',
+        resourceId: result.requestId,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'purchase-request.confirm',
+        entityType: 'PurchaseRequest',
+        entityId: result.requestId,
+        traceId,
+        after: {
+          status: result.status,
+          supplierOrderIds: result.supplierOrderIds,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 
   @Post(':id/reject')
@@ -250,32 +322,34 @@ export class PurchaseRequestsController {
       traceId,
     });
 
-    if (command.state === 'replay' || command.state === 'failed') {
+    if (command.state === 'replay') {
       return command.command.responseBody as RejectPurchaseRequestResult;
     }
 
-    const result = await this.purchaseRequestsService.reject(input.id, input.expectedVersion, input.reason);
-    await this.commandsService.succeed({
-      commandId: command.command.id,
-      resourceType: 'PurchaseRequest',
-      resourceId: result.requestId,
-      responseBody: result as never,
-    });
-    await this.audit.record({
-      actorUserId: auth.user.id,
-      activeScope: auditScope(auth),
-      action: 'purchase-request.reject',
-      entityType: 'PurchaseRequest',
-      entityId: result.requestId,
-      traceId,
-      reason: input.reason,
-      after: {
-        status: result.status,
-        rejectedAt: result.rejectedAt,
-      },
-    });
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.purchaseRequestsService.reject(input.id, input.expectedVersion, input.reason, tx);
+      await this.commandsService.succeed({
+        commandId: command.command.id,
+        resourceType: 'PurchaseRequest',
+        resourceId: result.requestId,
+        responseBody: result as never,
+      }, tx);
+      await this.audit.record({
+        actorUserId: auth.user.id,
+        activeScope: auditScope(auth),
+        action: 'purchase-request.reject',
+        entityType: 'PurchaseRequest',
+        entityId: result.requestId,
+        traceId,
+        reason: input.reason,
+        after: {
+          status: result.status,
+          rejectedAt: result.rejectedAt,
+        },
+      }, tx);
 
-    return result;
+      return result;
+    });
   }
 }
 
@@ -315,8 +389,9 @@ function parseListQuery(query: ListQuery): ListPurchaseRequestsInput {
   return { storeId, status };
 }
 
-function parsePreviewBody(body: PreviewBody): { storeId: string; items: PreviewItemInput[] } {
+function parsePreviewBody(body: PreviewBody): { storeId: string; expectedTemplateId?: string; items: PreviewItemInput[] } {
   const issues: ValidationIssue[] = [...validateUuid('storeId', body.storeId)];
+  if (body.expectedTemplateId !== undefined) issues.push(...validateUuid('expectedTemplateId', body.expectedTemplateId));
   const items: PreviewItemInput[] = [];
 
   if (!Array.isArray(body.items) || body.items.length === 0) {
@@ -329,14 +404,16 @@ function parsePreviewBody(body: PreviewBody): { storeId: string; items: PreviewI
       }
       issues.push(...validateUuid(`items.${index}.productId`, item.productId));
       issues.push(...validateDecimalString(`items.${index}.quantity`, item.quantity, 6));
+      if (item.unitId !== undefined) issues.push(...validateUuid(`items.${index}.unitId`, item.unitId));
+      if (item.expectedProductVersion !== undefined) issues.push(...validateExpectedVersion(`items.${index}.expectedProductVersion`, item.expectedProductVersion));
       if (typeof item.productId === 'string' && typeof item.quantity === 'string') {
-        items.push({ productId: item.productId, quantity: item.quantity });
+        items.push({ productId: item.productId, quantity: item.quantity, unitId: item.unitId as string | undefined, expectedProductVersion: item.expectedProductVersion as number | undefined, ...parseApprovedPrices(item, index, issues) });
       }
     }
   }
 
   throwIfInvalid(issues);
-  return { storeId: body.storeId as string, items };
+  return { storeId: body.storeId as string, items, expectedTemplateId: body.expectedTemplateId as string | undefined };
 }
 
 function parseConfirmBody(id: string, body: ConfirmBody): { id: string; expectedVersion: number } {
@@ -370,8 +447,10 @@ function parsePatchItemsBody(
       issues.push(...validateUuid(`items.${index}.productId`, item.productId));
       issues.push(...validateUuid(`items.${index}.supplierId`, item.supplierId));
       issues.push(...validateDecimalString(`items.${index}.quantity`, item.quantity, 6));
+      if (item.unitId !== undefined) issues.push(...validateUuid(`items.${index}.unitId`, item.unitId));
+      if (item.expectedProductVersion !== undefined) issues.push(...validateExpectedVersion(`items.${index}.expectedProductVersion`, item.expectedProductVersion));
       if (typeof item.productId === 'string' && typeof item.supplierId === 'string' && typeof item.quantity === 'string') {
-        items.push({ productId: item.productId, supplierId: item.supplierId, quantity: item.quantity });
+        items.push({ productId: item.productId, supplierId: item.supplierId, quantity: item.quantity, unitId: item.unitId as string | undefined, expectedProductVersion: item.expectedProductVersion as number | undefined, ...parseApprovedPrices(item, index, issues) });
       }
     }
   }
@@ -380,10 +459,18 @@ function parsePatchItemsBody(
   return { id, expectedVersion: body.expectedVersion as number, reason: reason!, items };
 }
 
+function parseApprovedPrices(item: Record<string, unknown>, index: number, issues: ValidationIssue[]) {
+  for (const field of ['expectedPriceVersionId', 'expectedSupplyPriceVersionId']) {
+    if (item[field] !== undefined) issues.push(...validateUuid(`items.${index}.${field}`, item[field]));
+  }
+  return { expectedPriceVersionId: item.expectedPriceVersionId as string | undefined,
+    expectedSupplyPriceVersionId: item.expectedSupplyPriceVersionId as string | undefined };
+}
+
 function parseReassignBody(
   id: string,
   body: ReassignBody,
-): { id: string; expectedVersion: number; itemIds: string[]; supplierId: string } {
+): { id: string; expectedVersion: number; itemIds: string[]; supplierId: string; expectedPrices?: Array<{ requestItemId: string; priceVersionId: string; supplyPriceVersionId: string }> } {
   const issues: ValidationIssue[] = [
     ...validateUuid('id', id),
     ...validateExpectedVersion('expectedVersion', body.expectedVersion),
@@ -407,8 +494,23 @@ function parseReassignBody(
     }
   }
 
+  let expectedPrices: Array<{ requestItemId: string; priceVersionId: string; supplyPriceVersionId: string }> | undefined;
+  if (body.expectedPrices !== undefined) {
+    if (!Array.isArray(body.expectedPrices)) issues.push({ field: 'expectedPrices', code: 'INVALID_EXPECTED_PRICES', message: 'expectedPrices must be an array' });
+    else {
+      expectedPrices = [];
+      for (const [index, price] of body.expectedPrices.entries()) {
+        if (!isRecord(price)) { issues.push({ field: `expectedPrices.${index}`, code: 'INVALID_EXPECTED_PRICES', message: 'Expected price must be an object' }); continue; }
+        for (const field of ['requestItemId', 'priceVersionId', 'supplyPriceVersionId']) issues.push(...validateUuid(`expectedPrices.${index}.${field}`, price[field]));
+        expectedPrices.push(price as { requestItemId: string; priceVersionId: string; supplyPriceVersionId: string });
+      }
+      if (expectedPrices.length !== itemIds.length || new Set(expectedPrices.map(price => price.requestItemId)).size !== itemIds.length || expectedPrices.some(price => !itemIds.includes(price.requestItemId))) {
+        issues.push({ field: 'expectedPrices', code: 'INVALID_EXPECTED_PRICES', message: 'Expected prices must cover each selected item exactly once' });
+      }
+    }
+  }
   throwIfInvalid(issues);
-  return { id, expectedVersion: body.expectedVersion as number, itemIds, supplierId: body.supplierId as string };
+  return { id, expectedVersion: body.expectedVersion as number, itemIds, supplierId: body.supplierId as string, expectedPrices };
 }
 
 function parseReallocateBody(

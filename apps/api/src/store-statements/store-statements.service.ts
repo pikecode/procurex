@@ -34,7 +34,7 @@ export type StoreStatementSummaryView = {
   payableAmount: string;
   adjustmentAmount: string;
   adjustmentSettlementItemIds: string[];
-  adjustmentItems: Array<{ settlementItemId: string; amount: string }>;
+  adjustmentItems: Array<{ settlementItemId: string; amount: string; supplierOrderId?: string }>;
   lineCount: number;
 };
 
@@ -68,7 +68,7 @@ type StatementGroup = {
   paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal };
   adjustmentAmount: Decimal;
   adjustmentSettlementItemIds: string[];
-  adjustmentItems: Array<{ settlementItemId: string; amount: string }>;
+  adjustmentItems: Array<{ settlementItemId: string; amount: string; supplierOrderId?: string }>;
 };
 
 @Injectable()
@@ -109,6 +109,7 @@ export class StoreStatementsService {
         storeId: input.storeId,
         supplierId: input.supplierId,
         status: SupplierOrderStatus.COMPLETED,
+        settlementMode: 'COMPANY_TERM',
         firstShippedAt: { not: null },
       },
       include: {
@@ -125,7 +126,7 @@ export class StoreStatementsService {
 
     const groups = new Map<string, StatementGroup>();
     for (const order of orders) {
-      if (!order.firstShippedAt) {
+      if (!order.firstShippedAt || order.settlementMode !== 'COMPANY_TERM') {
         continue;
       }
       const cycle = normalizeCycle(order.settlementCycleSnapshot);
@@ -161,7 +162,14 @@ export class StoreStatementsService {
       groups.set(key, group);
     }
 
-    const adjustmentDocuments = await this.database.client.adjustmentDocument?.findMany({ where: { storeId: input.storeId, side: 'STORE' } }) ?? [];
+    const adjustmentOrders = await this.database.client.supplierOrder.findMany({
+      where: { storeId: input.storeId, supplierId: input.supplierId, settlementMode: 'COMPANY_TERM' },
+      select: { id: true, settlementMode: true },
+    });
+    const adjustmentDocuments = await this.database.client.adjustmentDocument?.findMany({ where: {
+      storeId: input.storeId, supplierId: input.supplierId, side: 'STORE',
+      supplierOrderId: { in: adjustmentOrders.filter(order => order.settlementMode === 'COMPANY_TERM').map(order => order.id) },
+    } }) ?? [];
     for (const document of adjustmentDocuments) {
       const period = parsePeriodKey(document.settlementPeriodKey);
       if (!period || (input.cycle && input.cycle !== period.cycle)) continue;
@@ -175,7 +183,7 @@ export class StoreStatementsService {
       group.adjustmentAmount = group.adjustmentAmount.plus(document.amount);
       const adjustmentSettlementItemId = encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'STORE');
       group.adjustmentSettlementItemIds.push(adjustmentSettlementItemId);
-      group.adjustmentItems.push({ settlementItemId: adjustmentSettlementItemId, amount: new Decimal(document.amount).toFixed(2) });
+      group.adjustmentItems.push({ settlementItemId: adjustmentSettlementItemId, amount: new Decimal(document.amount).toFixed(2), supplierOrderId: document.supplierOrderId });
       groups.set(key, group);
     }
 

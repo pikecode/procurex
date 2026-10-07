@@ -3,6 +3,7 @@ import { ApiError, hasRole, request, type User } from './api';
 
 type Command = { key: string; path: string; method: 'POST' | 'PATCH'; body: Record<string, unknown>; label: string };
 const keyFor = (userId: string) => `procurex-admin-purchase-command-v1:${userId}`;
+export const adminCommandPath = (path: string) => /^\/commands\/[0-9a-f-]{36}\/(reviews|close-rolled-back-price|close-uncommitted-price)$/.test(path);
 const financePath = (path: string) => /^\/stores\/[0-9a-f-]{36}\/(recharges|clearings|credit-limit)$/.test(path) || path === '/payment-records' || /^\/payment-records\/[0-9a-f-]{36}\/(confirm|reject|cancel)$/.test(path) || path === '/difference-disposals' || /^\/difference-disposals\/[0-9a-f-]{36}\/confirm$/.test(path);
 const allowed = (path: string) => financePath(path) || path === '/purchase-requests' || /^\/purchase-requests\/[0-9a-f-]{36}\/(confirm|reject|items|assign|reallocate)$/.test(path) || /^\/supplier-orders\/[0-9a-f-]{36}\/(reject|reconcile-funding|shipments|freight-confirmations)$/.test(path) || /^\/freight-confirmations\/[0-9a-f-]{36}\/(confirm|reject)$/.test(path) || /^\/shipments\/[0-9a-f-]{36}\/receipts$/.test(path) || /^\/discrepancies\/[0-9a-f-]{36}\/resolve$/.test(path);
 export const canRecoverWorkflow = (user: User, path?: string) => hasRole(user, 'ADMIN') || (hasRole(user, 'HQ_FINANCE') && Boolean(path && financePath(path))) || (hasRole(user, 'PURCHASER') && Boolean(path && (path.startsWith('/purchase-requests') || path.endsWith('/reconcile-funding') || path.startsWith('/freight-confirmations/'))));
@@ -16,7 +17,7 @@ export function useWorkflowCommand(userId: string) {
       const saved = localStorage.getItem(keyFor(userId));
       if (saved) {
         const command = JSON.parse(saved) as Command;
-        if (!allowed(command.path) || !['POST', 'PATCH'].includes(command.method) || typeof command.key !== 'string' || !command.key || !command.body || typeof command.body !== 'object' || Array.isArray(command.body)) throw new Error('提交恢复记录异常，请核查原提交，不能直接重新提交。');
+        if (!(allowed(command.path) || adminCommandPath(command.path)) || !['POST', 'PATCH'].includes(command.method) || typeof command.key !== 'string' || !command.key || !command.body || typeof command.body !== 'object' || Array.isArray(command.body)) throw new Error('提交恢复记录异常，请核查原提交，不能直接重新提交。');
         setPending(command);
       }
     } catch (failure) { setStorageError((failure as Error).message); }

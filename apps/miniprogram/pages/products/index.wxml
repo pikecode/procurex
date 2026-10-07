@@ -1,0 +1,30 @@
+<view class="products-page">
+  <view class="products-heading"><text>商品资料</text><button class="add-product" wx:if="{{!editing}}" bindtap="newProduct" aria-label="新增商品">+</button></view>
+  <view class="error-banner" wx:if="{{error}}">{{error}}<button class="secondary" wx:if="{{conflict}}" bindtap="reloadSelected">重新读取商品</button></view>
+  <block wx:if="{{!editing}}">
+    <view class="products-search"><icon type="search" size="18" /><input value="{{search}}" bindinput="onSearch" placeholder="名称、编码、规格或品牌" /></view>
+    <view class="products-empty" wx:if="{{loading}}">正在读取商品</view>
+    <view class="products-empty" wx:if="{{!loading && !visibleProducts.length}}">暂无匹配商品</view>
+    <view class="product-list-row" wx:for="{{visibleProducts}}" wx:key="id" data-id="{{item.id}}" bindtap="selectProduct"><view><text class="product-title">{{item.name}}</text><text class="muted">{{item.sku}} · {{item.specification || '未设置规格'}}</text><text class="muted" wx:if="{{item.brand}}">{{item.brand}}</text></view><text class="product-state">{{item.isActive ? '启用' : '停用'}} ›</text></view>
+  </block>
+  <block wx:if="{{editing && !crop}}">
+    <view class="editor-toolbar"><button class="back-product" bindtap="closeEditor" disabled="{{saving || uploading}}" aria-label="返回商品列表">‹</button><text>{{selectedId ? '编辑商品' : '新增商品'}}</text></view>
+    <view class="product-fields">
+      <view class="product-field"><text>货号</text><input value="{{draft.sku}}" data-field="sku" bindinput="onField" disabled="{{saving || uploading}}" maxlength="100" /></view>
+      <view class="product-field"><text>商品名称</text><input value="{{draft.name}}" data-field="name" bindinput="onField" disabled="{{saving || uploading}}" maxlength="240" /></view>
+      <view class="product-field"><text>商品分类</text><picker range="{{categories}}" range-key="name" value="{{categoryIndex}}" data-kind="category" bindchange="chooseOption" disabled="{{saving || uploading}}"><view>{{categoryIndex < 0 ? '请选择' : categories[categoryIndex].name}} ›</view></picker></view>
+      <view class="product-field"><text>销售单位</text><picker range="{{units}}" range-key="name" value="{{unitIndex}}" data-kind="unit" bindchange="chooseOption" disabled="{{saving || uploading}}"><view>{{unitIndex < 0 ? '请选择' : units[unitIndex].name}} ›</view></picker></view>
+      <view class="product-field"><text>默认销售价</text><input type="digit" value="{{draft.defaultSalesPrice}}" data-field="defaultSalesPrice" bindinput="onField" disabled="{{saving || uploading}}" /></view>
+      <view class="product-field"><text>规格</text><input value="{{draft.specification}}" data-field="specification" bindinput="onField" disabled="{{saving || uploading}}" maxlength="240" /></view>
+      <view class="product-field"><text>品牌</text><input value="{{draft.brand}}" data-field="brand" bindinput="onField" disabled="{{saving || uploading}}" maxlength="120" /><picker range="{{brands}}" bindchange="chooseBrand" wx:if="{{brands.length}}" disabled="{{saving || uploading}}"><view class="brand-select">选择 ›</view></picker></view>
+      <view class="product-field"><text>储存条件</text><picker range="{{storageOptions}}" range-key="name" value="{{storageIndex}}" data-kind="storage" bindchange="chooseOption" disabled="{{saving || uploading}}"><view>{{storageOptions[storageIndex].name}} ›</view></picker></view>
+      <view class="product-field"><text>起订量</text><input type="digit" value="{{draft.minOrderQty}}" data-field="minOrderQty" bindinput="onField" disabled="{{saving || uploading}}" /></view>
+      <view class="product-field"><text>订货倍数</text><input type="digit" value="{{draft.orderMultiple}}" data-field="orderMultiple" bindinput="onField" disabled="{{saving || uploading}}" /></view>
+      <view class="product-field" wx:if="{{selectedId}}"><text>启用商品</text><switch checked="{{draft.isActive}}" bindchange="toggleActive" disabled="{{saving || uploading}}" color="#167e5a" /></view>
+    </view>
+    <view class="product-image-section"><text class="product-title">商品图片</text><view class="product-image-tools"><image wx:if="{{imageUrl}}" src="{{imageUrl}}" mode="aspectFit" /><button class="add-image" bindtap="chooseImage" disabled="{{saving || uploading}}" aria-label="选择商品图片">+</button><button class="remove-image" wx:if="{{imageFile}}" bindtap="removeImage" disabled="{{saving || uploading}}" aria-label="移除商品图片">×</button></view><text class="muted" wx:if="{{uploading}}">正在处理图片</text></view>
+    <view class="product-save-bar"><button class="primary save-product" bindtap="saveProduct" disabled="{{saving || uploading}}" loading="{{saving}}">保存商品</button></view>
+  </block>
+  <view class="crop-editor" wx:if="{{crop}}"><text class="product-title">裁切商品图片</text><movable-area class="crop-frame"><movable-view direction="all" x="{{crop.x}}" y="{{crop.y}}" style="width:{{crop.width}}px;height:{{crop.height}}px" bindchange="onCropMove"><image src="{{crop.path}}" style="width:{{crop.width}}px;height:{{crop.height}}px" /></movable-view></movable-area><slider min="1" max="3" step="0.05" value="{{crop.scale}}" bindchange="onCropZoom" disabled="{{uploading}}" activeColor="#167e5a" /><view class="crop-actions"><button class="secondary" bindtap="cancelCrop" disabled="{{uploading}}">取消</button><button class="primary crop-confirm" bindtap="confirmCrop" disabled="{{uploading}}" loading="{{uploading}}">使用图片</button></view></view>
+  <canvas canvas-id="product-crop" class="crop-canvas" style="width:240px;height:240px" />
+</view>

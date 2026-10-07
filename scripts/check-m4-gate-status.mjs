@@ -4,6 +4,12 @@ import { readFile } from 'node:fs/promises';
 const gateDefinitions = JSON.parse(await readFile('apps/web/m4-gates.json', 'utf8'));
 const result = JSON.parse(await readFile('apps/web/billing-acceptance-run.json', 'utf8'));
 assert.equal(result.status, 'PASSED', 'M4 billing acceptance output must be PASSED');
+const nativeEvidence = await readFile('var/miniprogram-extended-evidence/manifest.json', 'utf8')
+  .then(JSON.parse).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+if (nativeEvidence?.settlementCheck) {
+  assert.equal(nativeEvidence.settlementCheck.status, 'PASSED',
+    `AC-E08 reopened: native expected payable ${nativeEvidence.settlementCheck.expectedPayable}, preview ${nativeEvidence.settlementCheck.previewPayable}; quantity-to-money reconciliation is required`);
+}
 
 const evidenceByGate = new Map();
 for (const step of result.steps || []) {

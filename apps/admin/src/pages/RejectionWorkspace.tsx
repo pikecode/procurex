@@ -82,11 +82,11 @@ export function RejectionEditor({ requestId, orderId, command, canRecover, onClo
     {loading ? <Spin /> : context && <>
       <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[{ key: 'request', label: '采购申请', children: context.purchase.requestNo }, { key: 'order', label: '拒单编号', children: context.order.supplierOrderNo }, { key: 'template', label: '原订货模板', children: context.template.name }, { key: 'supplier', label: '原供应商', children: context.suppliers.find(row => row.id === context.order.supplierId)?.name || '-' }]} />
       {mobile ? <Form layout="vertical" className="compact-form">{context.items.map(item => <div className="rejection-item" data-item-id={item.id} key={item.id}>
-        <strong>{productName(item)}</strong><div className="template-price">{item.quantity} {item.unitSnapshot?.salesUnitName || item.unitName || ''}</div>
+        <strong>{productName(item)}</strong><div className="template-price">{item.quantity} {item.unitName || item.unitSnapshot?.salesUnitName || ''}</div>
         <Form.Item label="处理方式">{methodControl(item)}</Form.Item><Form.Item label="目标供应商">{supplierControl(item)}</Form.Item>
       </div>)}</Form> : <Table<WorkflowItem> rowKey="id" size="small" dataSource={context.items} pagination={false} scroll={{ x: 720 }} columns={[
         { title: '商品', width: 200, render: (_, item) => productName(item) },
-        { title: '数量 / 单位', width: 130, render: (_, item) => `${item.quantity} ${item.unitSnapshot?.salesUnitName || item.unitName || ''}` },
+        { title: '数量 / 单位', width: 130, render: (_, item) => `${item.quantity} ${item.unitName || item.unitSnapshot?.salesUnitName || ''}` },
         { title: '处理方式', width: 200, render: (_, item) => methodControl(item) },
         { title: '目标供应商', width: 220, render: (_, item) => supplierControl(item) },
       ]} />}

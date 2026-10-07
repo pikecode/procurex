@@ -9,6 +9,7 @@ import {
 } from '../../../../packages/backend/generated/prisma/enums.js';
 import { Prisma, type AdjustmentDocument, type DifferenceDisposal, type DifferenceDisposalItem, type Overpayment, type PaymentAllocation, type Shipment, type SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
+import { lockFundingRequest, refreshRequestPaymentSummary } from '../purchase-requests/request-funding.js';
 
 export type CreateDifferenceDisposalInput = {
   method: DifferenceDisposalMethod;
@@ -46,6 +47,7 @@ export type DifferenceDisposalItemView = {
   overpaymentId: string | null;
   adjustmentDocumentId: string | null;
   targetDebitItemId: string | null;
+  targetSupplierOrderNo?: string | null;
   amount: string;
   sourceVersion: number;
   createdAt: string;
@@ -84,10 +86,17 @@ export class DifferenceDisposalsService {
         message: 'Difference disposal was not found',
       });
     }
-    return toDifferenceDisposalView(disposal);
+    const view = toDifferenceDisposalView(disposal);
+    const targetOrderIds = disposal.items.flatMap(item => item.targetDebitItemId ? [decodeSettlementItemId(item.targetDebitItemId).supplierOrderId] : []);
+    const targets = targetOrderIds.length ? await this.database.client.supplierOrder.findMany({
+      where: { id: { in: targetOrderIds } }, select: { id: true, supplierOrderNo: true },
+    }) : [];
+    const names = new Map(targets.map(order => [order.id, order.supplierOrderNo]));
+    return { ...view, items: view.items.map(item => ({ ...item, targetSupplierOrderNo: item.targetDebitItemId
+      ? names.get(decodeSettlementItemId(item.targetDebitItemId).supplierOrderId) ?? null : null })) };
   }
 
-  async create(input: CreateDifferenceDisposalInput): Promise<DifferenceDisposalView> {
+  async create(input: CreateDifferenceDisposalInput, transaction?: Prisma.TransactionClient): Promise<DifferenceDisposalView> {
     if (input.method === DifferenceDisposalMethod.OFFLINE_RETURN && input.targetDebitItemIds && input.targetDebitItemIds.length > 0) {
       throw new ConflictException({
         code: 'TARGET_DEBIT_NOT_SUPPORTED',
@@ -101,7 +110,7 @@ export class DifferenceDisposalsService {
       });
     }
 
-    return this.database.client.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
       for (const id of [...input.creditItemIds, ...(input.targetDebitItemIds ?? [])].sort()) {
         await waitForSettlementLock(tx, id);
       }
@@ -110,6 +119,12 @@ export class DifferenceDisposalsService {
       where: { id: { in: input.creditItemIds } },
       include: { orderItem: { include: { supplierOrder: true } }, differenceDisposalItems: true },
     });
+    if (returns.length) {
+      throw new ConflictException({
+        code: 'RETURN_REVIEW_NOT_CREDIT',
+        message: 'Receipt review history is not a financial credit; use a frozen-bill adjustment document',
+      });
+    }
     const overpayments = await tx.overpayment.findMany({
       where: { id: { in: input.creditItemIds } },
       include: { payment: true, disposalItems: true },
@@ -118,6 +133,13 @@ export class DifferenceDisposalsService {
       where: { id: { in: input.creditItemIds } },
       include: { disposalItems: true },
     });
+    const fundingRefunds = await tx.accountLedger.findMany({
+      where: { sourceType: 'ADJUSTMENT', direction: 'CREDIT', sourceId: { in: adjustmentDocuments.flatMap(document => {
+        const source = document.sourceDiscrepancyId ?? document.sourcePriceChangeId ?? document.sourceShipmentId ?? document.sourceRejectedOrderId;
+        return source ? [source] : [];
+      }) } },
+    });
+    const refundBySource = new Map(fundingRefunds.map(ledger => [ledger.sourceId, new Decimal(ledger.amount)]));
     const returnById = new Map(returns.map((item) => [item.id, item]));
     const overpaymentById = new Map(overpayments.map((item) => [item.id, item]));
     const adjustmentById = new Map(adjustmentDocuments.map((item) => [item.id, item]));
@@ -152,7 +174,11 @@ export class DifferenceDisposalsService {
         });
       }
       const alreadyDisposed = returnRecord?.differenceDisposalItems.length || overpayment?.disposalItems.length || adjustmentDocument?.disposalItems.length;
-      if (alreadyDisposed) {
+      const fundingSource = adjustmentDocument?.sourceDiscrepancyId ?? adjustmentDocument?.sourcePriceChangeId ?? adjustmentDocument?.sourceShipmentId ?? adjustmentDocument?.sourceRejectedOrderId;
+      const fundingRefund = adjustmentDocument?.side === 'STORE' && fundingSource
+        ? refundBySource.get(fundingSource) ?? new Decimal(0) : new Decimal(0);
+      const adjustmentCredit = adjustmentDocument ? Decimal.max(0, new Decimal(adjustmentDocument.amount).abs().minus(fundingRefund)) : new Decimal(0);
+      if (alreadyDisposed || (adjustmentDocument && adjustmentCredit.isZero())) {
         throw new ConflictException({
           code: 'DIFFERENCE_CREDIT_ALREADY_DISPOSED',
           message: 'Difference credit item has already been disposed',
@@ -172,7 +198,7 @@ export class DifferenceDisposalsService {
         overpaymentId: overpayment?.id ?? null,
         adjustmentDocumentId: adjustmentDocument?.id ?? null,
         targetDebitItemId: targetDebitItemIds[index] ?? null,
-        amount: returnRecord ? new Decimal(returnRecord.quantity).mul(returnRecord.orderItem.supplyUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP) : overpayment ? new Decimal(overpayment.amount) : new Decimal(adjustmentDocument!.amount).abs(),
+        amount: returnRecord ? new Decimal(returnRecord.quantity).mul(returnRecord.orderItem.supplyUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP) : overpayment ? new Decimal(overpayment.amount) : adjustmentCredit,
         sourceVersion: returnRecord?.orderItem.supplierOrder.version ?? overpayment?.sourceRevision ?? adjustmentDocument!.sourceRevision,
       };
     });
@@ -228,7 +254,8 @@ export class DifferenceDisposalsService {
     });
 
     return toDifferenceDisposalView(disposal);
-    });
+    };
+    return transaction ? execute(transaction) : this.database.client.$transaction(execute);
   }
 
   private async loadTargetAvailability(targetDebitItemIds: string[], supplierId: string, storeId: string, direction: DifferenceDisposalDirection, client: DatabaseService['client'] | Prisma.TransactionClient = this.database.client): Promise<Map<string, Decimal>> {
@@ -299,6 +326,10 @@ export class DifferenceDisposalsService {
           details: { targetDebitItemId: item.id },
         });
       }
+      if ((item.decoded.kind === 'STORE_RECEIVABLE' || (item.decoded.kind === 'ADJUSTMENT' && item.decoded.adjustmentSide === 'STORE'))
+        && order.settlementMode !== 'COMPANY_TERM') {
+        throw new ConflictException({ code: 'TARGET_DEBIT_CHANNEL_MISMATCH', message: 'Store offsets require a company-term receivable' });
+      }
       if (item.decoded.kind === 'ADJUSTMENT') {
         const adjustment = item.decoded.adjustmentDocumentId ? adjustmentsById.get(item.decoded.adjustmentDocumentId) : undefined;
         if (!adjustment || adjustment.supplierOrderId !== order.id || adjustment.side !== item.decoded.adjustmentSide || !new Decimal(adjustment.amount).gt(0)) {
@@ -312,8 +343,8 @@ export class DifferenceDisposalsService {
     return result;
   }
 
-  async confirm(id: string, input: ConfirmDifferenceDisposalInput, scope?: { type?: string; storeId?: string; supplierId?: string }): Promise<DifferenceDisposalView> {
-    const disposal = await this.database.client.differenceDisposal.findUnique({
+  async confirm(id: string, input: ConfirmDifferenceDisposalInput, scope?: { type?: string; storeId?: string; supplierId?: string }, transaction?: Prisma.TransactionClient): Promise<DifferenceDisposalView> {
+    const disposal = await (transaction ?? (this.database.client as Prisma.TransactionClient)).differenceDisposal.findUnique({
       where: { id },
       include: { items: { orderBy: { createdAt: 'asc' } } },
     });
@@ -341,20 +372,36 @@ export class DifferenceDisposalsService {
       });
     }
 
-    const changed = await this.database.client.differenceDisposal.updateMany({
-      where: { id, version: input.expectedVersion, status: DifferenceDisposalStatus.PENDING },
-      data: {
-        status: DifferenceDisposalStatus.CONFIRMED,
-        confirmedAt: new Date(),
-        version: { increment: 1 },
-      },
-    });
-    if (changed.count !== 1) {
-      throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Difference disposal has already changed' });
-    }
-    const confirmed = await this.database.client.differenceDisposal.findUniqueOrThrow({ where: { id }, include: { items: { orderBy: { createdAt: 'asc' } } } });
-
-    return toDifferenceDisposalView(confirmed);
+    const confirm = async (client: Prisma.TransactionClient) => {
+      const changed = await client.differenceDisposal.updateMany({
+        where: { id, version: input.expectedVersion, status: DifferenceDisposalStatus.PENDING },
+        data: {
+          status: DifferenceDisposalStatus.CONFIRMED,
+          confirmedAt: new Date(),
+          version: { increment: 1 },
+        },
+      });
+      if (changed.count !== 1) {
+        throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Difference disposal has already changed' });
+      }
+      const confirmed = await client.differenceDisposal.findUniqueOrThrow({ where: { id }, include: { items: { orderBy: { createdAt: 'asc' } } } });
+      return toDifferenceDisposalView(confirmed);
+    };
+    const adjustmentIds = disposal.items.flatMap(item => item.adjustmentDocumentId ? [item.adjustmentDocumentId] : []);
+    const execute = async (tx: Prisma.TransactionClient) => {
+      if (disposal.direction !== DifferenceDisposalDirection.COMPANY_TO_STORE || !adjustmentIds.length) return confirm(tx);
+      const documents = await tx.adjustmentDocument.findMany({ where: { id: { in: adjustmentIds }, side: 'STORE', amount: { lt: 0 } } });
+      const orders = await tx.supplierOrder.findMany({ where: { id: { in: documents.map(document => document.supplierOrderId) }, settlementMode: 'CREDIT' },
+        select: { storeId: true, requestId: true } });
+      const requests = new Map(orders.map(order => [order.requestId, order.storeId]));
+      for (const [requestId, storeId] of [...requests].sort(([a, storeA], [b, storeB]) => storeA.localeCompare(storeB) || a.localeCompare(b))) {
+        await lockFundingRequest(tx, storeId, requestId);
+      }
+      const result = await confirm(tx);
+      for (const requestId of requests.keys()) await refreshRequestPaymentSummary(tx, requestId);
+      return result;
+    };
+    return transaction ? execute(transaction) : this.database.client.$transaction(execute);
   }
 }
 

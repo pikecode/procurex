@@ -5,6 +5,7 @@ Page({
     apiBase: 'http://127.0.0.1:3100/api/v1',
     username: '',
     password: '',
+    showSettings: false,
     loading: false,
     loadingText: '',
     error: ''
@@ -22,18 +23,23 @@ Page({
     this.setData({ [event.currentTarget.dataset.field]: event.detail.value });
   },
 
-  fillDemo() {
-    this.setData({ username: 'pxflow_store', password: 'correct-password' });
+  toggleSettings() {
+    this.setData({ showSettings: !this.data.showSettings });
   },
 
   async submit() {
+    if (this.data.loading) return;
+    if (!this.data.username.trim() || !this.data.password) {
+      this.setData({ error: '请输入账号和密码' });
+      return;
+    }
     const apiBase = this.data.apiBase.trim();
     if (!apiBase) {
       this.setData({ error: '请先填写 API 地址' });
       return;
     }
 
-    this.setData({ loading: true, loadingText: '连接 API...', error: '' });
+    this.setData({ loading: true, loadingText: '连接中...', error: '' });
     try {
       api.setApiBase(apiBase);
       wx.setStorageSync('procurexLastUsername', this.data.username);

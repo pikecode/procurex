@@ -51,7 +51,7 @@ test('immediate store, supplier, and supplier-store statements remain per execut
   const orders = ['order-1', 'order-2'].map((id, index) => ({
     id, supplierOrderNo: id, storeId: 'store-1', supplierId: 'supplier-1', version: 1,
     salesGoodsAmount: `${10 + index}.00`, supplyGoodsAmount: `${8 + index}.00`,
-    firstShippedAt: new Date(`2026-09-10T0${index + 1}:00:00.000Z`), settlementCycleSnapshot: 'IMMEDIATE',
+    firstShippedAt: new Date(`2026-09-10T0${index + 1}:00:00.000Z`), settlementMode: 'COMPANY_TERM', settlementCycleSnapshot: 'IMMEDIATE',
     supplier: { defaultSettlementCycle: 'MONTHLY' }, shipments: [], priceChangeRuns: [],
   }));
   const serviceFor = (Service: new (...args: any[]) => any) => new Service({

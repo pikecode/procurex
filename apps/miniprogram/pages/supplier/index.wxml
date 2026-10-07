@@ -1,84 +1,154 @@
+<wxs src="../../utils/labels.wxs" module="labels" />
 <view class="page">
-  <view class="hero">
-    <text class="eyebrow">SUPPLIER</text>
-    <text class="title">供应商工作台</text>
-    <view class="subtitle">面向 S06-S08：待发货、补发、拒单、收货差异和收款确认。当前切片接执行单、异常、账单和付款记录。</view>
-  </view>
+  <view class="business-heading"><view><text class="business-title">供货管理</text><text class="muted">{{user.displayName}}</text></view><view class="heading-actions"><text bindtap="openProfile">我的</text><text bindtap="loadWork">{{loading ? '刷新中' : '刷新'}}</text><text bindtap="logout">退出</text></view></view>
+  <view wx:if="{{error}}" class="error-banner">{{error}}</view>
+  <view wx:if="{{pendingCommand}}" class="command-recovery"><view><text class="row-title">{{pendingCommand.title}} · 结果待确认</text><text class="muted">{{pendingCommand.dateText}}</text></view><button class="secondary" bindtap="recoverCommand" disabled="{{recovering || shipping || rejecting || resolving || paying || freightRequesting}}" loading="{{recovering}}">确认提交结果</button></view>
+  <view wx:if="{{statementReturnId}}" class="source-return" bindtap="backToList">返回账单</view>
+  <view class="business-nav"><view class="nav-item {{activeView === 'orders' ? 'is-active' : ''}}" data-view="orders" bindtap="changeView">订单</view><view class="nav-item {{activeView === 'differences' ? 'is-active' : ''}}" data-view="differences" bindtap="changeView">差异</view><view class="nav-item {{activeView === 'payments' ? 'is-active' : ''}}" data-view="payments" bindtap="changeView">收款</view><view class="nav-item {{activeView === 'reports' ? 'is-active' : ''}}" data-view="reports" bindtap="changeView">账单</view><view class="nav-item {{activeView === 'history' ? 'is-active' : ''}}" data-view="history" bindtap="changeView">提交记录</view></view>
+  <view wx:if="{{activeView === 'history'}}" class="command-history"><text class="card-title">本机提交记录</text><view class="row" wx:for="{{commandHistory}}" wx:key="key"><view class="row-title"><text>{{item.title}}</text><text>{{item.status === 'SUCCEEDED' ? '已确认' : '未成功'}}</text></view><view class="muted">{{item.dateText}}</view><view class="muted" wx:if="{{item.message}}">{{item.message}}</view></view><view class="muted" wx:if="{{!commandHistory.length}}">暂无提交记录</view></view>
 
-  <view class="card">
-    <text class="card-title">当前账号</text>
-    <view class="metric-grid">
-      <view class="metric"><text class="metric-label">用户</text><text class="metric-value">{{user.displayName || '未登录'}}</text></view>
-      <view class="metric"><text class="metric-label">角色</text><text class="metric-value">{{roleText}}</text></view>
-    </view>
-    <view class="button-row">
-      <button class="secondary" loading="{{loading}}" bindtap="loadWork">刷新待办</button>
-      <button class="danger" bindtap="logout">退出</button>
-    </view>
-  </view>
-
-  <view class="card">
-    <text class="card-title">手动处理执行单</text>
-    <view class="field"><text class="field-label">供应商单 ID</text><input value="{{supplierOrderId}}" data-field="supplierOrderId" bindinput="onInput" placeholder="supplierOrderId" /></view>
-    <view class="field"><text class="field-label">发货数量</text><input type="digit" value="{{shipQuantity}}" data-field="shipQuantity" bindinput="onInput" /></view>
-    <view class="button-row">
-      <button class="primary" loading="{{shipping}}" bindtap="shipOrder">创建发货</button>
-      <button class="danger" loading="{{rejecting}}" bindtap="rejectOrder">拒单</button>
-    </view>
-  </view>
-
-  <view class="card">
-    <text class="card-title">待办列表</text>
-    <view class="list">
-      <view wx:for="{{orders}}" wx:key="id" class="row" bindtap="selectOrder" data-id="{{item.id}}">
-        <view class="row-title"><text>{{item.orderNo || item.id}}</text><text class="tag">{{item.status || item.fulfillmentStatus}}</text></view>
-        <view class="muted">点击填入执行单。仅显示当前账号可读的供应商订单。</view>
+  <view class="card" wx:if="{{activeView === 'orders' && (selectedOrder || orderLoading)}}">
+    <view class="detail-heading"><text wx:if="{{!statementReturnId}}" class="back-link" bindtap="backToList">返回订单</text><text class="card-title">{{selectedOrder.supplierOrderNo || '订单详情'}}</text></view>
+    <view wx:if="{{orderLoading}}" class="muted">正在读取订单明细</view>
+    <view wx:if="{{selectedOrder}}">
+      <view class="destination"><text class="card-title">{{selectedOrder.destination.name || selectedOrder.storeName || '收货门店'}}</text><view class="detail-line">{{selectedOrder.destination.address || '收货地址未配置'}}</view><view class="muted">{{selectedOrder.destination.contactName || '联系人未配置'}} · {{selectedOrder.destination.contactPhone || '联系电话未配置'}}</view></view>
+      <view class="row" wx:for="{{shipmentItems}}" wx:key="id">
+        <view class="row-title"><text>{{item.productName || '商品'}}</text><text class="tag">可发 {{item.remainingQuantity}}</text></view>
+        <view class="muted">订购 {{item.quantity}} · 已发 {{item.shippedQuantity}} {{item.unitName || '历史单位未记录'}}</view>
+        <view class="muted" wx:if="{{item.unitSnapshot.purchaseUnitId}}">1 {{item.purchaseUnitName || item.unitSnapshot.purchaseUnitName}} = {{item.unitSnapshot.salesUnitsPerPurchaseUnit}} {{item.unitName}} · ¥{{item.purchaseSupplyUnitPrice}} / {{item.purchaseUnitName || item.unitSnapshot.purchaseUnitName}}</view>
+        <view class="muted">实收 {{item.receivedQuantity}} · 供货单价 ¥{{item.supplyUnitPrice}} · 货款 ¥{{item.supplyLineAmount}}</view>
+        <view class="field" wx:if="{{selectedOrder.canShip}}"><text class="field-label">本次发货数量</text><input type="digit" value="{{item.shipQuantity}}" data-id="{{item.id}}" disabled="{{shipping || rejecting}}" bindinput="onShipQuantity" /></view>
+        <view class="field" wx:for="{{item.gaps}}" wx:for-item="gap" wx:key="id" wx:if="{{selectedOrder.canShip}}">
+          <text class="field-label">其中补发数量 · 缺口剩余 {{gap.remainingQuantity}}</text><input type="digit" value="{{gap.allocationQuantity}}" data-id="{{item.id}}" data-gap-id="{{gap.id}}" disabled="{{shipping || rejecting}}" bindinput="onGapQuantity" />
+        </view>
       </view>
-      <view wx:if="{{!orders.length}}" class="row"><view class="muted">暂无待办或尚未刷新。</view></view>
+      <view class="field" wx:if="{{selectedOrder.canShip}}"><text class="field-label">物流单号</text><input value="{{trackingNo}}" data-field="trackingNo" bindinput="onInput" placeholder="选填" /></view>
+      <view class="field" wx:if="{{selectedOrder.canReject}}"><text class="field-label">拒单原因</text><input value="{{rejectionReason}}" data-field="rejectionReason" bindinput="onInput" placeholder="拒单时必填" /></view>
+      <view class="field" wx:if="{{selectedOrder.canShip}}"><text class="field-label">本次运费</text><picker class="freight-picker" range="{{freightChoices}}" range-key="label" value="{{freightIndex}}" disabled="{{shipping || rejecting}}" bindchange="selectFreight"><view class="picker-value">{{freightChoices[freightIndex].label}}</view></picker></view>
+    </view>
+    <view class="button-row" wx:if="{{selectedOrder && (selectedOrder.canShip || selectedOrder.canReject)}}">
+      <button class="primary" disabled="{{!selectedOrder.canShip || shipping || rejecting || orderLoading}}" loading="{{shipping}}" bindtap="shipOrder">创建发货</button>
+      <button class="danger" disabled="{{!selectedOrder.canReject || shipping || rejecting || orderLoading}}" loading="{{rejecting}}" bindtap="rejectOrder">拒单</button>
+    </view>
+    <view wx:if="{{selectedOrder.canShip && selectedOrder.canRequestFreight}}" class="freight-request">
+      <text class="card-title">额外运费</text>
+      <view class="field"><text class="field-label">金额</text><input class="freight-amount" type="digit" value="{{freightRequestAmount}}" data-field="freightRequestAmount" bindinput="onInput" placeholder="0.00" /></view>
+      <view class="field"><text class="field-label">费用原因</text><input class="freight-reason" maxlength="300" value="{{freightRequestReason}}" data-field="freightRequestReason" bindinput="onInput" /></view>
+      <view class="button-row"><button class="secondary freight-request-submit" disabled="{{freightRequesting || shipping || rejecting}}" loading="{{freightRequesting}}" bindtap="requestFreight">提交采购确认</button></view>
+    </view>
+    <view class="list" wx:if="{{selectedOrder.freightConfirmations.length}}"><view class="row" wx:for="{{selectedOrder.freightConfirmations}}" wx:key="id"><view class="row-title"><text>运费 ¥{{item.amount}}</text><text class="tag">{{item.usedAt ? '已使用' : labels.status(item.status)}}</text></view><view class="muted">{{item.reason}}</view></view></view>
+  </view>
+
+  <view class="card" wx:if="{{activeView === 'orders' && !selectedOrder && !orderLoading}}">
+    <input class="business-search" value="{{search}}" bindinput="onSearch" placeholder="搜索订单号" />
+    <view class="status-filters"><text class="{{statusFilter === 'all' ? 'selected' : ''}}" data-filter="all" bindtap="filterStatus">全部</text><text class="{{statusFilter === 'PUSHED' ? 'selected' : ''}}" data-filter="PUSHED" bindtap="filterStatus">待发货</text><text class="{{statusFilter === 'PARTIAL_SHIPPED' ? 'selected' : ''}}" data-filter="PARTIAL_SHIPPED" bindtap="filterStatus">部分发货</text><text class="{{statusFilter === 'COMPLETED' ? 'selected' : ''}}" data-filter="COMPLETED" bindtap="filterStatus">已完成</text></view>
+    <view class="list">
+      <view wx:for="{{visibleOrders}}" wx:key="id" class="row" bindtap="selectOrder" data-id="{{item.id}}">
+        <view class="row-title"><text>{{item.supplierOrderNo}}</text><text class="tag">{{labels.status(item.status || item.fulfillmentStatus)}}</text></view>
+        <view class="muted">供货金额 ¥{{item.supplyGoodsAmount}}</view>
+      </view>
+      <view wx:if="{{!visibleOrders.length}}" class="row"><view class="muted">暂无待办</view></view>
     </view>
   </view>
 
-  <view class="card">
+  <view class="card" wx:if="{{activeView === 'differences'}}">
     <text class="card-title">收货差异处理</text>
-    <view class="field"><text class="field-label">差异 ID</text><input value="{{discrepancyId}}" data-field="discrepancyId" bindinput="onInput" placeholder="discrepancyId" /></view>
-    <view class="field"><text class="field-label">原因说明</text><input value="{{discrepancyReason}}" data-field="discrepancyReason" bindinput="onInput" placeholder="补发安排、退回原因或同意说明" /></view>
-    <view class="button-row">
-      <button class="secondary" loading="{{resolving}}" data-action="ACCEPT" bindtap="resolveDiscrepancy">同意少收</button>
-      <button class="primary" loading="{{resolving}}" data-action="REPLENISH" bindtap="resolveDiscrepancy">安排补发</button>
-    </view>
-    <view class="button-row">
-      <button class="danger" loading="{{resolving}}" data-action="RETURN" bindtap="resolveDiscrepancy">退回核对</button>
-      <button class="secondary" loading="{{loading}}" bindtap="loadDiscrepancies">刷新差异</button>
-    </view>
-    <view class="list">
-      <view wx:for="{{discrepancies}}" wx:key="id" class="row" bindtap="selectDiscrepancy" data-id="{{item.id}}">
-        <view class="row-title"><text>{{item.title}}</text><text class="tag tag-warn">OPEN</text></view>
-        <view class="muted">差异 {{item.id}} · 收货 {{item.receiptId || '—'}}，点击填入差异 ID。</view>
+    <view wx:if="{{selectedDiscrepancy}}" class="back-link" bindtap="backToList">返回列表</view>
+    <view wx:if="{{discrepancyLoading}}" class="muted">正在读取差异详情</view>
+    <view wx:if="{{selectedDiscrepancy}}">
+      <view class="row-title"><text>{{selectedDiscrepancy.productName}}</text><text class="tag">{{labels.status(selectedDiscrepancy.status)}}</text></view>
+      <view class="muted">{{selectedDiscrepancy.supplierOrderNo}} · {{selectedDiscrepancy.shipmentNo}}</view>
+      <view class="metric-grid"><view class="metric"><text class="metric-label">发货数量</text><text class="metric-value">{{selectedDiscrepancy.shippedQuantity}}</text></view><view class="metric"><text class="metric-label">实收数量</text><text class="metric-value">{{selectedDiscrepancy.receivedQuantity}}</text></view></view>
+      <view class="detail-line">少收 {{selectedDiscrepancy.missingQuantity}}</view>
+      <view class="detail-line" wx:for="{{selectedDiscrepancy.evidenceFiles}}" wx:key="id"><text>{{item.filename}}</text><button class="secondary receipt-proof-open" data-id="{{item.id}}" bindtap="viewReceiptEvidence" disabled="{{evidenceLoading}}">查看收货凭证</button></view>
+      <view class="field" wx:if="{{selectedDiscrepancy.status === 'OPEN'}}"><text class="field-label">处理说明</text><input maxlength="300" value="{{discrepancyReason}}" data-field="discrepancyReason" bindinput="onInput" placeholder="退回核对时必填" /></view>
+      <view class="button-row" wx:if="{{selectedDiscrepancy.status === 'OPEN'}}">
+        <button class="secondary" disabled="{{resolving}}" loading="{{resolving}}" data-action="ACCEPT" bindtap="resolveDiscrepancy">同意少收</button>
+        <button class="primary discrepancy-replenish" disabled="{{resolving}}" loading="{{resolving}}" data-action="REPLENISH" bindtap="resolveDiscrepancy">安排补发</button>
       </view>
-      <view wx:if="{{!discrepancies.length}}" class="row"><view class="muted">暂无收货差异通知或尚未刷新。</view></view>
+      <view class="button-row" wx:if="{{selectedDiscrepancy.status === 'OPEN'}}"><button class="danger" disabled="{{resolving}}" loading="{{resolving}}" data-action="RETURN" bindtap="resolveDiscrepancy">退回核对</button></view>
+      <view wx:if="{{selectedDiscrepancy.replenishmentGap}}" class="detail-line">待补发 {{selectedDiscrepancy.replenishmentGap.remainingQuantity}}</view>
+      <view class="button-row" wx:if="{{selectedDiscrepancy.replenishmentGap.remainingQuantity > 0}}"><button class="primary replenish-start" bindtap="startReplenishment">去补发</button></view>
+      <view class="muted" wx:if="{{selectedDiscrepancy.returnRecord}}">退回核对原因：{{selectedDiscrepancy.returnRecord.reason}}</view>
+    </view>
+    <view class="button-row"><button class="secondary" loading="{{loading}}" bindtap="loadDiscrepancies">刷新差异</button></view>
+    <view class="list">
+      <view wx:if="{{!selectedDiscrepancy && !discrepancyLoading}}" wx:for="{{discrepancies}}" wx:key="id" class="row" bindtap="selectDiscrepancy" data-id="{{item.id}}">
+        <view class="row-title"><text>{{item.title}}</text><text class="tag tag-warn">{{item.status ? labels.status(item.status) : '待查看'}}</text></view>
+        <view class="muted">{{item.createdAt}}</view>
+      </view>
+      <view wx:if="{{!discrepancies.length}}" class="row"><view class="muted">暂无收货差异通知。</view></view>
     </view>
   </view>
 
-  <view class="card">
+  <view class="card" wx:if="{{activeView === 'reports' && !statementId && !adjustmentId}}">
     <view class="section-head">
       <text class="card-title">供应商账单</text>
       <button class="ghost" loading="{{loading}}" bindtap="loadStatements">刷新</button>
     </view>
     <view class="list">
-      <view wx:for="{{statements}}" wx:key="id" class="row">
-        <view class="row-title"><text>{{item.periodKey}}</text><text class="tag">{{item.settlementStatus}}</text></view>
+      <view wx:for="{{statements}}" wx:key="id" class="row" data-id="{{item.id}}" bindtap="selectStatement">
+        <view class="row-title"><text>{{labels.status(item.cycle)}}账单</text><text class="tag">{{item.settlementStatus === 'SETTLED' ? '已结清' : '待结清'}}</text></view><view class="muted">{{item.periodText}}</view>
         <view class="muted">应付 {{item.payableAmount}}，待确认 {{item.pendingPaymentAmount}}，已付 {{item.confirmedPaidAmount}}</view>
       </view>
-      <view wx:if="{{!statements.length}}" class="row"><view class="muted">暂无供应商账单或尚未刷新。</view></view>
+      <view wx:if="{{!statements.length}}" class="row"><view class="muted">暂无供应商账单。</view></view>
     </view>
   </view>
 
-  <view class="card">
+  <view class="card" wx:if="{{activeView === 'reports' && statementId}}">
+    <text class="back-link" bindtap="backToList">{{statementKind === 'store' ? '返回供应商总账' : '返回账单列表'}}</text>
+    <view wx:if="{{statementLoading}}" class="muted">正在读取账单</view>
+    <button wx:if="{{!statementLoading && !selectedStatement}}" class="ghost" bindtap="retryStatement">重新读取账单</button>
+    <view wx:if="{{selectedStatement}}">
+      <text class="card-title">{{statementKind === 'store' ? selectedStatement.storeName || '分店账单' : labels.status(selectedStatement.cycle) + '账单'}}</text><view class="muted">{{selectedStatement.periodText}}</view>
+      <view class="metric-grid"><view class="metric"><text class="metric-label">应付余额</text><text class="metric-value">¥{{selectedStatement.payableAmount}}</text></view><view class="metric"><text class="metric-label">已确认收款</text><text class="metric-value">¥{{selectedStatement.confirmedPaidAmount}}</text></view></view>
+      <view class="detail-line">货款 ¥{{selectedStatement.goodsAmount}} · 运费 ¥{{selectedStatement.freightAmount}}</view>
+      <view class="detail-line">调整 ¥{{selectedStatement.adjustmentAmount}} · 待确认付款 ¥{{selectedStatement.pendingPaymentAmount}}</view>
+      <view wx:if="{{statementKind === 'total'}}" class="statement-stores">
+        <text class="card-title">分店账单</text>
+        <view wx:if="{{statementStoresLoading}}" class="muted">正在读取分店账单</view>
+        <view wx:if="{{statementStoresError}}" class="muted">{{statementStoresError}}</view><button wx:if="{{statementStoresError}}" class="ghost" bindtap="retryStatementStores">重新读取分店账单</button>
+        <view class="row statement-store-source" wx:for="{{statementStores}}" wx:key="id" data-id="{{item.id}}" bindtap="selectStoreStatement"><view class="row-title"><text>{{item.storeName || '门店未命名'}}</text><text>¥{{item.payableAmount}} ›</text></view><view class="muted">货款 ¥{{item.goodsAmount}} · 运费 ¥{{item.freightAmount}}</view><view class="muted">已收 ¥{{item.confirmedPaidAmount}} · 待确认 ¥{{item.pendingPaymentAmount}} · 调整 ¥{{item.adjustmentAmount}}</view></view>
+        <view wx:if="{{!statementStoresLoading && !statementStoresError && !statementStores.length}}" class="muted">暂无分店账单</view>
+      </view>
+      <text class="card-title">来源订单</text>
+      <view class="statement-order" wx:for="{{selectedStatement.lines}}" wx:for-item="line" wx:key="settlementItemId">
+        <view class="row statement-order-source" data-id="{{line.supplierOrderId}}" data-kind="order" bindtap="openStatementSource"><view class="row-title"><text>{{line.supplierOrderNo}}</text><text>¥{{line.totalAmount}} ›</text></view><view class="muted">{{line.storeName}}</view><view class="muted">{{line.amountBasis === 'FROZEN' ? '冻结货款' : '货款'}} ¥{{line.goodsAmount}} · 运费 ¥{{line.freightAmount}}</view></view>
+        <view class="statement-products-heading"><text>订单商品</text><button class="statement-products-toggle {{expandedStatementOrderId === line.supplierOrderId ? 'is-expanded' : ''}}" data-id="{{line.supplierOrderId}}" bindtap="toggleStatementProducts" aria-label="{{expandedStatementOrderId === line.supplierOrderId ? '收起商品明细' : '展开商品明细'}}">›</button></view>
+        <view wx:if="{{expandedStatementOrderId === line.supplierOrderId}}" class="statement-products">
+          <view class="row" wx:for="{{line.products}}" wx:for-item="product" wx:key="orderItemId"><view class="row-title"><text>{{product.productName}}</text><text>¥{{product.supplyLineAmount}}</text></view><view class="muted">{{product.sku}} · {{product.specification || product.unitName}}</view><view class="muted">订购 {{product.orderedText}} · 有效 {{product.effectiveText}} · 实收 {{product.receivedText}}</view><view class="muted">供货单价 ¥{{product.priceText}} / {{product.unitName}}</view></view>
+          <view class="detail-line">当前商品货款 ¥{{line.productGoodsAmount}}</view><view class="muted" wx:if="{{line.goodsReconciliationAmount !== '0.00'}}">结算基准差额 ¥{{line.goodsReconciliationAmount}}</view>
+          <view wx:if="{{!line.products.length}}" class="muted">暂无商品明细</view>
+        </view>
+      </view>
+      <text wx:if="{{selectedStatement.adjustmentItems.length}}" class="card-title">结算调整</text>
+      <view class="row statement-adjustment-source" wx:for="{{selectedStatement.adjustmentItems}}" wx:key="settlementItemId" data-id="{{item.adjustmentId}}" data-kind="adjustment" bindtap="openStatementSource"><view class="row-title"><text>{{item.adjustmentId ? '调整明细' : '来源详情暂不可用'}}</text><text>¥{{item.amount}}</text></view></view>
+      <text class="card-title">收款记录</text>
+      <view wx:if="{{statementPaymentsLoading}}" class="muted">正在读取收款记录</view>
+      <view wx:if="{{statementPaymentError}}" class="muted">{{statementPaymentError}}</view>
+      <button wx:if="{{statementPaymentError}}" class="ghost" bindtap="retryStatementPayments">重新读取</button>
+      <view class="row statement-payment-source" wx:for="{{statementPayments}}" wx:for-item="payment" wx:key="id" data-id="{{payment.id}}" data-kind="payment" bindtap="openStatementSource"><view class="row-title"><text>{{payment.paymentNo}}</text><text class="tag">{{labels.status(payment.status)}}</text></view><view class="muted">整笔付款 ¥{{payment.amount}}</view><view wx:for="{{payment.statementAllocations}}" wx:key="id" class="muted">本账单关联 ¥{{item.amount}} · {{labels.status(item.state)}}</view></view>
+      <view wx:if="{{!statementPaymentsLoading && !statementPaymentError && !statementPayments.length}}" class="muted">暂无关联收款记录</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{activeView === 'reports' && adjustmentId}}">
+    <view wx:if="{{adjustmentLoading}}" class="muted">正在读取调整详情</view>
+    <view wx:if="{{selectedAdjustment}}"><text class="card-title">{{labels.status(selectedAdjustment.type)}}</text><view class="muted">{{selectedAdjustment.supplierOrderNo}} · {{selectedAdjustment.createdText}}</view>
+      <view class="detail-line">调整金额 ¥{{selectedAdjustment.adjustmentAmount}}</view><view class="muted">{{labels.status(selectedAdjustment.processingStatus)}}</view>
+      <view class="detail-line">原交易账期 {{selectedAdjustment.originalPeriodText}}</view><view class="detail-line">调整账期 {{selectedAdjustment.periodText}}</view>
+      <view class="detail-line">待返还或抵扣 ¥{{selectedAdjustment.pendingReturnOrOffsetAmount}}</view>
+      <view class="row" wx:for="{{selectedAdjustment.lines}}" wx:key="orderItemId"><view class="row-title"><text>{{item.productName}}</text><text>¥{{item.supplyAdjustmentAmount}}</text></view><view class="muted">数量 {{item.quantity}} · 单价 ¥{{item.unitSupplyPrice}}</view></view>
+      <view wx:if="{{selectedAdjustment.disposal}}" class="detail-line">{{selectedAdjustment.disposal.disposalNo}} · {{labels.status(selectedAdjustment.disposal.status)}} · ¥{{selectedAdjustment.disposal.amount}}</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{activeView === 'reports' && !statementId && !adjustmentId}}">
     <view class="section-head">
       <text class="card-title">统计概览</text>
       <button class="ghost" loading="{{loading}}" bindtap="loadReports">刷新</button>
     </view>
-    <view class="muted">区间 {{reportRange.from}} 至 {{reportRange.to}}，仅显示当前供应商范围，不展示公司利润。</view>
+    <view class="muted">{{reportRange.from}} 至 {{reportRange.to}}</view>
     <view class="metric-grid" wx:if="{{reports.orderAmount}}">
       <view class="metric"><text class="metric-label">完成月份</text><text class="metric-value">{{reports.orderAmount.months[0].month || '-'}}</text></view>
       <view class="metric"><text class="metric-label">完成金额</text><text class="metric-value">{{reports.orderAmount.months[0].totalAmount || '0.00'}}</text></view>
@@ -93,29 +163,37 @@
     </view>
   </view>
 
-  <view class="card">
+  <view class="card" wx:if="{{activeView === 'payments'}}">
     <view class="section-head">
       <text class="card-title">收款确认</text>
       <button class="ghost" loading="{{loading}}" bindtap="loadPayments">刷新</button>
     </view>
-    <view class="field"><text class="field-label">付款记录 ID</text><input value="{{paymentId}}" data-field="paymentId" bindinput="onInput" placeholder="paymentRecordId" /></view>
-    <view class="field"><text class="field-label">驳回原因</text><input value="{{paymentReason}}" data-field="paymentReason" bindinput="onInput" placeholder="仅驳回时填写" /></view>
-    <view class="button-row">
-      <button class="primary" loading="{{paying}}" data-action="confirm" bindtap="handlePayment">确认收款</button>
-      <button class="danger" loading="{{paying}}" data-action="reject" bindtap="handlePayment">驳回付款</button>
+    <view wx:if="{{selectedPayment && !statementReturnId}}" class="back-link" bindtap="backToList">返回列表</view>
+    <view wx:if="{{paymentLoading}}" class="muted">正在读取付款详情</view>
+    <view wx:if="{{selectedPayment}}">
+      <view class="row-title"><text>{{selectedPayment.paymentNo}}</text><text class="tag">{{labels.status(selectedPayment.status)}}</text></view>
+      <view class="detail-line">付款金额 ¥{{selectedPayment.amount}}</view><view class="muted">业务日期 {{selectedPayment.businessDate}}</view>
+      <view class="muted" wx:if="{{selectedPayment.remark}}">{{selectedPayment.remark}}</view>
+      <view class="list"><view class="row" wx:for="{{selectedPayment.allocations}}" wx:key="id"><view class="row-title"><text>{{item.supplierOrderNo || '结算单'}}</text><text>¥{{item.amount}}</text></view></view></view>
+      <view class="list"><view class="row" wx:for="{{selectedPayment.evidenceFiles}}" wx:key="id"><text class="file-name">{{item.filename}}</text><button class="ghost evidence-open" data-id="{{item.id}}" disabled="{{evidenceLoading}}" loading="{{evidenceLoading}}" bindtap="viewEvidence">查看凭证</button></view><view wx:if="{{!selectedPayment.evidenceFiles.length}}" class="muted">暂无付款凭证</view></view>
+      <view class="field" wx:if="{{selectedPayment.status === 'PENDING'}}"><text class="field-label">驳回原因</text><input maxlength="300" value="{{paymentReason}}" data-field="paymentReason" bindinput="onInput" placeholder="驳回时必填" /></view>
+      <view class="button-row" wx:if="{{selectedPayment.status === 'PENDING'}}">
+        <button class="primary payment-confirm" disabled="{{paying}}" loading="{{paying}}" data-action="confirm" bindtap="handlePayment">确认收款</button>
+        <button class="danger" disabled="{{paying}}" loading="{{paying}}" data-action="reject" bindtap="handlePayment">驳回付款</button>
+      </view>
+      <view class="muted" wx:if="{{selectedPayment.rejectedReason}}">驳回原因：{{selectedPayment.rejectedReason}}</view>
     </view>
     <view class="list">
-      <view wx:for="{{payments}}" wx:key="id" class="row" bindtap="selectPayment" data-id="{{item.id}}">
-        <view class="row-title"><text>{{item.paymentNo || item.id}}</text><text class="tag {{item.status === 'PENDING' ? 'tag-warn' : ''}}">{{item.status}}</text></view>
-        <view class="muted">金额 {{item.amount}}，方向 {{item.direction}}，点击填入付款记录。</view>
+      <view wx:if="{{!selectedPayment && !paymentLoading}}" wx:for="{{payments}}" wx:key="id" class="row" bindtap="selectPayment" data-id="{{item.id}}">
+        <view class="row-title"><text>{{item.paymentNo || item.id}}</text><text class="tag {{item.status === 'PENDING' ? 'tag-warn' : ''}}">{{labels.status(item.status)}}</text></view>
+        <view class="muted">金额 {{item.amount}}，方向 {{labels.status(item.direction)}}</view>
       </view>
-      <view wx:if="{{!payments.length}}" class="row"><view class="muted">暂无付款记录或尚未刷新。</view></view>
+      <view wx:if="{{!payments.length}}" class="row"><view class="muted">暂无付款记录。</view></view>
     </view>
   </view>
 
   <view class="card" wx:if="{{result}}">
     <text class="card-title">处理结果</text>
-    <view class="row"><view class="row-title"><text>{{result.title}}</text><text class="tag">{{result.status}}</text></view><view class="muted">{{result.detail}}</view></view>
+    <view class="row"><view class="row-title"><text>{{result.title}}</text><text class="tag">{{labels.status(result.status)}}</text></view><view class="muted">{{result.detail}}</view></view>
   </view>
-  <view wx:if="{{error}}" class="card"><text class="tag tag-fail">{{error}}</text></view>
 </view>

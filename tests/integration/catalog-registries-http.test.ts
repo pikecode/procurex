@@ -1,0 +1,115 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { randomUUID } from 'node:crypto';
+import type { AddressInfo } from 'node:net';
+import { NestFactory } from '@nestjs/core';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { AppModule } from '../../apps/api/src/app.module.js';
+import { ApiExceptionFilter } from '../../apps/api/src/common/api-exception.filter.js';
+import { ResponseEnvelopeInterceptor } from '../../apps/api/src/common/response-envelope.interceptor.js';
+import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
+import { hashPassword } from '../../packages/domain/src/password.js';
+import { lockCatalog } from '../../apps/api/src/catalog/catalog-registries.service.js';
+
+test('catalog registries enforce two-level trees, reference-safe deletes, atomic versions and brand synchronization without repricing', async () => {
+  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public' }) });
+  const prefix = `ITREG${Date.now()}`;
+  const app = await NestFactory.create(AppModule, { logger: false });
+  app.setGlobalPrefix('api/v1'); app.useGlobalFilters(new ApiExceptionFilter()); app.useGlobalInterceptors(new ResponseEnvelopeInterceptor());
+  try {
+    await app.listen(0, '127.0.0.1');
+    const base = `http://127.0.0.1:${(app.getHttpServer().address() as AddressInfo).port}/api/v1`;
+    const tokenFor = async (code: string) => {
+      const role = await db.role.upsert({ where: { code }, update: {}, create: { code, name: code } });
+      const username = `${prefix}${code}`;
+      await db.user.create({ data: { username, displayName: code, passwordHash: await hashPassword('correct-password'), roles: { create: { roleId: role.id } } } });
+      const response = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password: 'correct-password', client: 'WEB' }) });
+      assert.equal(response.status, 201); return (await response.json() as any).data.accessToken as string;
+    };
+    const admin = await tokenFor('ADMIN'), finance = await tokenFor('HQ_FINANCE'), supplierToken = await tokenFor('SUPPLIER');
+    const call = async (path: string, method = 'GET', body?: object, token = admin) => {
+      const response = await fetch(`${base}${path}`, { method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      return { status: response.status, body: await response.json() as any };
+    };
+    const root = (await call('/categories', 'POST', { code: `${prefix}ROOT`, name: 'Root' })).body.data;
+    const child = (await call('/categories', 'POST', { code: `${prefix}CHILD`, name: 'Child', parentId: root.id })).body.data;
+    assert.equal((await call(`/categories/${child.id}`, 'PATCH', { expectedVersion: child.version, sortOrder: 2147483648 })).status, 400);
+    assert.equal((await call('/categories', 'POST', { code: `${prefix}THIRD`, name: 'Third', parentId: child.id })).status, 409);
+    assert.equal((await call(`/categories/${root.id}`, 'PATCH', { expectedVersion: root.version, parentId: child.id })).status, 409);
+    assert.equal((await call(`/categories/${child.id}`, 'PATCH', { expectedVersion: child.version, parentId: child.id })).status, 409);
+    assert.equal((await call(`/categories/${root.id}`, 'DELETE', { expectedVersion: root.version })).status, 409);
+    const unit = (await call('/units', 'POST', { code: `${prefix}BASE`, name: `${prefix}Bottle` })).body.data;
+    const repeated = await call('/units', 'POST', { name: ` ${unit.name} ` });
+    assert.equal(repeated.status, 409); assert.equal(repeated.body.code, 'UNIT_NAME_EXISTS');
+    const concurrentUnits = await Promise.all([1, 2].map(index => call('/units', 'POST', { code: `${prefix}CONCURRENT${index}`, name: `${prefix}Concurrent` })));
+    assert.deepEqual(concurrentUnits.map(result => result.status).sort(), [201, 409]);
+    const otherUnit = concurrentUnits.find(result => result.status === 201)!.body.data;
+    const collision = await call(`/units/${unit.id}`, 'PATCH', { expectedVersion: unit.version, name: ` ${otherUnit.name} ` });
+    assert.equal(collision.status, 409); assert.equal(collision.body.code, 'UNIT_NAME_EXISTS');
+    assert.equal((await db.unit.findUniqueOrThrow({ where: { id: unit.id } })).version, unit.version);
+    const edits = await Promise.all([`${prefix}Bottle A`, `${prefix}Bottle B`].map(name => call(`/units/${unit.id}`, 'PATCH', { expectedVersion: unit.version, name })));
+    assert.deepEqual(edits.map(result => result.status).sort(), [200, 409]);
+    const unitCurrent = (await call('/units')).body.data.find((row: any) => row.id === unit.id);
+    const brand = (await call('/brands', 'POST', { name: `${prefix}Brand` })).body.data;
+    const duplicates = await Promise.all([1, 2].map(() => call('/brands', 'POST', { name: `${prefix}Duplicate` })));
+    assert.deepEqual(duplicates.map(result => result.status).sort(), [201, 409]);
+    assert.equal((await call('/brands', 'GET', undefined, supplierToken)).status, 403);
+    assert.equal((await call('/brands', 'GET', undefined, finance)).status, 200);
+    assert.equal((await call(`/brands/${brand.id}`, 'PATCH', { expectedVersion: brand.version, name: 'Forbidden' }, finance)).status, 403);
+    const created = await call('/products', 'POST', { sku: prefix, name: 'Registry product', defaultSalesPrice: '10', categoryId: child.id, baseUnitId: unit.id, brandId: brand.id, barcode: '001234567890' });
+    assert.equal(created.status, 201); const product = created.body.data;
+    assert.equal(product.barcode, '001234567890'); assert.equal(product.brandId, brand.id);
+    for (const [resource, row] of [['categories', child], ['units', unitCurrent], ['brands', brand]] as const) assert.equal((await call(`/${resource}/${row.id}`, 'DELETE', { expectedVersion: row.version })).status, 409);
+    const renamed = await call(`/brands/${brand.id}`, 'PATCH', { expectedVersion: brand.version, name: `${prefix}Renamed` });
+    assert.equal(renamed.status, 200);
+    const displayed = (await call('/products')).body.data.find((row: any) => row.id === product.id);
+    assert.equal(displayed.brand, `${prefix}Renamed`); assert.ok(displayed.version > product.version);
+    assert.equal((await call(`/products/${product.id}`, 'PATCH', { expectedVersion: product.version, brand: `${prefix}Stale` })).status, 409);
+    assert.equal((await call(`/products/${product.id}`, 'PATCH', { expectedVersion: displayed.version, brandId: randomUUID() })).status, 404);
+    const store = await db.store.create({ data: { code: prefix, name: 'Historical store' } });
+    const supplier = await db.supplier.create({ data: { code: prefix, name: 'Historical supplier', deliveryMode: 'SELF', defaultSettlementMode: 'COMPANY_TERM', defaultSettlementCycle: 'MONTHLY' } });
+    const request = await db.purchaseRequest.create({ data: { requestNo: prefix, storeId: store.id, templateId: randomUUID() } });
+    let releaseWriter!: () => void;
+    let writerStarted!: () => void;
+    const released = new Promise<void>(resolve => { releaseWriter = resolve; });
+    const started = new Promise<void>(resolve => { writerStarted = resolve; });
+    const writer = db.$transaction(async tx => {
+      await lockCatalog(tx, true); writerStarted(); await released;
+      await tx.requestItem.create({ data: { requestId: request.id, productId: product.id, supplierId: supplier.id, quantity: '1', salesUnitPrice: '10', supplyUnitPrice: '8', salesLineAmount: '10', supplyLineAmount: '8' } });
+    });
+    try {
+      await started;
+      const concurrentRename = call(`/units/${unit.id}`, 'PATCH', { expectedVersion: unitCurrent.version, name: 'Concurrent historical rename' });
+      assert.equal(await Promise.race([concurrentRename.then(() => 'finished'), new Promise(resolve => setTimeout(() => resolve('blocked'), 30))]), 'blocked');
+      releaseWriter(); await writer;
+      assert.equal((await concurrentRename).status, 409);
+    } finally { releaseWriter(); await writer; }
+    const order = await db.supplierOrder.create({ data: { supplierOrderNo: prefix, requestId: request.id, storeId: store.id, supplierId: supplier.id, salesGoodsAmount: '10', supplyGoodsAmount: '8', items: { create: { productId: product.id, quantity: '1', salesUnitPrice: '10', supplyUnitPrice: '8', salesLineAmount: '10', supplyLineAmount: '8' } } } });
+    const blockedName = await call(`/units/${unit.id}`, 'PATCH', { expectedVersion: unitCurrent.version, name: 'Changed historical unit' });
+    assert.equal(blockedName.status, 409); assert.equal(blockedName.body.code, 'UNIT_HISTORY_SNAPSHOT_REQUIRED');
+    const purchaseUnit = (await call('/units', 'POST', { code: `${prefix}PACK`, name: `${prefix}Pack` })).body.data;
+    assert.equal((await call(`/products/${product.id}`, 'PATCH', { expectedVersion: displayed.version, baseUnitId: purchaseUnit.id })).status, 409);
+    await db.productUnitConversion.create({ data: { productId: product.id, fromUnitId: purchaseUnit.id, toUnitId: unit.id, ratio: '12' } });
+    assert.equal((await call(`/units/${purchaseUnit.id}`, 'DELETE', { expectedVersion: purchaseUnit.version })).status, 409);
+    const categoryRename = await call(`/categories/${child.id}`, 'PATCH', { expectedVersion: child.version, name: 'Child renamed', sortOrder: 2 });
+    assert.equal(categoryRename.status, 200); assert.equal((await db.supplierOrder.findUniqueOrThrow({ where: { id: order.id } })).salesGoodsAmount.toFixed(2), '10.00');
+    assert.equal(await db.priceVersion.count({ where: { scope: { productId: product.id } } }), 0);
+    const detach = await call(`/products/${product.id}`, 'PATCH', { expectedVersion: displayed.version, brandId: null, barcode: null });
+    assert.equal(detach.status, 200); assert.equal(detach.body.data.brand, null); assert.equal(detach.body.data.barcode, null);
+    assert.equal((await call(`/brands/${brand.id}`, 'DELETE', { expectedVersion: renamed.body.data.version })).status, 200);
+    assert.equal((await call(`/brands/${brand.id}`, 'DELETE', { expectedVersion: renamed.body.data.version })).status, 404);
+    const spare = (await call('/units', 'POST', { code: `${prefix}UNUSED`, name: 'Unused' })).body.data;
+    assert.equal((await call(`/units/${spare.id}`, 'DELETE', { expectedVersion: spare.version })).status, 200);
+    const emptyCategory = (await call('/categories', 'POST', { code: `${prefix}EMPTY`, name: 'Empty' })).body.data;
+    assert.equal((await call(`/categories/${emptyCategory.id}`, 'DELETE', { expectedVersion: emptyCategory.version })).status, 200);
+  } finally {
+    await app.close();
+    await db.supplierOrder.deleteMany({ where: { supplierOrderNo: prefix } }); await db.purchaseRequest.deleteMany({ where: { requestNo: prefix } });
+    await db.product.deleteMany({ where: { sku: prefix } });
+    await db.category.deleteMany({ where: { code: { startsWith: prefix }, parentId: { not: null } } });
+    await db.category.deleteMany({ where: { code: { startsWith: prefix } } }); await db.unit.deleteMany({ where: { code: { startsWith: prefix } } });
+    await db.brand.deleteMany({ where: { name: { startsWith: prefix } } });
+    await db.store.deleteMany({ where: { code: prefix } }); await db.supplier.deleteMany({ where: { code: prefix } });
+    await db.user.deleteMany({ where: { username: { startsWith: prefix } } }); await db.$disconnect();
+  }
+});

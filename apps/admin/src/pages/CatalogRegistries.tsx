@@ -19,7 +19,7 @@ export default function CatalogRegistries({ kind, user }: { kind: Kind; user: Us
     const values = await form.validateFields().catch(() => null); if (!values) return;
     lock.current = true; setSaving(true); setError('');
     try {
-      const body = { name: values.name.trim(), ...(!editing && kind !== 'brands' ? { code: values.code.trim() } : {}),
+      const body = { name: values.name.trim(),
         ...(kind === 'categories' ? { sortOrder: values.sortOrder ?? 0, ...(values.parentId ? { parentId: values.parentId } : editing ? { parentId: null } : {}) } : {}),
         ...(editing ? { expectedVersion: editing.version } : {}) };
       await request(`/${kind}${editing ? `/${editing.id}` : ''}`, { method: editing ? 'PATCH' : 'POST', body });
@@ -47,7 +47,7 @@ export default function CatalogRegistries({ kind, user }: { kind: Kind; user: Us
       confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving} onCancel={() => { if (!saving) setEditing(undefined); }}>
       {error && <Alert type="error" showIcon title={error} />}
       <Form form={form} layout="vertical" disabled={saving} className="compact-form">
-        {kind !== 'brands' && <Form.Item name="code" label="编码" rules={[{ required: true, whitespace: true, message: '请填写编码' }]}><Input disabled={Boolean(editing)} maxLength={kind === 'units' ? 40 : 80} /></Form.Item>}
+        {editing && kind !== 'brands' && <Form.Item name="code" label="编码"><Input disabled /></Form.Item>}
         <Form.Item name="name" label="名称" rules={[{ required: true, whitespace: true, message: '请填写名称' }]}><Input maxLength={kind === 'categories' ? 160 : kind === 'units' ? 80 : 120} /></Form.Item>
         {kind === 'categories' && <>
           <Form.Item name="parentId" label="上级分类"><Select allowClear showSearch optionFilterProp="label" options={data.rows.filter(row => !row.parentId && row.id !== editing?.id).map(row => ({ value: row.id, label: row.name }))} /></Form.Item>

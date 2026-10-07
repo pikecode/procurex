@@ -1,3 +1,4 @@
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { BadRequestException, Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -5,7 +6,7 @@ import { RolesGuard } from '../auth/roles.guard.js';
 import { ReportsService, type ReportFilters } from './reports.service.js';
 
 @Controller('reports')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
@@ -49,7 +50,7 @@ function scopedFilters(filters: ReportFilters, request: AuthenticatedRequest): R
   if (roles.includes('SUPPLIER')) {
     const supplierId = request.auth?.user.scope?.supplierId;
     if (!supplierId || (filters.supplierId && filters.supplierId !== supplierId)) throw new BadRequestException({ code: 'SCOPE_MISMATCH', message: 'Report is outside the current supplier scope' });
-    return { ...filters, supplierId };
+    return { ...filters, supplierId, amountBasis: 'SUPPLY' };
   }
   return filters;
 }

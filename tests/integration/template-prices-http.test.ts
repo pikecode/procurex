@@ -1,0 +1,190 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import type { AddressInfo } from 'node:net';
+import { NestFactory } from '@nestjs/core';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '../../packages/backend/generated/prisma/client.js';
+import { AppModule } from '../../apps/api/src/app.module.js';
+import { ApiExceptionFilter } from '../../apps/api/src/common/api-exception.filter.js';
+import { ResponseEnvelopeInterceptor } from '../../apps/api/src/common/response-envelope.interceptor.js';
+import { PricingService } from '../../apps/api/src/pricing/pricing.service.js';
+import { CommandsService } from '../../apps/api/src/commands/commands.service.js';
+import { PurchaseRequestsService } from '../../apps/api/src/purchase-requests/purchase-requests.service.js';
+import { PurchaseRequestPreviewService } from '../../apps/api/src/purchase-requests/purchase-request-preview.service.js';
+import { applyEffectiveOrderPrices } from '../../apps/api/src/pricing/price-checkpoint.js';
+import { hashPassword } from '../../packages/domain/src/password.js';
+
+test('template prices isolate quotes, historical repricing, checkpoints, copied schedules and quantity rules', async () => {
+  const prefix = `ITTP${Date.now()}`;
+  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public' }) });
+  const app = await NestFactory.create(AppModule, { logger: false });
+  app.setGlobalPrefix('api/v1'); app.useGlobalFilters(new ApiExceptionFilter()); app.useGlobalInterceptors(new ResponseEnvelopeInterceptor());
+  await app.listen(0, '127.0.0.1');
+  const base = `http://127.0.0.1:${(app.getHttpServer().address() as AddressInfo).port}/api/v1`;
+  const pricing = app.get(PricingService);
+  const requests = app.get(PurchaseRequestsService);
+  let token = '';
+  const call = async (path: string, method = 'GET', body?: unknown, key?: string) => {
+    const response = await fetch(`${base}${path}`, { method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...(key ? { 'idempotency-key': key } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: response.status, body: await response.json() as any };
+  };
+  try {
+    const role = await db.role.upsert({ where: { code: 'ADMIN' }, update: {}, create: { code: 'ADMIN', name: 'Admin' } });
+    await db.user.create({ data: { username: prefix, displayName: prefix, passwordHash: await hashPassword('correct-password'), roles: { create: { roleId: role.id } } } });
+    const login = await call('/auth/login', 'POST', { username: prefix, password: 'correct-password', client: 'web' });
+    assert.equal(login.status, 201); token = login.body.data.accessToken;
+    const category = await db.category.create({ data: { code: prefix, name: prefix } });
+    const unit = await db.unit.create({ data: { code: prefix, name: 'piece' } });
+    const supplier = await db.supplier.create({ data: { code: prefix, name: prefix, deliveryMode: 'SELF', defaultSettlementMode: 'COMPANY_TERM', defaultSettlementCycle: 'MONTHLY' } });
+    const product = await db.product.create({ data: { sku: prefix, name: prefix, categoryId: category.id, baseUnitId: unit.id, defaultSalesPrice: '11' } });
+    const templates = [];
+    const stores: Array<{ id: string }> = [];
+    for (const suffix of ['A', 'B']) {
+      const template = await db.orderTemplate.create({ data: { code: `${prefix}${suffix}`, name: `${prefix}${suffix}`, tag: 'Test', items: { create: { productId: product.id, initialSalesPrice: '11', suppliers: { create: { supplierId: supplier.id } } } } } });
+      templates.push(template);
+      stores.push(await db.store.create({ data: { code: `${prefix}${suffix}`, name: `${prefix}${suffix}`, bindings: { create: { templateId: template.id } } } }));
+    }
+    const a = templates[0]!; const b = templates[1]!;
+    const priceInput = { productId: product.id, supplierId: supplier.id, salesPrice: '10', supplyPrice: '8', effectiveAt: '2026-09-01T00:00:00Z', reason: 'Initial shared' };
+    const shared = await call('/price-changes', 'POST', priceInput); assert.equal(shared.status, 201);
+    const orders: Array<{ id: string }> = [];
+    for (const [index, template] of templates.entries()) {
+      const request = await db.purchaseRequest.create({ data: { requestNo: `${prefix}${index}`, storeId: stores[index]!.id, templateId: template.id, status: 'CONFIRMED', submittedAt: new Date('2026-09-15'), salesGoodsAmount: '20', supplyGoodsAmount: '16',
+        items: { create: { productId: product.id, supplierId: supplier.id, quantity: '2', priceVersionId: shared.body.data.versionId, salesUnitPrice: '10', supplyUnitPrice: '8', salesLineAmount: '20', supplyLineAmount: '16' } } } });
+      orders.push(await db.supplierOrder.create({ data: { supplierOrderNo: `${prefix}${index}`, requestId: request.id, storeId: stores[index]!.id, supplierId: supplier.id, status: 'PUSHED', settlementMode: 'COMPANY_TERM',
+        salesGoodsAmount: '20', supplyGoodsAmount: '16', items: { create: { productId: product.id, quantity: '2', salesUnitPrice: '10', supplyUnitPrice: '8', salesLineAmount: '20', supplyLineAmount: '16' } } } }));
+    }
+    const draft = { ...priceInput, templateId: a.id, salesPrice: '12', supplyPrice: '8', effectiveAt: '2026-09-10T00:00:00Z', reason: 'Template A only' };
+    await app.get(CommandsService).begin({ actorUserId: (await db.user.findUniqueOrThrow({ where: { username: prefix } })).id,
+      action: 'price.publish', idempotencyKey: `${prefix}-processing`, requestBody: draft, traceId: `${prefix}-trace` });
+    const pendingPublish = await call('/price-changes', 'POST', draft, `${prefix}-processing`);
+    assert.equal(pendingPublish.status, 409); assert.equal(pendingPublish.body.code, 'COMMAND_PROCESSING');
+    assert.equal(await db.priceVersion.count({ where: { scope: { productId: product.id, templateKey: a.id } } }), 0);
+    const impact = await call('/prices/impact-preview', 'POST', draft);
+    assert.equal(impact.status, 201); assert.deepEqual(impact.body.data.orders.map((order: any) => order.supplierOrderId), [orders[0]!.id]);
+    const scoped = await call('/price-changes', 'POST', draft, `${prefix}-publish`); assert.equal(scoped.status, 201);
+    const replay = await call('/price-changes', 'POST', draft, `${prefix}-publish`);
+    assert.equal(replay.status, 201); assert.deepEqual(replay.body.data, scoped.body.data);
+    assert.equal(await db.priceVersion.count({ where: { id: scoped.body.data.versionId } }), 1);
+    assert.equal((await call('/price-changes', 'POST', { ...draft, salesPrice: '13' }, `${prefix}-publish`)).status, 409);
+    assert.equal(scoped.body.data.templateId, a.id);
+    const run = await call(`/jobs/${scoped.body.data.runId}/process`, 'POST'); assert.equal(run.status, 201); assert.equal(run.body.data.status, 'SUCCEEDED');
+    assert.equal((await db.supplierOrder.findUniqueOrThrow({ where: { id: orders[0]!.id } })).salesGoodsAmount.toString(), '24');
+    assert.equal((await db.supplierOrder.findUniqueOrThrow({ where: { id: orders[1]!.id } })).salesGoodsAmount.toString(), '20');
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date('2026-09-05'), a.id)).salesPrice, '10');
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date('2026-09-15'), a.id)).salesPrice, '12');
+    const future = await call('/price-changes', 'POST', { ...draft, salesPrice: '15', effectiveAt: '2099-01-01T00:00:00Z' }); assert.equal(future.status, 201);
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date(), a.id)).salesPrice, '12');
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date('2099-01-01'), a.id)).salesPrice, '15');
+    const sharedImpact = await call('/prices/impact-preview', 'POST', { ...priceInput, salesPrice: '20' });
+    assert.deepEqual(sharedImpact.body.data.orders.map((order: any) => order.supplierOrderId), [orders[1]!.id]);
+    const sharedChange = await call('/price-changes', 'POST', { ...priceInput, salesPrice: '20' }); assert.equal(sharedChange.status, 201);
+    await call(`/jobs/${sharedChange.body.data.runId}/process`, 'POST');
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date(), a.id)).salesPrice, '12');
+    const staleCopy = await call(`/templates/${a.id}/copy`, 'POST', { expectedVersion: a.updatedAt.getTime(), code: `${prefix}STALE`, name: `${prefix}STALE`, tag: 'Copy' }); assert.equal(staleCopy.status, 409);
+    const copied = await call(`/templates/${a.id.toUpperCase()}/copy`, 'POST', { expectedVersion: (await call(`/templates/${a.id}`)).body.data.version, code: `${prefix}COPY`, name: `${prefix}COPY`, tag: 'Copy' }); assert.equal(copied.status, 201);
+    const copyId = copied.body.data.id;
+    const copyVersions = await db.priceVersion.findMany({ where: { scope: { templateKey: copyId } } });
+    assert.ok(copyVersions.every(version => version.effectiveAt >= new Date(copied.body.data.createdAt)));
+    assert.equal(await db.priceChangeRunVersion.count({ where: { priceVersion: { scope: { templateKey: copyId } } } }), 0);
+    const inheritedCopy = await call(`/templates/${b.id}/copy`, 'POST', { expectedVersion: b.updatedAt.getTime(), code: `${prefix}SHARED`, name: `${prefix}SHARED`, tag: 'Copy' }); assert.equal(inheritedCopy.status, 201);
+    await call('/price-changes', 'POST', { ...draft, salesPrice: '30', effectiveAt: '2026-09-10T00:00:00Z' });
+    await call('/price-changes', 'POST', { ...priceInput, salesPrice: '40' });
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date(), copyId)).salesPrice, '12');
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date('2099-01-01'), copyId)).salesPrice, '15');
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date(), inheritedCopy.body.data.id)).salesPrice, '20');
+    const checkpoint = await db.$transaction(tx => applyEffectiveOrderPrices(tx, orders[0]!.id, new Date('2026-09-15'))); assert.equal(checkpoint.changed, true);
+    assert.equal((await db.supplierOrder.findUniqueOrThrow({ where: { id: orders[0]!.id } })).salesGoodsAmount.toString(), '60');
+    await db.supplierOrder.update({ where: { id: orders[0]!.id }, data: { status: 'COMPLETED' } });
+    const completed = await call('/prices/impact-preview', 'POST', { ...draft, salesPrice: '31' }); assert.equal(completed.body.data.affectedOrderCount, 0);
+    const rules = { expectedVersion: (await call(`/templates/${a.id}`)).body.data.version, items: [{ productId: product.id, suppliers: [{ supplierId: supplier.id, priority: 1 }], minOrderQty: '4', orderMultiple: '2', isEnabled: true }] };
+    const invalid = await call(`/templates/${a.id}/items`, 'PUT', { ...rules, items: [{ ...rules.items[0], orderMultiple: '0' }] }); assert.equal(invalid.status, 400);
+    const configured = await call(`/templates/${a.id}/items`, 'PUT', rules); assert.equal(configured.status, 200);
+    const preview = (quantity: string) => call('/purchase-requests/preview', 'POST', { storeId: stores[0]!.id, items: [{ productId: product.id, quantity }] });
+    assert.equal((await preview('2')).status, 409); assert.equal((await preview('5')).status, 409);
+    const valid = await preview('4'); assert.equal(valid.status, 201); assert.equal(valid.body.data.totals.salesGoodsAmount, '120.00');
+    const realRequest = await requests.create({ storeId: stores[0]!.id, items: [{ productId: product.id, quantity: '4' }] });
+    assert.equal((await db.purchaseRequest.findUniqueOrThrow({ where: { id: realRequest.id } })).salesGoodsAmount.toString(), '120');
+    await requests.confirm(realRequest.id, realRequest.version);
+    const realOrder = await db.supplierOrder.findFirstOrThrow({ where: { requestId: realRequest.id }, include: { items: true } });
+    assert.equal(realOrder.items[0]?.salesPriceVersionId, realRequest.items[0]?.priceVersionId);
+    assert.equal(realOrder.items[0]?.supplyPriceVersionId, realRequest.items[0]?.supplyPriceVersionId);
+    assert.notEqual(realOrder.items[0]?.salesPriceVersionId, realOrder.items[0]?.supplyPriceVersionId);
+    await db.supplierOrder.delete({ where: { id: realOrder.id } });
+    await db.purchaseRequest.delete({ where: { id: realRequest.id } });
+    const previewService = app.get(PurchaseRequestPreviewService);
+    const originalPreview = previewService.preview.bind(previewService);
+    const requestCount = await db.purchaseRequest.count({ where: { storeId: stores[0]!.id } });
+    try {
+      // Supply a real stale preview without waiting for a writer behind the command's locks.
+      const stalePricePreview = await originalPreview({ storeId: stores[0]!.id, items: [{ productId: product.id, quantity: '4' }] });
+      await pricing.publishPrice({ ...draft, salesPrice: '31', effectiveAt: new Date(draft.effectiveAt) });
+      previewService.preview = async () => stalePricePreview;
+      await assert.rejects(requests.create({ storeId: stores[0]!.id, items: [{ productId: product.id, quantity: '4' }] }),
+        (error: any) => error.getResponse().code === 'VERSION_CONFLICT');
+      assert.equal(await db.purchaseRequest.count({ where: { storeId: stores[0]!.id } }), requestCount);
+      const staleRulesPreview = await originalPreview({ storeId: stores[0]!.id, items: [{ productId: product.id, quantity: '4' }] });
+      const changed = await call(`/templates/${a.id}/items`, 'PUT', { ...rules, expectedVersion: (await call(`/templates/${a.id}`)).body.data.version, items: [{ ...rules.items[0], orderMultiple: '4' }] });
+      assert.equal(changed.status, 200); configured.body.data.version = changed.body.data.version;
+      previewService.preview = async () => staleRulesPreview;
+      await assert.rejects(requests.create({ storeId: stores[0]!.id, items: [{ productId: product.id, quantity: '4' }] }),
+        (error: any) => error.getResponse().code === 'VERSION_CONFLICT');
+      assert.equal(await db.purchaseRequest.count({ where: { storeId: stores[0]!.id } }), requestCount);
+    } finally { previewService.preview = originalPreview; }
+    const disabled = await call(`/templates/${a.id}/items`, 'PUT', { ...rules, expectedVersion: configured.body.data.version, items: [{ ...rules.items[0], isEnabled: false }] }); assert.equal(disabled.status, 200);
+    assert.equal((await preview('4')).status, 409);
+    const retained = await call(`/templates/${a.id}/items`, 'PUT', { expectedVersion: disabled.body.data.version, items: [{ productId: product.id, suppliers: [{ supplierId: supplier.id, priority: 1 }] }] }); assert.equal(retained.status, 200);
+    const detail = (await call(`/templates/${a.id}`)).body.data;
+    assert.equal(detail.items[0].isEnabled, false); assert.equal(detail.items[0].minOrderQty, '4');
+    const disabledCopy = await call(`/templates/${a.id}/copy`, 'POST', { expectedVersion: detail.version, code: `${prefix}DISABLED`, name: `${prefix}DISABLED`, tag: 'Copy' }); assert.equal(disabledCopy.status, 201);
+    const copiedRules = (await call(`/templates/${disabledCopy.body.data.id}`)).body.data.items[0];
+    assert.equal(copiedRules.isEnabled, false); assert.equal(copiedRules.minOrderQty, '4'); assert.equal(copiedRules.orderMultiple, '2');
+    const cost = await call('/price-changes', 'POST', { ...priceInput, salesPrice: '40', supplyPrice: '9', reason: 'Shared supplier cost' }); assert.equal(cost.status, 201);
+    assert.equal((await call(`/jobs/${cost.body.data.runId}/process`, 'POST')).status, 201);
+    const copiedQuote = await pricing.getEffectivePrice(product.id, supplier.id, new Date(), copyId);
+    assert.equal(copiedQuote.salesPrice, '12'); assert.equal(copiedQuote.supplyPrice, '9');
+    assert.notEqual(copiedQuote.versionId, copiedQuote.supplyVersionId);
+    const history = (await call(`/price-scopes/${scoped.body.data.scopeId}/versions`)).body.data;
+    const originalVersion = history.find((version: any) => version.versionId === scoped.body.data.versionId);
+    assert.equal(originalVersion.supplyPrice, '8'); assert.equal(originalVersion.supplyVersionId, shared.body.data.versionId);
+    const bCost = await db.supplierOrder.findUniqueOrThrow({ where: { id: orders[1]!.id }, include: { items: true } });
+    assert.equal(bCost.supplyGoodsAmount.toString(), '18'); assert.equal(bCost.items[0]?.supplyPriceVersionId, cost.body.data.versionId);
+    const noTemplateCost = await call('/price-changes', 'POST', { ...draft, supplyPrice: '7' }, `${prefix}-invalid-cost`); assert.equal(noTemplateCost.status, 409);
+    const failedReplay = await call('/price-changes', 'POST', { ...draft, supplyPrice: '7' }, `${prefix}-invalid-cost`);
+    assert.equal(failedReplay.status, 409); assert.equal(failedReplay.body.code, noTemplateCost.body.code);
+    assert.equal((await db.commandRecord.findFirstOrThrow({ where: { idempotencyKey: `${prefix}-invalid-cost` } })).status, 'FAILED');
+    assert.equal(noTemplateCost.body.code, 'TEMPLATE_SUPPLY_PRICE_READ_ONLY');
+    const equal = await call('/price-changes', 'POST', { ...draft, templateId: b.id, salesPrice: '9', supplyPrice: '9.000000' }); assert.equal(equal.status, 201);
+    const direct = await call(`/templates/${b.id}/supplier-settings/${supplier.id}`, 'PUT', { expectedVersion: (await call(`/templates/${b.id}`)).body.data.version, settlementMode: 'SUPPLIER_TERM', settlementCycle: 'MONTHLY' }); assert.equal(direct.status, 200);
+    const costBeforeConflict = await db.priceVersion.count({ where: { scope: { productId: product.id } } });
+    const unbalancedCost = await call('/price-changes', 'POST', { ...priceInput, salesPrice: '10', supplyPrice: '10' }); assert.equal(unbalancedCost.status, 409);
+    assert.equal(unbalancedCost.body.code, 'DIRECT_TERM_PRICES_MUST_MATCH');
+    assert.equal(await db.priceVersion.count({ where: { scope: { productId: product.id } } }), costBeforeConflict);
+    assert.equal((await call('/price-changes', 'POST', { ...draft, templateId: b.id })).status, 409);
+    const overflow = await call('/price-changes', 'POST', { ...draft, salesPrice: '100000000000000' }); assert.equal(overflow.status, 400);
+    const rejectedPrice = await call('/price-changes', 'POST', { ...draft, templateId: unit.id }); assert.equal(rejectedPrice.status, 409);
+    const archived = await call(`/templates/${copyId}/archive`, 'POST', { expectedVersion: copied.body.data.version }); assert.equal(archived.status, 201);
+    assert.equal((await call('/price-changes', 'POST', { ...draft, templateId: copyId })).status, 409);
+  } finally {
+    await app.close();
+    const scopeWhere = { supplier: { code: prefix } };
+    const runWhere = { versions: { some: { priceVersion: { scope: scopeWhere } } } };
+    await db.priceChangeAdjustment.deleteMany({ where: { run: { run: runWhere } } });
+    await db.priceChangeRunOrder.deleteMany({ where: { run: runWhere } });
+    const runs = await db.priceChangeRun.findMany({ where: runWhere, select: { id: true } });
+    await db.priceChangeRunVersion.deleteMany({ where: { run: runWhere } });
+    await db.priceChangeRun.deleteMany({ where: { id: { in: runs.map(run => run.id) } } });
+    await db.priceScope.deleteMany({ where: scopeWhere });
+    await db.supplierOrder.deleteMany({ where: { store: { code: { startsWith: prefix } } } });
+    await db.purchaseRequest.deleteMany({ where: { store: { code: { startsWith: prefix } } } });
+    await db.storeTemplateBinding.deleteMany({ where: { template: { code: { startsWith: prefix } } } });
+    await db.orderTemplate.deleteMany({ where: { code: { startsWith: prefix } } });
+    await db.product.deleteMany({ where: { sku: prefix } });
+    await db.category.deleteMany({ where: { code: prefix } }); await db.unit.deleteMany({ where: { code: prefix } });
+    await db.storeAccount.deleteMany({ where: { store: { code: { startsWith: prefix } } } });
+    await db.store.deleteMany({ where: { code: { startsWith: prefix } } }); await db.supplier.deleteMany({ where: { code: prefix } });
+    await db.commandRecord.deleteMany({ where: { actor: { username: prefix } } });
+    await db.userSession.deleteMany({ where: { user: { username: prefix } } }); await db.userRole.deleteMany({ where: { user: { username: prefix } } }); await db.user.deleteMany({ where: { username: prefix } });
+    await db.$disconnect();
+  }
+});

@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { readUnitSnapshot } from '../catalog/transaction-units.js';
+import { displaySalesUnitName, readUnitDisplayNames } from '../catalog/transaction-units.js';
 import {
   DiscrepancyStatus,
   FulfillmentStatus,
@@ -101,7 +101,8 @@ export class ShipmentsService {
       });
     }
 
-    return toShipmentDetailView(shipment);
+    const names = await readUnitDisplayNames(this.database.client as Prisma.TransactionClient, shipment.items.map(item => item.orderItem.unitSnapshot));
+    return toShipmentDetailView(shipment, names);
   }
 
   async createReceipt(shipmentId: string, input: CreateReceiptInput, scope?: { type: string; storeId?: string }, actorUserId?: string, transaction?: Prisma.TransactionClient): Promise<ReceiptView> {
@@ -337,7 +338,7 @@ function toShipmentDetailView(shipment: Shipment & {
   supplierOrder: SupplierOrder;
   items: Array<ShipmentItem & { orderItem: { productId: string; unitSnapshot?: Prisma.JsonValue | null; product: { name: string } }; receiptItems: Array<{ discrepancy: { status: DiscrepancyStatus; returnRecord?: unknown } | null }> }>;
   receipts: Array<Receipt & { items: ReceiptItem[]; evidenceFiles?: FileObject[] }>;
-}): ShipmentDetailView {
+}, names: ReadonlyMap<string, string>): ShipmentDetailView {
   return {
     id: shipment.id,
     shipmentNo: shipment.shipmentNo,
@@ -354,7 +355,7 @@ function toShipmentDetailView(shipment: Shipment & {
       orderItemId: item.orderItemId,
       productId: item.orderItem.productId,
       productName: item.orderItem.product.name,
-      unitName: readUnitSnapshot(item.orderItem.unitSnapshot)?.salesUnitName ?? null,
+      unitName: displaySalesUnitName(item.orderItem.unitSnapshot, names),
       shippedQuantity: item.quantity.toString(),
       currentReceivedQuantity: shipment.receipts[0]?.items.find(receiptItem => receiptItem.shipmentItemId === item.id)?.receivedQuantity.toString() ?? null,
       receiptLocked: Boolean(shipment.receipts[0]) && isReceiptItemLocked(item.receiptItems),

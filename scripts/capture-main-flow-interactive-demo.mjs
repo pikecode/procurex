@@ -458,7 +458,7 @@ async function captureSupplierWorkbench(cdp, viewport, fileName) {
 
 async function captureProductApp(cdp, viewport, route, fileName) {
   await setViewport(cdp, viewport);
-  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/${route}`);
+  await navigate(cdp, `${webBaseUrl}/app.html?demo=1&capture=${Date.now()}#/${route}`);
   const state = await evaluate(cdp, `
     (async () => {
       const waitFor = async (predicate, label) => {
@@ -493,7 +493,7 @@ async function captureProductApp(cdp, viewport, route, fileName) {
 
 async function runProductAppFlow(cdp, viewport, fileName) {
   await setViewport(cdp, viewport);
-  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/flow`);
+  await navigate(cdp, `${webBaseUrl}/app.html?demo=1&capture=${Date.now()}#/flow`);
   const state = await evaluate(cdp, `
     (async () => {
       const waitFor = async (predicate, label) => {
@@ -539,7 +539,7 @@ async function runProductAppFlow(cdp, viewport, fileName) {
 
 async function runProductAppSupplierDiscrepancyAction(cdp, viewport, fileName) {
   await setViewport(cdp, viewport);
-  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/supplier`);
+  await navigate(cdp, `${webBaseUrl}/app.html?demo=1&capture=${Date.now()}#/supplier`);
   const state = await evaluate(cdp, `
     (async () => {
       const waitFor = async (predicate, label) => {
@@ -642,7 +642,7 @@ async function runProductAppSupplierDiscrepancyAction(cdp, viewport, fileName) {
 
 async function runProductAppRoleMutationJourney(cdp, viewport, fileName) {
   await setViewport(cdp, viewport);
-  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/store`);
+  await navigate(cdp, `${webBaseUrl}/app.html?demo=1&capture=${Date.now()}#/store`);
   const state = await evaluate(cdp, `
     (async () => {
       const waitFor = async (predicate, label) => {
@@ -730,7 +730,7 @@ async function runProductAppRoleMutationJourney(cdp, viewport, fileName) {
 
 async function runProductAppFinanceAction(cdp, viewport, fileName) {
   await setViewport(cdp, viewport);
-  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/finance`);
+  await navigate(cdp, `${webBaseUrl}/app.html?demo=1&capture=${Date.now()}#/finance`);
   const state = await evaluate(cdp, `
     (async () => {
       const waitFor = async (predicate, label) => {
@@ -765,7 +765,7 @@ async function runProductAppFinanceAction(cdp, viewport, fileName) {
 
 async function runProductAppFinancePendingAction(cdp, viewport, fileName) {
   await setViewport(cdp, viewport);
-  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/finance`);
+  await navigate(cdp, `${webBaseUrl}/app.html?demo=1&capture=${Date.now()}#/finance`);
   const state = await evaluate(cdp, `
     (async () => {
       const waitFor = async (predicate, label) => {
@@ -862,7 +862,7 @@ async function runProductAppFinancePendingAction(cdp, viewport, fileName) {
 
 async function runProductAppFinanceRejectAction(cdp, viewport, fileName) {
   await setViewport(cdp, viewport);
-  await navigate(cdp, `${webBaseUrl}/app.html?capture=${Date.now()}#/finance`);
+  await navigate(cdp, `${webBaseUrl}/app.html?demo=1&capture=${Date.now()}#/finance`);
   const state = await evaluate(cdp, `
     (async () => {
       const waitFor = async (predicate, label) => {
@@ -901,7 +901,7 @@ async function main() {
   const browser = await findBrowser();
   await mkdir(outputDir, { recursive: true });
   await withService(apiReadyUrl, 'API', 'npm', ['run', 'start:api'], async (startedApi) => {
-    await withService(`${webBaseUrl}/main-flow-demo.html`, 'Web server', 'npm', ['run', 'start:web'], async (startedWeb) => {
+    await withService(`${webBaseUrl}/main-flow-demo.html`, 'Web server', 'npm', ['run', 'start:web:legacy'], async (startedWeb) => {
       const { chrome, port } = await launchChrome(browser);
       try {
         const cdp = await connectToChrome(port);

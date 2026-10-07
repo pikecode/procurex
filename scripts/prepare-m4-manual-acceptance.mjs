@@ -33,7 +33,7 @@ console.log('  npm run m4:start-manual-acceptance');
 console.log('');
 console.log('Or start services in two terminals:');
 console.log('  npm run start:api');
-console.log('  npm run start:web');
+console.log('  npm run start:web:legacy');
 console.log('');
 console.log('Open these pages:');
 console.log('  http://127.0.0.1:4173/m4-acceptance.html');

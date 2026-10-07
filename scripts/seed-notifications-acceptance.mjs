@@ -1,9 +1,11 @@
 import { PrismaPg } from '@prisma/adapter-pg';
+import { assertLocalFixtureDatabase } from './local-fixture-guard.mjs';
 import { FulfillmentStatus, PaymentStatus, PurchaseRequestStatus, SettlementMode, ShipmentKind, SupplierOrderStatus } from '../dist/packages/backend/generated/prisma/enums.js';
 import { PrismaClient } from '../dist/packages/backend/generated/prisma/client.js';
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public';
+assertLocalFixtureDatabase(connectionString);
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 async function run() {

@@ -514,6 +514,7 @@ async function runSupplierRejectionAction() {
     const request = await call(`/purchase-requests/${flow.requestId}`, {}, purchaserAuth);
     const reallocated = await call(`/purchase-requests/${flow.requestId}/reallocate`, {
       method: 'POST',
+      headers: { 'idempotency-key': `role-reallocate-${crypto.randomUUID()}` },
       body: JSON.stringify({
         expectedVersion: request.version,
         rejectedOrderId: rejected.supplierOrderId,

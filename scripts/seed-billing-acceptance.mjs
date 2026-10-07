@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { assertLocalFixtureDatabase } from './local-fixture-guard.mjs';
+import { sharedFixtureUnit } from './shared-fixture-unit.mjs';
 import {
   DeliveryMode,
   FulfillmentStatus,
@@ -94,7 +95,7 @@ async function cleanup() {
   await prisma.priceScope.deleteMany({ where: { supplierId: { in: suppliers.map((supplier) => supplier.id) } } });
   await prisma.product.deleteMany({ where: { sku: { startsWith: prefix } } });
   await prisma.category.deleteMany({ where: { code: { startsWith: prefix } } });
-  await prisma.unit.deleteMany({ where: { code: { startsWith: prefix } } });
+  // Units are shared master data and may be referenced outside this fixture.
   await prisma.userSession.deleteMany({ where: { userId: { in: users.map((user) => user.id) } } });
   await prisma.userRole.deleteMany({ where: { userId: { in: users.map((user) => user.id) } } });
   await prisma.userScope.deleteMany({ where: { userId: { in: users.map((user) => user.id) } } });
@@ -240,7 +241,7 @@ async function run() {
     prisma.store.create({ data: { code: `${prefix}-STORE`, name: '结算验收门店' } }),
     prisma.orderTemplate.create({ data: { code: `${prefix}-TPL`, name: '结算验收模板' } }),
     prisma.category.create({ data: { code: `${prefix}-CAT`, name: '结算验收分类' } }),
-    prisma.unit.create({ data: { code: `${prefix}-UNIT`, name: '件' } }),
+    sharedFixtureUnit(prisma, '件', `${prefix}-UNIT`),
   ]);
   const product = await prisma.product.create({
     data: { sku: `${prefix}-SKU`, name: '结算验收商品', categoryId: category.id, baseUnitId: unit.id },

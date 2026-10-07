@@ -62,14 +62,15 @@
   {
     "id": "DEV-406",
     "title": "调整与差额处置",
-    "state": "Closed",
+    "state": "Reopened",
     "autoEvidence": [
       ["adjustment-list", "W10 调整列表"],
       ["adjustment-detail", "W10 调整详情"],
       ["offset-target", "正调整可作为抵扣目标"],
       ["offset-created", "抵扣处置已创建"],
       ["receiver-confirmed", "收款方确认通过"],
-      ["disposed-state", "处置状态已确认"]
+      ["disposed-state", "处置状态已确认"],
+      ["accepted-short-receipt-amount", "同意少收按有效实收联动货款与资金；3/2/3 实收的供应商应付为 84.50，已冻结侧保留原账单并生成差额"]
     ],
     "manualEvidence": [
       ["adjustment-list-detail-screens", "W10 列表/详情截图"],

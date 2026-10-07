@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
+import { masterDataAuditContext } from '../audit/master-data-audit.js';
+import type { AuthenticatedRequest } from '../auth/auth.guard.js';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
@@ -26,9 +28,9 @@ export class UsersController {
   }
 
   @Patch(':id')
-  updateUser(@Param('id') id: string, @Body() body: PatchUserBody): Promise<UserView> {
+  updateUser(@Param('id') id: string, @Body() body: PatchUserBody, @Req() request: AuthenticatedRequest): Promise<UserView> {
     const input = parsePatchUserInput(id, body);
-    return this.usersService.updateUser(id, input);
+    return this.usersService.updateUser(id, input, masterDataAuditContext(request));
   }
 }
 

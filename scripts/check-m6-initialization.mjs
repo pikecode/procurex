@@ -106,7 +106,7 @@ async function buildReport() {
       _count: { _all: true },
       _sum: { amount: true },
     }),
-    prisma.fileObject.count({ where: { purpose: 'PAYMENT_EVIDENCE', status: 'READY' } }),
+    prisma.fileObject.count({ where: { purpose: 'PAYMENT', status: 'READY' } }),
     prisma.settlementItemSnapshot.aggregate({
       _count: { _all: true },
       _sum: { goodsAmount: true, freightAmount: true, totalAmount: true },
@@ -154,15 +154,28 @@ async function buildReport() {
 
   const blockers = checks.filter((item) => item.severity === 'required' && item.status !== 'PASS');
   const status = blockers.length === 0 ? 'LOCAL_READY' : 'BLOCKED';
+  const fixtureInventory = await Promise.all(['PXFLOW', 'PXACC', 'PXRPT', 'PXSCALE'].map(async prefix => ({
+    prefix,
+    stores: await prisma.store.count({ where: { code: { startsWith: prefix } } }),
+    suppliers: await prisma.supplier.count({ where: { code: { startsWith: prefix } } }),
+    orders: await prisma.supplierOrder.count({ where: { supplierOrderNo: { startsWith: prefix } } }),
+  })));
 
   return {
     generatedAt: new Date().toISOString(),
     title: 'M6 Local Initialization And Finance Signoff Check',
     status,
     summary: status === 'LOCAL_READY'
-      ? 'Required local initialization inventory and reconciliation checks passed; customer finance sign-off is still required before production READY.'
-      : 'Required local initialization inventory or reconciliation checks failed.',
+      ? 'Required local inventory and nonnegative-value checks passed; this is not ledger/receivable reconciliation or customer finance sign-off.'
+      : 'Required local initialization inventory or nonnegative-value checks failed.',
     cutoffDate,
+    dataOrigin: {
+      classification: 'UNVERIFIED_LOCAL_DATA',
+      recognizedFixturePrefixes: fixtureInventory,
+      productionBlockers: ['Customer source and cutoff date unverified',
+        ...(fixtureInventory.some(row => row.stores + row.suppliers + row.orders > 0) ? ['Known demo/acceptance fixtures present; not a clean production initialization'] : [])],
+      note: 'Prefix detection is diagnostic, not proof that unrecognized rows are customer data; no rows are deleted.',
+    },
     environment: {
       node: process.version,
       databaseUrl: connectionString.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:***@'),

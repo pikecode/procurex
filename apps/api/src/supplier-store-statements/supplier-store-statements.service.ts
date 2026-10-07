@@ -5,6 +5,9 @@ import { PaymentAllocationState, SupplierOrderStatus } from '../../../../package
 import type { Shipment, Supplier, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import { summarizeAllocations } from '../payment-records/payment-records.service.js';
+import { adjustmentDocumentViewId } from '../adjustments/adjustments.service.js';
+import { enrichStatementLines, type StatementOrderDetails } from '../supplier-statements/statement-order-details.js';
+import { validateUuid } from '../../../../packages/domain/src/validation.js';
 
 export type SupplierStoreStatementStatus = 'OPEN' | 'SETTLED';
 
@@ -20,6 +23,7 @@ export type SupplierStoreStatementSummaryView = {
   parentStatementId: string;
   type: 'SUPPLIER_STORE';
   storeId: string;
+  storeName: string;
   supplierId: string;
   cycle: SettlementCycle;
   periodKey: string;
@@ -34,12 +38,12 @@ export type SupplierStoreStatementSummaryView = {
   payableAmount: string;
   adjustmentAmount: string;
   adjustmentSettlementItemIds: string[];
-  adjustmentItems: Array<{ settlementItemId: string; amount: string }>;
+  adjustmentItems: Array<{ settlementItemId: string; amount: string; adjustmentId?: string; supplierOrderId?: string }>;
   lineCount: number;
 };
 
 export type SupplierStoreStatementDetailView = SupplierStoreStatementSummaryView & {
-  lines: SupplierStoreStatementLineView[];
+  lines: Array<SupplierStoreStatementLineView & StatementOrderDetails>;
 };
 
 export type SupplierStoreStatementLineView = {
@@ -50,6 +54,7 @@ export type SupplierStoreStatementLineView = {
   freightAmount: string;
   totalAmount: string;
   sourceRevision: number;
+  amountBasis: 'CURRENT_ORDER' | 'FROZEN';
   firstShippedAt: string;
   priceAdjustments: Array<{ id: string; runId: string; orderItemId: string; salesDelta: string; supplyDelta: string; createdAt: string }>;
 };
@@ -60,6 +65,7 @@ type StatementGroup = {
   id: string;
   parentStatementId: string;
   storeId: string;
+  storeName: string;
   supplierId: string;
   cycle: SettlementCycle;
   periodKey: string;
@@ -69,7 +75,7 @@ type StatementGroup = {
   paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal };
   adjustmentAmount: Decimal;
   adjustmentSettlementItemIds: string[];
-  adjustmentItems: Array<{ settlementItemId: string; amount: string }>;
+  adjustmentItems: Array<{ settlementItemId: string; amount: string; adjustmentId?: string; supplierOrderId?: string }>;
 };
 
 @Injectable()
@@ -83,6 +89,7 @@ export class SupplierStoreStatementsService {
 
   async get(id: string, scope?: { type?: string; supplierId?: string }): Promise<SupplierStoreStatementDetailView> {
     const key = decodeStatementId(id);
+    if (scope?.type === 'SUPPLIER' && scope.supplierId !== key.supplierId) throw new NotFoundException({ code: 'SUPPLIER_STORE_STATEMENT_NOT_FOUND', message: 'Supplier store statement was not found' });
     const groups = await this.loadGroups({
       storeId: key.storeId,
       supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId,
@@ -101,7 +108,7 @@ export class SupplierStoreStatementsService {
         message: 'Supplier store statement was not found',
       });
     }
-    return { ...toSummaryView(group), lines: group.lines };
+    return { ...toSummaryView(group), lines: await enrichStatementLines(this.database.client, group.lines) };
   }
 
   private async loadGroups(input: ListSupplierStoreStatementsInput): Promise<StatementGroup[]> {
@@ -110,6 +117,7 @@ export class SupplierStoreStatementsService {
         storeId: input.storeId,
         supplierId: input.supplierId,
         status: SupplierOrderStatus.COMPLETED,
+        settlementMode: { not: 'SUPPLIER_TERM' },
         firstShippedAt: { not: null },
       },
       include: {
@@ -126,6 +134,7 @@ export class SupplierStoreStatementsService {
 
     const groups = new Map<string, StatementGroup>();
     for (const order of orders) {
+      if (order.settlementMode === 'SUPPLIER_TERM') continue;
       if (!order.firstShippedAt) {
         continue;
       }
@@ -156,6 +165,7 @@ export class SupplierStoreStatementsService {
             orderId: cycle === 'IMMEDIATE' ? order.id : undefined,
           }),
           storeId: order.storeId,
+          storeName: '',
           supplierId: order.supplierId,
           cycle,
           periodKey,
@@ -170,25 +180,34 @@ export class SupplierStoreStatementsService {
     }
 
     const adjustmentDocuments = await this.database.client.adjustmentDocument?.findMany({ where: { storeId: input.storeId, supplierId: input.supplierId, side: 'SUPPLIER' } }) ?? [];
+    const adjustmentOrders = adjustmentDocuments.length ? await this.database.client.supplierOrder.findMany({
+      where: { id: { in: adjustmentDocuments.map(document => document.supplierOrderId) } }, select: { id: true, settlementMode: true },
+    }) : [];
+    const companyOrderIds = new Set(adjustmentOrders.filter(order => order.settlementMode !== 'SUPPLIER_TERM').map(order => order.id));
     for (const document of adjustmentDocuments) {
+      if (!companyOrderIds.has(document.supplierOrderId)) continue;
       const period = parsePeriodKey(document.settlementPeriodKey);
       if (!period || (input.cycle && input.cycle !== period.cycle)) continue;
       const key = `${document.storeId}:${document.supplierId}:${document.settlementPeriodKey}${period.cycle === 'IMMEDIATE' ? `:${document.supplierOrderId}` : ''}`;
       const group = groups.get(key) ?? {
         id: encodeStatementId({ storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, orderId: period.cycle === 'IMMEDIATE' ? document.supplierOrderId : undefined }),
         parentStatementId: encodeParentStatementId({ supplierId: document.supplierId, cycle: period.cycle, periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, orderId: period.cycle === 'IMMEDIATE' ? document.supplierOrderId : undefined }),
-        storeId: document.storeId, supplierId: document.supplierId, cycle: period.cycle, periodKey: document.settlementPeriodKey,
+        storeId: document.storeId, storeName: '', supplierId: document.supplierId, cycle: period.cycle, periodKey: document.settlementPeriodKey,
         periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [],
         paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [], adjustmentItems: [],
       };
       group.adjustmentAmount = group.adjustmentAmount.plus(document.amount);
       const adjustmentSettlementItemId = encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'SUPPLIER');
       group.adjustmentSettlementItemIds.push(adjustmentSettlementItemId);
-      group.adjustmentItems.push({ settlementItemId: adjustmentSettlementItemId, amount: new Decimal(document.amount).toFixed(2) });
+      group.adjustmentItems.push({ settlementItemId: adjustmentSettlementItemId, amount: new Decimal(document.amount).toFixed(2),
+        adjustmentId: adjustmentDocumentViewId(document), supplierOrderId: document.supplierOrderId });
       groups.set(key, group);
     }
 
     const allGroups = [...groups.values()];
+    const stores = await this.database.client.store?.findMany({ where: { id: { in: [...new Set(allGroups.map(group => group.storeId))] } }, select: { id: true, name: true } }) ?? [];
+    const storeNames = new Map(stores.map(store => [store.id, store.name]));
+    for (const group of allGroups) group.storeName = storeNames.get(group.storeId) ?? '';
     const allocations = await this.database.client.paymentAllocation?.findMany({
       where: { settlementItemId: { in: allGroups.flatMap((group) => [...group.lines.map((line) => line.settlementItemId), ...group.adjustmentSettlementItemIds]) }, state: { in: [PaymentAllocationState.RESERVED, PaymentAllocationState.CONFIRMED] } },
     }) ?? [];
@@ -220,6 +239,7 @@ function toLineView(order: StatementOrder, snapshot?: { goodsAmount: import('dec
     freightAmount: freightAmount.toFixed(2),
     totalAmount: (snapshot?.totalAmount ?? goodsAmount.plus(freightAmount)).toFixed(2),
     sourceRevision: snapshot?.sourceVersion ?? order.version,
+    amountBasis: snapshot ? 'FROZEN' : 'CURRENT_ORDER',
     firstShippedAt: order.firstShippedAt!.toISOString(),
     priceAdjustments: (order.priceChangeRuns ?? []).flatMap(({ runId, adjustment }) => adjustment ? [{ id: adjustment.id, runId, orderItemId: adjustment.orderItemId, salesDelta: adjustment.salesDelta.toFixed(2), supplyDelta: adjustment.supplyDelta.toFixed(2), createdAt: adjustment.createdAt.toISOString() }] : []),
   };
@@ -242,6 +262,7 @@ function toSummaryView(group: StatementGroup): SupplierStoreStatementSummaryView
     parentStatementId: group.parentStatementId,
     type: 'SUPPLIER_STORE',
     storeId: group.storeId,
+    storeName: group.storeName,
     supplierId: group.supplierId,
     cycle: group.cycle,
     periodKey: group.periodKey,
@@ -324,6 +345,7 @@ function decodeStatementId(id: string): {
     if (
       typeof parsed.storeId === 'string' &&
       typeof parsed.supplierId === 'string' &&
+      validateUuid('storeId', parsed.storeId).length === 0 && validateUuid('supplierId', parsed.supplierId).length === 0 &&
       (parsed.cycle === 'WEEKLY' || parsed.cycle === 'HALF_MONTHLY' || parsed.cycle === 'MONTHLY' || parsed.cycle === 'IMMEDIATE') &&
       typeof parsed.periodStart === 'string' &&
       typeof parsed.periodEndExclusive === 'string'

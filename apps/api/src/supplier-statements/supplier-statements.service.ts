@@ -5,6 +5,9 @@ import { PaymentAllocationState, SupplierOrderStatus } from '../../../../package
 import type { Shipment, Supplier, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import { summarizeAllocations } from '../payment-records/payment-records.service.js';
+import { adjustmentDocumentViewId } from '../adjustments/adjustments.service.js';
+import { enrichStatementLines, type StatementOrderDetails } from './statement-order-details.js';
+import { validateUuid } from '../../../../packages/domain/src/validation.js';
 
 export type SupplierStatementStatus = 'OPEN' | 'SETTLED';
 
@@ -31,13 +34,13 @@ export type SupplierStatementSummaryView = {
   payableAmount: string;
   adjustmentAmount: string;
   adjustmentSettlementItemIds: string[];
-  adjustmentItems: Array<{ settlementItemId: string; amount: string }>;
+  adjustmentItems: Array<{ settlementItemId: string; amount: string; adjustmentId?: string; supplierOrderId?: string }>;
   storeCount: number;
   lineCount: number;
 };
 
 export type SupplierStatementDetailView = SupplierStatementSummaryView & {
-  lines: SupplierStatementLineView[];
+  lines: Array<SupplierStatementLineView & StatementOrderDetails>;
 };
 
 export type SupplierStatementLineView = {
@@ -49,6 +52,7 @@ export type SupplierStatementLineView = {
   freightAmount: string;
   totalAmount: string;
   sourceRevision: number;
+  amountBasis: 'CURRENT_ORDER' | 'FROZEN';
   firstShippedAt: string;
   priceAdjustments: PriceAdjustmentSourceView[];
 };
@@ -65,10 +69,11 @@ type StatementGroup = {
   periodStart: string;
   periodEndExclusive: string;
   lines: SupplierStatementLineView[];
+  storeIds: Set<string>;
   paymentSummary: { pendingAmount: Decimal; confirmedAmount: Decimal };
   adjustmentAmount: Decimal;
   adjustmentSettlementItemIds: string[];
-  adjustmentItems: Array<{ settlementItemId: string; amount: string }>;
+  adjustmentItems: Array<{ settlementItemId: string; amount: string; adjustmentId?: string; supplierOrderId?: string }>;
 };
 
 @Injectable()
@@ -82,6 +87,7 @@ export class SupplierStatementsService {
 
   async get(id: string, scope?: { type?: string; supplierId?: string }): Promise<SupplierStatementDetailView> {
     const key = decodeStatementId(id);
+    if (scope?.type === 'SUPPLIER' && scope.supplierId !== key.supplierId) throw new NotFoundException({ code: 'SUPPLIER_STATEMENT_NOT_FOUND', message: 'Supplier statement was not found' });
     const groups = await this.loadGroups({
       supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId,
       cycle: key.cycle,
@@ -99,7 +105,7 @@ export class SupplierStatementsService {
         message: 'Supplier statement was not found',
       });
     }
-    return { ...toSummaryView(group), lines: group.lines };
+    return { ...toSummaryView(group), lines: await enrichStatementLines(this.database.client, group.lines) };
   }
 
   private async loadGroups(input: ListSupplierStatementsInput): Promise<StatementGroup[]> {
@@ -107,6 +113,7 @@ export class SupplierStatementsService {
       where: {
         supplierId: input.supplierId,
         status: SupplierOrderStatus.COMPLETED,
+        settlementMode: { not: 'SUPPLIER_TERM' },
         firstShippedAt: { not: null },
       },
       include: {
@@ -123,7 +130,7 @@ export class SupplierStatementsService {
 
     const groups = new Map<string, StatementGroup>();
     for (const order of orders) {
-      if (!order.firstShippedAt) {
+      if (!order.firstShippedAt || order.settlementMode === 'SUPPLIER_TERM') {
         continue;
       }
       const cycle = normalizeCycle(order.settlementCycleSnapshot);
@@ -150,28 +157,37 @@ export class SupplierStatementsService {
           periodStart: period.startDate,
           periodEndExclusive,
           lines: [],
+          storeIds: new Set<string>(),
           paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) },
           adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [], adjustmentItems: [],
         };
       group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId('SUPPLIER_PAYABLE', order.id))));
+      group.storeIds.add(order.storeId);
       groups.set(key, group);
     }
 
     const adjustmentDocuments = await this.database.client.adjustmentDocument?.findMany({ where: { supplierId: input.supplierId, side: 'SUPPLIER' } }) ?? [];
+    const adjustmentOrders = adjustmentDocuments.length ? await this.database.client.supplierOrder.findMany({
+      where: { id: { in: adjustmentDocuments.map(document => document.supplierOrderId) } }, select: { id: true, settlementMode: true },
+    }) : [];
+    const companyOrderIds = new Set(adjustmentOrders.filter(order => order.settlementMode !== 'SUPPLIER_TERM').map(order => order.id));
     for (const document of adjustmentDocuments) {
+      if (!companyOrderIds.has(document.supplierOrderId)) continue;
       const period = parsePeriodKey(document.settlementPeriodKey);
       if (!period || (input.cycle && input.cycle !== period.cycle)) continue;
       const key = `${document.supplierId}:${document.settlementPeriodKey}${period.cycle === 'IMMEDIATE' ? `:${document.supplierOrderId}` : ''}`;
       const group = groups.get(key) ?? {
         id: encodeStatementId({ supplierId: document.supplierId, cycle: period.cycle, periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, orderId: period.cycle === 'IMMEDIATE' ? document.supplierOrderId : undefined }),
         supplierId: document.supplierId, cycle: period.cycle, periodKey: document.settlementPeriodKey,
-        periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [],
+        periodStart: period.periodStart, periodEndExclusive: period.periodEndExclusive, lines: [], storeIds: new Set<string>(),
         paymentSummary: { pendingAmount: new Decimal(0), confirmedAmount: new Decimal(0) }, adjustmentAmount: new Decimal(0), adjustmentSettlementItemIds: [], adjustmentItems: [],
       };
       group.adjustmentAmount = group.adjustmentAmount.plus(document.amount);
+      group.storeIds.add(document.storeId);
       const adjustmentSettlementItemId = encodeAdjustmentSettlementItemId(document.id, document.supplierOrderId, 'SUPPLIER');
       group.adjustmentSettlementItemIds.push(adjustmentSettlementItemId);
-      group.adjustmentItems.push({ settlementItemId: adjustmentSettlementItemId, amount: new Decimal(document.amount).toFixed(2) });
+      group.adjustmentItems.push({ settlementItemId: adjustmentSettlementItemId, amount: new Decimal(document.amount).toFixed(2),
+        adjustmentId: adjustmentDocumentViewId(document), supplierOrderId: document.supplierOrderId });
       groups.set(key, group);
     }
 
@@ -208,6 +224,7 @@ function toLineView(order: StatementOrder, snapshot?: { goodsAmount: import('dec
     freightAmount: freightAmount.toFixed(2),
     totalAmount: (snapshot?.totalAmount ?? goodsAmount.plus(freightAmount)).toFixed(2),
     sourceRevision: snapshot?.sourceVersion ?? order.version,
+    amountBasis: snapshot ? 'FROZEN' : 'CURRENT_ORDER',
     firstShippedAt: order.firstShippedAt!.toISOString(),
     priceAdjustments: (order.priceChangeRuns ?? []).flatMap(({ runId, adjustment }) => adjustment ? [{ id: adjustment.id, runId, orderItemId: adjustment.orderItemId, salesDelta: adjustment.salesDelta.toFixed(2), supplyDelta: adjustment.supplyDelta.toFixed(2), createdAt: adjustment.createdAt.toISOString() }] : []),
   };
@@ -245,7 +262,7 @@ function toSummaryView(group: StatementGroup): SupplierStatementSummaryView {
     adjustmentAmount: group.adjustmentAmount.toFixed(2),
     adjustmentSettlementItemIds: group.adjustmentSettlementItemIds,
     adjustmentItems: group.adjustmentItems,
-    storeCount: new Set(group.lines.map((line) => line.storeId)).size,
+    storeCount: group.storeIds.size,
     lineCount: group.lines.length,
   };
 }
@@ -299,6 +316,7 @@ function decodeStatementId(id: string): {
     };
     if (
       typeof parsed.supplierId === 'string' &&
+      validateUuid('supplierId', parsed.supplierId).length === 0 &&
       (parsed.cycle === 'WEEKLY' || parsed.cycle === 'HALF_MONTHLY' || parsed.cycle === 'MONTHLY' || parsed.cycle === 'IMMEDIATE') &&
       typeof parsed.periodStart === 'string' &&
       typeof parsed.periodEndExclusive === 'string'

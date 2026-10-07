@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import {
@@ -178,7 +178,7 @@ export type RechargeDocumentView = {
 };
 
 export type CreateStoreInput = StoreProfile & {
-  code: string;
+  code?: string;
   name: string;
   contactName?: string;
   contactPhone?: string;
@@ -218,7 +218,7 @@ export class StoresService {
       await validateStoreGroup(tx, input.groupName);
       return tx.store.create({
       data: {
-        code: input.code,
+        code: input.code ?? `MD${randomUUID().replaceAll('-', '').toUpperCase()}`,
         name: input.name,
         contactName: input.contactName,
         contactPhone: input.contactPhone,

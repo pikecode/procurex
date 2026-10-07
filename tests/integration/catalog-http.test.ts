@@ -107,6 +107,7 @@ test('catalog endpoints create and archive basic product data', async () => {
       body: JSON.stringify({
         sku,
         name: 'Chinese Cabbage',
+        defaultSalesPrice: '12',
         categoryId: categoryBody.data.id,
         baseUnitId: unitBody.data.id,
         minOrderQty: '1.000000',
@@ -156,8 +157,36 @@ test('catalog endpoints create and archive basic product data', async () => {
     const archivedBody = (await archived.json()) as { data: { isActive: boolean }; traceId: string };
     assert.equal(archivedBody.traceId, 'trace-catalog-archive');
     assert.equal(archivedBody.data.isActive, false);
+
+    const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+    const input = { name: 'Optional SKU', categoryId: categoryBody.data.id, baseUnitId: unitBody.data.id };
+    for (const defaultSalesPrice of [undefined, null, '-1', '1.0000001', '100000000000000']) {
+      const invalid = await fetch(`${baseUrl}/products`, { method: 'POST', headers, body: JSON.stringify({ ...input, defaultSalesPrice }) });
+      assert.equal(invalid.status, 400);
+    }
+    for (const optionalSku of [undefined, null, '   ']) {
+      const optional = await fetch(`${baseUrl}/products`, { method: 'POST', headers, body: JSON.stringify({ ...input, sku: optionalSku, defaultSalesPrice: '0' }) });
+      assert.equal(optional.status, 201);
+      const { data } = await optional.json() as { data: { id: string; sku: string | null; defaultSalesPrice: string; version: number } };
+      assert.equal(data.sku, null);
+      assert.equal(data.defaultSalesPrice, '0');
+      const duplicate = await fetch(`${baseUrl}/products/${data.id}`, { method: 'PATCH', headers, body: JSON.stringify({ sku, expectedVersion: data.version }) });
+      assert.equal(duplicate.status, 409);
+      const edits = await Promise.all(['2', '3'].map(defaultSalesPrice => fetch(`${baseUrl}/products/${data.id}`, { method: 'PATCH', headers, body: JSON.stringify({ defaultSalesPrice, expectedVersion: data.version }) })));
+      assert.deepEqual(edits.map(response => response.status).sort(), [200, 409]);
+    }
+    const duplicateCreate = await fetch(`${baseUrl}/products`, { method: 'POST', headers, body: JSON.stringify({ ...input, sku, defaultSalesPrice: '1' }) });
+    assert.equal(duplicateCreate.status, 409);
+    const legacy = await prisma.product.create({ data: input });
+    const legacyEdit = await fetch(`${baseUrl}/products/${legacy.id}`, { method: 'PATCH', headers, body: JSON.stringify({ expectedVersion: legacy.updatedAt.getTime(), name: 'Legacy product edited' }) });
+    assert.equal(legacyEdit.status, 200);
+    const legacyBody = await legacyEdit.json() as { data: { version: number; defaultSalesPrice: string | null } };
+    assert.equal(legacyBody.data.defaultSalesPrice, null);
+    const clearPrice = await fetch(`${baseUrl}/products/${legacy.id}`, { method: 'PATCH', headers, body: JSON.stringify({ expectedVersion: legacyBody.data.version, defaultSalesPrice: null }) });
+    assert.equal(clearPrice.status, 400);
   } finally {
     await app.close();
+    await prisma.product.deleteMany({ where: { category: { code: categoryCode } } });
     await prisma.product.deleteMany({ where: { sku } });
     await prisma.category.deleteMany({ where: { code: categoryCode } });
     await prisma.unit.deleteMany({ where: { code: unitCode } });
@@ -252,9 +281,10 @@ test('store catalog endpoint returns active template products with supplier pric
     const body = (await response.json()) as {
       data: {
         storeId: string;
+        store: { name: string; address: string | null };
         templateId: string;
         items: Array<{
-          product: { id: string; sku: string; minOrderQty: string };
+          product: { id: string; sku: string; minOrderQty: string; categoryName: string; unitName: string };
           sortOrder: number;
           suppliers: Array<{ supplierId: string; priority: number; salesPrice: string | null; supplyPrice: string | null; priceVersionId: string | null }>;
         }>;
@@ -263,6 +293,10 @@ test('store catalog endpoint returns active template products with supplier pric
     };
     assert.equal(body.traceId, 'trace-store-catalog');
     assert.equal(body.data.storeId, store.id);
+    assert.equal(body.data.store.name, 'Catalog Store');
+    assert.equal(body.data.store.address, null);
+    assert.equal(body.data.items[0]?.product.categoryName, 'Catalog Category');
+    assert.equal(body.data.items[0]?.product.unitName, 'bag');
     assert.equal(body.data.templateId, template.id);
     assert.equal(body.data.items.length, 1);
     assert.equal(body.data.items[0]?.product.id, product.id);
@@ -272,10 +306,14 @@ test('store catalog endpoint returns active template products with supplier pric
     assert.deepEqual(body.data.items[0]?.suppliers, [
       {
         supplierId: supplier.id,
+        supplierName: 'Catalog Supplier',
+        purchaseSalesPrice: null,
+        purchaseSupplyPrice: null,
         priority: 3,
         salesPrice: '12',
         supplyPrice: '9',
         priceVersionId: priceVersion.id,
+        supplyPriceVersionId: priceVersion.id,
       },
     ]);
 

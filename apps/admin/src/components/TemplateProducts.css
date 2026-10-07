@@ -1,0 +1,9 @@
+.template-products-table .ant-form-item { margin-bottom: 6px; }
+.template-products-table .ant-input-number { width: 100%; }
+.template-supplier-cell { display: grid; grid-template-columns: minmax(0, 1fr) 72px 28px; gap: 6px; align-items: start; }
+.template-supplier-cell .ant-form-item { min-width: 0; }
+.template-supplier-cell .ant-btn { width: 28px; padding: 4px; }
+.template-product-picker { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 12px; }
+.template-product-picker aside { border-right: 1px solid #e5e7eb; padding-right: 8px; max-height: 420px; overflow: auto; }
+.template-product-picker > .ant-table-wrapper { min-width: 0; }
+@media (max-width: 768px) { .template-product-picker { grid-template-columns: minmax(0, 1fr); } .template-product-picker aside { display: none; } }

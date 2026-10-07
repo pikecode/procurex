@@ -1,0 +1,9 @@
+**
+!infra/
+!infra/admin/
+!infra/admin/Dockerfile
+!infra/admin/default.conf.template
+!apps/
+!apps/admin/
+!apps/admin/dist/
+!apps/admin/dist/**

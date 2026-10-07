@@ -1,7 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Decimal } from 'decimal.js';
-import { AdjustmentsService } from '../../apps/api/src/adjustments/adjustments.service.js';
+import { AdjustmentsService, adjustmentDocumentViewId } from '../../apps/api/src/adjustments/adjustments.service.js';
+
+test('statement adjustment links use the scoped detail identity and do not invent legacy sources', () => {
+  const document = { id: 'doc', storeId: 'store', supplierId: 'supplier', side: 'SUPPLIER' as const,
+    sourcePriceChangeId: null, sourceShipmentId: null, sourceDiscrepancyId: null, shipmentAdjustmentKind: null };
+  assert.equal(adjustmentDocumentViewId(document), undefined);
+  const price = JSON.parse(Buffer.from(adjustmentDocumentViewId({ ...document, sourcePriceChangeId: 'price' })!, 'base64url').toString());
+  assert.deepEqual(price, { kind: 'PRICE_DOCUMENT', documentId: document.id, storeId: 'store', supplierId: 'supplier' });
+  for (const [fields, kind] of [[{ sourceDiscrepancyId: 'gap' }, 'ACCEPTED_SHORTAGE'], [{ sourceShipmentId: 'shipment' }, 'PERMANENT_REDUCTION'], [{ sourceShipmentId: 'shipment', shipmentAdjustmentKind: 'FREIGHT' as const }, 'FREIGHT_CHANGE']] as const) {
+    const source = JSON.parse(Buffer.from(adjustmentDocumentViewId({ ...document, ...fields })!, 'base64url').toString());
+    assert.equal(source.kind, kind); assert.equal(source.documentId, 'doc'); assert.equal(source.supplierId, 'supplier');
+  }
+});
 
 const changedAt = new Date('2026-09-21T00:00:00Z');
 
@@ -67,6 +79,18 @@ test('B05 reads persisted adjustment documents when available', async () => {
   const target = JSON.parse(Buffer.from(adjustments[0]!.offsetTargetItemId!, 'base64url').toString());
   assert.equal(target.adjustmentDocumentId, 'adjustment-target');
   assert.equal(target.adjustmentSide, 'SUPPLIER');
+});
+
+test('frozen price detail reads original effective quantity and price snapshots', async () => {
+  const service = createService({});
+  (service as any).database.client.adjustmentDocument = {
+    findMany: async () => [{ id: 'adjustment', sourcePriceChangeId: 'change-1', side: 'SUPPLIER', amount: new Decimal(10), createdAt: changedAt,
+      items: [{ orderItemId: 'line-1', quantitySnapshot: new Decimal(9), unitPriceSnapshot: new Decimal(11) }] }],
+  };
+  const [adjustment] = await service.list({});
+  const detail = await service.get(adjustment!.id);
+  assert.equal(detail.lines[0]!.quantity, '9');
+  assert.equal(detail.lines[0]!.unitSupplyPrice, '11.00');
 });
 
 test('B05 exposes confirmed persisted adjustment disposal by side', async () => {

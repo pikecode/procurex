@@ -47,8 +47,9 @@ export type ListAuditLogsInput = {
 export class AuditService {
   constructor(private readonly database: DatabaseService) {}
 
-  async record(input: RecordAuditInput): Promise<void> {
-    await this.database.client.auditLog.create({
+  async record(input: RecordAuditInput, tx?: Prisma.TransactionClient): Promise<void> {
+    const client = tx ?? (this.database.client as Prisma.TransactionClient);
+    await client.auditLog.create({
       data: {
         actorUserId: input.actorUserId,
         activeScope: input.activeScope,

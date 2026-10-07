@@ -1,3 +1,4 @@
+import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { Controller, Get, Headers, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
@@ -7,19 +8,19 @@ import { RolesGuard } from '../auth/roles.guard.js';
 import { FilesService } from './files.service.js';
 
 @Controller('files')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class FilesController {
   constructor(private readonly files: FilesService) {}
 
   @Post('upload-sessions')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
   create(@CurrentAuth() auth: AuthenticatedSession, @Req() request: AuthenticatedRequest) {
     const body = (request as AuthenticatedRequest & { body?: { purpose?: string; filename?: string; mimeType?: string; sizeBytes?: number } }).body;
-    return this.files.create(auth.user.id, { purpose: body?.purpose ?? '', filename: body?.filename ?? '', mimeType: body?.mimeType ?? '', sizeBytes: body?.sizeBytes ?? 0 });
+    return this.files.create(auth.user.id, { purpose: body?.purpose ?? '', filename: body?.filename ?? '', mimeType: body?.mimeType ?? '', sizeBytes: body?.sizeBytes ?? 0 }, auth.user.roles);
   }
 
   @Post(':id/content')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
   async upload(@CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string, @Headers('x-upload-token') token: string, @Req() request: AuthenticatedRequest) {
     const chunks: Buffer[] = [];
     let length = 0;
@@ -33,11 +34,11 @@ export class FilesController {
   }
 
   @Post(':id/complete')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
   complete(@CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string) { return this.files.complete(auth.user.id, id); }
 
   @Get(':id/download')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
   async download(@CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string, @Res() response: { setHeader(name: string, value: string): void; end(bytes: Buffer): void }) {
     const result = await this.files.download(auth.user.id, id, auth.user.scope, auth.user.roles);
     response.setHeader('content-type', result.file.mimeType);

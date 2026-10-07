@@ -11,7 +11,7 @@ const storeId = '11111111-1111-4111-8111-111111111111';
 const supplierId = '22222222-2222-4222-8222-222222222222';
 
 function request(scope: { type: string; storeId?: string; supplierId?: string }) {
-  return { auth: { user: { scope } } } as never;
+  return { auth: { user: { scope, roles: [scope.type] } } } as never;
 }
 
 test('statement controllers narrow list scope and require configured detail scope', async () => {

@@ -9,7 +9,7 @@ test('B12 can offset a negative credit against an available positive adjustment'
   const service = new DifferenceDisposalsService({ client: {} } as any);
   const client = {
     supplierOrder: { findMany: async () => [{
-      id: 'order-1', storeId: 'store-1', supplierId: 'supplier-1', status: 'COMPLETED', firstShippedAt: new Date(),
+      id: 'order-1', storeId: 'store-1', supplierId: 'supplier-1', status: 'COMPLETED', settlementMode: 'COMPANY_TERM', firstShippedAt: new Date(),
     }] },
     adjustmentDocument: { findMany: async () => [{
       id: 'adjustment-1', supplierOrderId: 'order-1', side: 'STORE', amount: new Decimal('20.00'),
@@ -22,6 +22,22 @@ test('B12 can offset a negative credit against an available positive adjustment'
   );
   assert.equal(available.get(targetId)?.toFixed(2), '15.00');
 });
+
+for (const mode of ['STORED_VALUE', 'CREDIT']) {
+  for (const kind of ['STORE_RECEIVABLE', 'ADJUSTMENT']) {
+    test(`${mode} cannot receive a store offset against ${kind}`, async () => {
+      const targetId = Buffer.from(JSON.stringify({ kind, supplierOrderId: 'order', adjustmentDocumentId: 'adjustment', adjustmentSide: 'STORE' })).toString('base64url');
+      const client = {
+        supplierOrder: { findMany: async () => [{ id: 'order', storeId: 'store', supplierId: 'supplier', status: 'COMPLETED', firstShippedAt: new Date(), settlementMode: mode }] },
+        adjustmentDocument: { findMany: async () => [{ id: 'adjustment', supplierOrderId: 'order', side: 'STORE', amount: new Decimal(20) }] },
+        paymentAllocation: { findMany: async () => [] }, differenceDisposalItem: { findMany: async () => [] },
+      };
+      const service = new DifferenceDisposalsService({ client } as never);
+      await assert.rejects(() => (service as any).loadTargetAvailability([targetId], 'supplier', 'store', DifferenceDisposalDirection.COMPANY_TO_STORE, client),
+        (error: any) => error.getResponse().code === 'TARGET_DEBIT_CHANNEL_MISMATCH');
+    });
+  }
+}
 
 test('B12 rejects positive adjustment targets on the opposite settlement side', async () => {
   const targetId = Buffer.from(JSON.stringify({ kind: 'ADJUSTMENT', supplierOrderId: 'order-1', adjustmentDocumentId: 'adjustment-1', adjustmentSide: 'STORE' })).toString('base64url');
@@ -49,15 +65,16 @@ test('B12 scope confirmation only exposes the matching receiver direction', asyn
     createdAt: new Date('2026-09-27T00:00:00Z'),
     items: [],
   };
-  const service = new DifferenceDisposalsService({
-    client: {
+  const client = {
       differenceDisposal: {
         findUnique: async () => disposal,
         updateMany: async () => ({ count: 1 }),
         findUniqueOrThrow: async () => ({ ...disposal, status: DifferenceDisposalStatus.CONFIRMED, version: 2 }),
       },
-    },
-  } as any);
+  };
+  const service = new DifferenceDisposalsService({ client: {
+    ...client, $transaction: async (operation: (tx: typeof client) => Promise<unknown>) => operation(client),
+  } } as any);
 
   await assert.rejects(
     () => service.get(disposal.id, { type: 'STORE', storeId: disposal.storeId }),
