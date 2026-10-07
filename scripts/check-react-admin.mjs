@@ -105,9 +105,9 @@ try {
   await page.getByText('广州市', { exact: true }).click();
   await page.getByText('天河区', { exact: true }).click();
   await page.getByLabel('门店详细地址', { exact: true }).fill('测试地址1号');
-  await page.getByRole('switch').click();
+  await page.getByRole('checkbox', { name: '同门店信息', exact: true }).uncheck();
   await page.getByLabel('收货人', { exact: true }).waitFor();
-  await page.getByRole('switch').click();
+  await page.getByRole('checkbox', { name: '同门店信息', exact: true }).check();
   let submitted = false;
   // Validate the real form payload without adding a persistent store.
   await page.route('**/api/v1/stores', async route => {
@@ -127,7 +127,7 @@ try {
   await page.getByRole('dialog').waitFor();
   await page.getByRole('button', { name: '关闭', exact: true }).last().click();
   await page.getByRole('button', { name: '编辑主流程演示门店', exact: true }).click();
-  assert.equal(await page.getByLabel('门店编号', { exact: true }).isDisabled(), true);
+  assert.equal(await page.getByLabel('门店编号', { exact: true }).count(), 0);
   await page.getByRole('button', { name: '取消', exact: true }).click();
   await page.setViewportSize({ width: 320, height: 960 });
   await page.getByRole('button', { name: '打开菜单', exact: true }).click();
