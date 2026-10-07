@@ -1,41 +1,45 @@
 {
-  "generatedAt": "2026-09-28T14:47:23.334Z",
+  "generatedAt": "2026-10-06T00:41:54.098Z",
   "title": "M6 Local Rollback Check",
   "status": "LOCAL_READY",
   "summary": "Local migration, release, and rollback readiness checks passed; production-specific rollback rehearsal remains required.",
   "migration": {
     "provider": "postgresql",
-    "migrationCount": 41,
-    "latestMigration": "20260927223000_add_audit_logs",
+    "migrationCount": 62,
+    "latestMigration": "20261005140000_credit_occurrence_history",
     "commandOwner": "Release owner runs npm run db:migrate once per release window."
+  },
+  "actualLocalRestore": {
+    "status": "PASS",
+    "path": "var/ops-restore-evidence/manifest.json",
+    "generatedAt": "2026-10-06T00:39:47.393Z",
+    "migrationCount": 62,
+    "recoveryMs": 1111,
+    "checkpointAgeAtOutageMs": 162,
+    "limitation": "Local manual checkpoint age is not production scheduled-backup RPO; previous application build rollback remains separate."
   },
   "commands": [
     {
       "command": "npx prisma validate",
       "status": "PASS",
-      "durationMs": 1009,
+      "durationMs": 823,
       "stdout": [
         "The schema at database/schema.prisma is valid 🚀"
       ],
       "stderr": [
-        "│                                                         │",
-        "│  This is a major update - please follow the guide at    │",
-        "│  https://pris.ly/d/major-version-upgrade                │",
-        "│                                                         │",
-        "│  Run the following to update                            │",
-        "│    npm i --save-dev prisma@latest                       │",
-        "│    npm i @prisma/client@latest                          │",
-        "└─────────────────────────────────────────────────────────┘"
+        "◇ injected env (0) from .env",
+        "Loaded Prisma config from prisma.config.ts.",
+        "Prisma schema loaded from database/schema.prisma."
       ]
     },
     {
       "command": "npx prisma migrate status",
       "status": "PASS",
-      "durationMs": 745,
+      "durationMs": 592,
       "stdout": [
         "Datasource \"db\": PostgreSQL database \"procurex\", schema \"public\" at \"127.0.0.1:55438\"",
         "",
-        "41 migrations found in prisma/migrations",
+        "62 migrations found in prisma/migrations",
         "",
         "Database schema is up to date!"
       ],
@@ -85,6 +89,10 @@
     }
   ],
   "artifacts": [
+    {
+      "path": "var/ops-restore-evidence/manifest.json (actual isolated restore matching current migrations)",
+      "status": "PASS"
+    },
     {
       "path": "database/schema.prisma",
       "status": "PASS"

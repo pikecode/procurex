@@ -1,9 +1,43 @@
 {
-  "generatedAt": "2026-09-28T15:04:32.153Z",
+  "generatedAt": "2026-10-06T00:41:16.755Z",
   "title": "M6 Local Initialization And Finance Signoff Check",
   "status": "LOCAL_READY",
-  "summary": "Required local initialization inventory and reconciliation checks passed; customer finance sign-off is still required before production READY.",
+  "summary": "Required local inventory and nonnegative-value checks passed; this is not ledger/receivable reconciliation or customer finance sign-off.",
   "cutoffDate": "2026-09-28",
+  "dataOrigin": {
+    "classification": "UNVERIFIED_LOCAL_DATA",
+    "recognizedFixturePrefixes": [
+      {
+        "prefix": "PXFLOW",
+        "stores": 1,
+        "suppliers": 2,
+        "orders": 0
+      },
+      {
+        "prefix": "PXACC",
+        "stores": 1,
+        "suppliers": 4,
+        "orders": 6
+      },
+      {
+        "prefix": "PXRPT",
+        "stores": 2,
+        "suppliers": 2,
+        "orders": 4
+      },
+      {
+        "prefix": "PXSCALE",
+        "stores": 0,
+        "suppliers": 0,
+        "orders": 0
+      }
+    ],
+    "productionBlockers": [
+      "Customer source and cutoff date unverified",
+      "Known demo/acceptance fixtures present; not a clean production initialization"
+    ],
+    "note": "Prefix detection is diagnostic, not proof that unrecognized rows are customer data; no rows are deleted."
+  },
   "environment": {
     "node": "v22.22.0",
     "databaseUrl": "postgresql://procurex:***@127.0.0.1:55438/procurex?schema=public",
@@ -22,39 +56,39 @@
     ]
   },
   "inventory": {
-    "stores": 8,
-    "suppliers": 13,
-    "activeProducts": 6,
+    "stores": 10,
+    "suppliers": 17,
+    "activeProducts": 10,
     "activeOrderTemplates": 7,
-    "activeTemplateItems": 6,
-    "templateItemSuppliers": 11,
+    "activeTemplateItems": 8,
+    "templateItemSuppliers": 15,
     "activeStoreTemplateBindings": 5,
-    "activeUsers": 21,
+    "activeUsers": 24,
     "roleCounts": {
       "ADMIN": 3,
       "HQ_FINANCE": 5,
-      "STORE": 9,
+      "STORE": 10,
       "STORE_FINANCE": 2,
-      "SUPPLIER": 10,
-      "PURCHASER": 2
+      "SUPPLIER": 11,
+      "PURCHASER": 3
     },
     "scopeCounts": {
       "store": 6,
-      "supplier": 7
+      "supplier": 8
     }
   },
   "financeReconciliation": {
     "storeAccounts": {
-      "count": 4,
-      "totalBalance": "3120.00",
+      "count": 6,
+      "totalBalance": "2843.50",
       "totalCreditLimit": "800.00",
       "totalCreditUsed": "80.00",
       "negativeAccountRows": 0
     },
     "activeFundingAllocations": {
-      "count": 2,
-      "totalTargetAmount": "50.00",
-      "totalNetPaid": "0.00",
+      "count": 15,
+      "totalTargetAmount": "1326.50",
+      "totalNetPaid": "1276.50",
       "totalCreditOutstanding": "50.00",
       "negativeAllocationRows": 0,
       "byMethod": [
@@ -64,25 +98,33 @@
           "targetAmount": "50.00",
           "netPaid": "0.00",
           "creditOutstanding": "50.00"
+        },
+        {
+          "method": "STORED_VALUE",
+          "count": 13,
+          "targetAmount": "1276.50",
+          "netPaid": "1276.50",
+          "creditOutstanding": "0.00"
         }
       ]
     },
     "settlementSnapshots": {
-      "count": 6,
-      "goodsAmount": "700.00",
-      "freightAmount": "68.00",
-      "totalAmount": "768.00"
+      "count": 22,
+      "goodsAmount": "1797.50",
+      "freightAmount": "204.00",
+      "totalAmount": "2001.50"
     },
     "paymentRecords": {
-      "count": 7,
+      "count": 36,
       "byDirection": {
-        "COMPANY_TO_SUPPLIER": 3,
+        "COMPANY_TO_SUPPLIER": 32,
         "STORE_TO_SUPPLIER": 3,
         "STORE_TO_COMPANY": 1
       },
       "byStatus": {
         "PENDING": 2,
-        "CONFIRMED": 5
+        "REJECTED": 13,
+        "CONFIRMED": 21
       },
       "grouped": [
         {
@@ -99,9 +141,15 @@
         },
         {
           "direction": "COMPANY_TO_SUPPLIER",
+          "status": "REJECTED",
+          "count": 13,
+          "amount": "1127.00"
+        },
+        {
+          "direction": "COMPANY_TO_SUPPLIER",
           "status": "CONFIRMED",
-          "count": 1,
-          "amount": "90.00"
+          "count": 17,
+          "amount": "1323.50"
         },
         {
           "direction": "STORE_TO_SUPPLIER",
@@ -110,7 +158,7 @@
           "amount": "439.50"
         }
       ],
-      "readyEvidenceFiles": 0
+      "readyEvidenceFiles": 32
     }
   },
   "checks": [
@@ -118,7 +166,7 @@
       "name": "Required role bindings",
       "status": "PASS",
       "severity": "required",
-      "detail": "roles=ADMIN:3, HQ_FINANCE:5, PURCHASER:2, STORE:9, STORE_FINANCE:2, SUPPLIER:10"
+      "detail": "roles=ADMIN:3, HQ_FINANCE:5, PURCHASER:3, STORE:10, STORE_FINANCE:2, SUPPLIER:11"
     },
     {
       "name": "Store user scopes",
@@ -130,25 +178,25 @@
       "name": "Supplier user scopes",
       "status": "PASS",
       "severity": "required",
-      "detail": "supplierScopes=7"
+      "detail": "supplierScopes=8"
     },
     {
       "name": "Master data inventory",
       "status": "PASS",
       "severity": "required",
-      "detail": "stores=8, suppliers=13, activeProducts=6"
+      "detail": "stores=10, suppliers=17, activeProducts=10"
     },
     {
       "name": "Template pricing inventory",
       "status": "PASS",
       "severity": "required",
-      "detail": "templates=7, items=6, itemSuppliers=11, storeBindings=5"
+      "detail": "templates=7, items=8, itemSuppliers=15, storeBindings=5"
     },
     {
       "name": "Store account opening data",
       "status": "PASS",
       "severity": "required",
-      "detail": "storeAccounts=4"
+      "detail": "storeAccounts=6"
     },
     {
       "name": "No negative store balances or credit figures",
@@ -166,13 +214,13 @@
       "name": "Settlement/payable snapshots exist",
       "status": "PASS",
       "severity": "local-evidence",
-      "detail": "settlementSnapshots=6"
+      "detail": "settlementSnapshots=22"
     },
     {
       "name": "Payment evidence inventory exists",
-      "status": "WARN",
+      "status": "PASS",
       "severity": "local-evidence",
-      "detail": "readyPaymentEvidenceFiles=0"
+      "detail": "readyPaymentEvidenceFiles=32"
     }
   ],
   "blockers": []

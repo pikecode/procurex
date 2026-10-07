@@ -7,6 +7,10 @@ coverage/
 .DS_Store
 .omc/
 var/private-files/
+# Local test screenshots, reports and database backups; tracked M6 records remain versioned.
+/var/*-evidence/
+/var/native-visual-acceptance/
+/var/settlement-mode-journeys/
 var/m4-browser-evidence/
 var/chrome-m4-browser-evidence/
 var/m4-manual-evidence/
