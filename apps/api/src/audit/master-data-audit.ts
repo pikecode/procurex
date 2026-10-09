@@ -15,7 +15,7 @@ export function masterDataAuditContext(request: AuthenticatedRequest): MasterDat
 }
 
 type ResourceResult = { id?: string; templateId?: string; supplierId?: string; version?: number; updatedAt?: Date | string; deleted?: boolean;
-  storeIds?: string[]; productIds?: string[]; items?: unknown[] };
+  storeIds?: string[]; productIds?: string[]; items?: unknown[]; removedCycleOverrides?: Array<{ storeId: string; supplierId: string; settlementCycle: string }> };
 
 // The audit is part of the existing business transaction; project only non-sensitive result metadata.
 export function auditedMasterDataTransaction<T extends ResourceResult>(
@@ -33,7 +33,9 @@ export function auditedMasterDataTransaction<T extends ResourceResult>(
           ...(result.storeIds ? { storeCount: result.storeIds.length } : {}),
           ...(result.productIds ? { productCount: result.productIds.length } : {}),
           ...(result.items ? { itemCount: result.items.length } : {}),
-          ...(result.templateId && result.supplierId ? { supplierId: result.supplierId } : {}) } }, tx);
+          ...(result.templateId && result.supplierId ? { supplierId: result.supplierId } : {}),
+          // Settlement cycle changes payment timing, so record which store/supplier overrides a product removal dropped.
+          ...(result.removedCycleOverrides ? { removedCycleOverrides: result.removedCycleOverrides } : {}) } }, tx);
     }
     return result;
   });

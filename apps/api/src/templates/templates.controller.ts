@@ -1,6 +1,6 @@
 import { masterDataAuditContext } from '../audit/master-data-audit.js';
 import type { AuthenticatedRequest } from '../auth/auth.guard.js';
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, ConflictException, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { profileText } from '../common/master-data-profile.js';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -23,7 +23,7 @@ import { validateDecimalString, validateExpectedVersion, validateUuid, type Vali
 type CreateTemplateBody = { code?: unknown; name?: unknown; tag?: unknown; remark?: unknown };
 type TemplateVersionBody = { expectedVersion?: unknown };
 type PutTemplateStoresBody = { expectedVersion?: unknown; storeIds?: unknown };
-type PutTemplateItemsBody = { expectedVersion?: unknown; items?: unknown };
+type PutTemplateItemsBody = { expectedVersion?: unknown; items?: unknown; confirmCycleOverrideRemoval?: unknown };
 type PutTemplateSupplierSettingBody = { expectedVersion?: unknown; settlementMode?: unknown; settlementCycle?: unknown };
 
 @Controller('templates')
@@ -86,22 +86,31 @@ export class TemplatesController {
   @Put(':id/items')
   replaceItems(@Param('id') id: string, @Body() body: PutTemplateItemsBody, @Req() request: AuthenticatedRequest): Promise<TemplateItemsView> {
     const input = parsePutTemplateItemsBody(id, body);
-    return this.templatesService.replaceTemplateItems(id, input.expectedVersion, input.items, masterDataAuditContext(request));
+    return this.templatesService.replaceTemplateItems(id, input.expectedVersion, input.items, masterDataAuditContext(request), input.confirmCycleOverrideRemoval);
+  }
+
+  @Put(':id/settlement-cycles')
+  replaceSettlementCycles(@Param('id') id: string, @Body() body: TemplateVersionBody & { rows?: unknown }, @Req() request: AuthenticatedRequest) {
+    const expectedVersion = parseVersion(id, body);
+    const issues: ValidationIssue[] = [];
+    const rows: { storeId: string; supplierId: string; settlementCycle: string }[] = [];
+    if (!Array.isArray(body.rows) || body.rows.length > 10000) {
+      issues.push({ field: 'rows', code: 'INVALID_CYCLES', message: '请提交有效周期列表，最多10000条' });
+    } else for (const [index, value] of body.rows.entries()) {
+      const row = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+      issues.push(...validateUuid(`rows.${index}.storeId`, row.storeId), ...validateUuid(`rows.${index}.supplierId`, row.supplierId));
+      if (typeof row.settlementCycle !== 'string' || !['IMMEDIATE', 'WEEKLY', 'HALF_MONTHLY', 'MONTHLY'].includes(row.settlementCycle)) {
+        issues.push({ field: `rows.${index}.settlementCycle`, code: 'INVALID_CYCLE', message: '请选择有效周期' });
+      }
+      rows.push({ storeId: row.storeId as string, supplierId: row.supplierId as string, settlementCycle: row.settlementCycle as string });
+    }
+    throwIfInvalid(issues);
+    return this.templatesService.replaceSettlementCycles(id, expectedVersion, rows, masterDataAuditContext(request));
   }
 
   @Put(':id/supplier-settings')
   replaceSupplierSettings(@Param('id') id: string, @Body() body: TemplateVersionBody & { settings?: unknown }, @Req() request: AuthenticatedRequest) {
-    const expectedVersion = parseVersion(id, body);
-    const issues: ValidationIssue[] = [];
-    if (!Array.isArray(body.settings)) issues.push({ field: 'settings', code: 'INVALID_ARRAY', message: 'settings must be an array' });
-    throwIfInvalid(issues);
-    const settings: TemplatePaymentSetting[] = (body.settings as unknown[]).map((row, index) => {
-      if (!isRecord(row)) { throwIfInvalid([{ field: `settings.${index}`, code: 'INVALID_SETTING', message: 'setting must be an object' }]); }
-      const value = row as Record<string, unknown>;
-      const parsed = parsePutTemplateSupplierSettingBody(id, String(value.supplierId), { ...value, expectedVersion });
-      return { supplierId: String(value.supplierId).toLowerCase(), settlementMode: parsed.settlementMode, settlementCycle: parsed.settlementCycle };
-    });
-    return this.templatesService.replaceSupplierSettings(id, expectedVersion, settings, masterDataAuditContext(request));
+    throw new ConflictException({ code: 'TEMPLATE_SETTLEMENT_DISABLED', message: '请在供应商资料中维护结算方式和周期' });
   }
 
   @Put(':id/supplier-settings/:supplierId')
@@ -111,15 +120,7 @@ export class TemplatesController {
     @Body() body: PutTemplateSupplierSettingBody,
     @Req() request: AuthenticatedRequest,
   ): Promise<TemplateSupplierSettingView> {
-    const input = parsePutTemplateSupplierSettingBody(id, supplierId, body);
-    return this.templatesService.setSupplierSetting(
-      id,
-      supplierId,
-      input.expectedVersion,
-      input.settlementMode,
-      input.settlementCycle,
-      masterDataAuditContext(request),
-    );
+    throw new ConflictException({ code: 'TEMPLATE_SETTLEMENT_DISABLED', message: '请在供应商资料中维护结算方式和周期' });
   }
 }
 
@@ -166,12 +167,16 @@ function parsePutTemplateItemsBody(
 ): {
   expectedVersion: number;
   items: TemplateItemInput[];
+  confirmCycleOverrideRemoval: boolean;
 } {
   const issues: ValidationIssue[] = [
     ...validateUuid('id', id),
     ...validateExpectedVersion('expectedVersion', body.expectedVersion),
   ];
   const items: TemplateItemInput[] = [];
+  if (body.confirmCycleOverrideRemoval !== undefined && typeof body.confirmCycleOverrideRemoval !== 'boolean') {
+    issues.push({ field: 'confirmCycleOverrideRemoval', code: 'INVALID_CONFIRM_CYCLE_OVERRIDE_REMOVAL', message: 'confirmCycleOverrideRemoval must be a boolean' });
+  }
 
   if (!Array.isArray(body.items)) {
     issues.push({ field: 'items', code: 'INVALID_TEMPLATE_ITEMS', message: 'items must be an array' });
@@ -183,7 +188,7 @@ function parsePutTemplateItemsBody(
       }
 
       issues.push(...validateUuid(`items.${itemIndex}.productId`, item.productId));
-      const suppliers: Array<{ supplierId: string; priority: number }> = [];
+      const suppliers: TemplateItemInput['suppliers'] = [];
       if (!Array.isArray(item.suppliers) || item.suppliers.length === 0) {
         issues.push({
           field: `items.${itemIndex}.suppliers`,
@@ -202,8 +207,9 @@ function parsePutTemplateItemsBody(
           }
           issues.push(...validateUuid(`items.${itemIndex}.suppliers.${supplierIndex}.supplierId`, supplier.supplierId));
           const priority = optionalInteger(`items.${itemIndex}.suppliers.${supplierIndex}.priority`, supplier.priority, issues) ?? 100;
+          if (supplier.salesPrice !== undefined) issues.push(...validateDecimalString(`items.${itemIndex}.suppliers.${supplierIndex}.salesPrice`, supplier.salesPrice, 2));
           if (typeof supplier.supplierId === 'string') {
-            suppliers.push({ supplierId: supplier.supplierId, priority });
+            suppliers.push({ supplierId: supplier.supplierId, priority, salesPrice: supplier.salesPrice as string | undefined });
           }
         }
       }
@@ -225,7 +231,7 @@ function parsePutTemplateItemsBody(
   }
 
   throwIfInvalid(issues);
-  return { expectedVersion: body.expectedVersion as number, items };
+  return { expectedVersion: body.expectedVersion as number, items, confirmCycleOverrideRemoval: body.confirmCycleOverrideRemoval === true };
 }
 
 function parsePutTemplateSupplierSettingBody(

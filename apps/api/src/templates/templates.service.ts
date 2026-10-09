@@ -8,6 +8,7 @@ import { auditedMasterDataTransaction, type MasterDataAuditContext } from '../au
 import { lockCatalog } from '../catalog/catalog-registries.service.js';
 import { lockPricePublication } from '../pricing/price-checkpoint.js';
 import { effectivePriceVersion } from '../pricing/effective-price.js';
+import { PricingService } from '../pricing/pricing.service.js';
 
 export type TemplateView = {
   tag: string | null;
@@ -35,12 +36,13 @@ export type TemplateItemInput = {
   orderMultiple?: string | null;
   productId: string;
   sortOrder?: number;
-  suppliers: Array<{ supplierId: string; priority: number }>;
+  suppliers: Array<{ supplierId: string; priority: number; salesPrice?: string }>;
 };
 
 export type TemplateItemsView = {
   templateId: string;
   items: Array<{ productId: string; sortOrder: number; initialSalesPrice: string | null; isEnabled: boolean; minOrderQty: string | null; orderMultiple: string | null; suppliers: Array<{ supplierId: string; priority: number }> }>;
+  removedCycleOverrides: Array<{ storeId: string; supplierId: string; settlementCycle: string }>;
   version: number;
 };
 
@@ -63,7 +65,7 @@ export type CreateTemplateInput = {
 
 @Injectable()
 export class TemplatesService {
-  constructor(private readonly database: DatabaseService, private readonly audit: AuditService = new AuditService(database)) {}
+  constructor(private readonly database: DatabaseService, private readonly audit: AuditService = new AuditService(database), private readonly pricing: PricingService = new PricingService(database)) {}
 
   async listTemplates(): Promise<TemplateListView[]> {
     const templates = await this.database.client.orderTemplate.findMany({
@@ -99,7 +101,6 @@ export class TemplatesService {
         code: input.code ?? `MB${randomUUID().replaceAll('-', '').toUpperCase()}`, name: input.name, tag: input.tag ?? source.tag, remark: input.remark === undefined ? source.remark : input.remark,
         items: { create: source.items.map(item => ({ productId: item.productId, sortOrder: item.sortOrder, isEnabled: item.isEnabled, initialSalesPrice: item.initialSalesPrice, minOrderQty: item.minOrderQty, orderMultiple: item.orderMultiple,
           suppliers: { create: item.suppliers.map(supplier => ({ supplierId: supplier.supplierId, priority: supplier.priority })) } })) },
-        settings: { create: source.settings.map(setting => ({ supplierId: setting.supplierId, settlementMode: setting.settlementMode, settlementCycle: setting.settlementCycle })) },
       } });
       const copiedAt = new Date();
       for (const item of source.items) for (const supplier of item.suppliers) {
@@ -130,6 +131,7 @@ export class TemplatesService {
       await this.lockTemplate(tx, id, expectedVersion);
       await tx.storeTemplateBinding.updateMany({ where: { templateId: id, expiredAt: null }, data: { expiredAt: new Date() } });
       await tx.templateItem.deleteMany({ where: { templateId: id } });
+      await tx.templateStoreSupplierCycle.deleteMany({ where: { templateId: id } });
       await tx.templateSupplierSetting.deleteMany({ where: { templateId: id } });
       return toTemplateView(await tx.orderTemplate.update({ where: { id }, data: { isArchived: true, updatedAt: new Date(Math.max(Date.now(), expectedVersion + 1)) } }));
     });
@@ -163,6 +165,7 @@ export class TemplatesService {
         bindings: { where: { expiredAt: null }, orderBy: { storeId: 'asc' }, select: { storeId: true } },
         items: { orderBy: [{ sortOrder: 'asc' }, { productId: 'asc' }], include: { suppliers: { orderBy: [{ priority: 'asc' }, { supplierId: 'asc' }] } } },
         settings: { orderBy: { supplierId: 'asc' } },
+        cycleOverrides: { orderBy: [{ storeId: 'asc' }, { supplierId: 'asc' }] },
       },
     });
     if (!template) throw new NotFoundException({ code: 'TEMPLATE_NOT_FOUND', message: 'Template was not found' });
@@ -177,6 +180,7 @@ export class TemplatesService {
           return { supplierId: supplier.supplierId, priority: supplier.priority, salesPrice: price?.salesPrice.toString() ?? null, supplyPrice: price?.supplyPrice.toString() ?? null };
         })) }))),
       settings: template.settings.map(setting => ({ supplierId: setting.supplierId, settlementMode: setting.settlementMode, settlementCycle: setting.settlementCycle })),
+      cycleOverrides: template.cycleOverrides.map(row => ({ storeId: row.storeId, supplierId: row.supplierId, settlementCycle: row.settlementCycle })),
     };
   }
 
@@ -222,6 +226,7 @@ export class TemplatesService {
     await tx.storeTemplateBinding.createMany({
         data: uniqueStoreIds.map((storeId) => ({ templateId, storeId })),
       });
+    await tx.templateStoreSupplierCycle.deleteMany({ where: { templateId, storeId: { notIn: uniqueStoreIds } } });
 
     const activeBindings = await tx.storeTemplateBinding.findMany({
       where: { templateId, expiredAt: null },
@@ -238,9 +243,32 @@ export class TemplatesService {
     });
   }
 
-  async replaceTemplateItems(templateId: string, expectedVersion: number, items: TemplateItemInput[], context?: MasterDataAuditContext): Promise<TemplateItemsView> {
+  async replaceSettlementCycles(templateId: string, expectedVersion: number, rows: { storeId: string; supplierId: string; settlementCycle: string }[], context?: MasterDataAuditContext) {
+    return auditedMasterDataTransaction(this.database, this.audit, context, 'template.settlement-cycles.replace', 'OrderTemplate', async tx => {
+      await lockCatalog(tx);
+      await this.lockTemplate(tx, templateId, expectedVersion);
+      const bindings = await tx.storeTemplateBinding.findMany({ where: { templateId, expiredAt: null }, select: { storeId: true } });
+      const links = await tx.templateItemSupplier.findMany({ where: { templateItem: { templateId, isEnabled: true } }, include: { supplier: true } });
+      const keys = new Set<string>();
+      for (const row of rows) {
+        const key = `${row.storeId}:${row.supplierId}`;
+        const supplier = links.find(link => link.supplierId === row.supplierId)?.supplier;
+        if (keys.has(key) || !bindings.some(binding => binding.storeId === row.storeId) || !supplier || supplier.isArchived ||
+          !['SUPPLIER_TERM', 'COMPANY_TERM'].includes(supplier.defaultSettlementMode) || !['IMMEDIATE', 'WEEKLY', 'HALF_MONTHLY', 'MONTHLY'].includes(row.settlementCycle)) {
+          throw new ConflictException({ code: 'TEMPLATE_CYCLE_INVALID', message: '请选择已绑定门店和商品涉及的账期供应商，周期不能重复或无效' });
+        }
+        keys.add(key);
+      }
+      await tx.templateStoreSupplierCycle.deleteMany({ where: { templateId } });
+      if (rows.length) await tx.templateStoreSupplierCycle.createMany({ data: rows.map(row => ({ ...row, templateId })) });
+      const updated = await this.touchTemplate(tx, templateId, expectedVersion);
+      return { templateId, version: templateVersion(updated), cycleOverrides: rows };
+    });
+  }
+
+  async replaceTemplateItems(templateId: string, expectedVersion: number, items: TemplateItemInput[], context?: MasterDataAuditContext, confirmCycleOverrideRemoval = false): Promise<TemplateItemsView> {
     return auditedMasterDataTransaction(this.database, this.audit, context, 'template.items.replace', 'OrderTemplate', async tx => {
-    await lockPricePublication(tx);
+    await lockPricePublication(tx, items.some(item => item.suppliers.some(supplier => supplier.salesPrice !== undefined)));
     await lockCatalog(tx);
     await this.lockTemplate(tx, templateId, expectedVersion);
     const previousItems = await tx.templateItem.findMany({ where: { templateId } });
@@ -263,6 +291,23 @@ export class TemplatesService {
       throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'One or more suppliers were not found' });
     }
 
+      const retainedSupplierIds = items.filter(item => item.isEnabled).flatMap(item => item.suppliers.map(link => link.supplierId));
+      // Dropping a supplier's products would silently revert its per-store settlement cycle to the supplier default.
+      const removedCycleOverrides = await tx.templateStoreSupplierCycle.findMany({
+        where: { templateId, supplierId: { notIn: retainedSupplierIds } },
+        select: { storeId: true, supplierId: true, settlementCycle: true },
+        orderBy: [{ storeId: 'asc' }, { supplierId: 'asc' }],
+      });
+      if (removedCycleOverrides.length && !confirmCycleOverrideRemoval) {
+        throw new ConflictException({
+          code: 'TEMPLATE_CYCLE_OVERRIDE_REMOVAL_UNCONFIRMED',
+          message: '移除商品会同时清除这些门店的账期覆盖，确认后将以供应商默认账期结算',
+          details: { overrides: removedCycleOverrides },
+        });
+      }
+      if (removedCycleOverrides.length) {
+        await tx.templateStoreSupplierCycle.deleteMany({ where: { templateId, supplierId: { notIn: retainedSupplierIds } } });
+      }
       await tx.templateItem.deleteMany({ where: { templateId } });
       for (const item of items) {
         await tx.templateItem.create({
@@ -283,7 +328,17 @@ export class TemplatesService {
           },
         });
       }
-    const updated = await this.touchTemplate(tx, templateId, expectedVersion);
+    await this.touchTemplate(tx, templateId, expectedVersion);
+    const effectiveAt = new Date();
+    for (const item of items) for (const supplier of item.suppliers) {
+      if (supplier.salesPrice === undefined) continue;
+      const current = await effectivePriceVersion(tx, item.productId, supplier.supplierId, effectiveAt, templateId);
+      if (!current) throw new ConflictException({ code: 'PRICE_VERSION_NOT_FOUND', message: '请先在商品资料中维护该供应商的采购价' });
+      if (current.salesPrice.equals(supplier.salesPrice)) continue;
+      await this.pricing.publishPrice({ productId: item.productId, supplierId: supplier.supplierId, templateId,
+        salesPrice: supplier.salesPrice, supplyPrice: current.supplyPrice.toString(), effectiveAt, reason: '订货模板维护供应商销售价' }, tx);
+    }
+    const updated = await tx.orderTemplate.findUniqueOrThrow({ where: { id: templateId } });
     const currentItems = await tx.templateItem.findMany({
       where: { templateId },
       orderBy: [{ sortOrder: 'asc' }, { productId: 'asc' }],
@@ -299,6 +354,7 @@ export class TemplatesService {
         sortOrder: item.sortOrder,
         suppliers: item.suppliers.map((supplier) => ({ supplierId: supplier.supplierId, priority: supplier.priority })),
       })),
+      removedCycleOverrides,
       version: templateVersion(updated),
     };
     });
