@@ -73,6 +73,7 @@ const messages: Record<string, string> = {
   SUPPLIER_ARCHIVED: '供应商已归档，请刷新列表。',
   TEMPLATE_NAME_EXISTS: '模板名称已存在。', TEMPLATE_NOT_FOUND: '模板不存在或已归档，请刷新。',
   STORE_ALREADY_BOUND: '所选门店已绑定其他有效模板，请刷新后检查。', DUPLICATE_TEMPLATE_ITEM: '商品和供货方不能重复。',
+  TEMPLATE_CYCLE_OVERRIDE_REMOVAL_UNCONFIRMED: '移除商品会清除账期覆盖，请确认后重试。', INVALID_CONFIRM_CYCLE_OVERRIDE_REMOVAL: '确认标志格式不正确，请重试。',
   SUPPLIER_NOT_IN_TEMPLATE: '该供应商未关联模板商品。', DIRECT_TERM_PRICES_MUST_MATCH: '直供供应商账期的销售价与供货价必须一致。',
   TEMPLATE_PRICE_PAIR_NOT_ALLOWED: '商品和供应商必须关联有效模板。', TEMPLATE_SUPPLY_PRICE_READ_ONLY: '模板供货价须沿用生效的共享供货价，请先在共享范围维护。',
   PRICE_VERSION_NOT_FOUND: '尚未设置当前生效价格。', COMMAND_PROCESSING: '提交仍在处理中，请保留原提交记录并稍后恢复查询。',

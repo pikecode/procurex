@@ -13,3 +13,22 @@
 .template-product-picker > .ant-table-wrapper { min-width: 0; }
 @media (max-width: 768px) { .template-product-picker { grid-template-columns: minmax(0, 1fr); } .template-product-picker aside { max-height: 160px; border-right: 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; } }
 .template-product-editor .ant-modal-body { max-height: calc(100dvh - 240px); overflow: auto; }
+.template-cycle-warning p { margin: 0 0 8px; }
+.template-cycle-warning ul { margin: 0; padding-left: 20px; max-height: 180px; overflow: auto; font-size: 13px; }
+.template-supplier-expanded { display: grid; gap: 12px; }
+.template-cycle-heading { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+.template-cycle-heading span { font-weight: 400; font-size: 12px; color: #667085; }
+.template-cycle-grid { display: grid; gap: 0; border: 1px solid #e5e7eb; border-radius: 6px; overflow-x: auto; }
+.template-cycle-head { padding: 8px 10px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 12px; font-weight: 600; color: #475467; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.template-cycle-supplier { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid #f2f4f7; min-width: 0; }
+.template-cycle-supplier span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.template-cycle-supplier small { flex-shrink: 0; padding: 0 6px; border-radius: 10px; background: #ecfdf3; color: #027a48; font-size: 11px; }
+.template-cycle-cell { padding: 6px 10px; border-bottom: 1px solid #f2f4f7; display: flex; align-items: center; min-width: 0; }
+.template-cycle-cell .ant-select { width: 100%; }
+.template-cycle-na { color: #98a2b3; font-size: 12px; }
+.template-supplier-cell-list { display: grid; gap: 4px; }
+.template-supplier-cell-list > span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.template-supplier-cell-list > span > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.template-supplier-cell-list small { flex-shrink: 0; padding: 0 6px; border-radius: 10px; background: #ecfdf3; color: #027a48; font-size: 11px; }
+.template-supplier-cell-list button { flex-shrink: 0; padding: 0; border: none; background: none; color: #1570ef; font-size: 12px; cursor: pointer; }
+.template-supplier-cell-list button:disabled { color: #d0d5dd; cursor: not-allowed; }
