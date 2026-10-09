@@ -1,5 +1,48 @@
 # 开发日志
 
+## 2026-10-09 已选商品显示商品管理的全部关联供应商
+
+- 问题：从"待添加商品"勾选加入模板时，`changeSelection` 用 `.slice(0, 1)` 只自动关联第一个供应商，多供应商商品在"已选商品"里看不到其余供应商，展开行也无法为它们设置各门店结算周期——上一条新增的账期矩阵因此只对单供应商商品有效。
+- 改动：新增商品时改为带出商品管理中全部有效关联供应商（`supplierIds` 过滤未归档且 ACTIVE），按列表顺序赋 priority。"已选商品"表格的供应商列由多选标签框改为只读列表——每行一个供应商名，首选带绿色"首选"标记，非首选可就地"设首选"。
+- 交互口径（用户明确要求）：模板不提供"添加供应商"入口。商品一旦加入模板，其可用供应商即为商品管理中已配置的关联供应商，此处只负责展示与排序/首选调整；如需增减供应商应回商品管理维护，避免两处口径不一致。相应移除主表的追加下拉，列宽保持 210。组件内 `selectTemplateSuppliers` 随之不再被引用，保留导出（仍有单测覆盖，属通用工具）。
+- 验证：`npm run check:admin`、`npm run build:admin` 通过。未做浏览器实测，按用户要求由用户自行验证。
+
+## 2026-10-09 模板商品展开行内按门店配置结算周期
+
+- 需求：模板商品管理里，商品关联多个供应商时要列出供应商、展示销售价与对应供应商价，并能针对"每个门店 × 关联供应商"设置结算周期；仅公司账期/供应商账期需要周期，其余结算方式即时结算。
+- 现状核对：列出供应商、供货价、模板销售价、预估毛利此前已在展开行实现；真正缺的是账期配置——原先只在独立弹窗里，且每次只能切换查看单个门店，配N 个门店需点N 次，且与商品配置割裂（看不到哪些供应商实际在这批商品里）。
+- 交互设计：采用"商品展开行内横排门店"的账期矩阵。展开某商品后，先看供应商表（新增"结算方式"列），下方按门店横向铺开周期下拉；门店取自该模板已绑定门店，横轴一眼看完，无需切门店。只有 `SUPPLIER_TERM`/`COMPANY_TERM` 的供应商渲染下拉，其余显示"即时结算"——与后端 `resolveSettlementTerms` 对非账期强制 `IMMEDIATE` 的口径一致。未绑定门店时给信息提示，引导先绑定。
+- 保存语义：保持两个接口各自保存（用户选定）。展开行内改动的账期先存为草稿，点击保存时先提交 `items`，成功拿到新version 后再以该version 提交 `settlement-cycles`，对管理员仍是一次保存动作。
+- 修正的两个隐患：①账期提交失败时商品已提交，原实现会落入通用catch 显示"保存失败"并保留弹窗，管理员会误以为整体失败而重复提交——改为商品已保存 + 明确 warning 提示账期失败并关闭刷新；②账期合并逻辑原以"草稿命中旧记录"为保留条件，会把被 `allowClear` 清空的旧覆盖一并保留，改为以草稿为准，另用 `clearedCycleKeys` 显式记录清除项。未保存检测与关闭重置也补上了账期草稿。
+- 改动：`components/TemplateProducts.tsx`（账期矩阵、结算方式列、无门店提示）、`components/TemplateProducts.css`（矩阵样式）、`pages/Templates.tsx`（草稿 state、串联提交、失败分支、未保存检测）。
+- 验证：`npm run check:admin`、`npm run build:admin`、`npm run build` 通过；`npm test` 210/210 通过。未做浏览器实测与视觉确认，本条不声称交互已验收。
+
+## 2026-10-09 移除商品不再静默清除账期覆盖
+
+- 问题：`PUT /templates/:id/items` 原先无条件执行 `templateStoreSupplierCycle.deleteMany({ supplierId: { notIn: 保留的供应商 } })`，从模板移除某供应商的商品时，会连带删除它在所有门店的账期覆盖，供应商悄悄回退到资料里的默认账期。该变更影响付款时点，却只有 `template.items.replace` 一条粗粒度审计，管理员无从察觉。
+- 方案：删除前先查出受影响的覆盖记录，非空且调用方未显式确认则抛 409 `TEMPLATE_CYCLE_OVERRIDE_REMOVAL_UNCONFIRMED` 并在 `details.overrides` 列出明细；带 `confirmCycleOverrideRemoval: true` 重试才真正删除。保留口径与 `replaceSettlementCycles` 一致——只有仍留在 enabled 商品上的供应商才保住覆盖。响应新增 `removedCycleOverrides` 字段，审计 `after.removedCycleOverrides` 同步记录被清除的门店/供应商/账期。
+- 改动：`templates.service.ts`（查询、确认分支、响应字段）、`templates.controller.ts`（`confirmCycleOverrideRemoval` 布尔校验与透传）、`audit/master-data-audit.ts`（审计投影）、`apps/admin/src/pages/Templates.tsx`（保存前本地判断，仅在真会清除时弹确认框并显示门店/供应商名称，取消则保留草稿）、新增 `lib/templateCycleOverrides.ts`（纯函数）及样式与中文错误映射。
+- 验证：`npm run build`、`npm run build:admin` 通过；新增 `tests/unit/template-cycle-override-removal.test.ts` 4 项（含"商品被禁用时不保护其账期覆盖"这一易漏边界）通过；`npm test` 全量 210/210 通过。本条改动本身未引入集成回归——见下条对 `template-prices-http.test.ts` 的归因核查。
+
+## 2026-10-09 结算方式收敛遗留的失效测试（未修复，仅记录）
+
+- 发现：`PUT /templates/:id/supplier-settings` 与 `.../:supplierId` 已改为返回 `TEMPLATE_SETTLEMENT_DISABLED`，但多个测试与脚本仍在调用并断言成功，构成当前集成测试的失败点，与账期覆盖确认改动无关。
+- 归因方法：把新增的 409 分支临时短路后重跑，`template-prices-http.test.ts` 仍以同样的 `409 !== 200` 失败，确认失败源是第 158 行调用已废弃的 `supplier-settings`（期望 200，实际 409 `TEMPLATE_SETTLEMENT_DISABLED`），已恢复原状。
+- 已修复一处：`templates-http.test.ts` 原断言这些路由可用，改为覆盖 `settlement-cycles`（详见上条）。
+- **仍未修复的失效调用点**（需后续逐个确认是"应改断言"还是"该路由本就不该禁用"）：
+  - `tests/integration/template-prices-http.test.ts:158` — 期望 200
+  - `tests/integration/master-data-audit-http.test.ts:84-85` — 以 `template.supplier-setting.set/clear` 验证审计动作，但控制器已无此路径，审计动作实际不可达
+  - `tests/integration/workspace-master-data-http.test.ts:111,155` — 期望 200/DELETE 成功
+  - `scripts/check-local-business-flow.mjs:51` — 业务流脚本调用该路由
+  - `scripts/check-react-admin-r2.mjs:82` — 模拟接口仍以 DELETE `supplier-settings` 作为"结算覆盖"入口
+- 判断依据：结算方式统一在供应商资料维护是既定产品决策（见 `requirements-0923.test.ts` 断言 `resolveSettlementTerms` 绝不读取旧覆盖表），因此多数断言应改为期望 409 或改测 `settlement-cycles`；但 `master-data-audit-http.test.ts` 依赖的审计动作 `template.supplier-setting.set/clear` 是否应随产品决策一并废弃，需用户确认后再动。
+
+## 2026-10-09 模板结算周期集成测试改写覆盖settlement-cycles
+
+- 问题：`tests/integration/templates-http.test.ts` 仍在断言 `PUT /templates/:id/supplier-settings` 返回 200 并写入 `TemplateSupplierSetting`。该路由已在未提交改动中改为 `throw TEMPLATE_SETTLEMENT_DISABLED`（结算方式统一在供应商资料维护，模板只保留按门店账期覆盖，见 `tests/unit/requirements-0923.test.ts` 断言 `resolveSettlementTerms` 绝不读取旧覆盖表），因此该测试必然失败。
+- 改法：不保留对新行为的否定式断言充数，改为覆盖 `PUT /templates/:id/settlement-cycles`，补齐此前缺失的强度——门店未绑定返回 `TEMPLATE_CYCLE_INVALID`、供应商未关联 enabled 商品同样拒绝、非法周期 400、重复 (storeId,supplierId) 409、失败后库中无残留、成功后版本递增且落库正确、旧 expectedVersion 返回 `VERSION_CONFLICT` 且不覆盖已存账期；末尾保留一条断言确保已废弃的 `supplier-settings` 仍返回 `TEMPLATE_SETTLEMENT_DISABLED` 且不写入旧表。fixture 新增门店与绑定，清理阶段同步删除账期覆盖与绑定。
+- 验证：`npm run build` 通过；在本地真实 PostgreSQL（`procurex-local-postgres-1`，healthy）上运行 `dist/tests/integration/templates-http.test.js`，2/2 通过，含清理断言。首次运行曾因误按嵌套结构读取错误码失败，核对 `api-exception.filter.ts` 后改为平铺 `{code,message,traceId}` 修正。
+
 ## 2026-10-07 支付方式管理整批保存
 
 - 将原单供应商结算覆盖表单替换为关联供应商逐行表格，供应商去重，支付方式四选一、周期可选，一次保存。未配置时取供应商默认值，保存后形成模板配置；关闭未保存修改需确认，失败保留草稿。

@@ -1,8 +1,18 @@
 # ProcureX Continuation Handoff
 
-Last updated: 2026-10-07
+Last updated: 2026-10-09
 
 ## 当前接续（唯一待办入口）
+
+- 2026-10-09 已选商品改为显示商品管理的全部关联供应商：新增商品自动带出全部有效关联供应商，主表供应商列改为列表式（每行一个，首选带标记，可设首选/追加）。**待用户浏览器实测**，服务在 4174/3114，账号 `pxflow_user` / `correct-password`，主要看"结算验收模板"（3门店）。
+
+- 2026-10-09 模板商品展开行内新增按门店配置结算周期：展开商品后，供应商表下按门店横排周期下拉，仅公司账期/供应商账期可设，其余显示"即时结算"；改动存为草稿，保存时先提交 items 再以新 version 提交 settlement-cycles，对管理员仍是一次保存。**尚未做浏览器实测与视觉确认**，需在 http://127.0.0.1:4174/templates 实际走一遍确认交互与横向滚动表现。
+
+- 2026-10-09 结算方式收敛遗留了一批失效测试与脚本，**下一批优先处理**：`template-prices-http.test.ts:158`、`master-data-audit-http.test.ts:84-85`（依赖的审计动作 `template.supplier-setting.set/clear` 已不可达，是否一并废弃需用户确认）、`workspace-master-data-http.test.ts:111,155`、`scripts/check-local-business-flow.mjs:51`、`scripts/check-react-admin-r2.mjs:82`。已确认这些失败与账期覆盖确认改动无关。详见 development-log 对应条目。
+
+- 2026-10-09 模板账期覆盖不再静默清除：移除商品若会连带删除某供应商在门店的账期覆盖，接口改为409 `TEMPLATE_CYCLE_OVERRIDE_REMOVAL_UNCONFIRMED` 并列出明细，须带 `confirmCycleOverrideRemoval: true` 重试；审计记录被清除项。`templates-http.test.ts` 已改为覆盖 `settlement-cycles`，真实数据库 2/2 通过。详见 development-log 对应两条。
+
+- 2026-10-09 需求核对发现文档状态与代码存在实质差距，接续时不要沿用旧的"已完成"表述：以代码为准。已确认被**有意禁用**（非缺陷）：`PUT /templates/:id/supplier-settings` 与 `.../:supplierId` 现返回 `TEMPLATE_SETTLEMENT_DISABLED`，结算方式统一在供应商资料维护，模板只保留按门店账期（cycle）覆盖；`TemplateSupplierSetting` 表及 `replaceSupplierSettings`/`setSupplierSetting` 为保留的死代码，归档与供应商删除时仍在清理。尚未独立核实、需在继续开发前逐条验证的疑点：worker 为空壳（`main.ts` 仅 `console.log`）、超时自动催收、采购拒单/资金缺口通知门店缺失、权限矩阵未落地为可配置能力、商品图片"自动压缩+非正方形裁切"实为拒绝。库存/进货单全仓零实现，属待用户决策的范围问题，不是 bug。
 
 - 支付方式管理现在是关联供应商去重后的逐行配置表，四种支付方式和周期，一次事务保存，PUT /templates/:id/supplier-settings。批量管理已完成，早期未完成说明失效；模板销售价编辑、统一资料/门店配置及删除口径仍是后续项。API3114已运行新版本。
 
