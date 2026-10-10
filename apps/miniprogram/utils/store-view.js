@@ -21,7 +21,21 @@ function orderStage(order) {
   return ['PENDING_FUNDS', 'PENDING_PROCUREMENT', 'DRAFT'].includes(order.status) ? 'pending' : 'receive';
 }
 
-function previewGroups(preview, products) {
+// Tones mirror labels.wxs: green for settled, amber for in flight, red for blocked, grey for inactive.
+const STAGE_TONES = { pending: 'progress', receive: 'progress', completed: 'done', canceled: 'muted' };
+function orderStageTone(order) {
+  if (order.rejectedSupplierCount > 0) return 'fail';
+  return STAGE_TONES[orderStage(order)] || 'muted';
+}
+const STATUS_TONES = {
+  COMPLETED: 'done', SUCCEEDED: 'done', RECEIVED: 'done', PAID: 'done', SETTLED: 'done',
+  CANCELED: 'muted', CANCELLED: 'muted', DRAFT: 'muted',
+  REJECTED: 'fail', FAILED: 'fail', SHORT_RECEIVED: 'fail', UNPAID: 'fail', SHORTFALL: 'fail', PENDING_FUNDS: 'fail',
+  PENDING_PROCUREMENT: 'progress', PROCESSING: 'progress', PUSHED: 'progress',
+  PARTIAL_PUSHED: 'progress', PARTIAL_SHIPPED: 'progress', PARTIAL_PAID: 'progress', OPEN: 'progress',
+};
+function statusTone(value) { return STATUS_TONES[value] || 'muted'; }
+function previewGroups(preview, products, expandedKey) {
   const groups = [];
   for (const line of preview.items || []) {
     const product = products.find(product => product.id === line.productId) || {};
@@ -33,7 +47,11 @@ function previewGroups(preview, products) {
     group.items.push({ ...line, productName: product.name || '商品', unitName: line.unitName || line.unitSnapshot?.salesUnitName || product.unitName || '',
       purchaseInput: Boolean(line.unitSnapshot?.purchaseUnitId && line.unitSnapshot.inputUnitId === line.unitSnapshot.purchaseUnitId) });
   }
-  return groups;
+  // Keep the first supplier open unless the admin has opened another, so a long order stays scannable.
+  return groups.map((group, index) => {
+    const total = group.items.reduce((sum, line) => sum + Number(line.salesLineAmount || 0), 0);
+    return { ...group, itemCount: group.items.length, groupAmount: total.toFixed(2), open: expandedKey ? expandedKey === group.supplierId : index === 0 };
+  });
 }
 
 function previewSignature(preview) {
@@ -59,4 +77,4 @@ function statementPeriod(statement) {
   return `${statement.periodStart} 至 ${end.toISOString().slice(0, 10)}`;
 }
 
-module.exports = { dateText, decimalText, orderStage, previewGroups, previewSignature, monthRange, statementPeriod };
+module.exports = { dateText, decimalText, orderStage, orderStageTone, statusTone, previewGroups, previewSignature, monthRange, statementPeriod };

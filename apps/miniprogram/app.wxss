@@ -1,3 +1,6 @@
+/* Type scale. Prefer these steps; 24rpx is the default body size.
+   caption 22 · body 24 · body-lg 26 · subtitle 28 · title 32 · display 40+ (figures only, not for running text).
+   Existing sizes outside this set are legacy — align them when the surrounding area is next touched. */
 page {
   background: #f7f9f8;
   color: #18231f;
@@ -222,7 +225,7 @@ button {
 .view-tab { flex: 1; padding: 24rpx 8rpx; text-align: center; font-size: 26rpx; color: #66736c; border-bottom: 4rpx solid transparent; }
 .is-active { color: #167e5a; font-weight: 700; border-bottom-color: #167e5a; }
 .workspace-toolbar { display: flex; justify-content: space-between; padding: 20rpx 0; color: #66736c; font-size: 23rpx; }
-.error-message, .error-banner { margin-top: 24rpx; padding: 22rpx; color: #b34a40; background: #fff0ed; font-size: 25rpx; word-break: break-all; }
+.error-message, .error-banner { margin-top: 24rpx; padding: 22rpx; color: #b34a40; background: #fff0ed; font-size: 25rpx; overflow-wrap: anywhere; }
 .login-page { padding-top: 100rpx; }
 .login-page .title { font-size: 44rpx; }
 .login-footer { margin-top: 48rpx; text-align: center; color: #66736c; font-size: 24rpx; }

@@ -15,6 +15,7 @@ var names = {
   COMPANY_TO_SUPPLIER: '公司付款', STORE_TO_COMPANY: '门店付款', STORE_TO_SUPPLIER: '门店直付'
 };
 function status(value) { return names[value] || value || '待确认'; }
+// Tones are computed in each page's view helper, so status text alone stays colour-neutral here.
 var sources = { RECHARGE: '账户充值', PURCHASE_REQUEST: '订货扣款', ADJUSTMENT: '订单金额调整', CLEARING: '挂账清账', REFUND: '退款', CREDIT_LIMIT_CHANGE: '授信调整' };
 function source(value) { return sources[value] || '账户变动'; }
 function money(value) {

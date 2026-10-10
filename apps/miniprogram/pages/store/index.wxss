@@ -71,7 +71,16 @@ button::after { border: 0; }
 .order-entry { background: #fff; padding: 26rpx 28rpx; margin-bottom: 16rpx; border-bottom: 1rpx solid #e4ebe6; }
 .document-number { min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
 .entry-top { align-items: flex-start; font-size: 25rpx; }
+.group-toggle { display: flex; align-items: center; gap: 12rpx; flex: 1; min-width: 0; }
+.group-toggle .section-title { flex: 0 1 auto; }
+.group-summary { flex-shrink: 0; color: #718078; font-size: 23rpx; font-variant-numeric: tabular-nums; }
+.group-chevron { flex-shrink: 0; color: #8a9690; font-size: 30rpx; transition: transform .18s ease; }
+.group-chevron.is-open { transform: rotate(90deg); }
 .status-label { flex-shrink: 0; font-size: 22rpx; color: #167e5a; background: #eef7f0; padding: 5rpx 10rpx; border-radius: 6rpx; }
+.status-progress { color: #8b601e; background: #fff6e8; }
+.status-done { color: #167e5a; background: #eef7f0; }
+.status-fail { color: #a33935; background: #fff0ef; }
+.status-muted { color: #7c8781; background: #f1f4f2; }
 .entry-progress { margin-top: 24rpx; font-size: 24rpx; }
 .entry-bottom { padding-top: 20rpx; margin-top: 20rpx; border-top: 1rpx solid #e9eeeb; font-size: 22rpx; color: #718078; }
 .fulfillment-group { margin-top: 24rpx; padding-top: 24rpx; border-top: 1rpx solid #e9eeeb; }
