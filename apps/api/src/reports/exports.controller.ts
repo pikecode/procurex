@@ -5,6 +5,8 @@ import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import type { ReportFilters, ReportType } from './reports.service.js';
 import { ReportsService } from './reports.service.js';
+import { throwIfInvalid } from '../common/request-contract.js';
+import { validateUuid } from '../../../../packages/domain/src/validation.js';
 
 @Controller('exports')
 @UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
@@ -37,6 +39,7 @@ export class ExportsController {
   @Post(':id/retry')
   @HttpCode(202)
   async retry(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    throwIfInvalid(validateUuid('id', id));
     const result = await this.reports.retryExport(id, request.auth!.user.id, request.auth!.user.roles, request.auth!.user.scope);
     if (!result) throw new NotFoundException({ code: 'EXPORT_NOT_FOUND', message: 'Export job was not found or expired' });
     if (!result.retryable) throw new ConflictException({ code: 'EXPORT_NOT_RETRYABLE', message: `Only FAILED exports can be retried; current status is ${result.status}` });
@@ -45,6 +48,7 @@ export class ExportsController {
 
   @Get(':id')
   async status(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    throwIfInvalid(validateUuid('id', id));
     const job = await this.reports.exportStatus(id, request.auth!.user.id, request.auth!.user.roles, request.auth!.user.scope);
     if (!job) throw new NotFoundException({ code: 'EXPORT_NOT_FOUND', message: 'Export job was not found or expired' });
     return job;
@@ -52,6 +56,7 @@ export class ExportsController {
 
   @Get(':id/download')
   async download(@Param('id') id: string, @Req() request: AuthenticatedRequest, @Res() response: { setHeader(name: string, value: string): void; send(body: string): void }) {
+    throwIfInvalid(validateUuid('id', id));
     const csv = await this.reports.exportContent(id, request.auth!.user.id, request.auth!.user.roles, request.auth!.user.scope);
     if (csv === null || csv === undefined) throw new NotFoundException({ code: 'EXPORT_NOT_READY', message: 'Export is unavailable, expired, or not ready' });
     response.setHeader('Content-Type', 'text/csv; charset=utf-8'); response.setHeader('Content-Disposition', `attachment; filename="procurex-${id}.csv"`); response.send(`\uFEFF${csv}`);

@@ -16,7 +16,7 @@ import { DatabaseService } from '../database/database.service.js';
 import { PricingService } from '../pricing/pricing.service.js';
 import { effectivePriceVersion } from '../pricing/effective-price.js';
 import { lockPricePublication } from '../pricing/price-checkpoint.js';
-import { lockFundingRequest, requireRequestVersion, synchronizeRequestFunding } from './request-funding.js';
+import { lockFundingRequest, requireRequestVersion, synchronizeRequestFunding, resolveSettlementTerms } from './request-funding.js';
 import { isHistoricalRejection, requestProgress } from './request-progress.js';
 import {
   PurchaseRequestPreviewService,
@@ -89,7 +89,7 @@ export type SupplierOrderSummaryView = {
   version: number;
   supplierName?: string;
   rejectionHandled?: boolean;
-  shipments?: Array<{ id: string; shipmentNo: string; kind: string; shippedAt: string; trackingNo: string | null; receivedAt: string | null; receiptRevision: number }>;
+  shipments?: Array<{ id: string; shipmentNo: string; kind: string; shippedAt: string; trackingNo: string | null; deliveryModeSnapshot: string | null; receivedAt: string | null; receiptRevision: number }>;
 };
 
 export type ListPurchaseRequestsInput = {
@@ -173,7 +173,7 @@ export class PurchaseRequestsService {
       where: { id, storeId: isStoreScope(scope?.type) ? scope?.storeId : undefined },
       include: {
         items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true } } } },
-        supplierOrders: { orderBy: { createdAt: 'asc' }, include: { items: { select: { productId: true } }, supplier: { select: { name: true } }, shipments: { orderBy: { sequence: 'asc' }, include: { receipts: { where: { isCurrent: true }, select: { submittedAt: true, revision: true } } } } } },
+        supplierOrders: { orderBy: { createdAt: 'asc' }, include: { items: { select: { productId: true } }, supplier: { select: { name: true, deliveryContactPhone: true } }, shipments: { orderBy: { sequence: 'asc' }, include: { receipts: { where: { isCurrent: true }, select: { submittedAt: true, revision: true } } } } } },
       },
     });
     if (!request) {
@@ -188,8 +188,8 @@ export class PurchaseRequestsService {
       where: { requestId: request.id, active: true, method: 'STORED_VALUE' }, _sum: { reservedAmount: true },
     });
     return { ...toPurchaseRequestDetailView(request), storedReservedAmount: reservations._sum.reservedAmount?.toFixed(2) ?? '0.00', ...requestProgress(request), items: request.items.map(item => ({ ...toPurchaseRequestItemView(item), ...transactionUnitView(item.unitSnapshot, item.salesUnitPrice.toString(), item.supplyUnitPrice.toString(), names), productName: item.product.name })),
-      supplierOrders: request.supplierOrders.map(order => ({ ...toSupplierOrderSummaryView(order), supplierName: order.supplier.name, rejectionHandled: isHistoricalRejection(request, order),
-        shipments: order.shipments.map(shipment => ({ id: shipment.id, shipmentNo: shipment.shipmentNo, kind: shipment.kind, shippedAt: shipment.shippedAt.toISOString(), trackingNo: shipment.trackingNo,
+      supplierOrders: request.supplierOrders.map(order => ({ ...toSupplierOrderSummaryView(order), supplierName: order.supplier.name, deliveryContactPhone: order.supplier.deliveryContactPhone, rejectionHandled: isHistoricalRejection(request, order),
+        shipments: order.shipments.map(shipment => ({ id: shipment.id, shipmentNo: shipment.shipmentNo, kind: shipment.kind, shippedAt: shipment.shippedAt.toISOString(), trackingNo: shipment.trackingNo, deliveryModeSnapshot: shipment.deliveryModeSnapshot,
           receivedAt: shipment.receipts[0]?.submittedAt.toISOString() ?? null, receiptRevision: shipment.receipts[0]?.revision ?? 0 })) })) };
   }
 
@@ -701,10 +701,6 @@ export class PurchaseRequestsService {
     const reassignmentSupplierIds = [...new Set(pricedAssignments.filter((item) => !item.assignment.cancel).map((item) => item.assignment.supplierId!))];
     const reassignmentSuppliers = await this.database.client.supplier.findMany({ where: { id: { in: reassignmentSupplierIds } } });
     const reassignmentSuppliersById = new Map(reassignmentSuppliers.map((supplier) => [supplier.id, supplier]));
-    const reassignmentSettings = await this.database.client.templateSupplierSetting.findMany({
-      where: { templateId: request.templateId, supplierId: { in: reassignmentSupplierIds } },
-    });
-    const reassignmentSettingsBySupplier = new Map(reassignmentSettings.map((setting) => [setting.supplierId, setting]));
 
     const execute = async (tx: Prisma.TransactionClient) => {
       await lockPricePublication(tx);
@@ -759,8 +755,8 @@ export class PurchaseRequestsService {
               storeId: request.storeId,
               supplierId: priced.assignment.supplierId!,
               requiresFreightSnapshot: reassignmentSuppliersById.get(priced.assignment.supplierId!)!.requiresFreight,
-              settlementMode: reassignmentSettingsBySupplier.get(priced.assignment.supplierId!)?.settlementMode ?? reassignmentSuppliersById.get(priced.assignment.supplierId!)!.defaultSettlementMode,
-              settlementCycleSnapshot: reassignmentSettingsBySupplier.get(priced.assignment.supplierId!)?.settlementCycle ?? reassignmentSuppliersById.get(priced.assignment.supplierId!)!.defaultSettlementCycle,
+              settlementMode: reassignmentSuppliersById.get(priced.assignment.supplierId!)!.defaultSettlementMode,
+              settlementCycleSnapshot: (await resolveSettlementTerms(tx, request.templateId, [priced.assignment.supplierId!], request.storeId)).get(priced.assignment.supplierId!)!.cycle,
               status: SupplierOrderStatus.PUSHED,
               fulfillmentStatus: FulfillmentStatus.PENDING,
               pushedAt: new Date(),
@@ -960,10 +956,6 @@ export class PurchaseRequestsService {
     }
     const suppliers = await client.supplier.findMany({ where: { id: { in: [...supplierGroups.keys()] } } });
     const suppliersById = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
-    const settings = await client.templateSupplierSetting.findMany({
-      where: { templateId: request.templateId, supplierId: { in: [...supplierGroups.keys()] } },
-    });
-    const settingsBySupplier = new Map(settings.map((setting) => [setting.supplierId, setting]));
 
     const execute = async (tx: Prisma.TransactionClient) => {
       await lockFundingRequest(tx, request.storeId, request.id);
@@ -981,9 +973,9 @@ export class PurchaseRequestsService {
             requestId: request.id,
             storeId: request.storeId,
             supplierId,
-            settlementMode: snapshotItems.find(item => item.supplierId === supplierId)?.settlementModeSnapshot ?? settingsBySupplier.get(supplierId)?.settlementMode ?? suppliersById.get(supplierId)!.defaultSettlementMode,
+            settlementMode: snapshotItems.find(item => item.supplierId === supplierId)?.settlementModeSnapshot ?? suppliersById.get(supplierId)!.defaultSettlementMode,
             requiresFreightSnapshot: suppliersById.get(supplierId)!.requiresFreight,
-            settlementCycleSnapshot: snapshotItems.find(item => item.supplierId === supplierId)?.settlementCycleSnapshot ?? settingsBySupplier.get(supplierId)?.settlementCycle ?? suppliersById.get(supplierId)!.defaultSettlementCycle,
+            settlementCycleSnapshot: snapshotItems.find(item => item.supplierId === supplierId)?.settlementCycleSnapshot ?? (await resolveSettlementTerms(tx, request.templateId, [supplierId], request.storeId)).get(supplierId)!.cycle,
             status: SupplierOrderStatus.PUSHED,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             pushedAt: new Date(),

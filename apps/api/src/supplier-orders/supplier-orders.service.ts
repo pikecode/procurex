@@ -9,6 +9,7 @@ import { applyEffectiveOrderPrices, lockPricePublication } from '../pricing/pric
 import { createReductionDocuments, createFrozenFreightDocuments } from './reduction-adjustments.js';
 import {
   FreightConfirmationStatus,
+  DeliveryMode,
   FulfillmentStatus,
   PaymentStatus,
   PurchaseRequestStatus,
@@ -40,6 +41,7 @@ export type ListSupplierOrdersInput = {
 
 export type SupplierOrderSummaryView = {
   storeName?: string;
+  productSummary?: string;
   id: string;
   supplierOrderNo: string;
   requestId: string;
@@ -58,6 +60,7 @@ export type SupplierOrderSummaryView = {
 };
 
 export type SupplierOrderDetailView = SupplierOrderSummaryView & {
+  defaultDeliveryMode: DeliveryMode;
   requiresFreightSnapshot?: boolean | null;
   destination?: { name: string; address: string | null; contactName: string | null; contactPhone: string | null };
   items: SupplierOrderItemView[];
@@ -111,6 +114,7 @@ export type ReconcileSupplierOrderFundingResult = {
 };
 
 export type ShipmentPreviewInput = {
+  deliveryMode?: DeliveryMode;
   items: ShipmentPreviewItemInput[];
   freight: string;
   freightConfirmationId?: string;
@@ -130,6 +134,7 @@ export type ShipmentGapAllocationInput = {
 };
 
 export type ShipmentPreviewView = {
+  deliveryMode: DeliveryMode;
   supplierOrderId: string;
   version: number;
   items: ShipmentPreviewItemView[];
@@ -145,6 +150,7 @@ export type ShipmentPreviewView = {
 };
 
 export type ShipmentView = {
+  deliveryModeSnapshot: DeliveryMode | null;
   id: string;
   shipmentNo: string;
   supplierOrderId: string;
@@ -207,16 +213,20 @@ export class SupplierOrdersService {
         status: input.status,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      include: { store: { select: { name: true } } },
+      include: { store: { select: { name: true } }, items: {
+        orderBy: { createdAt: 'asc' }, select: { product: { select: { name: true } } },
+      } },
     });
 
-    return orders.map(order => ({ ...toSupplierOrderSummaryView(order), storeName: order.store.name }));
+    return orders.map(order => ({ ...toSupplierOrderSummaryView(order), storeName: order.store.name,
+      productSummary: order.items.map(item => item.product.name).join('、') }));
   }
 
   async get(id: string, scope?: { type: string; supplierId?: string }): Promise<SupplierOrderDetailView> {
     const order = await this.database.client.supplierOrder.findUnique({
       where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
       include: {
+        supplier: { select: { deliveryMode: true } },
         store: { select: { name: true, address: true, contactName: true, contactPhone: true, receiptAddress: true, receiptContactName: true, receiptContactPhone: true } },
         items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true } }, shipmentItems: { select: { permanentlyReduced: true, gapAllocations: { select: { quantity: true } } } }, replenishmentGaps: { orderBy: { createdAt: 'asc' } } } },
         freightConfirmations: { orderBy: { createdAt: 'desc' } },
@@ -232,6 +242,7 @@ export class SupplierOrdersService {
     const names = await readUnitDisplayNames(this.database.client as Prisma.TransactionClient, order.items.map(item => item.unitSnapshot));
     return {
       ...toSupplierOrderDetailView(order),
+      defaultDeliveryMode: order.supplier.deliveryMode,
       storeName: order.store.name,
       destination: storeDestination(order.store),
       requiresFreightSnapshot: order.requiresFreightSnapshot,
@@ -246,6 +257,7 @@ export class SupplierOrdersService {
     const order = await this.database.client.supplierOrder.findUnique({
       where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
       include: {
+        supplier: { select: { deliveryMode: true } },
         items: {
           orderBy: { createdAt: 'asc' },
           include: { shipmentItems: { include: { gapAllocations: { select: { quantity: true } } } } },
@@ -392,7 +404,11 @@ export class SupplierOrdersService {
     const salesGoodsAmount = previewItems.reduce((sum, item) => sum.plus(item.salesLineAmount), new Decimal(0));
     const supplyGoodsAmount = previewItems.reduce((sum, item) => sum.plus(item.supplyLineAmount), new Decimal(0));
 
+    const deliveryMode = input.deliveryMode ?? order.supplier.deliveryMode;
+    if (![DeliveryMode.SELF, DeliveryMode.LOGISTICS].includes(deliveryMode)) throw new ConflictException({ code: 'INVALID_DELIVERY_MODE', message: '请选择自配送或物流' });
+    if (input.trackingNo && (deliveryMode !== DeliveryMode.LOGISTICS || input.trackingNo.length > 100)) throw new ConflictException({ code: 'INVALID_TRACKING_NO', message: '物流单号仅适用于物流配送，最多100字' });
     return {
+      deliveryMode,
       supplierOrderId: order.id,
       version: order.version,
       items: previewItems,
@@ -444,6 +460,7 @@ export class SupplierOrdersService {
           sequence,
           kind,
           trackingNo: input.trackingNo,
+          deliveryModeSnapshot: preview.deliveryMode,
           freight: preview.totals.freight,
           freightConfirmationId: preview.freightConfirmationId,
         },
@@ -847,7 +864,7 @@ function toRejectSupplierOrderResult(order: SupplierOrder): RejectSupplierOrderR
   };
 }
 
-function toSupplierOrderDetailView(order: SupplierOrder & { items: OrderItem[] }): SupplierOrderDetailView {
+function toSupplierOrderDetailView(order: SupplierOrder & { items: OrderItem[] }): Omit<SupplierOrderDetailView, 'defaultDeliveryMode'> {
   return {
     ...toSupplierOrderSummaryView(order),
     items: order.items.map(toSupplierOrderItemView),
@@ -880,6 +897,7 @@ function toShipmentView(
     sequence: shipment.sequence,
     kind: shipment.kind,
     shippedAt: shipment.shippedAt.toISOString(),
+    deliveryModeSnapshot: shipment.deliveryModeSnapshot,
     trackingNo: shipment.trackingNo,
     freight: shipment.freight.toFixed(2),
     freightConfirmationId: shipment.freightConfirmationId,

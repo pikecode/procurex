@@ -79,7 +79,9 @@ export class FilesService {
 
   private async removeExpiredUploads() {
     const expired = await this.database.client.fileObject.findMany({ where: { status: 'UPLOADING', createdAt: { lte: new Date(Date.now() - 86_400_000) }, paymentId: null, receiptId: null }, take: 100 });
-    for (const file of expired) await this.storage.remove(file.objectKey);
-    if (expired.length) await this.database.client.fileObject.deleteMany({ where: { id: { in: expired.map(({ id }) => id) }, status: 'UPLOADING', paymentId: null, receiptId: null } });
+    // Preserve records belonging to an unavailable storage backend for later cleanup.
+    const accessible = expired.filter(file => this.storage.canAccess(file.objectKey));
+    for (const file of accessible) await this.storage.remove(file.objectKey);
+    if (accessible.length) await this.database.client.fileObject.deleteMany({ where: { id: { in: accessible.map(({ id }) => id) }, status: 'UPLOADING', paymentId: null, receiptId: null } });
   }
 }

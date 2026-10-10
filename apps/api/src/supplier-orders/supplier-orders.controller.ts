@@ -25,7 +25,7 @@ import {
   type SupplierOrderDetailView,
   type SupplierOrderSummaryView,
 } from './supplier-orders.service.js';
-import { SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import { DeliveryMode, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import {
   validateDecimalString,
   validateExpectedVersion,
@@ -49,6 +49,7 @@ type ReconcileFundingBody = {
 };
 
 type ShipmentPreviewBody = {
+  deliveryMode?: unknown;
   expectedVersion?: unknown;
   items?: unknown;
   freight?: unknown;
@@ -143,6 +144,8 @@ export class SupplierOrdersController {
         after: {
           supplierOrderId: result.supplierOrderId,
           shipmentNo: result.shipmentNo,
+          deliveryMode: result.deliveryModeSnapshot,
+          trackingNo: result.trackingNo,
           kind: result.kind,
           itemCount: result.items.length,
           freight: result.freight,
@@ -435,12 +438,16 @@ function parseShipmentPreviewBody(
     issues.push(...validateUuid('freightConfirmationId', body.freightConfirmationId));
   }
   const trackingNo = optionalTrimmedString('trackingNo', body.trackingNo, issues);
+  if (body.deliveryMode !== undefined && body.deliveryMode !== DeliveryMode.SELF && body.deliveryMode !== DeliveryMode.LOGISTICS) {
+    issues.push({ field: 'deliveryMode', code: 'INVALID_DELIVERY_MODE', message: '请选择自配送或物流' });
+  }
 
   throwIfInvalid(issues);
   return {
     id,
     expectedVersion: body.expectedVersion as number,
     preview: {
+      deliveryMode: body.deliveryMode as DeliveryMode | undefined,
       items,
       freight: freight as string,
       freightConfirmationId: typeof body.freightConfirmationId === 'string' ? body.freightConfirmationId : undefined,

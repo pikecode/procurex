@@ -428,7 +428,6 @@ function parseLedgerQuery(query: LedgerQuery): StoreLedgerQuery {
 }
 
 function accountEvidence(value: unknown, issues: ValidationIssue[]): string[] | undefined {
-  if (value === undefined) return undefined;
   if (!Array.isArray(value) || value.length < 1 || value.length > 5 || new Set(value).size !== value.length) {
     issues.push({ field: 'evidenceFileIds', code: 'ACCOUNT_EVIDENCE_INVALID', message: 'Provide one to five distinct evidence IDs' });
     return undefined;

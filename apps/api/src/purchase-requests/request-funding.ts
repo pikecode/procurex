@@ -10,14 +10,14 @@ import { recordCreditMovement } from '../stores/credit-movements.js';
 type Client = DatabaseService['client'] | Prisma.TransactionClient;
 type Terms = { mode: SettlementMode; cycle: string };
 
-export async function resolveSettlementTerms(client: Client, templateId: string, supplierIds: string[]): Promise<Map<string, Terms>> {
+export async function resolveSettlementTerms(client: Client, templateId: string, supplierIds: string[], storeId?: string): Promise<Map<string, Terms>> {
   const suppliers = await client.supplier.findMany({ where: { id: { in: supplierIds } } });
-  const settings = await client.templateSupplierSetting.findMany({ where: { templateId, supplierId: { in: supplierIds } } });
+  const overrides = storeId ? await client.templateStoreSupplierCycle.findMany({ where: { templateId, storeId, supplierId: { in: supplierIds }, template: { bindings: { some: { storeId, expiredAt: null } } } } }) : [];
   return new Map(supplierIds.map(id => {
     const supplier = suppliers.find(supplier => supplier.id === id);
     if (!supplier) throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'Funding supplier was not found' });
-    const setting = settings.find(setting => setting.supplierId === id);
-    return [id, { mode: setting?.settlementMode ?? supplier.defaultSettlementMode, cycle: setting?.settlementCycle ?? supplier.defaultSettlementCycle }];
+    const term = supplier.defaultSettlementMode === 'SUPPLIER_TERM' || supplier.defaultSettlementMode === 'COMPANY_TERM';
+    return [id, { mode: supplier.defaultSettlementMode, cycle: term ? overrides.find(row => row.supplierId === id)?.settlementCycle ?? supplier.defaultSettlementCycle : 'IMMEDIATE' }];
   }));
 }
 
@@ -85,7 +85,7 @@ export async function synchronizeRequestFunding(tx: Prisma.TransactionClient, re
     accountId: account.id, fundingAllocationId: id, before, after,
     sourceType: options.initial ? 'PURCHASE_REQUEST' : 'ADJUSTMENT', sourceId: options.sourceId ?? requestId,
   });
-  const terms = await resolveSettlementTerms(tx, request.templateId, [...new Set(request.items.map(item => item.supplierId))]);
+  const terms = await resolveSettlementTerms(tx, request.templateId, [...new Set(request.items.map(item => item.supplierId))], request.storeId);
   const targets = new Map<string, { method: 'STORED_VALUE' | 'CREDIT'; amount: Decimal; orderId?: string }>();
   for (const item of request.items) {
     const policy = terms.get(item.supplierId)!;

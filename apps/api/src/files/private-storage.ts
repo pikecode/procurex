@@ -24,6 +24,12 @@ export class PrivateStorage {
 
   newKey() { return this.client ? `oss:${this.prefix}${randomUUID()}` : randomUUID(); }
 
+  canAccess(key: string) {
+    if (!key.startsWith('oss:')) return /^[a-f0-9-]{36}$/.test(key);
+    return !!this.client && key.startsWith(`oss:${this.prefix}`)
+      && /^[a-f0-9-]{36}$/.test(key.slice(4 + this.prefix.length));
+  }
+
   private objectName(key: string) {
     if (!this.client || !key.startsWith(`oss:${this.prefix}`) || !/^[a-f0-9-]{36}$/.test(key.slice(4 + this.prefix.length))) throw new Error('Invalid OSS object key or storage configuration');
     return key.slice(4);

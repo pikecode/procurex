@@ -25,8 +25,7 @@ import { recordCreditMovement } from './credit-movements.js';
 import { lockStoreGroups, validateStoreGroup } from './store-groups.service.js';
 
 async function attachAccountEvidence(tx: Prisma.TransactionClient, input: { evidenceFileIds?: string[]; actorUserId?: string }, purpose: 'RECHARGE' | 'CLEARING', id: string) {
-  if (input.evidenceFileIds === undefined) return;
-  const ids = input.evidenceFileIds;
+  const ids = input.evidenceFileIds ?? [];
   if (!input.actorUserId || !ids.length || ids.length > 5 || new Set(ids).size !== ids.length) {
     throw new ConflictException({ code: 'ACCOUNT_EVIDENCE_INVALID', message: 'Account evidence is invalid' });
   }

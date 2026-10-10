@@ -139,11 +139,9 @@ export class PricingService {
       if (!new Decimal(input.salesPrice).equals(input.supplyPrice)) {
         const supplier = await tx.supplier.findUnique({
           where: { id: input.supplierId },
-          select: { defaultSettlementMode: true, templateSupplierSettings: { select: { settlementMode: true } } },
+          select: { defaultSettlementMode: true },
         });
-        const setting = input.templateId ? await tx.templateSupplierSetting.findUnique({ where: { templateId_supplierId: { templateId: input.templateId, supplierId: input.supplierId } } }) : null;
-        const hasDirectSettlement = input.templateId ? (setting?.settlementMode ?? supplier?.defaultSettlementMode) === 'SUPPLIER_TERM'
-          : supplier?.defaultSettlementMode === 'SUPPLIER_TERM';
+        const hasDirectSettlement = supplier?.defaultSettlementMode === 'SUPPLIER_TERM';
         if (hasDirectSettlement) {
           throw new ConflictException({
             code: 'DIRECT_TERM_PRICES_MUST_MATCH',
@@ -408,7 +406,7 @@ export class PricingService {
     const start = new Date(Math.max(Date.now(), input.effectiveAt.getTime()));
     for (const item of items) {
       if (input.templateId && item.templateId !== input.templateId) continue;
-      if ((item.template.settings[0]?.settlementMode ?? supplier.defaultSettlementMode) !== 'SUPPLIER_TERM') continue;
+      if (supplier.defaultSettlementMode !== 'SUPPLIER_TERM') continue;
       const future = await tx.priceVersion.findMany({ where: { scope: { productId: input.productId, supplierId: input.supplierId, templateKey: { in: ['', item.templateId] } }, effectiveAt: { gt: start } }, select: { effectiveAt: true } });
       for (const at of [start, ...future.map(version => version.effectiveAt)]) {
         const quote = await effectivePriceVersion(tx, input.productId, input.supplierId, at, item.templateId);

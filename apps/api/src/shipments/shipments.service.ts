@@ -55,6 +55,7 @@ export type ShipmentDetailView = {
   kind: string;
   shippedAt: string;
   trackingNo: string | null;
+  deliveryModeSnapshot: string | null;
   currentReceiptRevision: number;
   evidenceFiles: ReceiptEvidenceView[];
   items: ShipmentDetailItemView[];
@@ -348,6 +349,7 @@ function toShipmentDetailView(shipment: Shipment & {
     kind: shipment.kind,
     shippedAt: shipment.shippedAt.toISOString(),
     trackingNo: shipment.trackingNo,
+    deliveryModeSnapshot: shipment.deliveryModeSnapshot,
     currentReceiptRevision: shipment.receipts[0]?.revision ?? 0,
     evidenceFiles: (shipment.receipts[0]?.evidenceFiles ?? []).map(toEvidenceView),
     items: shipment.items.map((item) => ({

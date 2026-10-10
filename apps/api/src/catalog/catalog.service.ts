@@ -78,6 +78,7 @@ export type StoreCatalogView = {
     suppliers: Array<{
       supplierId: string;
       supplierName: string;
+      deliveryContactPhone: string | null;
       priority: number;
       salesPrice: string | null;
       supplyPrice: string | null;
@@ -373,6 +374,7 @@ export class CatalogService {
               return {
                 supplierId: supplier.supplierId,
                 supplierName: supplier.supplier.name,
+                deliveryContactPhone: supplier.supplier.deliveryContactPhone,
                 priority: supplier.priority,
                 salesPrice: price?.salesPrice ?? null,
                 supplyPrice: price?.supplyPrice ?? null,

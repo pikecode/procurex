@@ -119,7 +119,7 @@ export class PurchaseRequestPreviewService {
     const supplyGoodsAmount = items.reduce((sum, item) => sum.plus(item.supplyLineAmount), toMoney(0));
     const account = await client.storeAccount.findUnique({ where: { storeId: input.storeId } });
     const available = toMoney(account?.balance ?? 0).minus(account?.reservedBalance ?? 0);
-    const terms = await resolveSettlementTerms(client, catalog.templateId, [...new Set(items.map(item => item.supplierId))]);
+    const terms = await resolveSettlementTerms(client, catalog.templateId, [...new Set(items.map(item => item.supplierId))], input.storeId);
     const storedRequired = items.filter(item => terms.get(item.supplierId)?.mode === 'STORED_VALUE').reduce((sum, item) => sum.plus(item.salesLineAmount), toMoney(0));
     const creditRequired = items.filter(item => terms.get(item.supplierId)?.mode === 'CREDIT').reduce((sum, item) => sum.plus(item.salesLineAmount), toMoney(0));
     const creditAvailable = toMoney(account?.creditLimit ?? 0).minus(account?.creditUsed ?? 0);
