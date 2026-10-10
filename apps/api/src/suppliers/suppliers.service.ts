@@ -9,6 +9,9 @@ import type { SupplierProfile } from '../common/master-data-profile.js';
 import { effectivePriceVersion } from '../pricing/effective-price.js';
 import { lockCatalog } from '../catalog/catalog-registries.service.js';
 import { lockPricePublication } from '../pricing/price-checkpoint.js';
+import { PricingService } from '../pricing/pricing.service.js';
+
+export type SupplierProductPrice = { productId: string; supplyPrice: string; expectedVersionId: string | null };
 
 export type SupplierView = Pick<Supplier, 'address' | 'bankName' | 'bankAccountName' | 'bankAccount' | 'taxpayerId' | 'invoiceTitle' | 'requiresFreight' | 'supplierType' | 'settlementCycleDescription' | 'remark'> & {
   id: string;
@@ -16,6 +19,7 @@ export type SupplierView = Pick<Supplier, 'address' | 'bankName' | 'bankAccountN
   name: string;
   contactName: string | null;
   contactPhone: string | null;
+  deliveryContactPhone: string | null;
   deliveryMode: DeliveryMode;
   defaultSettlementMode: SettlementMode;
   defaultSettlementCycle: string;
@@ -30,6 +34,7 @@ export type SupplierProductsView = {
   supplierId: string;
   productIds: string[];
   version: number;
+  prices?: SupplierProductPrice[];
 };
 
 export type CreateSupplierInput = SupplierProfile & {
@@ -40,6 +45,7 @@ export type CreateSupplierInput = SupplierProfile & {
   defaultSettlementCycle: string;
   contactName?: string;
   contactPhone?: string;
+  deliveryContactPhone?: string;
 };
 
 export type UpdateSupplierInput = SupplierProfile & {
@@ -47,6 +53,7 @@ export type UpdateSupplierInput = SupplierProfile & {
   name?: string;
   contactName?: string | null;
   contactPhone?: string | null;
+  deliveryContactPhone?: string | null;
   deliveryMode?: DeliveryMode;
   defaultSettlementMode?: SettlementMode;
   defaultSettlementCycle?: string;
@@ -55,7 +62,7 @@ export type UpdateSupplierInput = SupplierProfile & {
 
 @Injectable()
 export class SuppliersService {
-  constructor(private readonly database: DatabaseService, private readonly audit: AuditService = new AuditService(database)) {}
+  constructor(private readonly database: DatabaseService, private readonly audit: AuditService = new AuditService(database), private readonly pricing: PricingService = new PricingService(database)) {}
 
   async getSupplier(id: string): Promise<SupplierView> {
     const supplier = await this.database.client.supplier.findUnique({ where: { id } });
@@ -113,7 +120,7 @@ export class SuppliersService {
 
   async createSupplier(input: CreateSupplierInput, context?: MasterDataAuditContext): Promise<SupplierView> {
     const supplier = await auditedMasterDataTransaction(this.database, this.audit, context, 'supplier.create', 'Supplier', tx => tx.supplier.create({
-      data: { ...input, code: input.code ?? `GYS${randomUUID().replaceAll('-', '').toUpperCase()}` },
+      data: { ...input, defaultSettlementCycle: supplierSettlementCycle(input.defaultSettlementMode, input.defaultSettlementCycle), code: input.code ?? `GYS${randomUUID().replaceAll('-', '').toUpperCase()}` },
     }));
 
     return toSupplierView(supplier);
@@ -124,7 +131,13 @@ export class SuppliersService {
       products: { where: { supplyEnabled: true }, orderBy: { productId: 'asc' }, select: { productId: true } },
     } });
     if (!supplier) throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'Supplier was not found' });
-    return { supplierId: id, productIds: supplier.products.map(product => product.productId), version: supplierVersion(supplier) };
+    const productIds = supplier.products.map(product => product.productId);
+    return { supplierId: id, productIds, version: supplierVersion(supplier), prices: await this.productPrices(this.database.client, id) };
+  }
+
+  private async productPrices(tx: Prisma.TransactionClient, supplierId: string): Promise<SupplierProductPrice[]> {
+    const scopes = await tx.priceScope.findMany({ where: { supplierId, templateKey: '' }, include: { versions: { where: { effectiveAt: { lte: new Date() } }, orderBy: [{ effectiveAt: 'desc' }, { revision: 'desc' }], take: 1 } } });
+    return scopes.filter(scope => scope.versions.length).map(scope => ({ productId: scope.productId, supplyPrice: scope.versions[0]!.supplyPrice.toString(), expectedVersionId: scope.versions[0]!.id }));
   }
 
   async updateSupplier(id: string, input: UpdateSupplierInput, context?: MasterDataAuditContext): Promise<SupplierView> {
@@ -137,6 +150,8 @@ export class SuppliersService {
     }
 
     if (existing.isArchived) throw new ConflictException({ code: 'SUPPLIER_ARCHIVED', message: 'Archived supplier cannot be edited' });
+    const settlementCycle = supplierSettlementCycle(input.defaultSettlementMode ?? existing.defaultSettlementMode,
+      input.defaultSettlementCycle ?? (input.defaultSettlementMode && input.defaultSettlementMode !== existing.defaultSettlementMode ? undefined : existing.defaultSettlementCycle));
 
     const version = supplierVersion(existing);
     if (version !== input.expectedVersion) {
@@ -148,15 +163,17 @@ export class SuppliersService {
     }
 
     const updated = await auditedMasterDataTransaction(this.database, this.audit, context, 'supplier.update', 'Supplier', async tx => {
+    await lockCatalog(tx);
     const changed = await tx.supplier.updateMany({
       where: { id, updatedAt: { gte: new Date(version), lt: new Date(version + 1) } },
       data: {
         name: input.name,
         contactName: input.contactName,
         contactPhone: input.contactPhone,
+        deliveryContactPhone: input.deliveryContactPhone,
         deliveryMode: input.deliveryMode,
         defaultSettlementMode: input.defaultSettlementMode,
-        defaultSettlementCycle: input.defaultSettlementCycle,
+        defaultSettlementCycle: settlementCycle,
         status: input.status,
         address: input.address,
         bankName: input.bankName,
@@ -172,14 +189,18 @@ export class SuppliersService {
       },
     });
     if (!changed.count) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Supplier version has changed' });
+    if (input.defaultSettlementMode && input.defaultSettlementMode !== existing.defaultSettlementMode) {
+      await tx.templateStoreSupplierCycle.deleteMany({ where: { supplierId: id } });
+    }
     return tx.supplier.findUniqueOrThrow({ where: { id } });
     });
 
     return toSupplierView(updated);
   }
 
-  async replaceSupplierProducts(id: string, expectedVersion: number, productIds: string[], context?: MasterDataAuditContext): Promise<SupplierProductsView> {
+  async replaceSupplierProducts(id: string, expectedVersion: number, productIds: string[], context?: MasterDataAuditContext, prices: SupplierProductPrice[] = []): Promise<SupplierProductsView> {
     return auditedMasterDataTransaction(this.database, this.audit, context, 'supplier.products.replace', 'Supplier', async tx => {
+    await lockPricePublication(tx, true);
     await lockCatalog(tx);
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Supplier" WHERE "id" = ${id}::uuid FOR UPDATE`);
     const supplier = await tx.supplier.findUnique({ where: { id } });
@@ -201,10 +222,13 @@ export class SuppliersService {
     }
 
     const uniqueProductIds = [...new Set(productIds)];
+    if (new Set(prices.map(price => price.productId)).size !== prices.length || prices.some(price => !uniqueProductIds.includes(price.productId) || !/^(0|[1-9]\d{0,9})(\.\d{1,2})?$/.test(price.supplyPrice))) {
+      throw new ConflictException({ code: 'INVALID_SUPPLIER_PRICES', message: '供货价必须属于已选商品，且为最多两位小数的非负金额' });
+    }
     const previousProducts = await tx.supplierProduct.findMany({ where: { supplierId: id }, select: { productId: true } });
     const products = await tx.product.findMany({
       where: { id: { in: uniqueProductIds } },
-      select: { id: true },
+      select: { id: true, defaultSalesPrice: true },
     });
     if (products.length !== uniqueProductIds.length) {
       throw new NotFoundException({
@@ -227,6 +251,21 @@ export class SuppliersService {
         });
     }
 
+    const at = new Date();
+    const existingPrices = await this.productPrices(tx, id);
+    const initialPrices: SupplierProductPrice[] = products.filter(product => product.defaultSalesPrice !== null && !existingPrices.some(price => price.productId === product.id) && !prices.some(price => price.productId === product.id))
+      .map(product => ({ productId: product.id, supplyPrice: product.defaultSalesPrice!.toFixed(2), expectedVersionId: null }));
+    for (const price of [...prices, ...initialPrices].sort((a, b) => a.productId.localeCompare(b.productId))) {
+      const currentPrice = await effectivePriceVersion(tx, price.productId, id, at);
+      if ((currentPrice?.supplyVersionId ?? null) !== price.expectedVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: '供货价已变更，请重新打开商品配置后重试' });
+      if (currentPrice?.supplyPrice.eq(price.supplyPrice)) continue;
+      const product = await tx.product.findUniqueOrThrow({ where: { id: price.productId } });
+      if (!currentPrice && product.defaultSalesPrice === null && supplier.defaultSettlementMode !== 'SUPPLIER_TERM') throw new ConflictException({ code: 'SALES_PRICE_REQUIRED', message: '请先在商品资料中设置默认销售价' });
+      await this.pricing.publishPrice({ productId: price.productId, supplierId: id, supplyPrice: price.supplyPrice,
+        salesPrice: supplier.defaultSettlementMode === 'SUPPLIER_TERM' ? price.supplyPrice : currentPrice?.salesPrice.toString() ?? product.defaultSalesPrice!.toString(),
+        effectiveAt: at, reason: '供应商关联商品维护供货价' }, tx);
+    }
+
     // Product-side editors must observe association changes made from the supplier side.
     await tx.$executeRaw`UPDATE "Product" SET "updatedAt" = GREATEST(clock_timestamp(), "updatedAt" + interval '1 millisecond') WHERE "id" = ANY(${[...new Set([...uniqueProductIds, ...previousProducts.map(row => row.productId)])]}::uuid[])`;
 
@@ -244,6 +283,7 @@ export class SuppliersService {
       supplierId: id,
       productIds: current.map((item) => item.productId),
       version: supplierVersion(updatedSupplier),
+      prices: await this.productPrices(tx, id),
     };
     });
   }
@@ -266,6 +306,7 @@ function toSupplierView(supplier: Supplier): SupplierView {
     name: supplier.name,
     contactName: supplier.contactName,
     contactPhone: supplier.contactPhone,
+    deliveryContactPhone: supplier.deliveryContactPhone,
     deliveryMode: supplier.deliveryMode,
     defaultSettlementMode: supplier.defaultSettlementMode,
     defaultSettlementCycle: supplier.defaultSettlementCycle,
@@ -280,3 +321,4 @@ function toSupplierView(supplier: Supplier): SupplierView {
 function supplierVersion(supplier: Pick<Supplier, 'updatedAt'>): number {
   return supplier.updatedAt.getTime();
 }
+import { supplierSettlementCycle } from './settlement-config.js';

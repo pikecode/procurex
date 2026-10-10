@@ -49,13 +49,20 @@ export class AuthService {
     }
 
     const accessToken = randomBytes(32).toString('base64url');
-    const session = await this.database.client.userSession.create({
+    const session = await this.database.client.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(810081)`;
+      const current = await tx.user.findUnique({ where: { id: user.id } });
+      if (!current || current.status !== UserStatus.ACTIVE || current.passwordHash !== user.passwordHash || current.updatedAt.getTime() !== user.updatedAt.getTime()) {
+        throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: '账号已变更，请重新登录' });
+      }
+      return tx.userSession.create({
       data: {
         userId: user.id,
         tokenHash: tokenHash(accessToken),
         client: input.client,
         expiresAt: new Date(Date.now() + SESSION_TTL_MS),
       },
+      });
     });
 
     return {

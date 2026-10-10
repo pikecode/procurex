@@ -9,7 +9,7 @@ import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { throwIfInvalid } from '../common/request-contract.js';
 import { parseSupplierProfile, profileText, type SupplierProfile } from '../common/master-data-profile.js';
-import { SuppliersService, type SupplierProductsView, type SupplierView } from './suppliers.service.js';
+import { SuppliersService, type SupplierProductPrice, type SupplierProductsView, type SupplierView } from './suppliers.service.js';
 import { DeliveryMode, SettlementMode, SupplierStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { validateExpectedVersion, validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
 
@@ -18,6 +18,7 @@ type CreateSupplierBody = Record<string, unknown> & {
   name?: unknown;
   contactName?: unknown;
   contactPhone?: unknown;
+  deliveryContactPhone?: unknown;
   deliveryMode?: unknown;
   defaultSettlementMode?: unknown;
   defaultSettlementCycle?: unknown;
@@ -29,6 +30,7 @@ type PatchSupplierBody = CreateSupplierBody & {
 };
 
 type PutSupplierProductsBody = {
+  prices?: unknown;
   expectedVersion?: unknown;
   productIds?: unknown;
 };
@@ -90,7 +92,7 @@ export class SuppliersController {
   @RequireRoles('ADMIN', 'PURCHASER')
   replaceProducts(@Param('id') id: string, @Body() body: PutSupplierProductsBody, @Req() request: AuthenticatedRequest): Promise<SupplierProductsView> {
     const input = parsePutSupplierProductsBody(id, body);
-    return this.suppliersService.replaceSupplierProducts(id, input.expectedVersion, input.productIds, masterDataAuditContext(request));
+    return this.suppliersService.replaceSupplierProducts(id, input.expectedVersion, input.productIds, masterDataAuditContext(request), input.prices);
   }
 }
 
@@ -108,15 +110,18 @@ function parseCreateSupplierBody(body: CreateSupplierBody): SupplierProfile & {
   defaultSettlementCycle: string;
   contactName?: string;
   contactPhone?: string;
+  deliveryContactPhone?: string;
 } {
   const issues: ValidationIssue[] = [];
   const code = profileText('code', body.code, 80, false, false, issues) ?? undefined;
   const name = requiredTrimmedString('name', body.name, issues);
   const deliveryMode = requiredDeliveryMode(body.deliveryMode, issues);
   const defaultSettlementMode = requiredSettlementMode(body.defaultSettlementMode, issues);
-  const defaultSettlementCycle = requiredTrimmedString('defaultSettlementCycle', body.defaultSettlementCycle, issues);
+  const defaultSettlementCycle = defaultSettlementMode === SettlementMode.SUPPLIER_TERM || defaultSettlementMode === SettlementMode.COMPANY_TERM
+    ? requiredTrimmedString('defaultSettlementCycle', body.defaultSettlementCycle, issues) : 'IMMEDIATE';
   const contactName = profileText('contactName', body.contactName, 120, false, true, issues) ?? undefined;
   const contactPhone = profileText('contactPhone', body.contactPhone, 32, false, true, issues) ?? undefined;
+  const deliveryContactPhone = profileText('deliveryContactPhone', body.deliveryContactPhone, 32, false, true, issues) ?? undefined;
   const profile = parseSupplierProfile(body, true, issues);
   profileText('name', body.name, 200, true, false, issues);
 
@@ -131,6 +136,7 @@ function parseCreateSupplierBody(body: CreateSupplierBody): SupplierProfile & {
     defaultSettlementCycle: defaultSettlementCycle!,
     contactName,
     contactPhone,
+    deliveryContactPhone,
   };
 }
 
@@ -139,6 +145,7 @@ function parsePatchSupplierBody(id: string, body: PatchSupplierBody): SupplierPr
   name?: string;
   contactName?: string | null;
   contactPhone?: string | null;
+  deliveryContactPhone?: string | null;
   deliveryMode?: DeliveryMode;
   defaultSettlementMode?: SettlementMode;
   defaultSettlementCycle?: string;
@@ -152,6 +159,7 @@ function parsePatchSupplierBody(id: string, body: PatchSupplierBody): SupplierPr
   const name = optionalTrimmedString('name', body.name, issues);
   const contactName = profileText('contactName', body.contactName, 120, false, true, issues);
   const contactPhone = profileText('contactPhone', body.contactPhone, 32, false, true, issues);
+  const deliveryContactPhone = profileText('deliveryContactPhone', body.deliveryContactPhone, 32, false, true, issues);
   const profile = parseSupplierProfile(body, false, issues);
   profileText('name', body.name, 200, false, false, issues);
   const deliveryMode = optionalDeliveryMode(body.deliveryMode, issues);
@@ -167,6 +175,7 @@ function parsePatchSupplierBody(id: string, body: PatchSupplierBody): SupplierPr
     name,
     contactName,
     contactPhone,
+    deliveryContactPhone,
     deliveryMode,
     defaultSettlementMode,
     defaultSettlementCycle,
@@ -174,7 +183,7 @@ function parsePatchSupplierBody(id: string, body: PatchSupplierBody): SupplierPr
   };
 }
 
-function parsePutSupplierProductsBody(id: string, body: PutSupplierProductsBody): { expectedVersion: number; productIds: string[] } {
+function parsePutSupplierProductsBody(id: string, body: PutSupplierProductsBody): { expectedVersion: number; productIds: string[]; prices: SupplierProductPrice[] } {
   const issues: ValidationIssue[] = [
     ...validateUuid('id', id),
     ...validateExpectedVersion('expectedVersion', body.expectedVersion),
@@ -192,12 +201,19 @@ function parsePutSupplierProductsBody(id: string, body: PutSupplierProductsBody)
     }
   }
 
+  const prices: SupplierProductPrice[] = [];
+  if (body.prices !== undefined) {
+    if (!Array.isArray(body.prices) || body.prices.length > 10000) issues.push({ field: 'prices', code: 'INVALID_PRICES', message: 'prices must be an array of at most 10000 entries' });
+    else for (const [index, value] of body.prices.entries()) {
+      const row = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+      issues.push(...validateUuid(`prices.${index}.productId`, row.productId));
+      if (row.expectedVersionId !== null) issues.push(...validateUuid(`prices.${index}.expectedVersionId`, row.expectedVersionId));
+      if (typeof row.supplyPrice !== 'string' || !/^(0|[1-9]\d{0,9})(\.\d{1,2})?$/.test(row.supplyPrice)) issues.push({ field: `prices.${index}.supplyPrice`, code: 'INVALID_PRICE', message: '供货价最多两位小数且不能为负数' });
+      prices.push(row as SupplierProductPrice);
+    }
+  }
   throwIfInvalid(issues);
-
-  return {
-    expectedVersion: body.expectedVersion as number,
-    productIds,
-  };
+  return { expectedVersion: body.expectedVersion as number, productIds, prices };
 }
 
 function requiredTrimmedString(field: string, value: unknown, issues: ValidationIssue[]): string | undefined {
