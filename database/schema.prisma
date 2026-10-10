@@ -386,6 +386,7 @@ model Store {
   createdAt         DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime               @updatedAt @db.Timestamptz(6)
   bindings          StoreTemplateBinding[]
+  cycleOverrides    TemplateStoreSupplierCycle[]
   accounts          StoreAccount[]
   requests          PurchaseRequest[]
   supplierOrders    SupplierOrder[]
@@ -403,6 +404,7 @@ model Supplier {
   name                     String                    @db.VarChar(200)
   contactName              String?                   @db.VarChar(120)
   contactPhone             String?                   @db.VarChar(32)
+  deliveryContactPhone     String?                   @db.VarChar(32)
   address                  String?                   @db.VarChar(300)
   bankName                 String?                   @db.VarChar(200)
   bankAccountName          String?                   @db.VarChar(200)
@@ -422,6 +424,7 @@ model Supplier {
   products                 SupplierProduct[]
   templateSuppliers        TemplateItemSupplier[]
   templateSupplierSettings TemplateSupplierSetting[]
+  cycleOverrides           TemplateStoreSupplierCycle[]
   priceScopes              PriceScope[]
   requestItems             RequestItem[]
   supplierOrders           SupplierOrder[]
@@ -525,6 +528,20 @@ model OrderTemplate {
   bindings   StoreTemplateBinding[]
   items      TemplateItem[]
   settings   TemplateSupplierSetting[]
+  cycleOverrides TemplateStoreSupplierCycle[]
+}
+
+model TemplateStoreSupplierCycle {
+  id String @id @default(uuid()) @db.Uuid
+  templateId String @db.Uuid
+  storeId String @db.Uuid
+  supplierId String @db.Uuid
+  settlementCycle String @db.VarChar(40)
+  template OrderTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@unique([templateId, storeId, supplierId])
 }
 
 model StoreTemplateBinding {
@@ -844,6 +861,7 @@ model Shipment {
   kind                  ShipmentKind
   shippedAt             DateTime             @default(now()) @db.Timestamptz(6)
   trackingNo            String?              @db.VarChar(100)
+  deliveryModeSnapshot  DeliveryMode?
   freight               Decimal              @default(0) @db.Decimal(20, 2)
   freightConfirmationId String?              @unique @db.Uuid
   createdAt             DateTime             @default(now()) @db.Timestamptz(6)

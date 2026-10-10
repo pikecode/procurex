@@ -33,3 +33,14 @@ apps/web/reports-acceptance-run.json
 apps/web/m5-status.json
 apps/web/m5-gate-status.json
 apps/miniprogram/project.private.config.json
+
+# AI 工具本地配置与第三方 skills 副本
+.claude/
+.agents/
+.windsurf/
+skills-lock.json
+
+# 验收截图（与上方 /var/*-evidence/ 规则同义，补齐未覆盖的命名）
+/var/five-role-ui/
+/var/five-role-ui-chef/
+/var/five-role-ui-purchaser/
