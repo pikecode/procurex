@@ -6,7 +6,7 @@ This guide is the operator checklist for the `PRODUCTION_RUNTIME` blocker. It is
 
 ## Current Position
 
-There is no production server or production domain yet. M6 must stay `NOT_READY` until the production database, private-file storage path or object-storage service, HTTPS API domain, API process, worker process, and migration owner are all in place.
+An SSH-accessible server is available as of 2026-10-08. The isolated deployment procedure and actual execution record are maintained in `docs/server-deployment.md`. A production domain/HTTPS and the remaining external sign-offs are not yet available. M6 must stay `NOT_READY` until the required runtime and external launch evidence is complete. The standalone worker is currently a placeholder; export maintenance runs in the API process.
 
 ## Required Inputs
 
