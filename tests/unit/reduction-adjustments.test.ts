@@ -39,7 +39,7 @@ test('new freight creates only frozen-side documents without a goods reduction',
 
 test('later shipments cannot reuse permanently reduced quantities', async () => {
   const service = new SupplierOrdersService({ client: { supplierOrder: { findUnique: async () => ({
-    id: 'order', version: 3, status: 'PARTIAL_SHIPPED', items: [{ id: 'item', productId: 'product', quantity: '10', shippedQuantity: '4', receivedQuantity: '4', salesUnitPrice: '12', supplyUnitPrice: '9', shipmentItems: [{ permanentlyReduced: '2' }] }],
+    id: 'order', version: 3, supplier: { deliveryMode: 'SELF' }, status: 'PARTIAL_SHIPPED', items: [{ id: 'item', productId: 'product', quantity: '10', shippedQuantity: '4', receivedQuantity: '4', salesUnitPrice: '12', supplyUnitPrice: '9', shipmentItems: [{ permanentlyReduced: '2' }] }],
   }) } } } as never);
   const preview = await service.shipmentPreview('order', 3, { freight: '0', items: [{ orderItemId: 'item', shipQuantity: '3', permanentlyReduceQuantity: '1' }] });
   assert.equal(preview.items[0]!.remainingQuantityBefore, '4');

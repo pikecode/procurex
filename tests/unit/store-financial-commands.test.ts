@@ -13,9 +13,9 @@ const storeId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const auth = { user: { id: storeId, roles: ['HQ_FINANCE'] } } as AuthenticatedSession;
 const request = { headers: { 'idempotency-key': 'financial-command-test' }, auth } as AuthenticatedRequest;
 const operations = [
-  { name: 'recharge', method: 'createRecharge', body: { amount: '10.00', businessDate: '2026-10-04', collectionAccountId: 'bank-reference' } },
+  { name: 'recharge', method: 'createRecharge', body: { amount: '10.00', businessDate: '2026-10-04', collectionAccountId: 'bank-reference', evidenceFileIds: [storeId] } },
   { name: 'credit limit', method: 'updateCreditLimit', body: { expectedVersion: 1, limit: '100.00', reason: 'approved' } },
-  { name: 'clearing', method: 'createClearing', body: { businessDate: '2026-10-04', items: [{ fundingAllocationId: storeId, expectedVersion: 1, expectedAmount: '10.00' }] } },
+  { name: 'clearing', method: 'createClearing', body: { businessDate: '2026-10-04', evidenceFileIds: [storeId], items: [{ fundingAllocationId: storeId, expectedVersion: 1, expectedAmount: '10.00' }] } },
 ] as const;
 
 function fixture(state: BeginCommandResult['state'], reject = false) {

@@ -49,6 +49,22 @@ test('OSS requires explicit opt-in and complete safe configuration', () => {
 
 function configWithLocal() { return { ...config, FILE_STORAGE: 'local' }; }
 
+test('expired uploads from unavailable storage do not block new upload sessions', async (t) => {
+  const removed: string[] = [];
+  let deleted: unknown;
+  const localKey = '00000000-0000-0000-0000-000000000000';
+  const database = { client: { fileObject: {
+    findMany: async () => [{ id: 'remote', objectKey: `oss:other-prefix/${localKey}` }, { id: 'local', objectKey: localKey }],
+    deleteMany: async (input: unknown) => { deleted = input; },
+    create: async () => ({}),
+  } } } as unknown as DatabaseService;
+  t.mock.method(PrivateStorage.prototype, 'remove', async (key: string) => { removed.push(key); });
+  const result = await new FilesService(database).create('owner', { filename: 'receipt.png', mimeType: 'image/png', sizeBytes: 1, purpose: 'RECEIPT' });
+  assert.ok(result.uploadToken);
+  assert.deepEqual(removed, [localKey]);
+  assert.deepEqual(deleted, { where: { id: { in: ['local'] }, status: 'UPLOADING', paymentId: null, receiptId: null } });
+});
+
 test('OSS uses only owned keys, private uploads, and propagates storage outages', async (t) => {
   const storage = new PrivateStorage(config);
   const key = storage.newKey();

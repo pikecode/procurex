@@ -113,6 +113,7 @@ test('suppliers endpoint creates, lists and disables suppliers with purchaser ro
         invoiceTitle: 'Test supplier',
         contactName: 'Bob',
         contactPhone: '13900000000',
+        deliveryContactPhone: '13800000000',
         deliveryMode: DeliveryMode.LOGISTICS,
         defaultSettlementMode: SettlementMode.COMPANY_TERM,
         defaultSettlementCycle: 'MONTHLY',
@@ -123,6 +124,8 @@ test('suppliers endpoint creates, lists and disables suppliers with purchaser ro
       data: {
         id: string;
         code: string;
+        contactPhone: string;
+        deliveryContactPhone: string | null;
         deliveryMode: DeliveryMode;
         defaultSettlementMode: SettlementMode;
         status: SupplierStatus;
@@ -132,6 +135,8 @@ test('suppliers endpoint creates, lists and disables suppliers with purchaser ro
     };
     assert.equal(createdBody.traceId, 'trace-suppliers-create');
     assert.equal(createdBody.data.code, supplierCode);
+    assert.equal(createdBody.data.contactPhone, '13900000000');
+    assert.equal(createdBody.data.deliveryContactPhone, '13800000000');
     assert.equal(createdBody.data.deliveryMode, DeliveryMode.LOGISTICS);
     assert.equal(createdBody.data.defaultSettlementMode, SettlementMode.COMPANY_TERM);
     assert.equal(createdBody.data.status, SupplierStatus.ACTIVE);
@@ -165,12 +170,15 @@ test('suppliers endpoint creates, lists and disables suppliers with purchaser ro
         'content-type': 'application/json',
         'x-trace-id': 'trace-suppliers-disable',
       },
-      body: JSON.stringify({ expectedVersion: createdBody.data.version, status: SupplierStatus.DISABLED }),
+      body: JSON.stringify({ expectedVersion: createdBody.data.version, status: SupplierStatus.DISABLED, deliveryContactPhone: null }),
     });
     assert.equal(disabled.status, 200);
     const disabledBody = (await disabled.json()) as { data: { status: SupplierStatus }; traceId: string };
     assert.equal(disabledBody.traceId, 'trace-suppliers-disable');
     assert.equal(disabledBody.data.status, SupplierStatus.DISABLED);
+    const stored = await prisma.supplier.findUniqueOrThrow({ where: { id: createdBody.data.id } });
+    assert.equal(stored.contactPhone, '13900000000');
+    assert.equal(stored.deliveryContactPhone, null);
   } finally {
     await app.close();
     await prisma.supplier.deleteMany({ where: { code: supplierCode } });
@@ -214,6 +222,7 @@ test('supplier product endpoint replaces product bindings atomically', async () 
       data: {
         sku,
         name: 'Supplier Product',
+        defaultSalesPrice: '12.50',
         categoryId: category.id,
         baseUnitId: unit.id,
       },
@@ -266,18 +275,48 @@ test('supplier product endpoint replaces product bindings atomically', async () 
       body: JSON.stringify({ expectedVersion: createdBody.data.version, productIds: [product.id, product.id] }),
     });
     assert.equal(bound.status, 200);
-    const boundBody = (await bound.json()) as { data: { supplierId: string; productIds: string[]; version: number }; traceId: string };
+    const boundBody = (await bound.json()) as { data: { supplierId: string; productIds: string[]; version: number; prices: { supplyPrice: string; expectedVersionId: string }[] }; traceId: string };
     assert.equal(boundBody.traceId, 'trace-supplier-products-bind');
     assert.equal(boundBody.data.supplierId, createdBody.data.id);
     assert.deepEqual(boundBody.data.productIds, [product.id]);
     assert.ok(boundBody.data.version >= createdBody.data.version);
+    assert.equal(boundBody.data.prices[0]?.supplyPrice, '12.5');
 
     const relation = await prisma.supplierProduct.findUnique({
       where: { supplierId_productId: { supplierId: createdBody.data.id, productId: product.id } },
     });
     assert.equal(relation?.supplyEnabled, true);
+    const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+    const priced = await fetch(`${baseUrl}/suppliers/${createdBody.data.id}/products`, { method: 'PUT', headers,
+      body: JSON.stringify({ expectedVersion: boundBody.data.version, productIds: [product.id], prices: [{ productId: product.id, supplyPrice: '8.25', expectedVersionId: boundBody.data.prices[0]!.expectedVersionId }] }) });
+    assert.equal(priced.status, 200, await priced.clone().text());
+    const pricedBody = await priced.json() as { data: { version: number; prices: { productId: string; supplyPrice: string; expectedVersionId: string }[] } };
+    assert.equal(pricedBody.data.prices[0]?.supplyPrice, '8.25');
+    assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).defaultSalesPrice?.toString(), '12.5');
+    const read = await fetch(`${baseUrl}/suppliers/${createdBody.data.id}/products`, { headers });
+    assert.deepEqual((await read.json() as { data: { prices: unknown } }).data.prices, pricedBody.data.prices);
+    for (const supplyPrice of ['-1', '1.234']) {
+      const invalid: Response = await fetch(`${baseUrl}/suppliers/${createdBody.data.id}/products`, { method: 'PUT', headers,
+        body: JSON.stringify({ expectedVersion: pricedBody.data.version, productIds: [product.id], prices: [{ productId: product.id, supplyPrice, expectedVersionId: pricedBody.data.prices[0]!.expectedVersionId }] }) });
+      assert.equal(invalid.status, 400);
+    }
+    const stale = await fetch(`${baseUrl}/suppliers/${createdBody.data.id}/products`, { method: 'PUT', headers,
+      body: JSON.stringify({ expectedVersion: pricedBody.data.version, productIds: [product.id], prices: [{ productId: product.id, supplyPrice: '9.25', expectedVersionId: null }] }) });
+    assert.equal(stale.status, 409);
+    assert.equal((await prisma.supplier.findUniqueOrThrow({ where: { id: createdBody.data.id } })).updatedAt.getTime(), pricedBody.data.version);
+    const priceScope = await prisma.priceScope.findFirstOrThrow({ where: { supplierId: createdBody.data.id, productId: product.id, templateKey: '' }, include: { versions: true } });
+    assert.equal(priceScope.versions.length, 2);
+    assert.equal(priceScope.versions[0]!.salesPrice.toString(), '12.5');
   } finally {
     await app.close();
+    const scopeWhere = { supplier: { code: supplierCode } };
+    const runWhere = { versions: { some: { priceVersion: { scope: scopeWhere } } } };
+    const runs = await prisma.priceChangeRun.findMany({ where: runWhere, select: { id: true } });
+    await prisma.priceChangeAdjustment.deleteMany({ where: { run: { run: runWhere } } });
+    await prisma.priceChangeRunOrder.deleteMany({ where: { run: runWhere } });
+    await prisma.priceChangeRunVersion.deleteMany({ where: { run: runWhere } });
+    await prisma.priceChangeRun.deleteMany({ where: { id: { in: runs.map(run => run.id) } } });
+    await prisma.priceScope.deleteMany({ where: scopeWhere });
     await prisma.supplierProduct.deleteMany({ where: { supplier: { code: supplierCode } } });
     await prisma.supplier.deleteMany({ where: { code: supplierCode } });
     await prisma.product.deleteMany({ where: { sku } });

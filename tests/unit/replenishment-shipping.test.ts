@@ -14,7 +14,7 @@ test('historical replenishment shipments do not consume normal remaining quantit
 
 test('gap-only and mixed shipment previews consume only non-gap quantities', async () => {
   const service = new SupplierOrdersService({ client: {
-    supplierOrder: { findUnique: async () => ({ id: 'order', version: 2, status: 'PARTIAL_SHIPPED', items: [
+    supplierOrder: { findUnique: async () => ({ id: 'order', version: 2, supplier: { deliveryMode: 'SELF' }, status: 'PARTIAL_SHIPPED', items: [
       { id: 'item', productId: 'product', quantity: '6', shippedQuantity: '3', receivedQuantity: '2', salesUnitPrice: '4', supplyUnitPrice: '3', shipmentItems: [{ permanentlyReduced: '1' }] },
     ] }) }, replenishmentGap: { findMany: async () => [{ id: 'gap', orderItemId: 'item', status: 'PENDING', remainingQuantity: '1' }] },
   } } as never);
@@ -25,7 +25,7 @@ test('gap-only and mixed shipment previews consume only non-gap quantities', asy
 
 function service() {
   return new SupplierOrdersService({ client: {
-    supplierOrder: { findUnique: async () => ({ id: 'order', version: 2, status: 'SHIPPED', items: [
+    supplierOrder: { findUnique: async () => ({ id: 'order', version: 2, supplier: { deliveryMode: 'SELF' }, status: 'SHIPPED', items: [
       { id: 'item', productId: 'product', quantity: '3', shippedQuantity: '3', receivedQuantity: '2', salesUnitPrice: '4', supplyUnitPrice: '3' },
     ] }) },
     replenishmentGap: { findMany: async () => [{ id: 'gap', orderItemId: 'item', status: 'PENDING', remainingQuantity: '1' }] },

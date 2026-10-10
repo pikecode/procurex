@@ -163,11 +163,34 @@ test('template prices isolate quotes, historical repricing, checkpoints, copied 
     assert.equal((await call('/price-changes', 'POST', { ...draft, templateId: b.id })).status, 409);
     const overflow = await call('/price-changes', 'POST', { ...draft, salesPrice: '100000000000000' }); assert.equal(overflow.status, 400);
     const rejectedPrice = await call('/price-changes', 'POST', { ...draft, templateId: unit.id }); assert.equal(rejectedPrice.status, 409);
+    const alternate = await db.supplier.create({ data: { code: `${prefix}ALT`, name: '备用供货商', deliveryMode: 'SELF', defaultSettlementMode: 'COMPANY_TERM', defaultSettlementCycle: 'MONTHLY' } });
+    assert.equal((await call('/price-changes', 'POST', { ...priceInput, supplierId: alternate.id, salesPrice: '14', supplyPrice: '7' })).status, 201);
+    const multiItems = [{ productId: product.id, isEnabled: true, minOrderQty: '4', orderMultiple: '2', suppliers: [
+      { supplierId: alternate.id, priority: 0, salesPrice: '18.00' }, { supplierId: supplier.id, priority: 10, salesPrice: '16.00' },
+    ] }];
+    const beforeMulti = (await call(`/templates/${a.id}`)).body.data;
+    const multi = await call(`/templates/${a.id}/items`, 'PUT', { expectedVersion: beforeMulti.version, items: multiItems });
+    assert.equal(multi.status, 200, JSON.stringify(multi.body));
+    const afterMulti = (await call(`/templates/${a.id}`)).body.data;
+    assert.equal(afterMulti.version, multi.body.data.version);
+    assert.equal(afterMulti.items[0].suppliers[0].supplierId, alternate.id);
+    assert.equal(afterMulti.items[0].suppliers[0].salesPrice, '18');
+    assert.equal(afterMulti.items[0].suppliers[0].supplyPrice, '7');
+    assert.equal(afterMulti.items[0].suppliers[1].salesPrice, '16');
+    assert.equal(afterMulti.items[0].suppliers[1].supplyPrice, '9');
+    const defaultPreview = await preview('4');
+    assert.equal(defaultPreview.status, 201);
+    assert.equal(defaultPreview.body.data.items[0].supplierId, alternate.id);
+    assert.equal(defaultPreview.body.data.totals.salesGoodsAmount, '72.00');
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date('2026-09-15'), a.id)).salesPrice, '31');
+    const failedMulti = await call(`/templates/${a.id}/items`, 'PUT', { expectedVersion: afterMulti.version, items: [{ ...multiItems[0], suppliers: [{ supplierId: supplier.id, priority: 0, salesPrice: '1.005' }] }] });
+    assert.equal(failedMulti.status, 400);
+    assert.equal((await call(`/templates/${a.id}`)).body.data.version, afterMulti.version);
     const archived = await call(`/templates/${copyId}/archive`, 'POST', { expectedVersion: copied.body.data.version }); assert.equal(archived.status, 201);
     assert.equal((await call('/price-changes', 'POST', { ...draft, templateId: copyId })).status, 409);
   } finally {
     await app.close();
-    const scopeWhere = { supplier: { code: prefix } };
+    const scopeWhere = { supplier: { code: { startsWith: prefix } } };
     const runWhere = { versions: { some: { priceVersion: { scope: scopeWhere } } } };
     await db.priceChangeAdjustment.deleteMany({ where: { run: { run: runWhere } } });
     await db.priceChangeRunOrder.deleteMany({ where: { run: runWhere } });
@@ -182,7 +205,7 @@ test('template prices isolate quotes, historical repricing, checkpoints, copied 
     await db.product.deleteMany({ where: { sku: prefix } });
     await db.category.deleteMany({ where: { code: prefix } }); await db.unit.deleteMany({ where: { code: prefix } });
     await db.storeAccount.deleteMany({ where: { store: { code: { startsWith: prefix } } } });
-    await db.store.deleteMany({ where: { code: { startsWith: prefix } } }); await db.supplier.deleteMany({ where: { code: prefix } });
+    await db.store.deleteMany({ where: { code: { startsWith: prefix } } }); await db.supplier.deleteMany({ where: { code: { startsWith: prefix } } });
     await db.commandRecord.deleteMany({ where: { actor: { username: prefix } } });
     await db.userSession.deleteMany({ where: { user: { username: prefix } } }); await db.userRole.deleteMany({ where: { user: { username: prefix } } }); await db.user.deleteMany({ where: { username: prefix } });
     await db.$disconnect();
