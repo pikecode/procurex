@@ -4,12 +4,15 @@ const view = require('../../utils/store-view');
 
 Page({
   data: {
-    activeView: 'orders',
+    activeView: 'tasks',
+    shippingTasks: [],
+    differenceTasks: [],
     pendingCommand: null,
     commandHistory: [],
     recovering: false,
     search: '',
     statusFilter: 'all',
+    orderMode: 'detail',
     visibleOrders: [],
     user: {},
     roleText: '未登录',
@@ -45,6 +48,8 @@ Page({
     shipmentItems: [],
     orderLoading: false,
     trackingNo: '',
+    deliveryIndex: 0,
+    deliveryChoices: [{ value: 'SELF', label: '自配送' }, { value: 'LOGISTICS', label: '物流' }],
     rejectionReason: '',
     freightChoices: [],
     freightIndex: 0,
@@ -75,7 +80,7 @@ Page({
     if (this.data.user.id !== user.id) {
       this.statementRequestSequence = (this.statementRequestSequence || 0) + 1;
       this.setData({ statementPayments: [], statementPaymentError: '', statementPaymentsLoading: false, statementReturnId: '', selectedAdjustment: null, adjustmentId: '', adjustmentLoading: false });
-      this.setData({ visibleOrders: [], search: '', statusFilter: 'all' });
+      this.setData({ visibleOrders: [], search: '', statusFilter: 'all', orderMode: 'detail', activeView: 'tasks', shippingTasks: [], differenceTasks: [] });
       this.setData({ selectedStatement: null, statementId: '', statementLoading: false });
       this.setData({ statementKind: 'total', statementParentId: '', statementStores: [], statementStoresLoading: false,
         statementStoresError: '', expandedStatementOrderId: '', statementReturnKind: 'total', statementReturnParentId: '' });
@@ -127,6 +132,17 @@ Page({
     this.setData({ activeView: event.currentTarget.dataset.view, error: '' });
   },
 
+  openTaskOrder(event) {
+    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting || this.data.resolving) return;
+    this.setData({ activeView: 'orders', result: null });
+    return this.selectOrder(event);
+  },
+  openTaskDifference(event) {
+    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting || this.data.resolving) return;
+    this.setData({ activeView: 'differences', result: null });
+    return this.loadDiscrepancy(event.currentTarget.dataset.id);
+  },
+
   openProfile() {
     if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting) return;
     wx.navigateTo({ url: '/pages/profile/index?kind=supplier' });
@@ -139,7 +155,7 @@ Page({
     const returnParentId = this.data.statementReturnParentId;
     const parentId = this.data.statementKind === 'store' ? this.data.statementParentId : '';
     this.statementRequestSequence = (this.statementRequestSequence || 0) + 1;
-    this.setData({ selectedOrder: null, supplierOrderId: '', selectedDiscrepancy: null, discrepancyId: '', selectedPayment: null, paymentId: '', shipmentItems: [] });
+    this.setData({ selectedOrder: null, supplierOrderId: '', selectedDiscrepancy: null, discrepancyId: '', selectedPayment: null, paymentId: '', shipmentItems: [], orderMode: 'detail' });
     this.setData({ selectedStatement: null, statementId: '', statementLoading: false });
     this.setData({ statementKind: 'total', statementParentId: '', statementStores: [], statementStoresLoading: false,
       statementStoresError: '', expandedStatementOrderId: '' });
@@ -269,11 +285,26 @@ Page({
     this.refreshList();
   },
 
-  refreshList() {
+  nextOrders() { this.refreshList((this.data.orderLimit || 10) + 10); },
+  refreshList(limit = 10) {
     const search = this.data.search.trim().toLowerCase();
-    this.setData({ visibleOrders: this.data.orders.filter(item =>
-      (this.data.statusFilter === 'all' || item.status === this.data.statusFilter) &&
-      [item.supplierOrderNo, item.storeName].some(value => String(value || '').toLowerCase().includes(search))) });
+    const matches = item => this.data.statusFilter === 'all' ||
+      (this.data.statusFilter === 'pending' ? ['PUSHED', 'ACCEPTED'].includes(item.status) :
+        this.data.statusFilter === 'COMPLETED' ? item.fulfillmentStatus === 'COMPLETED' || item.status === 'COMPLETED' :
+          this.data.statusFilter === 'SHIPPED' ? item.status === 'SHIPPED' && item.fulfillmentStatus !== 'COMPLETED' :
+            item.status === this.data.statusFilter);
+    const filtered = this.data.orders.filter(item =>
+      matches(item) &&
+      [item.supplierOrderNo, item.storeName, item.productSummary].some(value => String(value || '').toLowerCase().includes(search)));
+    this.setData({ visibleOrders: filtered.slice(0, limit), orderLimit: limit, orderTotal: filtered.length, moreOrders: filtered.length > limit });
+  },
+
+  changeOrderMode(event) {
+    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting) return;
+    const mode = event.currentTarget.dataset.mode;
+    if (mode === 'ship' && !this.data.selectedOrder?.canShip) return;
+    if (mode === 'reject' && !this.data.selectedOrder?.canReject) return;
+    if (['detail', 'ship', 'reject'].includes(mode)) this.setData({ orderMode: mode, error: '', result: null });
   },
 
   onInput(event) {
@@ -299,14 +330,25 @@ Page({
   async selectOrder(event) {
     await this.loadOrder(event.currentTarget.dataset.id);
   },
+  async openResultOrder() {
+    if (!this.data.result?.supplierOrderId) return;
+    const id = this.data.result.supplierOrderId;
+    this.setData({ activeView: 'orders' });
+    await this.loadOrder(id);
+  },
+  callContact() {
+    const phone = this.data.selectedOrder?.destination?.contactPhone;
+    if (phone) wx.makePhoneCall({ phoneNumber: phone });
+  },
 
   async loadOrder(id) {
     if (this.data.shipping || this.data.rejecting || this.data.freightRequesting) return;
-    this.setData({ supplierOrderId: id, selectedOrder: null, shipmentItems: [], orderLoading: true, freightIndex: 0, freightChoices: [], error: '' });
+    const actorId = this.data.user.id;
+    this.setData({ supplierOrderId: id, selectedOrder: null, shipmentItems: [], orderLoading: true, freightIndex: 0, freightChoices: [], error: '', orderMode: 'detail', trackingNo: '', rejectionReason: '', freightRequestAmount: '', freightRequestReason: '', result: null });
     try {
       const selectedOrder = await api.request(`/supplier-orders/${id}`);
-      if (this.data.supplierOrderId !== id) return;
-      this.setData({ selectedOrder: { ...selectedOrder,
+      if (this.data.supplierOrderId !== id || this.data.user.id !== actorId) return;
+      this.setData({ deliveryIndex: selectedOrder.defaultDeliveryMode === 'LOGISTICS' ? 1 : 0, selectedOrder: { ...selectedOrder,
         canRequestFreight: selectedOrder.requiresFreightSnapshot !== false,
         canShip: ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED'].includes(selectedOrder.status) || (selectedOrder.status === 'SHIPPED' && selectedOrder.items.some(item => (item.replenishmentGaps || []).some(gap => ['PENDING', 'PARTIAL_FILLED'].includes(gap.status) && Number(gap.remainingQuantity) > 0))),
         canReject: ['PUSHED', 'ACCEPTED'].includes(selectedOrder.status) && !selectedOrder.firstShippedAt && selectedOrder.fulfillmentStatus === 'PENDING'
@@ -329,6 +371,13 @@ Page({
     if (this.data.shipping || this.data.rejecting) return;
     this.setData({ shipmentItems: this.data.shipmentItems.map(item => item.id === event.currentTarget.dataset.id
       ? { ...item, shipQuantity: event.detail.value } : item) });
+  },
+
+  selectDelivery(event) {
+    if (this.data.shipping || this.data.rejecting) return;
+    const index = Number(event.detail.value);
+    if (index !== 0 && index !== 1) return;
+    this.setData({ deliveryIndex: index, trackingNo: '' });
   },
 
   onGapQuantity(event) {
@@ -389,7 +438,7 @@ Page({
     if (!gap || Number(gap.remainingQuantity) <= 0 || this.data.resolving || this.data.shipping || this.data.freightRequesting) return;
     await this.loadOrder(discrepancy.supplierOrderId);
     if (!this.data.selectedOrder || this.data.selectedOrder.id !== discrepancy.supplierOrderId) return;
-    this.setData({ activeView: 'orders', shipmentItems: this.data.shipmentItems.map(item => ({ ...item,
+    this.setData({ activeView: 'orders', orderMode: 'ship', shipmentItems: this.data.shipmentItems.map(item => ({ ...item,
       shipQuantity: item.id === gap.orderItemId ? gap.remainingQuantity : '0',
       gaps: item.gaps.map(value => ({ ...value, allocationQuantity: value.id === gap.id ? gap.remainingQuantity : '0' }))
     })) });
@@ -449,10 +498,16 @@ Page({
   },
 
   async loadOrders(toggleLoading = true) {
+    const actorId = this.data.user.id;
     if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
       const orders = await api.request('/supplier-orders');
-      this.setData({ orders: Array.isArray(orders) ? orders : [] });
+      if (this.data.user.id !== actorId) return;
+      const rows = Array.isArray(orders) ? orders.map(order => ({ ...order,
+        createdText: view.dateText(order.createdAt),
+        productSummary: order.productSummary || (order.items || []).map(item => `${item.productName || '商品'} ${view.decimalText(item.quantity)}${item.unitName || ''}`).join('、')
+      })) : [];
+      this.setData({ orders: rows, shippingTasks: rows.filter(item => ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED'].includes(item.status) && item.fulfillmentStatus !== 'COMPLETED') });
       this.refreshList();
     } catch (error) {
       this.setData({ error: error.message });
@@ -462,9 +517,11 @@ Page({
   },
 
   async loadDiscrepancies(toggleLoading = true) {
+    const actorId = this.data.user.id;
     if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
       const data = await api.request('/notifications');
+      if (this.data.user.id !== actorId) return;
       const notifications = data.notifications || [];
       const discrepancies = [];
       const seen = new Set();
@@ -484,7 +541,12 @@ Page({
           });
         }
       }
-      this.setData({ discrepancies: discrepancies.slice(0, 20) });
+      const details = [];
+      for (let index = 0; index < discrepancies.length; index += 5) {
+        details.push(...await Promise.all(discrepancies.slice(index, index + 5).map(async item => ({ ...item, ...await api.request(`/discrepancies/${encodeURIComponent(item.id)}`) }))));
+        if (this.data.user.id !== actorId) return;
+      }
+      this.setData({ discrepancies: details, differenceTasks: details.filter(item => item.status === 'OPEN' || Number(item.replenishmentGap?.remainingQuantity) > 0) });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -496,7 +558,7 @@ Page({
     if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
       const statements = await api.request('/supplier-statements');
-      this.setData({ statements: Array.isArray(statements) ? statements.slice(0, 20).map(statement => ({ ...statement, periodText: view.statementPeriod(statement) })) : [] });
+      this.setData({ statements: Array.isArray(statements) ? statements.map(statement => ({ ...statement, periodText: view.statementPeriod(statement) })) : [] });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -508,7 +570,7 @@ Page({
     if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
       const payments = await api.request('/payment-records?direction=COMPANY_TO_SUPPLIER');
-      this.setData({ payments: Array.isArray(payments) ? payments.slice(0, 20) : [] });
+      this.setData({ payments: Array.isArray(payments) ? payments : [] });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -558,13 +620,15 @@ Page({
           items,
           freight: freight.amount,
           ...(freight.id ? { freightConfirmationId: freight.id } : {}),
-          trackingNo: this.data.trackingNo.trim() || undefined
+          deliveryMode: this.data.deliveryChoices[this.data.deliveryIndex].value,
+          trackingNo: this.data.deliveryIndex === 1 ? this.data.trackingNo.trim() || undefined : undefined
         },
         header: { 'idempotency-key': `mini-supplier-ship-${Date.now()}` }
       });
       this.setData({
         result: {
-          title: shipment.shipmentNo || shipment.id,
+          title: shipment.shipmentNo || '发货已提交',
+          supplierOrderId: order.id || this.data.supplierOrderId,
           status: shipment.status || 'SHIPPED',
           detail: `本次发货 ${items.length} 种商品，共 ${preview.totals.shipQuantity}`
         }

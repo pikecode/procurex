@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "供应商",
+  "navigationBarTitleText": "公司财务",
   "usingComponents": {
     "evidence-files": "../../components/evidence/index"
   }

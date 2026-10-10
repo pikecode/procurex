@@ -27,7 +27,7 @@ function previewGroups(preview, products) {
     const product = products.find(product => product.id === line.productId) || {};
     let group = groups.find(group => group.supplierId === line.supplierId);
     if (!group) {
-      group = { supplierId: line.supplierId, supplierName: product.supplierName || '配送供应商', items: [] };
+      group = { supplierId: line.supplierId, supplierName: product.supplierName || '配送供应商', deliveryContactPhone: product.deliveryContactPhone || '', items: [] };
       groups.push(group);
     }
     group.items.push({ ...line, productName: product.name || '商品', unitName: line.unitName || line.unitSnapshot?.salesUnitName || product.unitName || '',

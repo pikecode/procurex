@@ -1,0 +1,13 @@
+@import "../../styles/workspace.wxss";
+.page { min-height: 100vh; padding: 0 0 calc(132rpx + env(safe-area-inset-bottom)); }
+.business-heading { display: flex; justify-content: space-between; background: #fff; }
+.business-title, .muted { display: block; }
+.business-heading > view { flex: 1; min-width: 0; }
+.business-heading > button { margin: 0; flex-shrink: 0; }
+.business-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 20; display: flex; background: #fff; border-top: 1rpx solid #e5eae7; padding-bottom: env(safe-area-inset-bottom); }
+.business-nav .nav-item { flex: 1; text-align: center; border-top: 4rpx solid transparent; }
+.page .card { background: #fff; border: 0; border-radius: 0; box-shadow: none; }
+.business-search { background: #f1f4f2; padding: 0 20rpx; border-radius: 8rpx; }
+.finance-amount { display: block; font-size: 40rpx; font-weight: 600; padding: 20rpx 0; }
+.review-band { border-top: 1rpx solid #e5eae7; margin-top: 24rpx; padding-top: 24rpx; }
+.back-link { color: #167e5a; padding-bottom: 24rpx; font-size: 26rpx; }

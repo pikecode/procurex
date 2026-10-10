@@ -6,7 +6,8 @@
     "pages/purchaser/index",
     "pages/products/index",
     "pages/profile/index",
-    "pages/prices/index"
+    "pages/prices/index",
+    "pages/finance/index"
   ],
   "window": {
     "navigationBarTitleText": "ProcureX",
@@ -31,6 +32,10 @@
       {
         "pagePath": "pages/purchaser/index",
         "text": "采购"
+      },
+      {
+        "pagePath": "pages/finance/index",
+        "text": "公司财务"
       }
     ]
   }

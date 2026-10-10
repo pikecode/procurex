@@ -32,3 +32,15 @@
 .statement-products-toggle::after { border: none; }
 .statement-products { padding: 0 0 20rpx 20rpx; border-left: 4rpx solid #d4e8de; }
 .statement-products .muted { font-size: 24rpx; }
+
+@import "../../styles/workspace.wxss";
+
+.reconcile-tabs { display: flex; background: #fff; padding: 0 32rpx; gap: 40rpx; border-bottom: 1rpx solid #e2e6e4; }
+.reconcile-tabs > view { padding: 24rpx 0; font-size: 28rpx; color: #66746c; border-bottom: 4rpx solid transparent; }
+.reconcile-tabs .selected { color: #137951; border-bottom-color: #137951; font-weight: 600; }
+.status-filters { gap: 0; justify-content: space-between; flex-wrap: nowrap; }
+.status-filters > text { white-space: nowrap; font-size: 24rpx; padding: 12rpx 0; }
+.product-summary { margin-top: 16rpx; font-size: 27rpx; line-height: 1.6; color: #39483f; overflow-wrap: anywhere; }
+.order-list-footer { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-top: 18rpx; }
+.order-open { color: #137951; font-size: 24rpx; flex-shrink: 0; }
+.order-empty { padding: 64rpx 0; text-align: center; color: #69756e; font-size: 28rpx; }

@@ -21,3 +21,5 @@
 .back-link { color: #137951; font-size: 26rpx; padding: 8rpx 0 24rpx; display: block; }
 .detail-heading { margin-bottom: 20rpx; }
 .error-banner { padding: 20rpx 32rpx; background: #fff0ef; color: #b63a32; font-size: 26rpx; overflow-wrap: anywhere; }
+
+@import "../../styles/workspace.wxss";

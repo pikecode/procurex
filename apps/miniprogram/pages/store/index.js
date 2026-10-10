@@ -9,6 +9,10 @@ function orderError(error) {
 const storeView = require('../../utils/store-view');
 
 Page({
+  callDeliveryContact(event) {
+    const phoneNumber = String(event.currentTarget.dataset.phone || '').trim();
+    if (phoneNumber) wx.makePhoneCall({ phoneNumber });
+  },
   data: {
     activeView: 'order',
     orderStep: 'catalog',
@@ -51,6 +55,9 @@ Page({
     requests: [],
     account: null,
     ledgers: [],
+    statements: [],
+    selectedStatement: null,
+    statementLoading: false,
     shipmentId: '',
     shortReceivedQuantity: '0',
     shipmentTodos: [],
@@ -82,12 +89,14 @@ Page({
       this.receiptUploadSequence = (this.receiptUploadSequence || 0) + 1;
       this.setData({ cart: [], requests: [], account: null, ledgers: [], products: [], productId: '', productIndex: -1,
         created: null, preview: null, selectedRequest: null, selectedShipment: null, shipmentId: '', receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false, receiptUploading: false, shipmentTodos: [], receiptResult: null,
-        reports: { orderAmount: null, productQuantity: null }, orderStep: 'catalog', pendingOrder: null, pendingReceipt: null, store: {}, catalogLoaded: false });
+        reports: { orderAmount: null, productQuantity: null }, statements: [], selectedStatement: null, orderStep: 'catalog', pendingOrder: null, pendingReceipt: null, store: {}, catalogLoaded: false });
     }
+    const canWrite = (user.roles || []).includes('STORE');
     this.setData({
       user,
-      roleText: '门店',
-      storeId: scopedStoreId || '', canWrite: (user.roles || []).includes('STORE'),
+      roleText: canWrite ? '厨政经理' : '门店财务',
+      activeView: this.data.user.id !== user.id || (!canWrite && ['order', 'receive'].includes(this.data.activeView)) ? (canWrite ? 'order' : 'account') : this.data.activeView,
+      storeId: scopedStoreId || '', canWrite,
       orderDate: storeView.dateText(new Date().toISOString(), false), reportRange: storeView.monthRange()
     });
     const saved = wx.getStorageSync && wx.getStorageSync(`procurex-order-${user.id}-${scopedStoreId}`);
@@ -100,8 +109,38 @@ Page({
 
   changeView(event) {
     if (this.data.submitting || this.data.receiving || this.data.receiptUploading) return;
+    if (!this.data.canWrite && ['order', 'receive'].includes(event.currentTarget.dataset.view)) return;
     this.setData({ activeView: event.currentTarget.dataset.view, error: '' });
   },
+
+  async loadStatements() {
+    if (!this.data.storeId) return;
+    const storeId = this.data.storeId;
+    try {
+      const statements = await api.request(`/store-statements?storeId=${encodeURIComponent(storeId)}`);
+      if (this.data.storeId === storeId) this.setData({ statements: statements.map(item => ({ ...item, periodText: storeView.statementPeriod(item) })) });
+    } catch (error) { if (this.data.storeId === storeId) this.setData({ error: error.message }); }
+  },
+  async loadStoreProfile() {
+    const storeId = this.data.storeId;
+    if (!storeId) return;
+    try {
+      const store = await api.request(`/stores/${encodeURIComponent(storeId)}`);
+      if (this.data.storeId === storeId) this.setData({ store });
+    } catch (error) { if (this.data.storeId === storeId) this.setData({ error: error.message }); }
+  },
+  async selectStatement(event) {
+    const id = event.currentTarget.dataset.id;
+    const sequence = this.statementSequence = (this.statementSequence || 0) + 1;
+    const storeId = this.data.storeId;
+    this.setData({ selectedStatement: null, statementLoading: true, error: '' });
+    try {
+      const statement = await api.request(`/store-statements/${encodeURIComponent(id)}`);
+      if (sequence === this.statementSequence && storeId === this.data.storeId) this.setData({ selectedStatement: { ...statement, periodText: storeView.statementPeriod(statement) } });
+    } catch (error) { if (sequence === this.statementSequence && storeId === this.data.storeId) this.setData({ error: error.message }); }
+    finally { if (sequence === this.statementSequence) this.setData({ statementLoading: false }); }
+  },
+  closeStatement() { this.statementSequence = (this.statementSequence || 0) + 1; this.setData({ selectedStatement: null, statementLoading: false }); },
 
   refreshCatalogView() {
     const search = this.data.search.trim().toLowerCase();
@@ -169,9 +208,14 @@ Page({
 
   filterOrders(event) { this.setData({ orderFilter: event.currentTarget.dataset.filter }); this.refreshOrders(); },
   filterFunding(event) { this.setData({ fundingFilter: event.detail.value ? 'unpaid' : 'all' }); this.refreshOrders(); },
-  refreshOrders() {
-    this.setData({ filteredRequests: this.data.requests.filter(order => (this.data.orderFilter === 'all' || storeView.orderStage(order) === this.data.orderFilter) &&
-      (this.data.fundingFilter === 'all' || order.paymentStatus !== 'PAID')) });
+  nextOrders() { this.refreshOrders((this.data.orderLimit || 10) + 10); },
+  onOrderSearch(event) { this.setData({ orderSearch: event.detail.value }); this.refreshOrders(); },
+  refreshOrders(limit = 10) {
+    const search = String(this.data.orderSearch || '').trim().toLowerCase();
+    const filtered = this.data.requests.filter(order => (this.data.orderFilter === 'all' || storeView.orderStage(order) === this.data.orderFilter) &&
+      (this.data.fundingFilter === 'all' || order.paymentStatus !== 'PAID') &&
+      (!search || String(order.requestNo || '').toLowerCase().includes(search)));
+    this.setData({ filteredRequests: filtered.slice(0, limit), orderLimit: limit, orderTotal: filtered.length, moreOrders: filtered.length > limit });
   },
 
   savePending(kind, value) {
@@ -324,6 +368,7 @@ Page({
           salesPrice: supplier.salesPrice == null ? '' : supplier.salesPrice,
           purchaseSalesPrice: supplier.purchaseSalesPrice == null ? '' : supplier.purchaseSalesPrice,
           supplierName: supplier.supplierName || '配送供应商', supplierId: supplier.supplierId || '',
+          deliveryContactPhone: supplier.deliveryContactPhone || '',
           canOrder: supplier.salesPrice != null && !!supplier.priceVersionId,
           imageUrl: '', imageFailed: false };
       });
@@ -379,8 +424,11 @@ Page({
   async loadWork() {
     this.setData({ loading: true, error: '' });
     try {
-      const tasks = [this.loadRequests(false), this.loadShipments(false), this.loadReports(false)];
-      if (this.data.storeId) tasks.push(this.loadAccount(false), this.loadCatalog());
+      const tasks = [this.loadRequests(false), this.loadShipments(false), this.loadReports(false), this.loadStoreProfile()];
+      if (this.data.storeId) {
+        tasks.push(this.loadAccount(false), this.loadStatements());
+        if (this.data.canWrite) tasks.push(this.loadCatalog());
+      }
       await Promise.all(tasks);
     } finally {
       this.setData({ loading: false });

@@ -1,4 +1,9 @@
 page { background: #f4f6f5; color: #202b25; }
+.notice-error > button { margin: 14rpx 0 0; font-size: 24rpx; }
+.account-grid > view { min-width: 0; overflow-wrap: anywhere; }
+.ledger-line .line-name { flex: 1; min-width: 0; }
+.receipt-counts { flex-wrap: wrap; gap: 16rpx; }
+.receipt-input-group { flex-shrink: 0; }
 .store-page { min-height: 100vh; padding-bottom: calc(230rpx + env(safe-area-inset-bottom)); box-sizing: border-box; font-size: 27rpx; }
 .store-heading { padding: 28rpx 28rpx 22rpx; background: #fff; border-bottom: 1rpx solid #e5eae7; }
 .heading-main, .entry-top, .entry-progress, .entry-bottom, .amount-row, .product-bottom, .receipt-counts, .section-caption { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; }
@@ -109,3 +114,4 @@ button::after { border: 0; }
 .evidence-upload-error { display: block; margin-top: 8px; color: #a43d3d; font-size: 12px; overflow-wrap: anywhere; }
 .product-unit-select { display: flex; flex-wrap: wrap; gap: 8rpx 16rpx; align-items: center; padding: 10rpx 0; color: #137b59; font-size: 24rpx; }
 .product-price-unit { font-size: 22rpx; font-weight: 400; color: #68746e; }
+.delivery-contact { width: auto; margin: 6px 0; padding: 0 10px; font-size: 12px; line-height: 30px; }

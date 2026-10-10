@@ -1,0 +1,6 @@
+.evidence-list { display:flex; flex-wrap:wrap; gap:20rpx; padding:16rpx 0; }
+.evidence-file { width:144rpx; font-size:22rpx; color:#526158; }
+.thumbnail { width:144rpx; height:144rpx; border-radius:6rpx; }
+.placeholder { display:flex; align-items:center; justify-content:center; background:#edf1ef; }
+.evidence-file text { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; padding-top:8rpx; }
+.error { color:#b33232; font-size:24rpx; }

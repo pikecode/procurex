@@ -3,7 +3,9 @@ const view = require('../../utils/store-view');
 
 Page({
   data: {
-    activeView: 'orders',
+    activeView: 'tasks',
+    procurementTasks: [],
+    pendingFreight: [],
     pendingCommand: null,
     commandHistory: [],
     recovering: false,
@@ -43,9 +45,9 @@ Page({
     const user = api.openWorkspace('purchaser');
     if (!user) return;
     if (this.data.user.id !== user.id) {
-      this.setData({ visibleRequests: [], search: '', statusFilter: 'all' });
+      this.setData({ visibleRequests: [], search: '', statusFilter: 'all', activeView: 'tasks' });
       this.setData({ requests: [], rejectionTodos: [], selectedRequest: null, requestId: '', rejectedOrderId: '', targetSupplierId: '',
-        suppliers: [], supplierIndex: -1, result: null, freightConfirmations: [], selectedFreight: null,
+        suppliers: [], supplierIndex: -1, result: null, freightConfirmations: [], selectedFreight: null, procurementTasks: [], pendingFreight: [],
         reports: { orderAmount: null, productQuantity: null, profit: null } });
     }
     this.setData({ user, roleText: '采购', reportRange: view.monthRange() });
@@ -89,6 +91,17 @@ Page({
     this.setData({ activeView: event.currentTarget.dataset.view, error: '' });
   },
 
+  openTaskRequest(event) {
+    if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
+    this.setData({ activeView: 'orders' });
+    return this.selectRequest(event);
+  },
+  openTaskFreight(event) {
+    if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
+    this.setData({ activeView: 'freight' });
+    this.selectFreight(event);
+  },
+
   openProducts() {
     if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
     wx.navigateTo({ url: '/pages/products/index' });
@@ -114,11 +127,13 @@ Page({
     this.refreshList();
   },
 
-  refreshList() {
+  nextOrders() { this.refreshList((this.data.orderLimit || 10) + 10); },
+  refreshList(limit = 10) {
     const search = this.data.search.trim().toLowerCase();
-    this.setData({ visibleRequests: this.data.requests.filter(item =>
+    const filtered = this.data.requests.filter(item =>
       (this.data.statusFilter === 'all' || item.status === this.data.statusFilter) &&
-      [item.requestNo, item.storeName].some(value => String(value || '').toLowerCase().includes(search))) });
+      [item.requestNo, item.storeName].some(value => String(value || '').toLowerCase().includes(search)));
+    this.setData({ visibleRequests: filtered.slice(0, limit), orderLimit: limit, orderTotal: filtered.length, moreOrders: filtered.length > limit });
   },
 
   onInput(event) {
@@ -168,10 +183,14 @@ Page({
   },
 
   async loadRequests(toggleLoading = true) {
+    const actorId = this.data.user.id;
     if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
-      const requests = await api.request('/purchase-requests');
-      this.setData({ requests: Array.isArray(requests) ? requests : [] });
+      const [requests, stores] = await Promise.all([api.request('/purchase-requests'), api.request('/stores')]);
+      if (this.data.user.id !== actorId) return;
+      const names = new Map((Array.isArray(stores) ? stores : []).map(item => [item.id, item.name]));
+      const rows = Array.isArray(requests) ? requests.map(item => ({ ...item, storeName: item.storeName || names.get(item.storeId) || '', submittedText: view.dateText(item.submittedAt) })) : [];
+      this.setData({ requests: rows, procurementTasks: rows.filter(item => item.status === 'PENDING_PROCUREMENT') });
       this.refreshList();
     } catch (error) {
       this.setData({ error: error.message });
@@ -181,9 +200,11 @@ Page({
   },
 
   async loadFreight() {
+    const actorId = this.data.user.id;
     try {
       const freightConfirmations = await api.request('/freight-confirmations');
-      this.setData({ freightConfirmations });
+      if (this.data.user.id !== actorId) return;
+      this.setData({ freightConfirmations, pendingFreight: freightConfirmations.filter(item => item.status === 'PENDING') });
     } catch (error) {
       this.setData({ error: error.message });
     }

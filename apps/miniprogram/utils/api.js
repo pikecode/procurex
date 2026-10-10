@@ -3,7 +3,7 @@ const userKey = 'procurexUser';
 
 function apiBase() {
   const app = getApp();
-  return normalizeBase(wx.getStorageSync('procurexApiBase') || app.globalData.apiBase);
+  return normalizeBase(app.globalData.apiBase);
 }
 
 function request(path, options = {}) {
@@ -54,13 +54,6 @@ function normalizeBase(value) {
   return base.endsWith('/') ? base.slice(0, -1) : base;
 }
 
-function setApiBase(value) {
-  const base = normalizeBase(value);
-  wx.setStorageSync('procurexApiBase', base);
-  getApp().globalData.apiBase = base;
-  return base;
-}
-
 async function checkHealth() {
   return request('/health/live', { timeout: 5000 });
 }
@@ -82,7 +75,7 @@ function currentUser() {
 const roleFlights = new Set();
 function roleStorage(workspace) {
   const user = currentUser();
-  if (!user || !user.id || !['purchaser', 'supplier'].includes(workspace)) throw new Error('请重新登录');
+  if (!user || !user.id || !['purchaser', 'supplier', 'finance'].includes(workspace)) throw new Error('请重新登录');
   return `procurexRoleCommands:${encodeURIComponent(apiBase())}:${user.id}:${workspace}`;
 }
 function roleCommandState(workspace) {
@@ -139,6 +132,7 @@ function openWorkspace(name) {
   if (roles.includes('STORE') || roles.includes('STORE_FINANCE')) workspaces.push('store');
   if (roles.includes('SUPPLIER')) workspaces.push('supplier');
   if (roles.includes('PURCHASER') || roles.includes('ADMIN')) workspaces.push('purchaser');
+  if (roles.includes('HQ_FINANCE')) workspaces.push('finance');
   if (workspaces.length <= 1) wx.hideTabBar();
   else wx.showTabBar();
   if (!workspaces.includes(name)) {
@@ -154,7 +148,7 @@ function logout() {
   wx.removeStorageSync(userKey);
 }
 
-function previewEvidence(file) {
+function downloadEvidence(file) {
   return new Promise((resolve, reject) => {
     wx.downloadFile({
       url: `${apiBase()}/files/${file.id}/download`,
@@ -165,15 +159,19 @@ function previewEvidence(file) {
           reject(new Error('凭证下载失败，请刷新单据后重试'));
           return;
         }
-        const callbacks = { success: resolve, fail: () => reject(new Error('凭证无法打开，请稍后重试')) };
-        if (file.mimeType === 'application/pdf') {
-          wx.openDocument({ filePath: response.tempFilePath, fileType: 'pdf', showMenu: true, ...callbacks });
-        } else {
-          wx.previewImage({ urls: [response.tempFilePath], ...callbacks });
-        }
+        resolve(response.tempFilePath);
       },
       fail() { reject(new Error('凭证下载失败，请检查网络连接')); }
     });
+  });
+}
+
+async function previewEvidence(file) {
+  const path = await downloadEvidence(file);
+  return new Promise((resolve, reject) => {
+    const callbacks = { success: resolve, fail: () => reject(new Error('凭证无法打开，请稍后重试')) };
+    if (file.mimeType === 'application/pdf') wx.openDocument({ filePath: path, fileType: 'pdf', showMenu: true, ...callbacks });
+    else wx.previewImage({ urls: [path], ...callbacks });
   });
 }
 
@@ -212,7 +210,6 @@ function imagePath(file) {
 
 module.exports = {
   apiBase,
-  setApiBase,
   request,
   checkHealth,
   login,
@@ -222,6 +219,7 @@ module.exports = {
   retryRoleCommand,
   openWorkspace,
   previewEvidence,
+  downloadEvidence,
   chooseEvidence,
   uploadEvidence,
   imagePath,

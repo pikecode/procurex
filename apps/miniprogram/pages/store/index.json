@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "门店"
+  "navigationBarTitleText": "门店",
+  "usingComponents": {
+    "evidence-files": "../../components/evidence/index"
+  }
 }

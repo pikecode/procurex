@@ -4,8 +4,4 @@
   <view class="field"><text class="field-label">密码</text><input password value="{{password}}" data-field="password" bindinput="onInput" placeholder="请输入密码" bindconfirm="submit" /></view>
   <view class="button-row"><button class="primary" disabled="{{loading}}" loading="{{loading}}" bindtap="submit">{{loadingText || '登录'}}</button></view>
   <view wx:if="{{error}}" class="error-message">{{error}}</view>
-  <view class="login-footer"><text bindtap="toggleSettings">连接设置</text></view>
-  <view wx:if="{{showSettings}}" class="settings-panel">
-    <view class="field"><text class="field-label">服务地址</text><input value="{{apiBase}}" data-field="apiBase" bindinput="onInput" /></view>
-  </view>
 </view>

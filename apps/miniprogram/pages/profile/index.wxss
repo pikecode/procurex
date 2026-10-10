@@ -1,16 +1,27 @@
-.profile-page { padding: 24rpx; }
-.profile-heading, .catalog-row-head { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; }
-.profile-title { font-size: 36rpx; font-weight: 600; overflow-wrap: anywhere; flex: 1; }
-.profile-heading button { flex-shrink: 0; }
-.profile-field { display: grid; grid-template-columns: 180rpx minmax(0, 1fr); gap: 20rpx; padding: 26rpx 0; border-bottom: 1rpx solid #e1e7e3; }
-.profile-value, .catalog-name { overflow-wrap: anywhere; }
-.catalog-search { display: flex; align-items: center; gap: 16rpx; padding: 20rpx; background: white; border-bottom: 1rpx solid #dfe5e1; }
-.catalog-search input { min-width: 0; flex: 1; }
-.catalog-row { padding: 26rpx 0; border-bottom: 1rpx solid #dfe5e1; }
-.catalog-row > text { display: block; margin-top: 12rpx; overflow-wrap: anywhere; }
-.catalog-name { font-weight: 600; min-width: 0; }
-.supply-price { color: #176345; }
-.loading-state { padding: 40rpx 0; text-align: center; }
-.business-nav { display: flex; border-bottom: 1rpx solid #dfe5e1; margin: 20rpx 0; }
-.nav-item { flex: 1; text-align: center; padding: 24rpx 0; color: #66746c; border-bottom: 4rpx solid transparent; }
-.nav-item.is-active { color: #137951; border-bottom-color: #137951; font-weight: 600; }
+page { background: #f4f6f5; color: #202b25; }
+.profile-page { min-height: 100vh; padding-bottom: calc(32rpx + env(safe-area-inset-bottom)); box-sizing: border-box; font-size: 27rpx; }
+.profile-heading { padding: 28rpx 28rpx 22rpx; background: #fff; border-bottom: 1rpx solid #e5eae7; }
+.profile-heading-main, .catalog-row-head, .catalog-caption { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; }
+.profile-title { font-size: 32rpx; font-weight: 700; line-height: 1.4; min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.profile-caption { display: block; margin-top: 14rpx; color: #718078; font-size: 24rpx; }
+.profile-refresh { flex: 0 0 auto; margin: 0; height: 64rpx; line-height: 64rpx; font-size: 24rpx; font-weight: 600; }
+.profile-refresh::after { border: 0; }
+.profile-tabs { background: #fff; padding: 0 28rpx; }
+.profile-fields { margin-top: 18rpx; padding: 0 28rpx; background: #fff; border-bottom: 1rpx solid #e5eae7; }
+.profile-field { display: grid; grid-template-columns: 172rpx minmax(0, 1fr); gap: 20rpx; padding: 24rpx 0; line-height: 1.5; border-bottom: 1rpx solid #e9eeeb; }
+.profile-field:last-child, .catalog-row:last-child { border-bottom: 0; }
+.profile-label { color: #718078; font-size: 24rpx; }
+.profile-value { color: #24332c; font-size: 26rpx; min-width: 0; overflow-wrap: anywhere; }
+.catalog-tools { padding: 22rpx 28rpx; background: #fff; }
+.catalog-search { display: flex; align-items: center; gap: 16rpx; padding: 0 20rpx; background: #f1f4f2; border-radius: 8rpx; }
+.catalog-search icon { flex-shrink: 0; }
+.catalog-search input { min-width: 0; flex: 1; height: 74rpx; padding: 0; border: 0; background: transparent; font-size: 25rpx; }
+.catalog-caption { padding: 22rpx 28rpx; color: #718078; font-size: 23rpx; }
+.catalog-list { padding: 0 28rpx; background: #fff; }
+.catalog-row { padding: 26rpx 0; border-bottom: 1rpx solid #e9eeeb; }
+.catalog-name { min-width: 0; flex: 1; font-size: 28rpx; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.catalog-row-head .tag { flex-shrink: 0; }
+.catalog-row > text { display: block; margin-top: 10rpx; overflow-wrap: anywhere; }
+.supply-price { color: #167e5a; font-size: 27rpx; font-weight: 600; }
+.loading-state { padding: 48rpx 28rpx; text-align: center; }
+.profile-page .error-banner { margin: 20rpx 28rpx; padding: 20rpx; font-size: 24rpx; line-height: 1.6; border-left: 5rpx solid #c95f59; background: #fff0ef; color: #a33935; overflow-wrap: anywhere; }

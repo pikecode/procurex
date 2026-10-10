@@ -4,7 +4,8 @@ var names = {
   RESERVED: '待确认', RELEASED: '已释放', PENDING_DISPOSAL: '待处理', DISPOSED: '已处理',
   PRICE_CHANGE: '价格调整', ACCEPTED_SHORTAGE: '少收调整', PERMANENT_REDUCTION: '减量调整', FREIGHT_CHANGE: '运费调整', RETURN_SHORTAGE: '历史差异调整', ORDER_REJECTION: '拒单退款调整',
   WEEKLY: '周结', HALF_MONTHLY: '半月结', MONTHLY: '月结', IMMEDIATE: '即时结算',
-  STORE: '门店', STORE_FINANCE: '门店财务', SUPPLIER: '供应商', PURCHASER: '采购', ADMIN: '管理员',
+  STORE: '门店', STORE_FINANCE: '门店财务', SUPPLIER: '供应商', PURCHASER: '采购', ADMIN: '管理员', HQ_FINANCE: '公司财务',
+  SETTLED: '已结清', UNSETTLED: '待结清', SHORTFALL: '待补足资金', PARTIAL_PAID: '部分付款',
   PENDING_FUNDS: '待补足资金', PENDING_PROCUREMENT: '待采购确认', CONFIRMED: '已确认',
   PARTIAL_PUSHED: '部分推送', COMPLETED: '已完成', CANCELED: '已取消', CANCELLED: '已取消',
   DRAFT: '草稿', PUSHED: '待发货', ACCEPTED: '已接单', REJECTED: '已驳回',
@@ -16,4 +17,24 @@ var names = {
 function status(value) { return names[value] || value || '待确认'; }
 var sources = { RECHARGE: '账户充值', PURCHASE_REQUEST: '订货扣款', ADJUSTMENT: '订单金额调整', CLEARING: '挂账清账', REFUND: '退款', CREDIT_LIMIT_CHANGE: '授信调整' };
 function source(value) { return sources[value] || '账户变动'; }
-module.exports = { status: status, source: source };
+function money(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  var text = '' + value;
+  var negative = text.charAt(0) === '-';
+  if (negative) text = text.slice(1);
+  var parts = text.split('.');
+  var fraction = (parts[1] || '') + '000';
+  var digits = parts[0] + fraction.slice(0, 2);
+  if (fraction.charAt(2) >= '5') {
+    var carry = 1;
+    var rounded = '';
+    for (var i = digits.length - 1; i >= 0; i--) {
+      var digit = digits.charAt(i) * 1 + carry;
+      carry = digit >= 10 ? 1 : 0;
+      rounded = (digit % 10) + rounded;
+    }
+    digits = (carry ? '1' : '') + rounded;
+  }
+  return (negative && digits * 1 !== 0 ? '-' : '') + digits.slice(0, digits.length - 2) + '.' + digits.slice(digits.length - 2);
+}
+module.exports = { status: status, source: source, money: money };
