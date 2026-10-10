@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Alert, App, Button, Dropdown, Form, Input, Modal, Select, Spin, Table } from 'antd';
 import { Archive, CalendarClock, Copy, MoreHorizontal, PackageOpen, Pencil } from 'lucide-react';
 import { TemplateProducts, cycleChoices, termModes } from '../components/TemplateProducts';
+import '../components/TemplateProducts.css';
 import { ListPage } from '../components/ListPage';
 import { request } from '../lib/api';
 import { useRows } from '../lib/useRows';
@@ -59,7 +60,6 @@ export default function Templates() {
     if (mode !== 'archive' && dirty()) modal.confirm({ title: '放弃未保存的修改？', okText: '放弃修改', cancelText: '继续编辑', onOk: finish }); else finish();
   };
   const retainedSuppliers = new Set(items.filter(item => item.isEnabled).flatMap(item => item.suppliers.map(link => link.supplierId)));
-  const termSuppliers = suppliers.rows.filter(row => retainedSuppliers.has(row.id) && termModes.has(row.defaultSettlementMode));
   const cycleLabel = (value?: string | null) => cycleChoices.find(choice => choice.value === value)?.label;
   const occupiedBy = new Map<string, Template>();
   data.rows.filter(row => row.id !== detail?.id && !row.isArchived).forEach(template => template.storeIds.forEach(storeId => occupiedBy.set(storeId, template)));
@@ -109,13 +109,62 @@ export default function Templates() {
     {mode === 'edit' && <Form.Item name="storeIds" label="适用门店" className="full-width" extra="一个门店只能使用一个有效订货模板；已被占用的门店需先从原模板移除。"><Select mode="multiple" showSearch optionFilterProp="label" placeholder="请选择可使用该模板的门店" options={stores.rows.map(row => { const template = occupiedBy.get(row.id); return { value: row.id, disabled: !!template, label: template ? `${row.name}（已用于：${template.name}）` : row.name }; })} /></Form.Item>}
     <Form.Item name="remark" label="备注" className="full-width"><Input.TextArea rows={2} maxLength={500} /></Form.Item>
   </div>;
-  const settlement = <Table size="small" scroll={{ x: 960 }} locale={{ emptyText: storeIds.length ? '暂无账期供应商' : '暂无适用门店' }} rowKey={row => `${row.storeId}:${row.supplierId}`} pagination={{ defaultPageSize: 10, showSizeChanger: true }} dataSource={storeIds.flatMap(storeId => termSuppliers.map(supplier => ({ storeId, supplierId: supplier.id, supplier })))} columns={[
-    { title: '门店', render: (_, row) => stores.rows.find(store => store.id === row.storeId)?.name },
-    { title: '供应商', render: (_, row) => row.supplier.name },
-    { title: '结算方式', render: (_, row) => row.supplier.defaultSettlementMode === 'COMPANY_TERM' ? '公司账期结算' : '供应商账期结算' },
-    { title: '供应商默认周期', render: (_, row) => cycleLabel(row.supplier.defaultSettlementCycle) || '未设置' },
-    { title: '门店结算周期', width: 220, render: (_, row) => { const defaultValue = row.supplier.defaultSettlementCycle; const selected = cycles.find(cycle => cycle.storeId === row.storeId && cycle.supplierId === row.supplierId)?.settlementCycle || defaultValue || undefined; return <Select style={{ width: '100%' }} aria-label={`${row.storeId}-${row.supplierId}结算周期`} disabled={saving} status={defaultValue ? undefined : 'warning'} placeholder="请选择结算周期" value={selected} options={cycleChoices} onChange={value => form.setFieldValue('rows', [...cycles.filter(cycle => cycle.storeId !== row.storeId || cycle.supplierId !== row.supplierId), ...(value === defaultValue ? [] : [{ storeId: row.storeId, supplierId: row.supplierId, settlementCycle: value }])])} />; } },
-  ]} />;
+  // Every supplier the template keeps is listed; only term suppliers get a cycle selector.
+  const templateSuppliers = suppliers.rows.filter(row => retainedSuppliers.has(row.id));
+  const settlementModeText = (mode: string) => mode === 'COMPANY_TERM' ? '公司账期结算' : mode === 'SUPPLIER_TERM' ? '供应商账期结算' : mode === 'STORED_VALUE' ? '储值支付' : mode === 'CREDIT' ? '挂账' : '—';
+  const storeGroups = storeIds.map(storeId => ({
+    storeId,
+    name: stores.rows.find(store => store.id === storeId)?.name || '门店',
+    suppliers: templateSuppliers.map(supplier => ({ supplier, cycle: cycles.find(row => row.storeId === storeId && row.supplierId === supplier.id)?.settlementCycle })),
+    configurable: templateSuppliers.filter(supplier => termModes.has(supplier.defaultSettlementMode)).length,
+    configured: cycles.filter(row => row.storeId === storeId).length,
+  }));
+  const setStoreCycle = (storeId: string, supplierId: string, value: string) => {
+    const defaultValue = suppliers.rows.find(supplier => supplier.id === supplierId)?.defaultSettlementCycle;
+    const rest = cycles.filter(row => !(row.storeId === storeId && row.supplierId === supplierId));
+    form.setFieldValue('rows', value && value !== defaultValue ? [...rest, { storeId, supplierId, settlementCycle: value }] : rest);
+  };
+  const storeCycleColumns = (storeId: string, storeName: string) => [
+    { title: '供应商', render: (_: unknown, row: { supplier: CatalogSupplier; cycle?: string }) => row.supplier.name },
+    { title: '结算方式', width: 120, render: (_: unknown, row: { supplier: CatalogSupplier }) => <span className={termModes.has(row.supplier.defaultSettlementMode) ? undefined : 'template-cycle-na'}>{settlementModeText(row.supplier.defaultSettlementMode)}</span> },
+    { title: '供应商默认周期', width: 120, render: (_: unknown, row: { supplier: CatalogSupplier }) => cycleLabel(row.supplier.defaultSettlementCycle) || <span className="template-cycle-na">—</span> },
+    // Fall back to the supplier default so the admin sees the effective cycle, not an empty box.
+    { title: '本门店结算周期', width: 220, render: (_: unknown, row: { supplier: CatalogSupplier; cycle?: string }) => termModes.has(row.supplier.defaultSettlementMode)
+      ? <Select style={{ width: '100%' }} aria-label={`${storeName}-${row.supplier.name}结算周期`} disabled={saving} status={row.supplier.defaultSettlementCycle ? undefined : 'warning'} placeholder="请选择结算周期" value={row.cycle || row.supplier.defaultSettlementCycle || undefined} options={cycleChoices} onChange={value => setStoreCycle(storeId, row.supplier.id, value)} />
+      : <span className="template-cycle-na">即时结算</span> },
+  ];
+  // One pane per store: a left store list scales to dozens of stores where horizontal tabs would not.
+  const [cycleStore, setCycleStore] = useState<string>();
+  const [storeKeyword, setStoreKeyword] = useState('');
+  const totalConfigured = storeGroups.reduce((total, group) => total + group.configured, 0);
+  const totalConfigurable = storeGroups.reduce((total, group) => total + group.configurable, 0);
+  const visibleGroups = storeGroups.filter(group => !storeKeyword.trim() || group.name.includes(storeKeyword.trim()));
+  const activeStoreId = visibleGroups.some(group => group.storeId === cycleStore)
+    ? cycleStore!
+    : visibleGroups.find(group => group.configured < group.configurable)?.storeId ?? visibleGroups[0]?.storeId;
+  const settlement = <div className="template-settlement">
+    {!storeIds.length ? <Alert type="warning" showIcon title="该模板尚未绑定门店" description="请先在「编辑」中配置适用门店，之后才能为门店设置结算周期。" />
+      : !templateSuppliers.length ? <Alert type="info" showIcon title="该模板尚未关联供应商" description="请先在「配置商品」中为商品关联供应商。" />
+      : <div className="template-settlement-picker">
+        <aside>
+          {storeGroups.length > 6 ? <Input.Search allowClear size="small" aria-label="搜索门店" placeholder="搜索门店" value={storeKeyword} onChange={event => setStoreKeyword(event.target.value)} /> : null}
+          <div className="template-store-list" role="tablist" aria-label="门店结算周期">
+            {visibleGroups.map(group => <button type="button" role="tab" key={group.storeId} aria-selected={group.storeId === activeStoreId}
+              className={`template-store-item${group.storeId === activeStoreId ? ' is-active' : ''}`}
+              onClick={() => setCycleStore(group.storeId)}>
+              <span className="template-store-item-name" title={group.name}>{group.name}</span>
+              {group.configurable ? <small className={group.configured < group.configurable ? 'is-pending' : 'is-done'}>{group.configured}/{group.configurable}</small>
+                : <small className="is-none">无需设置</small>}
+            </button>)}
+            {!visibleGroups.length ? <span className="template-store-empty">没有匹配的门店</span> : null}
+          </div>
+        </aside>
+        <div className="template-settlement-pane">
+          {activeStoreId ? <Table size="small" rowKey="supplierId" pagination={false} dataSource={storeGroups.find(group => group.storeId === activeStoreId)!.suppliers} columns={storeCycleColumns(activeStoreId, storeGroups.find(group => group.storeId === activeStoreId)!.name)} /> : null}
+          <div className="template-settlement-summary">共 {storeGroups.length} 个门店 · 已配置 {totalConfigured} / {totalConfigurable} 条门店账期</div>
+        </div>
+      </div>}
+  </div>;
   return <>
     <ListPage title="订货模板" {...data} create={() => edit('edit')} columns={[
       { title: '模板名称', dataIndex: 'name', width: 220, ellipsis: true },

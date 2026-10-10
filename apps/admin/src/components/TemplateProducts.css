@@ -31,8 +31,6 @@
 .template-list-actions .ant-btn-link { padding-inline: 6px; }
 .template-cycle-collapse { background: transparent; }
 .template-cycle-collapse .ant-collapse-header { padding-left: 8px !important; font-weight: 600; }
-.template-store-label { font-weight: 600; }
-.template-store-extra { margin-left: 8px; font-size: 12px; font-weight: 400; color: #667085; }
 .template-cycle-supplier { display: inline-flex; align-items: center; gap: 6px; }
 .template-cycle-supplier small { padding: 0 6px; border-radius: 10px; background: #ecfdf3; color: #027a48; font-size: 11px; }
 .template-matrix-na { color: #98a2b3; }
@@ -41,3 +39,27 @@
 .template-price-cell small { color: #667085; font-size: 11px; }
 .template-dirty { margin-left: auto; color: #b54708; font-weight: 500; }
 .template-change-summary { display: flex; align-items: center; gap: 12px; padding-top: 12px; margin-top: 12px; border-top: 1px solid #e5e7eb; color: #667085; font-size: 12px; }
+
+/* Settlement is configured per store: a left store list scales to dozens of stores. */
+.template-settlement { display: grid; gap: 12px; }
+.template-settlement-picker { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; }
+.template-settlement-picker aside { display: grid; gap: 8px; align-content: start; border-right: 1px solid #e5e7eb; padding-right: 12px; }
+.template-store-list { display: grid; gap: 2px; max-height: 400px; overflow-y: auto; }
+.template-store-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: 6px; background: none; text-align: left; cursor: pointer; }
+.template-store-item:hover { background: #f9fafb; }
+.template-store-item.is-active { background: #eff6ff; box-shadow: inset 2px 0 0 #1570ef; }
+.template-store-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.template-store-item.is-active .template-store-item-name { font-weight: 600; }
+.template-store-item small { flex-shrink: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.template-store-item small.is-pending { color: #b54708; }
+.template-store-item small.is-done { color: #667085; }
+.template-store-item small.is-none { color: #98a2b3; }
+.template-store-empty { padding: 8px 10px; color: #98a2b3; font-size: 12px; }
+.template-settlement-pane { min-width: 0; }
+.template-settlement-summary { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb; color: #667085; font-size: 12px; }
+.template-cycle-na { color: #98a2b3; }
+@media (max-width: 768px) {
+  .template-settlement-picker { grid-template-columns: minmax(0, 1fr); }
+  .template-settlement-picker aside { border-right: 0; border-bottom: 1px solid #e5e7eb; padding-right: 0; padding-bottom: 8px; }
+  .template-store-list { max-height: 160px; }
+}
