@@ -1,3 +1,4 @@
+import { money } from '../lib/money';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Alert, App, Button, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Select, Spin, Table, Tag, Tooltip } from 'antd';
@@ -94,7 +95,7 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
   const itemColumns = [
     { title: '商品', dataIndex: 'productName', width: 180, render: (_: unknown, item: WorkflowItem) => item.productName || catalog?.items.find(row => row.product.id === item.productId)?.product.name || item.productId },
     { title: '数量', dataIndex: 'quantity', width: 110 }, { title: '销售单位', width: 110, render: (_: unknown, item: WorkflowItem) => item.unitName || item.unitSnapshot?.salesUnitName || '历史未核定' },
-    { title: '销售单价', dataIndex: 'salesUnitPrice', width: 110 }, { title: '供货单价', dataIndex: 'supplyUnitPrice', width: 110 },
+    { title: '销售单价', dataIndex: 'salesUnitPrice', width: 110, render: money }, { title: '供货单价', dataIndex: 'supplyUnitPrice', width: 110, render: money },
     { title: '销售金额', dataIndex: 'salesLineAmount', width: 110 }, { title: '供货金额', dataIndex: 'supplyLineAmount', width: 110 },
   ];
   const editable = detail && ['PENDING_FUNDS', 'PENDING_PROCUREMENT'].includes(detail.status) && !detail.supplierOrders.length;

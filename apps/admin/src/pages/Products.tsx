@@ -8,6 +8,7 @@ import { ListPage } from '../components/ListPage';
 import { getSession, hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { positiveIntegerRule } from '../lib/catalogTypes';
+import { money } from '../lib/money';
 
 interface Product { supplierPurchasePrices?: { supplierId: string; supplyPrice: string; expectedVersionId: string | null }[]; id: string; supplierIds?: string[]; name: string; sku: string | null; version: number; categoryId: string; baseUnitId: string; brandId: string | null; brand: string | null; defaultSalesPrice: string | null; minOrderQty: string; orderMultiple: string; isActive: boolean; imageFileId: string | null; purchaseUnitConversion: { purchaseUnitId: string; salesUnitsPerPurchaseUnit: string } | null }
 interface Named { id: string; name: string }
@@ -79,7 +80,7 @@ export default function Products({ user }: { user: User }) {
       { title: '商品名称', dataIndex: 'name', width: 210, render: (_, row) => <strong>{row.name}</strong> },
       { title: '分类', width: 140, render: (_, row) => categories.rows.find(item => item.id === row.categoryId)?.name || '-' },
       { title: '销售单位', width: 100, render: (_, row) => units.rows.find(item => item.id === row.baseUnitId)?.name || '-' },
-      { title: '销售价格', dataIndex: 'defaultSalesPrice', align: 'right', width: 120 },
+      { title: '销售价格', dataIndex: 'defaultSalesPrice', align: 'right', width: 120, render: money },
       { title: '状态', width: 80, render: (_, row) => row.isActive ? '启用' : '停用' },
       { title: '操作', width: 80, fixed: 'right', render: (_, row) => <div className="row-actions">
         <Tooltip title={writable ? '编辑' : '查看'}><Button type="text" aria-label={`${writable ? '编辑' : '查看'}${row.name}`} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip>
@@ -94,7 +95,7 @@ export default function Products({ user }: { user: User }) {
         <Form.Item className="full-width" name="name" label="商品名称" rules={[{ required: true, whitespace: true, message: '请填写商品名称' }]}><Input maxLength={200} /></Form.Item>
         <Form.Item name="categoryId" label="商品分类" rules={[{ required: true, message: '请选择商品分类' }]}><TreeSelect showSearch treeNodeFilterProp="title" treeDefaultExpandAll treeData={categoryTree} /></Form.Item>
         <Form.Item name="baseUnitId" label="销售单位" rules={[{ required: true, message: '请选择销售单位' }]}><Select showSearch optionFilterProp="label" options={options(units.rows)} onChange={() => form.setFieldsValue({ purchaseUnitId: undefined, salesUnitsPerPurchaseUnit: undefined })} /></Form.Item>
-        <Form.Item name="defaultSalesPrice" label="销售价格" rules={decimal('销售价格', 6)}><InputNumber aria-label="销售价格" stringMode min="0" precision={6} suffix={salesUnitId ? `元/${units.rows.find(row => row.id === salesUnitId)?.name || '销售单位'}` : '元'} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="defaultSalesPrice" label="销售价格" rules={decimal('销售价格', 2)}><InputNumber aria-label="销售价格" stringMode min="0" precision={2} suffix={salesUnitId ? `元/${units.rows.find(row => row.id === salesUnitId)?.name || '销售单位'}` : '元'} style={{ width: '100%' }} /></Form.Item>
         <Form.Item name="storageCondition" label="储存条件"><Select options={[{ value: 'AMBIENT', label: '常温' }, { value: 'CHILLED', label: '冷藏' }, { value: 'FROZEN', label: '冷冻' }, { value: 'WARM', label: '保温' }]} /></Form.Item>
         <Form.Item name="brandId" label="品牌"><Select placeholder={editing?.brandId ? undefined : editing?.brand || undefined} allowClear showSearch optionFilterProp="label" options={options(brands.rows)} /></Form.Item>
         <Form.Item name="specification" label="规格"><Input maxLength={240} /></Form.Item>
@@ -123,7 +124,7 @@ export default function Products({ user }: { user: User }) {
             const existingPrice = editing?.supplierPurchasePrices?.find(row => row.supplierId === supplierId)?.supplyPrice;
             return <div className="product-supplier-row" key={supplierId}>
               <span className="product-supplier-name" title={name}>{name}</span>
-              <div className="product-supplier-price"><Form.Item name={['purchasePrices', supplierId]} rules={[{ validator: async (_, value) => { if (value === undefined || value === null || value === '') return; if (typeof value !== 'string' || !/^\d{1,14}(\.\d{1,6})?$/.test(value)) throw new Error('采购价须为非负数，最多6位小数'); } }]}><InputNumber aria-label={name} stringMode min="0" precision={6} placeholder={existingPrice !== undefined ? `当前 ${existingPrice}` : '未设置'} style={{ width: '100%' }} /></Form.Item><span className="product-price-unit">{unit ? `元/${unit}` : '元/销售单位'}</span></div>
+              <div className="product-supplier-price"><Form.Item name={['purchasePrices', supplierId]} rules={[{ validator: async (_, value) => { if (value === undefined || value === null || value === '') return; if (typeof value !== 'string' || !/^\d{1,14}(\.\d{1,2})?$/.test(value)) throw new Error('采购价须为非负数，最多2位小数'); } }]}><InputNumber aria-label={name} stringMode min="0" precision={2} placeholder={existingPrice !== undefined ? `当前 ${existingPrice}` : '未设置'} style={{ width: '100%' }} /></Form.Item><span className="product-price-unit">{unit ? `元/${unit}` : '元/销售单位'}</span></div>
               <Tooltip title={`移除${name}`}><Button type="text" aria-label={`移除关联供应商${name}`} disabled={!writable || saving || uploading} icon={<X size={16} />} onClick={() => form.setFieldValue('supplierIds', selectedSupplierIds.filter(id => id !== supplierId))} /></Tooltip>
             </div>;
           })}

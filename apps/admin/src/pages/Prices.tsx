@@ -1,3 +1,4 @@
+import { money } from '../lib/money';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alert, App, Button, Descriptions, Form, Input, InputNumber, Popconfirm, Select, Table, Tooltip } from 'antd';
@@ -122,8 +123,8 @@ export default function Prices({ user }: { user: User }) {
         <Form.Item name="templateId" label="价格范围"><Select options={[{ value: '', label: '共享价格' }, ...namedOptions(templates.rows.filter(row => !row.isArchived))]} /></Form.Item>
         <Form.Item name="productId" label="商品" rules={[{ required: true, message: '请选择商品' }]}><Select showSearch optionFilterProp="label" options={namedOptions(restrictedProducts)} loading={templateLoading || products.loading} /></Form.Item>
         <Form.Item name="supplierId" label="供应商" rules={[{ required: true, message: '请选择供应商' }]}><Select showSearch optionFilterProp="label" options={namedOptions(restrictedSuppliers)} /></Form.Item>
-        <Form.Item name="salesPrice" label="销售单价" rules={[decimalRule('销售单价')]}><InputNumber stringMode min="0" precision={6} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="supplyPrice" label="供货单价" rules={[decimalRule('供货单价')]}><InputNumber stringMode min="0" precision={6} readOnly={Boolean(templateId)} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="salesPrice" label="销售单价" rules={[decimalRule('销售单价')]}><InputNumber stringMode min="0" precision={2} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="supplyPrice" label="供货单价" rules={[decimalRule('供货单价')]}><InputNumber stringMode min="0" precision={2} readOnly={Boolean(templateId)} style={{ width: '100%' }} /></Form.Item>
         <Form.Item name="effectiveAt" label="生效时间" rules={[{ required: true, message: '请选择生效时间' }]}><Input type="datetime-local" /></Form.Item>
         <Form.Item name="reason" label="改价原因" className="full-width" rules={[{ required: true, whitespace: true, message: '请填写改价原因' }]}><Input maxLength={500} /></Form.Item>
       </div>
@@ -140,7 +141,7 @@ export default function Prices({ user }: { user: User }) {
       { title: '订单编号', dataIndex: 'supplierOrderNo' }, { title: '销售额差额', dataIndex: 'salesDelta', align: 'right' }, { title: '供货额差额', dataIndex: 'supplyDelta', align: 'right' },
     ]} /></section>}
     {versions.length > 0 && <section className="price-band"><h2>价格版本</h2><Table size="small" rowKey="versionId" dataSource={versions} scroll={{ x: 700 }} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }} columns={[
-      { title: '版本', dataIndex: 'revision', width: 75 }, { title: '销售单价', dataIndex: 'salesPrice', align: 'right' }, { title: '供货单价', dataIndex: 'supplyPrice', align: 'right' },
+      { title: '版本', dataIndex: 'revision', width: 75 }, { title: '销售单价', dataIndex: 'salesPrice', align: 'right', render: money }, { title: '供货单价', dataIndex: 'supplyPrice', align: 'right', render: money },
       { title: '生效时间', dataIndex: 'effectiveAt', render: time }, { title: '原因', dataIndex: 'reason' },
     ]} /></section>}
     <section className="price-band"><h2>订单重算任务</h2><div className="job-toolbar"><Input aria-label="重算任务ID" placeholder="任务ID" value={jobInput} onChange={event => setJobInput(event.target.value.trim())} />
@@ -155,8 +156,8 @@ export default function Prices({ user }: { user: User }) {
         { title: '订单ID', dataIndex: 'supplierOrderId' }, { title: '状态', dataIndex: 'status', render: value => statuses[value] || value }, { title: '销售差额', dataIndex: 'salesDelta', align: 'right' }, { title: '供货差额', dataIndex: 'supplyDelta', align: 'right' },
       ]} /></>}
       {adjustments.length > 0 && <Table size="small" rowKey="id" dataSource={adjustments} scroll={{ x: 900 }} pagination={{ defaultPageSize: 10 }} columns={[
-        { title: '订单ID', dataIndex: 'supplierOrderId' }, { title: '原销售价', dataIndex: 'previousSalesPrice', align: 'right' }, { title: '新销售价', dataIndex: 'newSalesPrice', align: 'right' },
-        { title: '原供货价', dataIndex: 'previousSupplyPrice', align: 'right' }, { title: '新供货价', dataIndex: 'newSupplyPrice', align: 'right' }, { title: '销售差额', dataIndex: 'salesDelta', align: 'right' }, { title: '供货差额', dataIndex: 'supplyDelta', align: 'right' },
+        { title: '订单ID', dataIndex: 'supplierOrderId' }, { title: '原销售价', dataIndex: 'previousSalesPrice', align: 'right', render: money }, { title: '新销售价', dataIndex: 'newSalesPrice', align: 'right', render: money },
+        { title: '原供货价', dataIndex: 'previousSupplyPrice', align: 'right', render: money }, { title: '新供货价', dataIndex: 'newSupplyPrice', align: 'right', render: money }, { title: '销售差额', dataIndex: 'salesDelta', align: 'right' }, { title: '供货差额', dataIndex: 'supplyDelta', align: 'right' },
       ]} />}
     </section>
     <section className="price-band"><div className="page-heading"><h2>最近价格提交</h2><Button aria-label="刷新价格提交" icon={<RotateCcw size={16} />} onClick={submissions.reload} /></div>

@@ -1,3 +1,4 @@
+import { money } from '../lib/money';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Descriptions, Form, InputNumber, Modal, Popconfirm, Select, Spin, Table, Tag, Tooltip } from 'antd';
 import { Check, Eye, Plus, RotateCcw, Trash2 } from 'lucide-react';
@@ -78,7 +79,7 @@ export function StoreOrderEditor({ storeId, command, onClose, onSaved }: { store
       { key: 'stored', label: '储值所需 / 可用 / 缺口', children: `${preview.funding!.stored.required} / ${preview.funding!.stored.available} / ${preview.funding!.stored.shortfall}` },
       ...(preview.funding!.credit ? [{ key: 'credit', label: '挂账所需 / 可用 / 缺口', children: `${preview.funding!.credit.required} / ${preview.funding!.credit.available} / ${preview.funding!.credit.shortfall}` }] : []),
     ]} /><Tag color={preview.funding!.canConfirm ? 'green' : 'gold'}>{preview.funding!.canConfirm ? '资金可用' : '资金不足，提交后待补足'}</Tag>
-      <Table rowKey="productId" size="small" pagination={false} scroll={{ x: 550 }} dataSource={preview.items} columns={[{ title: '商品', render: (_, row) => catalog?.items.find(item => item.product.id === row.productId)?.product.name }, { title: '销售数量', dataIndex: 'quantity' }, { title: '销售单位', render: (_, row) => row.unitSnapshot?.salesUnitName }, { title: '销售单价', dataIndex: 'salesUnitPrice' }, { title: '货款', dataIndex: 'salesLineAmount' }]} />
+      <Table rowKey="productId" size="small" pagination={false} scroll={{ x: 550 }} dataSource={preview.items} columns={[{ title: '商品', render: (_, row) => catalog?.items.find(item => item.product.id === row.productId)?.product.name }, { title: '销售数量', dataIndex: 'quantity' }, { title: '销售单位', render: (_, row) => row.unitSnapshot?.salesUnitName }, { title: '销售单价', dataIndex: 'salesUnitPrice', render: money }, { title: '货款', dataIndex: 'salesLineAmount' }]} />
     </section>}
   </Modal>;
 }

@@ -6,20 +6,21 @@ import { decimalRule } from '../lib/catalogTypes';
 import type { useWorkflowCommand } from '../lib/useWorkflowCommand';
 import type { ShippingOrder, ShipmentInput, ShipmentPreview } from '../lib/workflowTypes';
 
-type Draft = { trackingNo?: string; freightConfirmationId?: string; items: { orderItemId: string; shipQuantity: string; permanentlyReduceQuantity: string; gapAllocations: { gapId: string; quantity: string }[] }[] };
+type Draft = { deliveryMode: 'SELF' | 'LOGISTICS'; trackingNo?: string; freightConfirmationId?: string; items: { orderItemId: string; shipQuantity: string; permanentlyReduceQuantity: string; gapAllocations: { gapId: string; quantity: string }[] }[] };
 const positive = (value: string) => /[1-9]/.test(value);
 export function ShipmentEditor({ orderId, supplierId, onRecover, command, onClose, onSaved }: { orderId: string; supplierId?: string; onRecover?: () => Promise<void>; command: ReturnType<typeof useWorkflowCommand>; onClose: () => void; onSaved: () => void }) {
   const [order, setOrder] = useState<ShippingOrder | null>(null); const [revision, setRevision] = useState(0); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const [preview, setPreview] = useState<ShipmentPreview | null>(null); const [signature, setSignature] = useState(''); const [busy, setBusy] = useState(false); const lock = useRef(false);
   const [form] = Form.useForm<Draft>(); const { message } = App.useApp(); const invalidate = () => { setPreview(null); setSignature(''); };
   const drafts = Form.useWatch('items', form) as Draft['items'] | undefined;
+  const deliveryMode = Form.useWatch('deliveryMode', form);
   useEffect(() => {
     const controller = new AbortController(); setOrder(null); setLoading(true); setError(''); invalidate(); form.resetFields();
     request<ShippingOrder>(`/supplier-orders/${orderId}`, { signal: controller.signal }).then(value => {
       if (controller.signal.aborted) return;
       if (supplierId && value.supplierId !== supplierId) throw new Error('订单不属于当前供应商。');
       if (value.id !== orderId || !['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED', 'SHIPPED'].includes(value.status)) throw new Error('订单当前状态不能发货，请返回刷新。');
-      setOrder(value); form.setFieldsValue({ items: value.items.map(item => ({ orderItemId: item.id, shipQuantity: '0', permanentlyReduceQuantity: '0', gapAllocations: (item.replenishmentGaps || []).filter(gap => ['PENDING', 'PARTIAL_FILLED'].includes(gap.status)).map(gap => ({ gapId: gap.id, quantity: '0' })) })) });
+      setOrder(value); form.setFieldsValue({ deliveryMode: value.defaultDeliveryMode, items: value.items.map(item => ({ orderItemId: item.id, shipQuantity: '0', permanentlyReduceQuantity: '0', gapAllocations: (item.replenishmentGaps || []).filter(gap => ['PENDING', 'PARTIAL_FILLED'].includes(gap.status)).map(gap => ({ gapId: gap.id, quantity: '0' })) })) });
     }).catch(failure => { if (!controller.signal.aborted) setError(failure.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [orderId, supplierId, revision, form]);
@@ -30,7 +31,7 @@ export function ShipmentEditor({ orderId, supplierId, onRecover, command, onClos
     if (!items.length) throw new Error('至少填写一项发货数量或永久减量。');
     const confirmation = order.freightConfirmations?.find(row => row.id === values.freightConfirmationId && row.status === 'CONFIRMED' && !row.usedAt);
     if (values.freightConfirmationId && !confirmation) throw new Error('运费确认已失效，请重新读取订单。');
-    return { expectedVersion: order.version, items, freight: confirmation?.amount || '0.00', ...(confirmation ? { freightConfirmationId: confirmation.id } : {}), ...(values.trackingNo?.trim() ? { trackingNo: values.trackingNo.trim() } : {}) };
+    return { expectedVersion: order.version, deliveryMode: values.deliveryMode, items, freight: confirmation?.amount || '0.00', ...(confirmation ? { freightConfirmationId: confirmation.id } : {}), ...(values.deliveryMode === 'LOGISTICS' && values.trackingNo?.trim() ? { trackingNo: values.trackingNo.trim() } : {}) };
   }
   async function readPreview() {
     if (lock.current || command.blocked) return; lock.current = true; setBusy(true); setError(''); invalidate();
@@ -57,7 +58,8 @@ export function ShipmentEditor({ orderId, supplierId, onRecover, command, onClos
     {command.pending && !supplierId && <Alert type="warning" showIcon title={`待确认提交：${command.pending.label}`} action={<Button loading={command.busy} onClick={async () => { if (await command.recover()) { message.success('原提交已确认'); onSaved(); } }}>恢复原提交</Button>} />}
     {loading ? <Spin /> : order && <Form form={form} layout="vertical" className="compact-form" disabled={busy || command.blocked} onValuesChange={invalidate}>
       <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[{ key: 'no', label: '供应商订单', children: order.supplierOrderNo }, { key: 'dest', label: '收货地址', children: order.destination?.address || '-' }]} />
-      <div className="form-grid"><Form.Item label="物流单号" name="trackingNo" rules={[{ max: 120, message: '最多120字' }]}><Input maxLength={120} /></Form.Item>
+      <div className="form-grid"><Form.Item label="配送方式" name="deliveryMode" rules={[{ required: true, message: '请选择配送方式' }]}><Select aria-label="配送方式" options={[{ value: 'SELF', label: '自配送' }, { value: 'LOGISTICS', label: '物流' }]} /></Form.Item>
+        {deliveryMode === 'LOGISTICS' && <Form.Item label="物流单号" name="trackingNo" rules={[{ max: 100, message: '最多100字' }]}><Input maxLength={100} /></Form.Item>}
         <Form.Item label="运费确认" name="freightConfirmationId"><Select aria-label="运费确认" allowClear placeholder="无运费" disabled={order.requiresFreightSnapshot === false || busy || command.blocked} options={(order.freightConfirmations || []).filter(row => row.status === 'CONFIRMED' && !row.usedAt && positive(row.amount)).map(row => ({ value: row.id, label: `${row.amount} 元 · ${row.reason}` }))} /></Form.Item></div>
       <Form.List name="items">{fields => fields.map(field => { const item = order.items[field.name]; return <div className="shipping-item" key={field.key}>
         <strong>{item.productName || item.productId}</strong><div className="template-price">销售单位：{item.unitName || item.unitSnapshot?.salesUnitName || '历史未核定'}；待发货：{item.remainingToShipQuantity ?? '-'}；已发货：{item.shippedQuantity ?? '-'}</div>

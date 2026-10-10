@@ -1,3 +1,4 @@
+import { money } from '../lib/money';
 import { useEffect, useState } from 'react';
 import { Alert, Button, Descriptions, Modal, Result, Spin, Table, Tag } from 'antd';
 import { useSearchParams } from 'react-router-dom';
@@ -70,7 +71,8 @@ export default function StoreOrders({ user }: { user: User }) {
       {detailLoading ? <Spin /> : detail && <>
         <Descriptions size="small" column={{ xs: 1, sm: 3 }} items={[{ key: 'no', label: '订单编号', children: detail.requestNo }, { key: 'status', label: '状态', children: workflowName(detail.status) }, { key: 'amount', label: '货款', children: detail.salesGoodsAmount }, { key: 'reserved', label: '储值预占', children: detail.storedReservedAmount || '0' }, { key: 'payment', label: '储值/挂账入账', children: accountFundingName(detail.paymentStatus) }]} />
         {detail.rejectedReason && <Alert type="warning" title={`拒单原因：${detail.rejectedReason}`} />}
-        <Table rowKey="id" size="small" pagination={false} scroll={{ x: 550 }} dataSource={detail.items} columns={[{ title: '商品', dataIndex: 'productName' }, { title: '数量', dataIndex: 'quantity' }, { title: '单位', render: (_, row) => row.unitName || row.unitSnapshot?.salesUnitName || '-' }, { title: '单价', dataIndex: 'salesUnitPrice' }, { title: '货款', dataIndex: 'salesLineAmount' }]} />
+        <Descriptions size="small" column={1} items={detail.supplierOrders.filter(order => order.deliveryContactPhone).map(order => ({ key: order.id, label: `${order.supplierName || '供应商'}配送联系`, children: <a href={`tel:${order.deliveryContactPhone}`}>{order.deliveryContactPhone}</a> }))} />
+        <Table rowKey="id" size="small" pagination={false} scroll={{ x: 550 }} dataSource={detail.items} columns={[{ title: '商品', dataIndex: 'productName' }, { title: '数量', dataIndex: 'quantity' }, { title: '单位', render: (_, row) => row.unitName || row.unitSnapshot?.salesUnitName || '-' }, { title: '单价', dataIndex: 'salesUnitPrice', render: money }, { title: '货款', dataIndex: 'salesLineAmount' }]} />
         <section className="price-band"><h2>发货进度</h2><Table rowKey="id" size="small" pagination={false} scroll={{ x: 550 }} dataSource={detail.supplierOrders.flatMap(order => (order.shipments || []).map(row => ({ ...row, supplierName: order.supplierName })))} columns={[{ title: '发货单', dataIndex: 'shipmentNo', render: (value, row) => <Button type="link" onClick={() => setShipmentId(row.id)}>{value}</Button> }, { title: '供应商', dataIndex: 'supplierName' }, { title: '物流单号', dataIndex: 'trackingNo' }, { title: '发货时间', dataIndex: 'shippedAt', render: workflowTime }, { title: '收货时间', dataIndex: 'receivedAt', render: workflowTime }]} /></section>
       </>}
     </Modal>

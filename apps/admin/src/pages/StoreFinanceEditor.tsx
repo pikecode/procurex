@@ -33,6 +33,7 @@ export function StoreFinanceEditor({ storeId, storeName, creditItems = [], mode,
     const values = await form.validateFields();
     if (loading || uploading) throw new Error('请等待数据和凭证读取完成。');
     if (mode === 'credit') { if (!account) throw new Error('请重新读取账户版本。'); return { expectedVersion: account.version, limit: values.limit as string, reason: values.reason.trim() }; }
+    if (!files.length) throw new Error('请上传至少一张图片凭证。');
     const common = { businessDate: values.businessDate as string, ...(values.remark?.trim() ? { remark: values.remark.trim() } : {}), ...(files.length ? { evidenceFileIds: files.map(file => file.id) } : {}) };
     if (mode === 'recharge') { if (!accounts.some(row => row.id === values.collectionAccountId)) throw new Error('请选择启用的收款账户。'); return { ...common, amount: values.amount as string, collectionAccountId: values.collectionAccountId as string }; }
     if (!preview) throw new Error('请重新读取销账预览。');

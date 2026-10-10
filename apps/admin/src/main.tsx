@@ -7,6 +7,8 @@ import { BarChart3, Building2, ChevronLeft, ExternalLink, Folders, Landmark, Log
 import { clearSession, getSession, hasRole, login, logout, onExpired, restore, type User } from './lib/api';
 import './styles.css';
 import { Notifications } from './components/Notifications';
+import { ChangePassword } from './components/ChangePassword';
+import { allowedPages, canAccessPage } from './lib/access';
 
 const Stores = lazy(() => import('./pages/Stores'));
 const Directories = lazy(() => import('./pages/Directories'));
@@ -24,6 +26,7 @@ const Billing = lazy(() => import('./pages/Billing'));
 const SettlementDifferences = lazy(() => import('./pages/SettlementDifferences'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Commands = lazy(() => import('./pages/Commands'));
+const Users = lazy(() => import('./pages/Users'));
 const legacyUrl = import.meta.env.VITE_LEGACY_URL || (import.meta.env.DEV ? 'http://127.0.0.1:4173/app.html' : '/legacy/');
 
 function Login({ authenticated }: { authenticated: (user: User) => void }) {
@@ -46,12 +49,13 @@ function Login({ authenticated }: { authenticated: (user: User) => void }) {
 const labels: Record<string, string> = { '/stores': '门店管理', '/store-groups': '门店分组', '/collection-accounts': '收款账户', '/categories': '商品分类', '/brands': '品牌管理', '/units': '单位管理', '/products': '商品管理', '/suppliers': '供应商管理', '/templates': '订货模板', '/purchase-requests': '采购申请', '/supplier-orders': '供应商订单', '/discrepancies': '收货差异' };
 labels['/reports'] = '业务报表'; labels['/settlement-differences'] = '结算差异';
 labels['/commands'] = '命令诊断';
+labels['/users'] = '用户管理';
 function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
   const [collapsed, setCollapsed] = useState(false); const [mobileOpen, setMobileOpen] = useState(false); const [leaving, setLeaving] = useState(false);
   const { message } = AntApp.useApp(); const location = useLocation(); const navigate = useNavigate();
   const central = hasRole(user, 'ADMIN', 'HQ_FINANCE'); const storeRole = ['STORE', 'STORE_FINANCE'].includes(user.scope?.type || '') || (!hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER') && hasRole(user, 'STORE', 'STORE_FINANCE'));
   const supplierRole = user.scope?.type === 'SUPPLIER' || (!storeRole && !hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER') && hasRole(user, 'SUPPLIER'));
-  const home = supplierRole ? '/supplier-orders' : storeRole ? '/store-orders' : '/stores'; const supported = supplierRole || storeRole || hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER');
+  const home = supplierRole ? '/supplier-orders' : storeRole ? '/store-orders' : '/stores'; const supported = allowedPages(user).length > 0;
   const items: { key: string; label: string; icon: ReactNode; children?: { key: string; label: string; icon: ReactNode }[] }[] = storeRole ? [{ key: '/store-orders', label: '门店订单', icon: <StoreIcon size={16} /> }, { key: '/store-finance', label: '门店账户', icon: <Landmark size={16} /> }, { key: '/finance', label: '账单与付款', icon: <Landmark size={16} /> }] : [
     { key: 'master', label: '基础资料', icon: <StoreIcon size={17} />, children: [
       { key: '/stores', label: '门店管理', icon: <StoreIcon size={16} /> },
@@ -67,14 +71,19 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
   if (supplierRole) items.splice(0, items.length, { key: '/supplier-orders', label: '供应商工作台', icon: <Folders size={16} /> }, { key: '/discrepancies', label: '收货差异', icon: <Folders size={16} /> }, { key: 'finance', label: '财务管理', icon: <Landmark size={17} />, children: [{ key: '/finance', label: '账单与收款', icon: <Landmark size={16} /> }, { key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> }] }, { key: '/reports', label: '业务报表', icon: <Folders size={16} /> });
   else if (storeRole) items.push({ key: '/reports', label: '业务报表', icon: <BarChart3 size={16} /> });
   else items.push({ key: 'statistics', label: '统计报表', icon: <BarChart3 size={17} />, children: [{ key: '/reports', label: '业务报表', icon: <BarChart3 size={16} /> }] });
-  if (!storeRole && !supplierRole && hasRole(user, 'ADMIN')) items.push({ key: 'system', label: '系统管理', icon: <Settings size={17} />, children: [{ key: '/commands', label: '命令诊断', icon: <Settings size={16} /> }] });
+  if (!storeRole && !supplierRole && hasRole(user, 'ADMIN')) items.push({ key: 'system', label: '系统管理', icon: <Settings size={17} />, children: [{ key: '/users', label: '用户管理', icon: <Settings size={16} /> }, { key: '/commands', label: '命令诊断', icon: <Settings size={16} /> }] });
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index]!;
+    if (item.children) item.children = item.children.filter(child => canAccessPage(user, child.key));
+    if (item.children ? item.children.length === 0 : !canAccessPage(user, item.key)) items.splice(index, 1);
+  }
   const activeGroup = items.find(item => item.children?.some(child => child.key === location.pathname))?.key;
   const [openKeys, setOpenKeys] = useState<string[]>([]);
   useEffect(() => { setOpenKeys(activeGroup ? [activeGroup] : []); }, [activeGroup]);
   const navigation = <Menu mode="inline" selectedKeys={[location.pathname]} openKeys={collapsed ? undefined : openKeys} onOpenChange={setOpenKeys} items={items}
     onClick={({ key }) => { navigate(key); setMobileOpen(false); }} inlineCollapsed={collapsed} />;
-  if (!supported) return <Result status="403" title="当前账号暂未迁移" extra={<div className="actions"><a href={legacyUrl}><Button>打开原后台</Button></a><Button onClick={async () => { try { await logout(); } finally { signedOut(); } }}>退出登录</Button></div>} />;
-  const authorized = storeRole ? ['/', '/store-orders', '/store-finance', '/finance', '/settlement-differences', '/reports'].includes(location.pathname) : location.pathname !== '/store-orders' && (!['/collection-accounts', '/store-finance', '/finance', '/settlement-differences'].includes(location.pathname) || central) && (location.pathname !== '/discrepancies' || hasRole(user, 'ADMIN')) && (!['/templates'].includes(location.pathname) || hasRole(user, 'ADMIN', 'PURCHASER'));
+  if (!supported) return <Result status="403" title="当前账号无可用权限或未绑定所属单位" extra={<Button onClick={async () => { try { await logout(); } finally { signedOut(); } }}>退出登录</Button>} />;
+  const authorized = canAccessPage(user, location.pathname);
   return <div className={`admin-shell ${collapsed ? 'is-collapsed' : ''}`}>
     <aside className="sidebar"><Link className="brand" to={home}><Building2 size={24} /><span>ProcureX<small>采购协同</small></span></Link>{navigation}</aside>
     <Drawer title="ProcureX" placement="left" open={mobileOpen} onClose={() => setMobileOpen(false)} width={250}><Menu mode="inline" selectedKeys={[location.pathname]} openKeys={openKeys} onOpenChange={setOpenKeys} items={items} onClick={({ key }) => { navigate(key); setMobileOpen(false); }} /></Drawer>
@@ -84,11 +93,13 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
       <span className="breadcrumb">{location.pathname === '/finance' ? (supplierRole ? '账单与收款' : '账单与付款') : location.pathname === '/store-finance' ? (storeRole ? '门店账户' : '门店财务') : location.pathname === '/store-orders' ? '门店订单' : labels[location.pathname] || '后台管理'}</span></div>
       <div className="actions"><Notifications key={user.id} userId={user.id} /><a className="legacy-link" href={legacyUrl} target="_blank" rel="noreferrer">原后台<ExternalLink size={13} /></a>
         <span className="user-name">{user.displayName || user.username || '管理员'}</span>
+        <ChangePassword signedOut={signedOut} />
         <Tooltip title="退出登录"><Button type="text" aria-label="退出登录" loading={leaving} icon={<LogOut size={17} />} onClick={async () => {
           setLeaving(true); try { await logout(); } catch (failure) { message.warning((failure as Error).message); } finally { signedOut(); setLeaving(false); }
         }} /></Tooltip></div>
-    </header><main className="page-content">{(supplierRole ? ['/', '/supplier-orders', '/discrepancies', '/finance', '/settlement-differences', '/reports'].includes(location.pathname) : authorized) ? <Suspense fallback={<Spin />}><Routes>
+    </header><main className="page-content">{authorized ? <Suspense fallback={<Spin />}><Routes>
       <Route path="/commands" element={hasRole(user, 'ADMIN') ? <Commands user={user} /> : <Result status="403" title="无权访问此页面" />} />
+      <Route path="/users" element={hasRole(user, 'ADMIN') ? <Users /> : <Result status="403" title="无权访问此页面" />} />
       <Route path="/stores" element={<Stores user={user} />} />
       <Route path="/store-orders" element={<StoreOrders user={user} />} />
       <Route path="/store-finance" element={<StoreFinance user={user} />} />

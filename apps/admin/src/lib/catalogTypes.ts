@@ -7,6 +7,7 @@ export interface Template extends Named {
   code: string; tag: string | null; remark: string | null; isArchived: boolean; version: number; storeIds: string[];
 }
 export interface TemplateDetail extends Template {
+  cycleOverrides?: { storeId: string; supplierId: string; settlementCycle: string }[];
   items: TemplateItem[]; settings: { supplierId: string; settlementMode: string; settlementCycle: string }[];
 }
 export interface CatalogProduct extends Named { sku: string | null; categoryId: string; baseUnitId?: string; isActive: boolean; defaultSalesPrice: string | null; minOrderQty: string; orderMultiple: string; supplierIds?: string[]; supplierPurchasePrices?: { supplierId: string; supplyPrice: string }[] }
