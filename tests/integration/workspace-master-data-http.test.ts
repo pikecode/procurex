@@ -83,6 +83,16 @@ test('formal workspace master-data reads are authorized and concurrent edits/bin
     assert.deepEqual(ownCatalog.items.map((item: any) => item.id), [product.id]);
     assert.equal(ownCatalog.items[0].supplyPrice, null);
     assert.deepEqual(Object.keys(ownCatalog.items[0]).sort(), ['id', 'isActive', 'name', 'sku', 'specification', 'supplyPrice', 'supplyPriceVersionId', 'unitName']);
+    assert.equal((await call(`/suppliers/${oldSupplier.id}/managed-products`, 'GET', undefined, ownSupplier)).status, 403);
+    const managed = (await call(`/suppliers/${supplier.id}/managed-products`, 'GET', undefined, ownSupplier)).body.data;
+    assert.equal(managed.items.length, 1); assert.equal(managed.items[0].supplyEnabled, true);
+    const unlisted = await call(`/suppliers/${supplier.id}/managed-products/${product.id}`, 'PATCH', { supplyEnabled: false, expectedVersion: managed.items[0].version }, ownSupplier);
+    assert.equal(unlisted.status, 200); assert.equal(unlisted.body.data.supplyEnabled, false);
+    assert.equal((await call(`/suppliers/${supplier.id}/catalog`, 'GET', undefined, ownSupplier)).body.data.items.length, 0);
+    assert.equal((await call(`/suppliers/${supplier.id}/managed-products/${product.id}`, 'PATCH', { supplyEnabled: true, expectedVersion: managed.items[0].version }, ownSupplier)).status, 409);
+    const relisted = await call(`/suppliers/${supplier.id}/managed-products/${product.id}`, 'PATCH', { supplyEnabled: true, expectedVersion: unlisted.body.data.version }, ownSupplier);
+    assert.equal(relisted.status, 200); assert.equal(relisted.body.data.supplyEnabled, true);
+    assert.deepEqual((await call(`/suppliers/${supplier.id}/catalog`, 'GET', undefined, ownSupplier)).body.data.items.map((item: any) => item.id), [product.id]);
     assert.equal((await call(`/suppliers/${supplier.id}`, 'PATCH', { expectedVersion: related.body.data.version, name: 'Forbidden' }, ownSupplier)).status, 403);
     assert.equal((await call('/products', 'GET', undefined, ownSupplier)).status, 403);
     assert.equal((await call(`/suppliers/${supplier.id}/products`, 'PUT', { expectedVersion: supplier.version, productIds: [] })).status, 409);

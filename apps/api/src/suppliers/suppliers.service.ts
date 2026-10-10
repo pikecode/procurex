@@ -37,6 +37,18 @@ export type SupplierProductsView = {
   prices?: SupplierProductPrice[];
 };
 
+export type SupplierManagedProductView = {
+  id: string;
+  name: string;
+  sku: string | null;
+  specification: string | null;
+  unitName: string;
+  productActive: boolean;
+  supplyEnabled: boolean;
+  supplyPrice: string | null;
+  version: number;
+};
+
 export type CreateSupplierInput = SupplierProfile & {
   code?: string;
   name: string;
@@ -86,6 +98,41 @@ export class SuppliersService {
     });
   }
 
+  async getManagedProducts(id: string): Promise<{ supplierId: string; items: SupplierManagedProductView[] }> {
+    const supplier = await this.database.client.supplier.findUnique({ where: { id }, select: { id: true } });
+    if (!supplier) throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'Supplier was not found' });
+    const links = await this.database.client.supplierProduct.findMany({
+      where: { supplierId: id }, orderBy: [{ product: { name: 'asc' } }, { productId: 'asc' }],
+      include: { product: { include: { baseUnit: true } } },
+    });
+    const prices = new Map((await this.productPrices(this.database.client, id)).map(item => [item.productId, item.supplyPrice]));
+    return { supplierId: id, items: links.map(link => ({
+      id: link.productId, name: link.product.name, sku: link.product.sku, specification: link.product.specification,
+      unitName: link.product.baseUnit.name, productActive: link.product.isActive, supplyEnabled: link.supplyEnabled,
+      supplyPrice: prices.get(link.productId) ?? null, version: link.updatedAt.getTime(),
+    })) };
+  }
+
+  async updateManagedProduct(supplierId: string, productId: string, supplyEnabled: boolean, expectedVersion: number,
+    context?: MasterDataAuditContext): Promise<SupplierManagedProductView> {
+    return auditedMasterDataTransaction(this.database, this.audit, context, supplyEnabled ? 'supplier.product.list' : 'supplier.product.unlist', 'SupplierProduct', async tx => {
+      await lockCatalog(tx);
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "SupplierProduct" WHERE "supplierId" = ${supplierId}::uuid AND "productId" = ${productId}::uuid FOR UPDATE`);
+      const link = await tx.supplierProduct.findUnique({ where: { supplierId_productId: { supplierId, productId } }, include: { supplier: true, product: { include: { baseUnit: true } } } });
+      if (!link) throw new NotFoundException({ code: 'SUPPLIER_PRODUCT_NOT_FOUND', message: 'Supplier product was not found' });
+      if (link.supplier.isArchived || link.supplier.status !== SupplierStatus.ACTIVE) throw new ConflictException({ code: 'SUPPLIER_UNAVAILABLE', message: 'Supplier is unavailable' });
+      if (link.updatedAt.getTime() !== expectedVersion) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Supplier product status has changed' });
+      const updated = link.supplyEnabled === supplyEnabled ? link : await tx.supplierProduct.update({
+        where: { id: link.id }, data: { supplyEnabled, updatedAt: new Date(Math.max(Date.now(), expectedVersion + 1)) }, include: { product: { include: { baseUnit: true } } },
+      });
+      const price = await effectivePriceVersion(tx, productId, supplierId, new Date());
+      return { supplierId, id: updated.productId, name: updated.product.name, sku: updated.product.sku,
+        specification: updated.product.specification, unitName: updated.product.baseUnit.name,
+        productActive: updated.product.isActive, supplyEnabled: updated.supplyEnabled,
+        supplyPrice: price?.supplyPrice.toString() ?? null, version: updated.updatedAt.getTime() };
+    });
+  }
+
   async listSuppliers(): Promise<SupplierView[]> {
     const suppliers = await this.database.client.supplier.findMany({
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -128,7 +175,7 @@ export class SuppliersService {
 
   async getSupplierProducts(id: string): Promise<SupplierProductsView> {
     const supplier = await this.database.client.supplier.findUnique({ where: { id }, include: {
-      products: { where: { supplyEnabled: true }, orderBy: { productId: 'asc' }, select: { productId: true } },
+      products: { orderBy: { productId: 'asc' }, select: { productId: true } },
     } });
     if (!supplier) throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'Supplier was not found' });
     const productIds = supplier.products.map(product => product.productId);
@@ -243,13 +290,11 @@ export class SuppliersService {
           productId: { notIn: uniqueProductIds },
         },
       });
-    for (const productId of uniqueProductIds) {
-      await tx.supplierProduct.upsert({
-          where: { supplierId_productId: { supplierId: id, productId } },
-          update: { supplyEnabled: true },
-          create: { supplierId: id, productId },
-        });
-    }
+    const previousProductIds = new Set(previousProducts.map(item => item.productId));
+    await tx.supplierProduct.createMany({
+      data: uniqueProductIds.filter(productId => !previousProductIds.has(productId)).map(productId => ({ supplierId: id, productId, supplyEnabled: true })),
+      skipDuplicates: true,
+    });
 
     const at = new Date();
     const existingPrices = await this.productPrices(tx, id);
@@ -260,9 +305,9 @@ export class SuppliersService {
       if ((currentPrice?.supplyVersionId ?? null) !== price.expectedVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: '供货价已变更，请重新打开商品配置后重试' });
       if (currentPrice?.supplyPrice.eq(price.supplyPrice)) continue;
       const product = await tx.product.findUniqueOrThrow({ where: { id: price.productId } });
-      if (!currentPrice && product.defaultSalesPrice === null && supplier.defaultSettlementMode !== 'SUPPLIER_TERM') throw new ConflictException({ code: 'SALES_PRICE_REQUIRED', message: '请先在商品资料中设置默认销售价' });
+      if (!currentPrice && product.defaultSalesPrice === null) throw new ConflictException({ code: 'SALES_PRICE_REQUIRED', message: '请先在商品资料中设置参考销售价' });
       await this.pricing.publishPrice({ productId: price.productId, supplierId: id, supplyPrice: price.supplyPrice,
-        salesPrice: supplier.defaultSettlementMode === 'SUPPLIER_TERM' ? price.supplyPrice : currentPrice?.salesPrice.toString() ?? product.defaultSalesPrice!.toString(),
+        salesPrice: currentPrice?.salesPrice.toString() ?? product.defaultSalesPrice!.toString(),
         effectiveAt: at, reason: '供应商关联商品维护供货价' }, tx);
     }
 
@@ -270,7 +315,7 @@ export class SuppliersService {
     await tx.$executeRaw`UPDATE "Product" SET "updatedAt" = GREATEST(clock_timestamp(), "updatedAt" + interval '1 millisecond') WHERE "id" = ANY(${[...new Set([...uniqueProductIds, ...previousProducts.map(row => row.productId)])]}::uuid[])`;
 
     const current = await tx.supplierProduct.findMany({
-      where: { supplierId: id, supplyEnabled: true },
+      where: { supplierId: id },
       orderBy: { productId: 'asc' },
       select: { productId: true },
     });

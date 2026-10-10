@@ -35,6 +35,11 @@ type PutSupplierProductsBody = {
   productIds?: unknown;
 };
 
+type PatchManagedProductBody = {
+  supplyEnabled?: unknown;
+  expectedVersion?: unknown;
+};
+
 @Controller('suppliers')
 @UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
 export class SuppliersController {
@@ -61,6 +66,25 @@ export class SuppliersController {
     throwIfInvalid(validateUuid('id', id));
     requireSupplierScope(id, auth);
     return this.suppliersService.getSupplierCatalog(id);
+  }
+
+  @Get(':id/managed-products')
+  @RequireRoles('ADMIN', 'PURCHASER', 'SUPPLIER')
+  getManagedProducts(@Param('id') id: string, @CurrentAuth() auth: AuthenticatedSession) {
+    throwIfInvalid(validateUuid('id', id));
+    requireSupplierScope(id, auth);
+    return this.suppliersService.getManagedProducts(id);
+  }
+
+  @Patch(':id/managed-products/:productId')
+  @RequireRoles('ADMIN', 'PURCHASER', 'SUPPLIER')
+  updateManagedProduct(@Param('id') id: string, @Param('productId') productId: string, @Body() body: PatchManagedProductBody,
+    @CurrentAuth() auth: AuthenticatedSession, @Req() request: AuthenticatedRequest) {
+    const issues = [...validateUuid('id', id), ...validateUuid('productId', productId), ...validateExpectedVersion('expectedVersion', body.expectedVersion)];
+    if (typeof body.supplyEnabled !== 'boolean') issues.push({ field: 'supplyEnabled', code: 'INVALID_BOOLEAN', message: 'supplyEnabled must be a boolean' });
+    throwIfInvalid(issues);
+    requireSupplierScope(id, auth);
+    return this.suppliersService.updateManagedProduct(id, productId, body.supplyEnabled as boolean, body.expectedVersion as number, masterDataAuditContext(request));
   }
 
   @Get()

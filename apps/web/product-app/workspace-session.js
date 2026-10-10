@@ -98,7 +98,7 @@ export function createWorkspaceClient({ base, storage, fetcher = fetch, onExpire
       const detail = envelope?.error || envelope || {};
       const code = detail.code;
       const messages = { SUPPLIER_ARCHIVED: '供应商已归档，不能修改或重新关联商品。', INVALID_CREDENTIALS: '账号或密码不正确', VERSION_CONFLICT: '资料已被其他人修改，请刷新后重新编辑。', COMMAND_PROCESSING: '提交仍在处理中，请稍后查询结果；若持续未完成，需要管理员核对。',
-        STORE_ALREADY_BOUND: '所选门店已绑定其他有效模板。', DIRECT_TERM_PRICES_MUST_MATCH: '供应商账期结算要求销售价与供货价一致。',
+        STORE_ALREADY_BOUND: '所选门店已绑定其他有效模板。',
         FREIGHT_NOT_ALLOWED: '该订单不允许收取运费，请使用零运费。',
         CLEARED_CREDIT_ADJUSTMENT_REQUIRED: '调整金额低于已清挂账金额，请联系财务处理独立结算调整；原清账记录保持不变。',
         CLEARED_CREDIT_REINCREASE_RECONCILIATION_REQUIRED: '该挂账仍有未确认的退回或抵扣差额，完成差额处置确认后才能涨价；有效已付金额以确认结果为准。',

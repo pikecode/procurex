@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Alert, App, Button, Descriptions, Input, Modal, Result, Table } from 'antd';
-import { Eye, Truck, X, Coins } from 'lucide-react';
+import { Alert, App, Button, Descriptions, Input, Modal, Popconfirm, Result, Table, Tabs, Tag } from 'antd';
+import { Eye, EyeOff, PackageCheck, Truck, X, Coins } from 'lucide-react';
 import { request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { useWorkflowCommand } from '../lib/useWorkflowCommand';
@@ -45,12 +45,15 @@ function Workspace({ user, supplierId }: { user: User; supplierId: string }) {
     if (!pending || !/^\/supplier-orders\/[0-9a-f-]{36}\/(reject|shipments|freight-confirmations)$/.test(pending.path)) { setError('此提交不能在供应商工作台恢复，请核查原操作。'); return; }
     try { await read(pending.path.split('/')[2]); if (await command.recover()) { message.success('原提交已确认'); saved(); } } catch (failure) { setError((failure as Error).message); }
   }
+  const [view, setView] = useState('orders');
   return <>
+    <Tabs activeKey={view} onChange={setView} items={[{ key: 'orders', label: '订单处理' }, { key: 'products', label: '供货商品' }]} />
     {(error || command.error) && <Alert type="error" showIcon title={error || command.error} />}
     {command.pending && <Alert type="warning" showIcon title={`待确认提交：${command.pending.label}`} action={<Button loading={command.busy} onClick={recover}>恢复原提交</Button>} />}
-    <ListPage title="供应商工作台" rows={list.rows.filter(row => row.supplierId === supplierId).map(row => ({ ...row, name: row.supplierOrderNo }))} loading={list.loading || reading} error={list.error} reload={list.reload}
+    {view === 'orders' && <ListPage title="供应商工作台" rows={list.rows.filter(row => row.supplierId === supplierId).map(row => ({ ...row, name: row.supplierOrderNo }))} loading={list.loading || reading} error={list.error} reload={list.reload}
       filters={[{ key: 'status', label: '订单状态', options: ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED', 'SHIPPED', 'REJECTED', 'CANCELED'].map(value => ({ value, label: workflowName(value) })) }]}
-      columns={[{ title: '订单编号', dataIndex: 'supplierOrderNo' }, { title: '门店', dataIndex: 'storeName' }, { title: '订单状态', dataIndex: 'status', render: workflowName }, { title: '履约状态', dataIndex: 'fulfillmentStatus', render: workflowName }, { title: '供货金额', dataIndex: 'supplyGoodsAmount' }, { title: '创建时间', dataIndex: 'createdAt', render: workflowTime }, { title: '操作', fixed: 'right', width: 92, render: (_, row) => <Button size="small" icon={<Eye size={14} />} onClick={() => open(row.id)}>查看</Button> }]} />
+      columns={[{ title: '订单编号', dataIndex: 'supplierOrderNo' }, { title: '门店', dataIndex: 'storeName' }, { title: '订单状态', dataIndex: 'status', render: workflowName }, { title: '履约状态', dataIndex: 'fulfillmentStatus', render: workflowName }, { title: '供货金额', dataIndex: 'supplyGoodsAmount' }, { title: '创建时间', dataIndex: 'createdAt', render: workflowTime }, { title: '操作', fixed: 'right', width: 92, render: (_, row) => <Button size="small" icon={<Eye size={14} />} onClick={() => open(row.id)}>查看</Button> }]} />}
+    {view === 'products' && <ManagedProducts supplierId={supplierId} />}
     <Modal open={Boolean(order)} title={order?.supplierOrderNo} width={920} footer={null} maskClosable={false} closable={!command.busy && !editor} onCancel={() => setOrder(undefined)}>
       {order && <>
         <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[{ key: 'status', label: '订单状态', children: workflowName(order.status) }, { key: 'amount', label: '供货金额', children: order.supplyGoodsAmount }, { key: 'address', label: '收货地址', children: order.destination?.address || '-' }, { key: 'contact', label: '收货联系人', children: `${order.destination?.contactName || '-'} ${order.destination?.contactPhone || ''}` }]} />
@@ -76,4 +79,37 @@ function Workspace({ user, supplierId }: { user: User; supplierId: string }) {
       {command.pending && <Button loading={command.busy} onClick={recover}>恢复原提交</Button>}
     </Modal>
   </>;
+}
+
+type ManagedProduct = { id: string; name: string; sku: string | null; specification: string | null; unitName: string; productActive: boolean; supplyEnabled: boolean; supplyPrice: string | null; version: number };
+function ManagedProducts({ supplierId }: { supplierId: string }) {
+  const { message } = App.useApp();
+  const [items, setItems] = useState<ManagedProduct[]>([]); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(''); const [error, setError] = useState('');
+  async function load() {
+    setLoading(true); setError('');
+    try { setItems((await request<{ items: ManagedProduct[] }>(`/suppliers/${supplierId}/managed-products`)).items); }
+    catch (failure) { setError((failure as Error).message); } finally { setLoading(false); }
+  }
+  useEffect(() => { void load(); }, [supplierId]);
+  async function change(item: ManagedProduct) {
+    const next = !item.supplyEnabled;
+    setSaving(item.id); setError('');
+    try {
+      const updated = await request<ManagedProduct>(`/suppliers/${supplierId}/managed-products/${item.id}`, { method: 'PATCH', body: { supplyEnabled: next, expectedVersion: item.version } });
+      setItems(current => current.map(row => row.id === updated.id ? updated : row));
+      message.success(next ? '商品已上架' : '商品已下架');
+    } catch (failure) { setError((failure as Error).message); await load(); } finally { setSaving(''); }
+  }
+  return <section className="list-page">
+    <div className="page-heading"><div><h1>供货商品</h1><p>管理本供应商商品的接单状态；商品资料和供货价由公司采购维护。</p></div><Button onClick={load} loading={loading}>刷新</Button></div>
+    {error && <Alert type="error" showIcon title={error} />}
+    <Table rowKey="id" size="small" loading={loading} dataSource={items} pagination={{ defaultPageSize: 10, showSizeChanger: true }} scroll={{ x: 760 }} columns={[
+      { title: '商品名称', dataIndex: 'name' }, { title: '规格', dataIndex: 'specification', render: value => value || '-' },
+      { title: '单位', dataIndex: 'unitName', width: 100 }, { title: '供货价', dataIndex: 'supplyPrice', width: 120, render: value => value === null ? '-' : `¥${Number(value).toFixed(2)}` },
+      { title: '供货状态', width: 110, render: (_, row) => !row.productActive ? <Tag>商品已停用</Tag> : row.supplyEnabled ? <Tag color="success">已上架</Tag> : <Tag>已下架</Tag> },
+      { title: '操作', fixed: 'right', width: 110, render: (_, row) => row.supplyEnabled ? <Popconfirm title={`下架“${row.name}”？`} description="门店将不能再向当前供应商新订购此商品，历史订单不受影响。" okText="确认下架" cancelText="取消" onConfirm={() => change(row)}>
+        <Button size="small" danger disabled={!row.productActive || Boolean(saving)} loading={saving === row.id} icon={<EyeOff size={14} />}>下架</Button>
+      </Popconfirm> : <Button size="small" disabled={!row.productActive || Boolean(saving)} loading={saving === row.id} icon={<PackageCheck size={14} />} onClick={() => change(row)}>上架</Button> },
+    ]} />
+  </section>;
 }

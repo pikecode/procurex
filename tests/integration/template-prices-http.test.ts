@@ -37,6 +37,7 @@ test('template prices isolate quotes, historical repricing, checkpoints, copied 
     const unit = await db.unit.create({ data: { code: prefix, name: 'piece' } });
     const supplier = await db.supplier.create({ data: { code: prefix, name: prefix, deliveryMode: 'SELF', defaultSettlementMode: 'COMPANY_TERM', defaultSettlementCycle: 'MONTHLY' } });
     const product = await db.product.create({ data: { sku: prefix, name: prefix, categoryId: category.id, baseUnitId: unit.id, defaultSalesPrice: '11' } });
+    await db.supplierProduct.create({ data: { supplierId: supplier.id, productId: product.id, supplyEnabled: true } });
     const templates = [];
     const stores: Array<{ id: string }> = [];
     for (const suffix of ['A', 'B']) {
@@ -91,8 +92,8 @@ test('template prices isolate quotes, historical repricing, checkpoints, copied 
     await call('/price-changes', 'POST', { ...draft, salesPrice: '30', effectiveAt: '2026-09-10T00:00:00Z' });
     await call('/price-changes', 'POST', { ...priceInput, salesPrice: '40' });
     assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date(), copyId)).salesPrice, '12');
-    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date('2099-01-01'), copyId)).salesPrice, '15');
-    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date(), inheritedCopy.body.data.id)).salesPrice, '20');
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date('2099-01-01'), copyId)).salesPrice, '12');
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date(), inheritedCopy.body.data.id)).salesPrice, '11');
     const checkpoint = await db.$transaction(tx => applyEffectiveOrderPrices(tx, orders[0]!.id, new Date('2026-09-15'))); assert.equal(checkpoint.changed, true);
     assert.equal((await db.supplierOrder.findUniqueOrThrow({ where: { id: orders[0]!.id } })).salesGoodsAmount.toString(), '60');
     await db.supplierOrder.update({ where: { id: orders[0]!.id }, data: { status: 'COMPLETED' } });
@@ -102,7 +103,7 @@ test('template prices isolate quotes, historical repricing, checkpoints, copied 
     const configured = await call(`/templates/${a.id}/items`, 'PUT', rules); assert.equal(configured.status, 200);
     const preview = (quantity: string) => call('/purchase-requests/preview', 'POST', { storeId: stores[0]!.id, items: [{ productId: product.id, quantity }] });
     assert.equal((await preview('2')).status, 409); assert.equal((await preview('5')).status, 409);
-    const valid = await preview('4'); assert.equal(valid.status, 201); assert.equal(valid.body.data.totals.salesGoodsAmount, '120.00');
+    const valid = await preview('4'); assert.equal(valid.status, 201, JSON.stringify(valid.body)); assert.equal(valid.body.data.totals.salesGoodsAmount, '120.00');
     const realRequest = await requests.create({ storeId: stores[0]!.id, items: [{ productId: product.id, quantity: '4' }] });
     assert.equal((await db.purchaseRequest.findUniqueOrThrow({ where: { id: realRequest.id } })).salesGoodsAmount.toString(), '120');
     await requests.confirm(realRequest.id, realRequest.version);
@@ -155,18 +156,16 @@ test('template prices isolate quotes, historical repricing, checkpoints, copied 
     assert.equal((await db.commandRecord.findFirstOrThrow({ where: { idempotencyKey: `${prefix}-invalid-cost` } })).status, 'FAILED');
     assert.equal(noTemplateCost.body.code, 'TEMPLATE_SUPPLY_PRICE_READ_ONLY');
     const equal = await call('/price-changes', 'POST', { ...draft, templateId: b.id, salesPrice: '9', supplyPrice: '9.000000' }); assert.equal(equal.status, 201);
-    const direct = await call(`/templates/${b.id}/supplier-settings/${supplier.id}`, 'PUT', { expectedVersion: (await call(`/templates/${b.id}`)).body.data.version, settlementMode: 'SUPPLIER_TERM', settlementCycle: 'MONTHLY' }); assert.equal(direct.status, 200);
-    const costBeforeConflict = await db.priceVersion.count({ where: { scope: { productId: product.id } } });
-    const unbalancedCost = await call('/price-changes', 'POST', { ...priceInput, salesPrice: '10', supplyPrice: '10' }); assert.equal(unbalancedCost.status, 409);
-    assert.equal(unbalancedCost.body.code, 'DIRECT_TERM_PRICES_MUST_MATCH');
-    assert.equal(await db.priceVersion.count({ where: { scope: { productId: product.id } } }), costBeforeConflict);
+    const independentCost = await call('/price-changes', 'POST', { ...priceInput, salesPrice: '10', supplyPrice: '10' });
+    assert.equal(independentCost.status, 201);
     assert.equal((await call('/price-changes', 'POST', { ...draft, templateId: b.id })).status, 409);
     const overflow = await call('/price-changes', 'POST', { ...draft, salesPrice: '100000000000000' }); assert.equal(overflow.status, 400);
     const rejectedPrice = await call('/price-changes', 'POST', { ...draft, templateId: unit.id }); assert.equal(rejectedPrice.status, 409);
     const alternate = await db.supplier.create({ data: { code: `${prefix}ALT`, name: '备用供货商', deliveryMode: 'SELF', defaultSettlementMode: 'COMPANY_TERM', defaultSettlementCycle: 'MONTHLY' } });
+    await db.supplierProduct.create({ data: { supplierId: alternate.id, productId: product.id, supplyEnabled: true } });
     assert.equal((await call('/price-changes', 'POST', { ...priceInput, supplierId: alternate.id, salesPrice: '14', supplyPrice: '7' })).status, 201);
     const multiItems = [{ productId: product.id, isEnabled: true, minOrderQty: '4', orderMultiple: '2', suppliers: [
-      { supplierId: alternate.id, priority: 0, salesPrice: '18.00' }, { supplierId: supplier.id, priority: 10, salesPrice: '16.00' },
+      { supplierId: alternate.id, priority: 0 }, { supplierId: supplier.id, priority: 10, salesPrice: '19.00' },
     ] }];
     const beforeMulti = (await call(`/templates/${a.id}`)).body.data;
     const multi = await call(`/templates/${a.id}/items`, 'PUT', { expectedVersion: beforeMulti.version, items: multiItems });
@@ -174,17 +173,22 @@ test('template prices isolate quotes, historical repricing, checkpoints, copied 
     const afterMulti = (await call(`/templates/${a.id}`)).body.data;
     assert.equal(afterMulti.version, multi.body.data.version);
     assert.equal(afterMulti.items[0].suppliers[0].supplierId, alternate.id);
-    assert.equal(afterMulti.items[0].suppliers[0].salesPrice, '18');
+    assert.equal(afterMulti.items[0].salesPrice, '7');
     assert.equal(afterMulti.items[0].suppliers[0].supplyPrice, '7');
-    assert.equal(afterMulti.items[0].suppliers[1].salesPrice, '16');
-    assert.equal(afterMulti.items[0].suppliers[1].supplyPrice, '9');
+    assert.equal(afterMulti.items[0].suppliers[1].supplyPrice, '10');
+    assert.equal(afterMulti.items[0].suppliers[0].salesPrice, '7');
+    assert.equal(afterMulti.items[0].suppliers[1].salesPrice, '19');
+    assert.equal((await pricing.getEffectivePrice(product.id, alternate.id, new Date(), a.id)).salesPrice, '7');
+    assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date(), a.id)).salesPrice, '19');
     const defaultPreview = await preview('4');
     assert.equal(defaultPreview.status, 201);
     assert.equal(defaultPreview.body.data.items[0].supplierId, alternate.id);
-    assert.equal(defaultPreview.body.data.totals.salesGoodsAmount, '72.00');
+    assert.equal(defaultPreview.body.data.totals.salesGoodsAmount, '28.00');
     assert.equal((await pricing.getEffectivePrice(product.id, supplier.id, new Date('2026-09-15'), a.id)).salesPrice, '31');
-    const failedMulti = await call(`/templates/${a.id}/items`, 'PUT', { expectedVersion: afterMulti.version, items: [{ ...multiItems[0], suppliers: [{ supplierId: supplier.id, priority: 0, salesPrice: '1.005' }] }] });
+    const failedMulti = await call(`/templates/${a.id}/items`, 'PUT', { expectedVersion: afterMulti.version, items: [{ ...multiItems[0], salesPrice: '1.005', suppliers: [{ supplierId: supplier.id, priority: 0 }] }] });
     assert.equal(failedMulti.status, 400);
+    const failedSupplierPrice = await call(`/templates/${a.id}/items`, 'PUT', { expectedVersion: afterMulti.version, items: [{ ...multiItems[0], suppliers: [{ supplierId: supplier.id, priority: 0, salesPrice: '1.005' }] }] });
+    assert.equal(failedSupplierPrice.status, 400);
     assert.equal((await call(`/templates/${a.id}`)).body.data.version, afterMulti.version);
     const archived = await call(`/templates/${copyId}/archive`, 'POST', { expectedVersion: copied.body.data.version }); assert.equal(archived.status, 201);
     assert.equal((await call('/price-changes', 'POST', { ...draft, templateId: copyId })).status, 409);
@@ -202,6 +206,7 @@ test('template prices isolate quotes, historical repricing, checkpoints, copied 
     await db.purchaseRequest.deleteMany({ where: { store: { code: { startsWith: prefix } } } });
     await db.storeTemplateBinding.deleteMany({ where: { template: { code: { startsWith: prefix } } } });
     await db.orderTemplate.deleteMany({ where: { code: { startsWith: prefix } } });
+    await db.supplierProduct.deleteMany({ where: { product: { sku: prefix } } });
     await db.product.deleteMany({ where: { sku: prefix } });
     await db.category.deleteMany({ where: { code: prefix } }); await db.unit.deleteMany({ where: { code: prefix } });
     await db.storeAccount.deleteMany({ where: { store: { code: { startsWith: prefix } } } });

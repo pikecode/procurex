@@ -108,7 +108,6 @@ export class PricingService {
       const salesPrice = input.templateId || !current?.scope.templateKey ? input.salesPrice : current.salesPrice;
       const supplyPrice = input.templateId ? current?.supplyPrice ?? input.supplyPrice : input.supplyPrice;
       if (!input.templateId && current?.scope.templateKey && lineAmount(effectiveOrderItemQuantity(item), salesPrice).eq(item.salesLineAmount) && lineAmount(effectiveOrderItemQuantity(item), supplyPrice).eq(item.supplyLineAmount)) return [];
-      if (order.settlementMode === 'SUPPLIER_TERM' && !new Decimal(salesPrice).equals(supplyPrice)) throw new ConflictException({ code: 'DIRECT_TERM_PRICES_MUST_MATCH', message: 'Historical direct supplier-term orders require equal prices' });
       return [{
         supplierOrderId: order.id,
         supplierOrderNo: order.supplierOrderNo,
@@ -136,19 +135,6 @@ export class PricingService {
         update: {},
         create: { productId: input.productId, supplierId: input.supplierId, templateKey: input.templateId ?? '' },
       });
-      if (!new Decimal(input.salesPrice).equals(input.supplyPrice)) {
-        const supplier = await tx.supplier.findUnique({
-          where: { id: input.supplierId },
-          select: { defaultSettlementMode: true },
-        });
-        const hasDirectSettlement = supplier?.defaultSettlementMode === 'SUPPLIER_TERM';
-        if (hasDirectSettlement) {
-          throw new ConflictException({
-            code: 'DIRECT_TERM_PRICES_MUST_MATCH',
-            message: 'Direct supplier-term sales and supply prices must be equal',
-          });
-        }
-      }
       const latest = await tx.priceVersion.findFirst({ where: { scopeId: scope.id }, orderBy: { revision: 'desc' }, select: { revision: true } });
       const supplySource = input.templateId ? await effectivePriceVersion(tx, input.productId, input.supplierId, input.effectiveAt) : null;
       const version = await tx.priceVersion.create({
@@ -162,7 +148,13 @@ export class PricingService {
           revision: (latest?.revision ?? 0) + 1,
         },
       });
-      await this.requireDirectSchedulesCompatible(tx, input);
+      if (input.templateId) {
+        const current = await effectivePriceVersion(tx, input.productId, input.supplierId, new Date(), input.templateId);
+        if (current) await tx.templateItem.updateMany({
+          where: { templateId: input.templateId, productId: input.productId },
+          data: { initialSalesPrice: current.salesPrice },
+        });
+      }
       const nextVersion = await tx.priceVersion.findFirst({
         where: { scopeId: scope.id, effectiveAt: { gt: input.effectiveAt } },
         orderBy: { effectiveAt: 'asc' },
@@ -184,7 +176,6 @@ export class PricingService {
         const salesPrice = input.templateId || !current?.scope.templateKey ? input.salesPrice : current.salesPrice;
         const supplyPrice = input.templateId ? current?.supplyPrice ?? input.supplyPrice : input.supplyPrice;
         if (!input.templateId && current?.scope.templateKey && lineAmount(effectiveOrderItemQuantity(item), salesPrice).eq(item.salesLineAmount) && lineAmount(effectiveOrderItemQuantity(item), supplyPrice).eq(item.supplyLineAmount)) return [];
-        if (order.settlementMode === 'SUPPLIER_TERM' && !new Decimal(salesPrice).equals(supplyPrice)) throw new ConflictException({ code: 'DIRECT_TERM_PRICES_MUST_MATCH', message: 'Historical direct supplier-term orders require equal prices' });
         return [{
           supplierOrderId: order.id,
           salesDelta: lineAmount(effectiveOrderItemQuantity(item), salesPrice).minus(item.salesLineAmount).toFixed(2),
@@ -397,22 +388,6 @@ export class PricingService {
   async quotePrice(input: { productId: string; supplierId: string; effectiveAt: Date; templateId?: string }): Promise<PriceQuote> {
     await this.requireTemplatePair(this.database.client, input);
     return this.getEffectivePrice(input.productId, input.supplierId, input.effectiveAt, input.templateId);
-  }
-
-  private async requireDirectSchedulesCompatible(tx: Prisma.TransactionClient, input: PublishPriceInput) {
-    const supplier = await tx.supplier.findUniqueOrThrow({ where: { id: input.supplierId } });
-    const items = await tx.templateItem.findMany({ where: { productId: input.productId, template: { isArchived: false }, suppliers: { some: { supplierId: input.supplierId } } },
-      include: { template: { include: { settings: { where: { supplierId: input.supplierId } } } } } });
-    const start = new Date(Math.max(Date.now(), input.effectiveAt.getTime()));
-    for (const item of items) {
-      if (input.templateId && item.templateId !== input.templateId) continue;
-      if (supplier.defaultSettlementMode !== 'SUPPLIER_TERM') continue;
-      const future = await tx.priceVersion.findMany({ where: { scope: { productId: input.productId, supplierId: input.supplierId, templateKey: { in: ['', item.templateId] } }, effectiveAt: { gt: start } }, select: { effectiveAt: true } });
-      for (const at of [start, ...future.map(version => version.effectiveAt)]) {
-        const quote = await effectivePriceVersion(tx, input.productId, input.supplierId, at, item.templateId);
-        if (quote && !quote.salesPrice.equals(quote.supplyPrice)) throw new ConflictException({ code: 'DIRECT_TERM_PRICES_MUST_MATCH', message: 'Supplier cost change would unbalance a current or scheduled direct template price' });
-      }
-    }
   }
 
   async listVersions(scopeId: string): Promise<PriceQuote[]> {

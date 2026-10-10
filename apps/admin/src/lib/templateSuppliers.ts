@@ -1,6 +1,6 @@
 import type { TemplateItem } from './catalogTypes.js';
 
-export function selectTemplateSuppliers(previous: TemplateItem['suppliers'], ids: string[]) {
+export function selectTemplateSuppliers(previous: TemplateItem['suppliers'], ids: string[]): TemplateItem['suppliers'] {
   const ordered = [...previous].sort((a, b) => a.priority - b.priority || a.supplierId.localeCompare(b.supplierId));
   const retained = ordered.filter(row => ids.includes(row.supplierId));
   return [...retained, ...ids.filter(id => !retained.some(row => row.supplierId === id)).map(supplierId => ({ supplierId, priority: 0 }))]

@@ -336,8 +336,13 @@ export class PurchaseRequestsService {
       },
       include: { suppliers: { where: { supplier: { status: 'ACTIVE', isArchived: false } } } },
     });
+    const enabledLinks = await this.database.client.supplierProduct.findMany({
+      where: { supplyEnabled: true, productId: { in: templateItems.map(item => item.productId) }, supplierId: { in: templateItems.flatMap(item => item.suppliers.map(link => link.supplierId)) } },
+      select: { productId: true, supplierId: true },
+    });
+    const enabledSupplierProducts = new Set(enabledLinks.map(link => `${link.productId}:${link.supplierId}`));
     const allowedSuppliersByProduct = new Map(
-      templateItems.map((item) => [item.productId, new Set(item.suppliers.map((supplier) => supplier.supplierId))]),
+      templateItems.map((item) => [item.productId, new Set(item.suppliers.filter(supplier => enabledSupplierProducts.has(`${item.productId}:${supplier.supplierId}`)).map((supplier) => supplier.supplierId))]),
     );
 
     const pricedItems = await Promise.all(
@@ -408,7 +413,8 @@ export class PurchaseRequestsService {
       for (const item of pricedItems) {
         const allowed = await tx.templateItem.findFirst({ where: { templateId: request.templateId, productId: item.productId, isEnabled: true,
           product: { isActive: true }, suppliers: { some: { supplierId: item.supplierId, supplier: { status: 'ACTIVE', isArchived: false } } } } });
-        if (!allowed) throw new ConflictException({ code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT', message: 'Supplier eligibility changed; preview again' });
+        const enabled = await tx.supplierProduct.findUnique({ where: { supplierId_productId: { supplierId: item.supplierId, productId: item.productId } }, select: { supplyEnabled: true } });
+        if (!allowed || !enabled?.supplyEnabled) throw new ConflictException({ code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT', message: 'Supplier eligibility changed; preview again' });
         const price = await effectivePriceVersion(tx, item.productId, item.supplierId, new Date(), request.templateId);
         if (price?.id !== item.priceVersionId || price?.supplyVersionId !== item.supplyPriceVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Effective price changed; preview again' });
       }
@@ -505,7 +511,8 @@ export class PurchaseRequestsService {
       for (const preview of previewItems) {
         const allowed = await tx.templateItem.findFirst({ where: { templateId: request.templateId, productId: preview.productId!, isEnabled: true,
           product: { isActive: true }, suppliers: { some: { supplierId, supplier: { status: 'ACTIVE', isArchived: false } } } } });
-        if (!allowed) throw new ConflictException({ code: 'REASSIGNMENT_NOT_ELIGIBLE', message: 'Supplier eligibility changed; preview again' });
+        const enabled = await tx.supplierProduct.findUnique({ where: { supplierId_productId: { supplierId, productId: preview.productId! } }, select: { supplyEnabled: true } });
+        if (!allowed || !enabled?.supplyEnabled) throw new ConflictException({ code: 'REASSIGNMENT_NOT_ELIGIBLE', message: 'Supplier eligibility changed; preview again' });
         const price = await effectivePriceVersion(tx, preview.productId!, supplierId, new Date(), request.templateId);
         if (price?.id !== preview.priceVersionId || price?.supplyVersionId !== preview.supplyPriceVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Effective price changed; preview again' });
       }
@@ -626,8 +633,13 @@ export class PurchaseRequestsService {
       },
       include: { suppliers: { where: { supplier: { status: 'ACTIVE', isArchived: false } } } },
     });
+    const enabledLinks = await this.database.client.supplierProduct.findMany({
+      where: { supplyEnabled: true, productId: { in: templateItems.map(item => item.productId) }, supplierId: { in: templateItems.flatMap(item => item.suppliers.map(link => link.supplierId)) } },
+      select: { productId: true, supplierId: true },
+    });
+    const enabledSupplierProducts = new Set(enabledLinks.map(link => `${link.productId}:${link.supplierId}`));
     const allowedSuppliersByProduct = new Map(
-      templateItems.map((item) => [item.productId, new Set(item.suppliers.map((supplier) => supplier.supplierId))]),
+      templateItems.map((item) => [item.productId, new Set(item.suppliers.filter(supplier => enabledSupplierProducts.has(`${item.productId}:${supplier.supplierId}`)).map((supplier) => supplier.supplierId))]),
     );
 
     const pricedAssignments = await Promise.all(
@@ -717,7 +729,8 @@ export class PurchaseRequestsService {
           await tx.$queryRaw`SELECT "id" FROM "Supplier" WHERE "id" = ${priced.assignment.supplierId}::uuid FOR SHARE`;
           const allowed = await tx.templateItem.findFirst({ where: { templateId: request.templateId, productId: priced.item.productId, isEnabled: true,
             product: { isActive: true }, suppliers: { some: { supplierId: priced.assignment.supplierId, supplier: { status: 'ACTIVE', isArchived: false } } } } });
-          if (!allowed) throw new ConflictException({ code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT', message: 'Supplier eligibility changed; reload the rejected order' });
+          const enabled = await tx.supplierProduct.findUnique({ where: { supplierId_productId: { supplierId: priced.assignment.supplierId, productId: priced.item.productId } }, select: { supplyEnabled: true } });
+          if (!allowed || !enabled?.supplyEnabled) throw new ConflictException({ code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT', message: 'Supplier eligibility changed; reload the rejected order' });
           const target = await tx.supplierOrder.findFirst({ where: { requestId: request.id, supplierId: priced.assignment.supplierId,
             status: { not: SupplierOrderStatus.REJECTED }, firstShippedAt: { not: null } } });
           if (target) throw new ConflictException({ code: 'TARGET_SUPPLIER_ALREADY_SHIPPED', message: 'Target supplier order has already shipped' });
@@ -869,8 +882,13 @@ export class PurchaseRequestsService {
       },
       include: { suppliers: true },
     });
+    const enabledLinks = await this.database.client.supplierProduct.findMany({
+      where: { supplyEnabled: true, productId: { in: templateItems.map(item => item.productId) }, supplierId: { in: templateItems.flatMap(item => item.suppliers.map(link => link.supplierId)) } },
+      select: { productId: true, supplierId: true },
+    });
+    const enabledSupplierProducts = new Set(enabledLinks.map(link => `${link.productId}:${link.supplierId}`));
     const allowedSuppliersByProduct = new Map(
-      templateItems.map((item) => [item.productId, new Set(item.suppliers.map((supplier) => supplier.supplierId))]),
+      templateItems.map((item) => [item.productId, new Set(item.suppliers.filter(supplier => enabledSupplierProducts.has(`${item.productId}:${supplier.supplierId}`)).map((supplier) => supplier.supplierId))]),
     );
 
     return Promise.all(

@@ -34,7 +34,7 @@ add(purchaser, [
   'POST /products', 'PATCH /products/:id', 'PATCH /products/:id/purchase-unit',
   'POST /suppliers', 'PATCH /suppliers/:id', 'POST /suppliers/:id/archive', 'PUT /suppliers/:id/products',
   'POST /templates', 'PATCH /templates/:id', 'POST /templates/:id/copy', 'POST /templates/:id/archive',
-  'PUT /templates/:id/stores', 'PUT /templates/:id/items',
+  'PUT /templates/:id/stores', 'PUT /templates/:id/items', 'PUT /templates/:id/settlement-cycles', 'PUT /templates/:id/configuration',
   'PUT /templates/:id/supplier-settings', 'PUT /templates/:id/supplier-settings/:supplierId', 'DELETE /templates/:id/supplier-settings/:supplierId',
   'POST /price-changes', 'POST /prices/quote', 'POST /prices/impact-preview', 'POST /jobs/:id/process',
   'PATCH /purchase-requests/:id/items', 'POST /purchase-requests/:id/items-preview',
@@ -43,7 +43,8 @@ add(purchaser, [
   'POST /supplier-orders/:id/reconcile-funding',
   'POST /freight-confirmations/:id/confirm', 'POST /freight-confirmations/:id/reject',
 ]);
-add(['ADMIN'], ['POST /stores', 'PATCH /stores/:id', 'POST /users', 'PATCH /users/:id', 'POST /users/:id/password', 'POST /users/:id/revoke-sessions',
+add(['ADMIN', 'PURCHASER', 'SUPPLIER'], ['PATCH /suppliers/:id/managed-products/:productId']);
+add(['ADMIN'], ['POST /stores', 'PATCH /stores/:id', 'POST /stores/group-memberships', 'POST /users', 'PATCH /users/:id', 'POST /users/:id/password', 'POST /users/:id/revoke-sessions',
   'POST /store-groups', 'PATCH /store-groups/:id', 'DELETE /store-groups/:id',
   'POST /commands/:id/reviews', 'POST /commands/:id/close-rolled-back-price', 'POST /commands/:id/close-uncommitted-price']);
 add(finance, ['POST /collection-accounts', 'PATCH /collection-accounts/:id', 'POST /stores/:id/recharges', 'PATCH /stores/:id/credit-limit',

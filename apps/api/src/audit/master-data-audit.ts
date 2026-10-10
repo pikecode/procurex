@@ -21,8 +21,9 @@ type ResourceResult = { id?: string; templateId?: string; supplierId?: string; v
 export function auditedMasterDataTransaction<T extends ResourceResult>(
   database: DatabaseService, audit: AuditService, context: MasterDataAuditContext | undefined,
   action: string, entityType: string, work: (tx: Prisma.TransactionClient) => Promise<T>,
+  transaction?: Prisma.TransactionClient,
 ): Promise<T> {
-  return database.client.$transaction(async tx => {
+  const execute = async (tx: Prisma.TransactionClient) => {
     const result = await work(tx);
     if (context) {
       const entityId = result.id ?? result.templateId ?? result.supplierId;
@@ -38,5 +39,6 @@ export function auditedMasterDataTransaction<T extends ResourceResult>(
           ...(result.removedCycleOverrides ? { removedCycleOverrides: result.removedCycleOverrides } : {}) } }, tx);
     }
     return result;
-  });
+  };
+  return transaction ? execute(transaction) : database.client.$transaction(execute);
 }

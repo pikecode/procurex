@@ -25,9 +25,6 @@ export async function applyEffectiveOrderPrices(tx: Prisma.TransactionClient, or
   for (const item of order.items) {
     const version = await effectivePriceVersion(tx, item.productId, order.supplierId, at, order.request.templateId);
     if (!version || (new Decimal(item.salesUnitPrice).eq(version.salesPrice) && new Decimal(item.supplyUnitPrice).eq(version.supplyPrice))) continue;
-    if (order.settlementMode === 'SUPPLIER_TERM' && !new Decimal(version.salesPrice).eq(version.supplyPrice)) {
-      throw new ConflictException({ code: 'DIRECT_TERM_PRICES_MUST_MATCH', message: 'Checkpoint prices must match for direct supplier terms' });
-    }
     const source = frozen ? await tx.priceChangeRunVersion.findFirst({ where: { priceVersionId: { in: [version.id, version.supplyVersionId] }, run: { orders: { some: { supplierOrderId: order.id, status: 'PENDING', adjustment: null } } } },
       include: { run: { include: { orders: { where: { supplierOrderId: order.id }, include: { adjustment: true } } } } },
     }) : null;

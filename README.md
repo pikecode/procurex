@@ -61,6 +61,9 @@ docker run --rm -p 127.0.0.1:4175:80 -e ADMIN_API_UPSTREAM=http://host.docker.in
 
 ## 接续资料
 
+- [需求文档](docs/requirements.md)、[当前模板规则](docs/template-current-spec.md)：现行业务规则。
+- [设计文档入口](docs/design-review-index.md)、[本地业务验收](docs/local-business-acceptance.md)：交互设计及测试依据。
+
 - `docs/continuation.md`：最新接续与下一步。
 - `docs/progress.md`：进度总账。
 - `docs/react-admin-migration.md`：React迁移状态、验证边界和部署说明。

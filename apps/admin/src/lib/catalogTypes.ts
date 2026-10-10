@@ -1,6 +1,6 @@
 export interface Named { id: string; name: string; code?: string }
 export interface TemplateItem {
-  productId: string; sortOrder: number; isEnabled: boolean; minOrderQty: string | null; orderMultiple: string | null; initialSalesPrice?: string | null;
+  productId: string; sortOrder: number; isEnabled: boolean; minOrderQty: string | null; orderMultiple: string | null; initialSalesPrice?: string | null; salesPrice?: string | null;
   suppliers: { supplierId: string; priority: number; salesPrice?: string | null; supplyPrice?: string | null }[];
 }
 export interface Template extends Named {

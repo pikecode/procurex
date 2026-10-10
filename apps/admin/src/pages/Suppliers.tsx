@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Alert, App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Switch, Table, Tabs, Tag, Tooltip, Tree } from 'antd';
-import { Link2, Pencil, Save, Trash2 } from 'lucide-react';
+import { EyeOff, Link2, PackageCheck, Pencil, Save, Trash2 } from 'lucide-react';
 import { ListPage } from '../components/ListPage';
 import { hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
@@ -11,6 +11,7 @@ interface Supplier { id: string; name: string; code: string; version: number; st
 interface Product { id: string; name: string; sku: string | null; isActive: boolean; categoryId: string; baseUnitId: string; specification: string | null; defaultSalesPrice: string | null }
 interface ProductPrice { productId: string; supplyPrice: string; expectedVersionId: string | null }
 interface Links { productIds: string[]; version: number; prices?: ProductPrice[] }
+interface ManagedProduct { id: string; productActive: boolean; supplyEnabled: boolean; version: number }
 const choices = (values: Record<string, string>) => Object.entries(values).map(([value, label]) => ({ value, label }));
 const delivery = choices({ SELF: '自配送', LOGISTICS: '物流' });
 const settlement = choices({ STORED_VALUE: '储值余额', CREDIT: '挂账', SUPPLIER_TERM: '供应商账期结算', COMPANY_TERM: '公司账期结算' });
@@ -25,6 +26,7 @@ export default function Suppliers({ user }: { user: User }) {
   const [category, setCategory] = useState<string>(); const [productSearch, setProductSearch] = useState('');
   const [editing, setEditing] = useState<Supplier | null | undefined>(); const [linking, setLinking] = useState<Supplier | null>(null);
   const [links, setLinks] = useState<Links | null>(null); const [selected, setSelected] = useState<string[]>([]);
+  const [managed, setManaged] = useState<Record<string, ManagedProduct>>({});
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false); const lock = useRef(false); const [error, setError] = useState('');
   const linkRequest = useRef(0);
@@ -47,15 +49,38 @@ export default function Suppliers({ user }: { user: User }) {
   };
   const openLinks = async (row: Supplier) => {
     const generation = ++linkRequest.current;
-    setLinking(row); setLinks(null); setSelected([]); setPriceDrafts({}); setError('');
+    setLinking(row); setLinks(null); setSelected([]); setManaged({}); setPriceDrafts({}); setError('');
     setCategory(undefined); setProductSearch(''); setAdding(false); setRemovals([]);
-    try { const result = await request<Links>(`/suppliers/${row.id}/products`); if (!Array.isArray(result.prices)) throw new Error('商品价格接口尚未更新，请重启本地 API 服务后重试'); if (generation === linkRequest.current) { setLinks(result); setSelected(result.productIds); } }
+    try {
+      const [result, statuses] = await Promise.all([
+        request<Links>(`/suppliers/${row.id}/products`),
+        request<{ items: ManagedProduct[] }>(`/suppliers/${row.id}/managed-products`),
+      ]);
+      if (!Array.isArray(result.prices)) throw new Error('商品价格接口尚未更新，请重启本地 API 服务后重试');
+      if (generation === linkRequest.current) { setLinks(result); setSelected(result.productIds); setManaged(Object.fromEntries(statuses.items.map(item => [item.id, item]))); }
+    }
     catch (failure) { if (generation === linkRequest.current) setError((failure as Error).message); }
   };
   const saveLinks = async () => {
     if (lock.current || !links || !linking || !dirty) return; lock.current = true; setSaving(true); setError('');
-    try { const result = await request<Links>(`/suppliers/${linking.id}/products`, { method: 'PUT', body: { expectedVersion: links.version, productIds: selected, prices: changedPrices } }); setLinks(result); setSelected(result.productIds); setPriceDrafts({}); setRemovals([]); data.reload(); products.reload(); message.success('商品及供货价已保存'); }
+    try {
+      const result = await request<Links>(`/suppliers/${linking.id}/products`, { method: 'PUT', body: { expectedVersion: links.version, productIds: selected, prices: changedPrices } });
+      const statuses = await request<{ items: ManagedProduct[] }>(`/suppliers/${linking.id}/managed-products`);
+      setLinks(result); setSelected(result.productIds); setManaged(Object.fromEntries(statuses.items.map(item => [item.id, item]))); setPriceDrafts({}); setRemovals([]);
+      data.reload(); products.reload(); message.success('商品及供货价已保存');
+    }
     catch (failure) { setError((failure as Error).message); } finally { lock.current = false; setSaving(false); }
+  };
+  const changeListing = async (row: Product) => {
+    if (!linking || !managed[row.id] || lock.current) return;
+    const current = managed[row.id]!; const supplyEnabled = !current.supplyEnabled;
+    lock.current = true; setSaving(true); setError('');
+    try {
+      const updated = await request<ManagedProduct>(`/suppliers/${linking.id}/managed-products/${row.id}`, { method: 'PATCH', body: { supplyEnabled, expectedVersion: current.version } });
+      setManaged(items => ({ ...items, [row.id]: updated }));
+      message.success(supplyEnabled ? '商品已上架' : '商品已下架');
+    } catch (failure) { setError((failure as Error).message); }
+    finally { lock.current = false; setSaving(false); }
   };
   const productColumns = [
     { title: '商品名称', dataIndex: 'name', width: 220 },
@@ -68,7 +93,7 @@ export default function Suppliers({ user }: { user: User }) {
       const value = priceDrafts[row.id] ?? saved?.supplyPrice ?? row.defaultSalesPrice ?? undefined;
       return writable ? <InputNumber aria-label={`${row.name}供货价`} stringMode min="0" max="9999999999.99" precision={2} step="0.01" prefix="¥" style={{ width: '100%' }} placeholder="未设置" value={value} disabled={saving || !links || !selected.includes(row.id)} onChange={next => setPriceDrafts(current => { const updated = { ...current }; if (next === null) delete updated[row.id]; else updated[row.id] = String(next); return updated; })} /> : value === undefined ? '-' : `¥${Number(value).toFixed(2)}`;
     } }] : []),
-    { title: '状态', width: 80, render: (_: unknown, row: Product) => row.isActive ? '启用' : '停用' },
+    ...(!adding ? [{ title: '供货状态', width: 100, render: (_: unknown, row: Product) => !row.isActive ? <Tag>商品已停用</Tag> : managed[row.id]?.supplyEnabled ? <Tag color="success">已上架</Tag> : <Tag>已下架</Tag> }] : []),
   ];
   const changedPrices: ProductPrice[] = selected.flatMap(productId => {
     const saved = links?.prices?.find(price => price.productId === productId);
@@ -106,7 +131,7 @@ export default function Suppliers({ user }: { user: User }) {
         <aside><strong>商品分类</strong><Tree titleRender={node => <Tooltip title={String(node.title)}><span className="supplier-category-label">{String(node.title)}</span></Tooltip>} blockNode defaultExpandAll selectedKeys={[category || 'all']} onSelect={keys => { setCategory(keys[0] === 'all' || !keys.length ? undefined : String(keys[0])); }} treeData={[{ key: 'all', title: `全部商品 (${adding ? products.rows.filter(row => availableProduct(row)).length : selected.length})` }, ...categoryNodes(null)]} /></aside>
         <div className="supplier-products-main">
           <div className="supplier-products-toolbar"><Input aria-label="搜索供应商品" placeholder="商品名称、货号" value={productSearch} onChange={event => setProductSearch(event.target.value)} allowClear /><div className="actions">{writable && !adding && <Button disabled={!removals.length || saving || !links} danger icon={<Trash2 size={16} />} onClick={() => { setSelected(current => current.filter(id => !removals.includes(id))); setRemovals([]); }}>移除所选{removals.length ? ` (${removals.length})` : ''}</Button>}</div></div>
-          <Table<Product> key={`${adding}-${category || 'all'}-${productSearch}`} rowKey="id" size="small" loading={!links && !error || products.loading} scroll={{ x: 700, y: 420 }} locale={{ emptyText: adding ? '暂无可添加商品' : '暂无供应商品' }} dataSource={products.rows.filter(row => (adding ? availableProduct(row) : selected.includes(row.id)) && matching(row))} rowSelection={writable ? { selectedRowKeys: adding ? selected.filter(id => !links?.productIds.includes(id)) : removals, preserveSelectedRowKeys: true, onChange: keys => { if (adding) setSelected(current => [...current.filter(id => links?.productIds.includes(id)), ...keys.map(String)]); else setRemovals(keys.map(String)); }, getCheckboxProps: () => ({ disabled: saving || !links }) } : undefined} columns={[...productColumns, ...(adding ? [{ title: '供应状态', width: 90, render: (_: unknown, row: Product) => selected.includes(row.id) ? <Tag color="processing">待新增</Tag> : '-' }] : writable ? [{ title: '操作', fixed: 'right' as const, width: 90, render: (_: unknown, row: Product) => <Button type="link" danger aria-label={`移除${row.name}`} disabled={saving || !links} icon={<Trash2 size={14} />} onClick={() => { setSelected(current => current.filter(id => id !== row.id)); setRemovals(current => current.filter(id => id !== row.id)); }}>移除</Button> }] : [])]} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条` }} />
+          <Table<Product> key={`${adding}-${category || 'all'}-${productSearch}`} rowKey="id" size="small" loading={!links && !error || products.loading} scroll={{ x: 820, y: 420 }} locale={{ emptyText: adding ? '暂无可添加商品' : '暂无供应商品' }} dataSource={products.rows.filter(row => (adding ? availableProduct(row) : selected.includes(row.id)) && matching(row))} rowSelection={writable ? { selectedRowKeys: adding ? selected.filter(id => !links?.productIds.includes(id)) : removals, preserveSelectedRowKeys: true, onChange: keys => { if (adding) setSelected(current => [...current.filter(id => links?.productIds.includes(id)), ...keys.map(String)]); else setRemovals(keys.map(String)); }, getCheckboxProps: () => ({ disabled: saving || !links }) } : undefined} columns={[...productColumns, ...(adding ? [{ title: '供应状态', width: 90, render: (_: unknown, row: Product) => selected.includes(row.id) ? <Tag color="processing">待新增</Tag> : '-' }] : writable ? [{ title: '操作', fixed: 'right' as const, width: 150, render: (_: unknown, row: Product) => <div className="row-actions">{managed[row.id]?.supplyEnabled ? <Popconfirm title={`下架“${row.name}”？`} description="门店将不能再向当前供应商新订购此商品，历史订单不受影响。" okText="确认下架" cancelText="取消" onConfirm={() => changeListing(row)}><Tooltip title="下架"><Button type="text" danger aria-label={`下架${row.name}`} disabled={saving || !links || !row.isActive} icon={<EyeOff size={15} />} /></Tooltip></Popconfirm> : <Tooltip title="上架"><Button type="text" aria-label={`上架${row.name}`} disabled={saving || !links || !row.isActive} icon={<PackageCheck size={15} />} onClick={() => changeListing(row)} /></Tooltip>}<Tooltip title="移除关联"><Button type="text" danger aria-label={`移除${row.name}`} disabled={saving || !links} icon={<Trash2 size={15} />} onClick={() => { setSelected(current => current.filter(id => id !== row.id)); setRemovals(current => current.filter(id => id !== row.id)); }} /></Tooltip></div> }] : [])]} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条` }} />
         </div>
       </div>
     </Modal>

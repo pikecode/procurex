@@ -24,7 +24,12 @@ test('product form configuration saves atomically and invalidates opposite-side 
     const category = await db.category.create({ data: { code: prefix, name: prefix } });
     const sales = await db.unit.create({ data: { code: `${prefix}S`, name: `${prefix}袋` } }); const purchase = await db.unit.create({ data: { code: `${prefix}P`, name: `${prefix}包` } });
     const suppliers = await Promise.all([0, 1].map(index => db.supplier.create({ data: { code: `${prefix}${index}`, name: `${prefix}${index}`, deliveryMode: 'SELF', defaultSettlementMode: 'COMPANY_TERM', defaultSettlementCycle: 'MONTHLY' } })));
-    const draft = { name: `${prefix}商品`, categoryId: category.id, baseUnitId: sales.id, defaultSalesPrice: '12', supplierIds: suppliers.map(row => row.id), purchaseUnitConversion: { purchaseUnitId: purchase.id, salesUnitsPerPurchaseUnit: '10' } };
+    const draft = {
+      name: `${prefix}商品`, categoryId: category.id, baseUnitId: sales.id, defaultSalesPrice: '12',
+      supplierIds: suppliers.map(row => row.id),
+      supplierPurchasePrices: suppliers.map((row, index) => ({ supplierId: row.id, supplyPrice: String(8 + index), expectedVersionId: null })),
+      purchaseUnitConversion: { purchaseUnitId: purchase.id, salesUnitsPerPurchaseUnit: '10' },
+    };
     for (const field of ['minOrderQty', 'orderMultiple']) for (const value of ['1.5', '0', '-1', '100000000000000']) {
       assert.equal((await call('/products', 'POST', { ...draft, [field]: value })).status, 400);
     }
@@ -40,7 +45,7 @@ test('product form configuration saves atomically and invalidates opposite-side 
       const response = await call(`/templates/${template.id}/items`, 'PUT', { expectedVersion: template.version, items: [{ productId: product.id, suppliers: [{ supplierId: suppliers[0]!.id }], [field]: '1.5' }] });
       assert.equal(response.status, 400);
     }
-    const templateItems = await call(`/templates/${template.id}/items`, 'PUT', { expectedVersion: template.version, items: [{ productId: product.id, suppliers: [{ supplierId: suppliers[0]!.id }], minOrderQty: '2', orderMultiple: '3' }] });
+    const templateItems = await call(`/templates/${template.id}/items`, 'PUT', { expectedVersion: template.version, items: [{ productId: product.id, salesPrice: '12', suppliers: [{ supplierId: suppliers[0]!.id }], minOrderQty: '2', orderMultiple: '3' }] });
     assert.equal(templateItems.status, 200);
     assert.deepEqual([...product.supplierIds].sort(), suppliers.map(row => row.id).sort()); assert.equal(product.purchaseUnitConversion.salesUnitsPerPurchaseUnit, '10');
     const oldSupplier = (await call(`/suppliers/${suppliers[0]!.id}/products`, 'GET')).body.data;
@@ -55,6 +60,7 @@ test('product form configuration saves atomically and invalidates opposite-side 
     const failedCreate = await call('/products', 'POST', { ...draft, name: `${prefix}回滚`, supplierIds: [randomUUID()] }); assert.equal(failedCreate.status, 409); assert.equal(await db.product.count({ where: { name: `${prefix}回滚` } }), 0);
   } finally {
     await db.templateItem.deleteMany({ where: { template: { code: `${prefix}TPL` } } }); await db.orderTemplate.deleteMany({ where: { code: `${prefix}TPL` } });
+    await db.priceScope.deleteMany({ where: { supplier: { code: { startsWith: prefix } } } });
     await db.supplierProduct.deleteMany({ where: { product: { name: { startsWith: prefix } } } }); await db.productUnitConversion.deleteMany({ where: { product: { name: { startsWith: prefix } } } }); await db.product.deleteMany({ where: { name: { startsWith: prefix } } });
     await db.supplier.deleteMany({ where: { code: { startsWith: prefix } } }); await db.category.deleteMany({ where: { code: prefix } }); await db.unit.deleteMany({ where: { code: { startsWith: prefix } } });
     if (actor) { await db.auditLog.deleteMany({ where: { actorUserId: actor.id } }); await db.user.delete({ where: { id: actor.id } }); }

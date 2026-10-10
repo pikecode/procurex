@@ -312,7 +312,7 @@ test('an older price run cannot overwrite a newer effective price when processed
   }
 });
 
-test('direct supplier-term pricing rejects unequal sales and supply prices', async () => {
+test('supplier-term pricing keeps store sales and supplier supply prices independent', async () => {
   const prisma = createClient();
   const service = createService(prisma);
   const suffix = Date.now();
@@ -327,13 +327,9 @@ test('direct supplier-term pricing rejects unequal sales and supply prices', asy
       prisma.supplier.create({ data: { code: supplierCode, name: 'Direct price supplier', deliveryMode: DeliveryMode.SELF, defaultSettlementMode: SettlementMode.SUPPLIER_TERM, defaultSettlementCycle: 'MONTHLY' } }),
     ]);
     const product = await prisma.product.create({ data: { sku, name: 'Direct price product', categoryId: category.id, baseUnitId: unit.id } });
-    await assert.rejects(
-      service.publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: '10', supplyPrice: '8', effectiveAt: new Date('2026-09-01T00:00:00Z'), reason: 'Invalid direct price' }),
-      (error: any) => error?.getResponse?.()?.code === 'DIRECT_TERM_PRICES_MUST_MATCH',
-    );
-    const quote = await service.publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: '10', supplyPrice: '10', effectiveAt: new Date('2026-09-01T00:00:00Z'), reason: 'Valid direct price' });
+    const quote = await service.publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: '10', supplyPrice: '8', effectiveAt: new Date('2026-09-01T00:00:00Z'), reason: 'Independent supplier-term prices' });
     assert.equal(quote.salesPrice, '10');
-    assert.equal(quote.supplyPrice, '10');
+    assert.equal(quote.supplyPrice, '8');
   } finally {
     await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: supplierCode } } } });
     await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });

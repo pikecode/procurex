@@ -34,6 +34,7 @@ export type TemplateItemInput = {
   isEnabled?: boolean;
   minOrderQty?: string | null;
   orderMultiple?: string | null;
+  salesPrice?: string;
   productId: string;
   sortOrder?: number;
   suppliers: Array<{ supplierId: string; priority: number; salesPrice?: string }>;
@@ -41,7 +42,7 @@ export type TemplateItemInput = {
 
 export type TemplateItemsView = {
   templateId: string;
-  items: Array<{ productId: string; sortOrder: number; initialSalesPrice: string | null; isEnabled: boolean; minOrderQty: string | null; orderMultiple: string | null; suppliers: Array<{ supplierId: string; priority: number }> }>;
+  items: Array<{ productId: string; sortOrder: number; initialSalesPrice: string | null; isEnabled: boolean; minOrderQty: string | null; orderMultiple: string | null; suppliers: Array<{ supplierId: string; priority: number; salesPrice: string | null }> }>;
   removedCycleOverrides: Array<{ storeId: string; supplierId: string; settlementCycle: string }>;
   version: number;
 };
@@ -61,6 +62,8 @@ export type CreateTemplateInput = {
   name: string;
   tag?: string;
   remark?: string | null;
+  storeIds?: string[];
+  confirmStoreReassignment?: boolean;
 };
 
 @Injectable()
@@ -78,17 +81,31 @@ export class TemplatesService {
   async createTemplate(input: CreateTemplateInput, context?: MasterDataAuditContext): Promise<TemplateView> {
     return auditedMasterDataTransaction(this.database, this.audit, context, 'template.create', 'OrderTemplate', async tx => {
       await this.requireUniqueName(tx, input.name);
-      return toTemplateView(await tx.orderTemplate.create({ data: { ...input, code: input.code ?? `MB${randomUUID().replaceAll('-', '').toUpperCase()}` } }));
+      const { storeIds = [], confirmStoreReassignment = false, ...metadata } = input;
+      if (storeIds.length) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('procurex.template-store-binding'))`;
+        const stores = await tx.store.findMany({ where: { id: { in: storeIds } }, select: { id: true } });
+        if (stores.length !== storeIds.length) throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'One or more stores were not found' });
+        const conflicts = await tx.storeTemplateBinding.findMany({ where: { storeId: { in: storeIds }, expiredAt: null }, select: { storeId: true, templateId: true } });
+        if (conflicts.length && !confirmStoreReassignment) throw new ConflictException({ code: 'STORE_ALREADY_BOUND', message: 'One or more stores already have an active template', details: { bindings: conflicts } });
+        if (conflicts.length) {
+          const reassignedAt = new Date();
+          await tx.storeTemplateBinding.updateMany({ where: { storeId: { in: conflicts.map(row => row.storeId) }, expiredAt: null }, data: { expiredAt: reassignedAt } });
+          await tx.templateStoreSupplierCycle.deleteMany({ where: { OR: conflicts.map(row => ({ templateId: row.templateId, storeId: row.storeId })) } });
+        }
+      }
+      return toTemplateView(await tx.orderTemplate.create({ data: { ...metadata, code: metadata.code ?? `MB${randomUUID().replaceAll('-', '').toUpperCase()}`,
+        bindings: storeIds.length ? { create: storeIds.map(storeId => ({ storeId })) } : undefined } }));
     });
   }
 
-  async updateTemplate(id: string, expectedVersion: number, input: { name?: string; tag?: string; remark?: string | null }, context?: MasterDataAuditContext): Promise<TemplateView> {
+  async updateTemplate(id: string, expectedVersion: number, input: { name?: string; tag?: string; remark?: string | null }, context?: MasterDataAuditContext, transaction?: Prisma.TransactionClient): Promise<TemplateView> {
     return auditedMasterDataTransaction(this.database, this.audit, context, 'template.update', 'OrderTemplate', async tx => {
       // All name-changing commands use the same lock before locking an individual template.
       if (input.name !== undefined) await this.requireUniqueName(tx, input.name, id);
       await this.lockTemplate(tx, id, expectedVersion);
       return toTemplateView(await tx.orderTemplate.update({ where: { id }, data: { ...input, updatedAt: new Date(Math.max(Date.now(), expectedVersion + 1)) } }));
-    });
+    }, transaction);
   }
 
   async copyTemplate(id: string, expectedVersion: number, input: CreateTemplateInput, context?: MasterDataAuditContext): Promise<TemplateView> {
@@ -104,20 +121,12 @@ export class TemplatesService {
       } });
       const copiedAt = new Date();
       for (const item of source.items) for (const supplier of item.suppliers) {
-        const scopes = await tx.priceScope.findMany({ where: { productId: item.productId, supplierId: supplier.supplierId, templateKey: { in: ['', source.id] } },
-          include: { versions: { orderBy: [{ effectiveAt: 'asc' }, { revision: 'asc' }] } } });
-        const times = [copiedAt, ...[...new Set(scopes.flatMap(scope => scope.versions.filter(version => version.effectiveAt > copiedAt).map(version => version.effectiveAt.toISOString())))].sort().map(time => new Date(time))];
-        const versions: Array<{ salesPrice: Prisma.Decimal; supplyPrice: Prisma.Decimal; supplySourceVersionId: string; effectiveAt: Date; reason: string; revision: number }> = [];
-        let previousSaleVersion: string | undefined;
-        for (const at of times) {
-          const quote = await effectivePriceVersion(tx, item.productId, supplier.supplierId, at, id);
-          if (!quote || quote.id === previousSaleVersion) continue;
-          versions.push({ salesPrice: quote.salesPrice, supplyPrice: quote.supplyPrice, supplySourceVersionId: quote.supplyVersionId, effectiveAt: at, reason: 'Copied template price', revision: versions.length + 1 });
-          previousSaleVersion = quote.id;
-        }
-        if (!versions.length) continue;
+        const quote = await effectivePriceVersion(tx, item.productId, supplier.supplierId, copiedAt, id);
+        if (!quote || item.initialSalesPrice === null) continue;
+        const salesPrice = quote.scope.templateKey === id.toLowerCase() ? quote.salesPrice : item.initialSalesPrice;
         await tx.priceScope.create({ data: { productId: item.productId, supplierId: supplier.supplierId, templateKey: copy.id,
-          versions: { create: versions } } });
+          versions: { create: { salesPrice, supplyPrice: quote.supplyPrice, supplySourceVersionId: quote.supplyVersionId,
+            effectiveAt: copiedAt, reason: '复制订货模板销售价', revision: 1 } } } });
       }
       return toTemplateView(copy);
     });
@@ -143,9 +152,6 @@ export class TemplatesService {
       await this.lockTemplate(tx, id, expectedVersion);
       const supplier = await tx.supplier.findUnique({ where: { id: supplierId } });
       if (!supplier) throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'Supplier was not found' });
-      if (supplier.defaultSettlementMode === SettlementMode.SUPPLIER_TERM) {
-        await this.requireDirectPrices(tx, id, supplierId);
-      }
       await tx.templateSupplierSetting.deleteMany({ where: { templateId: id, supplierId } });
       const updated = await this.touchTemplate(tx, id, expectedVersion);
       return { templateId: id, supplierId, settlementMode: supplier.defaultSettlementMode, settlementCycle: supplier.defaultSettlementCycle, usesDefault: true, version: templateVersion(updated) };
@@ -175,16 +181,17 @@ export class TemplatesService {
       items: await Promise.all(template.items.map(async item => ({ productId: item.productId, sortOrder: item.sortOrder, isEnabled: item.isEnabled,
         minOrderQty: item.minOrderQty?.toString() ?? null, orderMultiple: item.orderMultiple?.toString() ?? null,
         initialSalesPrice: item.initialSalesPrice?.toString() ?? null,
+        salesPrice: item.initialSalesPrice?.toString() ?? null,
         suppliers: await Promise.all(item.suppliers.map(async supplier => {
           const price = await effectivePriceVersion(this.database.client, item.productId, supplier.supplierId, new Date(), id);
-          return { supplierId: supplier.supplierId, priority: supplier.priority, salesPrice: price?.salesPrice.toString() ?? null, supplyPrice: price?.supplyPrice.toString() ?? null };
+          return { supplierId: supplier.supplierId, priority: supplier.priority, salesPrice: price?.salesPrice.toString() ?? item.initialSalesPrice?.toString() ?? null, supplyPrice: price?.supplyPrice.toString() ?? null };
         })) }))),
       settings: template.settings.map(setting => ({ supplierId: setting.supplierId, settlementMode: setting.settlementMode, settlementCycle: setting.settlementCycle })),
       cycleOverrides: template.cycleOverrides.map(row => ({ storeId: row.storeId, supplierId: row.supplierId, settlementCycle: row.settlementCycle })),
     };
   }
 
-  async replaceTemplateStores(templateId: string, expectedVersion: number, storeIds: string[], context?: MasterDataAuditContext): Promise<TemplateStoresView> {
+  async replaceTemplateStores(templateId: string, expectedVersion: number, storeIds: string[], context?: MasterDataAuditContext, transaction?: Prisma.TransactionClient, confirmStoreReassignment = false): Promise<TemplateStoresView> {
     return auditedMasterDataTransaction(this.database, this.audit, context, 'template.stores.replace', 'OrderTemplate', async tx => {
     // Binding changes across different templates must not claim the same store concurrently.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('procurex.template-store-binding'))`;
@@ -201,19 +208,25 @@ export class TemplatesService {
       });
     }
 
-    const conflictingBinding = await tx.storeTemplateBinding.findFirst({
+    const conflictingBindings = await tx.storeTemplateBinding.findMany({
       where: {
         storeId: { in: uniqueStoreIds },
         expiredAt: null,
         templateId: { not: templateId },
       },
     });
-    if (conflictingBinding) {
+    if (conflictingBindings.length && !confirmStoreReassignment) {
       throw new ConflictException({
         code: 'STORE_ALREADY_BOUND',
         message: 'One or more stores already have an active template',
-        details: { storeId: conflictingBinding.storeId, templateId: conflictingBinding.templateId },
+        details: { bindings: conflictingBindings.map(row => ({ storeId: row.storeId, templateId: row.templateId })) },
       });
+    }
+
+    if (conflictingBindings.length) {
+      const reassignedAt = new Date();
+      await tx.storeTemplateBinding.updateMany({ where: { id: { in: conflictingBindings.map(row => row.id) } }, data: { expiredAt: reassignedAt } });
+      await tx.templateStoreSupplierCycle.deleteMany({ where: { OR: conflictingBindings.map(row => ({ templateId: row.templateId, storeId: row.storeId })) } });
     }
 
     await tx.storeTemplateBinding.updateMany({
@@ -240,10 +253,10 @@ export class TemplatesService {
       storeIds: activeBindings.map((binding) => binding.storeId),
       version: templateVersion(updated),
     };
-    });
+    }, transaction);
   }
 
-  async replaceSettlementCycles(templateId: string, expectedVersion: number, rows: { storeId: string; supplierId: string; settlementCycle: string }[], context?: MasterDataAuditContext) {
+  async replaceSettlementCycles(templateId: string, expectedVersion: number, rows: { storeId: string; supplierId: string; settlementCycle: string }[], context?: MasterDataAuditContext, transaction?: Prisma.TransactionClient) {
     return auditedMasterDataTransaction(this.database, this.audit, context, 'template.settlement-cycles.replace', 'OrderTemplate', async tx => {
       await lockCatalog(tx);
       await this.lockTemplate(tx, templateId, expectedVersion);
@@ -263,16 +276,17 @@ export class TemplatesService {
       if (rows.length) await tx.templateStoreSupplierCycle.createMany({ data: rows.map(row => ({ ...row, templateId })) });
       const updated = await this.touchTemplate(tx, templateId, expectedVersion);
       return { templateId, version: templateVersion(updated), cycleOverrides: rows };
-    });
+    }, transaction);
   }
 
-  async replaceTemplateItems(templateId: string, expectedVersion: number, items: TemplateItemInput[], context?: MasterDataAuditContext, confirmCycleOverrideRemoval = false): Promise<TemplateItemsView> {
+  async replaceTemplateItems(templateId: string, expectedVersion: number, items: TemplateItemInput[], context?: MasterDataAuditContext, confirmCycleOverrideRemoval = false, transaction?: Prisma.TransactionClient): Promise<TemplateItemsView> {
     return auditedMasterDataTransaction(this.database, this.audit, context, 'template.items.replace', 'OrderTemplate', async tx => {
-    await lockPricePublication(tx, items.some(item => item.suppliers.some(supplier => supplier.salesPrice !== undefined)));
+    await lockPricePublication(tx, true);
     await lockCatalog(tx);
     await this.lockTemplate(tx, templateId, expectedVersion);
-    const previousItems = await tx.templateItem.findMany({ where: { templateId } });
+    const previousItems = await tx.templateItem.findMany({ where: { templateId }, include: { suppliers: { select: { supplierId: true } } } });
     const initialPrices = new Map(previousItems.map(item => [item.productId, item.initialSalesPrice]));
+    const previousSupplierKeys = new Set(previousItems.flatMap(item => item.suppliers.map(link => `${item.productId}:${link.supplierId}`)));
     if (new Set(items.map(item => item.productId)).size !== items.length || items.some(item => new Set(item.suppliers.map(supplier => supplier.supplierId)).size !== item.suppliers.length)) {
       throw new ConflictException({ code: 'DUPLICATE_TEMPLATE_ITEM', message: 'Template products and their suppliers must be unique' });
     }
@@ -280,8 +294,8 @@ export class TemplatesService {
     const productIds = [...new Set(items.map((item) => item.productId))];
     const supplierIds = [...new Set(items.flatMap((item) => item.suppliers.map((supplier) => supplier.supplierId)))];
     const [products, suppliers] = await Promise.all([
-      tx.product.findMany({ where: { id: { in: productIds } }, select: { id: true, defaultSalesPrice: true } }),
-      tx.supplier.findMany({ where: { id: { in: supplierIds }, isArchived: false }, select: { id: true } }),
+      tx.product.findMany({ where: { id: { in: productIds } }, select: { id: true, name: true, defaultSalesPrice: true } }),
+      tx.supplier.findMany({ where: { id: { in: supplierIds }, isArchived: false }, select: { id: true, name: true } }),
     ]);
 
     if (products.length !== productIds.length) {
@@ -290,7 +304,6 @@ export class TemplatesService {
     if (suppliers.length !== supplierIds.length) {
       throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'One or more suppliers were not found' });
     }
-
       const retainedSupplierIds = items.filter(item => item.isEnabled).flatMap(item => item.suppliers.map(link => link.supplierId));
       // Dropping a supplier's products would silently revert its per-store settlement cycle to the supplier default.
       const removedCycleOverrides = await tx.templateStoreSupplierCycle.findMany({
@@ -310,6 +323,7 @@ export class TemplatesService {
       }
       await tx.templateItem.deleteMany({ where: { templateId } });
       for (const item of items) {
+        const templateSalesPrice = item.salesPrice ?? initialPrices.get(item.productId)?.toString() ?? products.find(product => product.id === item.productId)!.defaultSalesPrice!.toString();
         await tx.templateItem.create({
           data: {
             templateId,
@@ -317,7 +331,7 @@ export class TemplatesService {
             isEnabled: item.isEnabled ?? previousItems.find(previous => previous.productId === item.productId)?.isEnabled ?? true,
             minOrderQty: item.minOrderQty === undefined ? previousItems.find(previous => previous.productId === item.productId)?.minOrderQty : item.minOrderQty,
             orderMultiple: item.orderMultiple === undefined ? previousItems.find(previous => previous.productId === item.productId)?.orderMultiple : item.orderMultiple,
-            initialSalesPrice: initialPrices.has(item.productId) ? initialPrices.get(item.productId) : products.find(product => product.id === item.productId)!.defaultSalesPrice,
+            initialSalesPrice: templateSalesPrice,
             sortOrder: item.sortOrder ?? 0,
             suppliers: {
               create: item.suppliers.map((supplier) => ({
@@ -331,12 +345,25 @@ export class TemplatesService {
     await this.touchTemplate(tx, templateId, expectedVersion);
     const effectiveAt = new Date();
     for (const item of items) for (const supplier of item.suppliers) {
-      if (supplier.salesPrice === undefined) continue;
       const current = await effectivePriceVersion(tx, item.productId, supplier.supplierId, effectiveAt, templateId);
-      if (!current) throw new ConflictException({ code: 'PRICE_VERSION_NOT_FOUND', message: '请先在商品资料中维护该供应商的采购价' });
-      if (current.salesPrice.equals(supplier.salesPrice)) continue;
+      if (!current) {
+        const product = products.find(row => row.id === item.productId);
+        const supplierRecord = suppliers.find(row => row.id === supplier.supplierId);
+        throw new ConflictException({ code: 'PRICE_VERSION_NOT_FOUND', message: `“${product?.name ?? '商品'}”尚未维护“${supplierRecord?.name ?? '供应商'}”的供货价`,
+          details: { productId: item.productId, productName: product?.name, supplierId: supplier.supplierId, supplierName: supplierRecord?.name } });
+      }
+      const wasLinked = previousSupplierKeys.has(`${item.productId}:${supplier.supplierId}`);
+      const templateSalesPrice = supplier.salesPrice ?? item.salesPrice ?? (wasLinked ? current.salesPrice.toString() : current.supplyPrice.toString());
+      if (current.salesPrice.equals(templateSalesPrice) && current.scope.templateKey === templateId.toLowerCase()) continue;
       await this.pricing.publishPrice({ productId: item.productId, supplierId: supplier.supplierId, templateId,
-        salesPrice: supplier.salesPrice, supplyPrice: current.supplyPrice.toString(), effectiveAt, reason: '订货模板维护供应商销售价' }, tx);
+        salesPrice: templateSalesPrice, supplyPrice: current.supplyPrice.toString(), effectiveAt, reason: '订货模板维护门店销售价' }, tx);
+    }
+    // Keep the legacy item-level price aligned with the default supplier. Supplier prices remain authoritative.
+    for (const item of items) {
+      const primary = [...item.suppliers].sort((left, right) => left.priority - right.priority || left.supplierId.localeCompare(right.supplierId))[0];
+      const primaryPrice = primary ? await effectivePriceVersion(tx, item.productId, primary.supplierId, effectiveAt, templateId) : null;
+      const primarySalesPrice = primaryPrice?.salesPrice.toString() ?? item.salesPrice ?? initialPrices.get(item.productId)?.toString() ?? products.find(product => product.id === item.productId)!.defaultSalesPrice!.toString();
+      await tx.templateItem.update({ where: { templateId_productId: { templateId, productId: item.productId } }, data: { initialSalesPrice: primarySalesPrice } });
     }
     const updated = await tx.orderTemplate.findUniqueOrThrow({ where: { id: templateId } });
     const currentItems = await tx.templateItem.findMany({
@@ -347,17 +374,32 @@ export class TemplatesService {
 
     return {
       templateId,
-      items: currentItems.map((item) => ({
+      items: await Promise.all(currentItems.map(async (item) => ({
         isEnabled: item.isEnabled, minOrderQty: item.minOrderQty?.toString() ?? null, orderMultiple: item.orderMultiple?.toString() ?? null,
         initialSalesPrice: item.initialSalesPrice?.toString() ?? null,
         productId: item.productId,
         sortOrder: item.sortOrder,
-        suppliers: item.suppliers.map((supplier) => ({ supplierId: supplier.supplierId, priority: supplier.priority })),
-      })),
+        suppliers: await Promise.all(item.suppliers.map(async (supplier) => ({ supplierId: supplier.supplierId, priority: supplier.priority,
+          salesPrice: (await effectivePriceVersion(tx, item.productId, supplier.supplierId, new Date(), templateId))?.salesPrice.toString() ?? item.initialSalesPrice?.toString() ?? null }))),
+      }))),
       removedCycleOverrides,
       version: templateVersion(updated),
     };
-    });
+    }, transaction);
+  }
+
+  async replaceConfiguration(id: string, expectedVersion: number, input: { name: string; tag: string; remark?: string | null; storeIds: string[]; items: TemplateItemInput[]; rows: { storeId: string; supplierId: string; settlementCycle: string }[]; confirmStoreReassignment: boolean; confirmCycleOverrideRemoval: boolean }, context?: MasterDataAuditContext) {
+    return this.database.client.$transaction(async tx => {
+      // Follow the publication/catalog/name/binding lock order before touching the template.
+      await lockPricePublication(tx, true);
+      await lockCatalog(tx);
+      await this.requireUniqueName(tx, input.name, id);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('procurex.template-store-binding'))`;
+      const metadata = await this.updateTemplate(id, expectedVersion, { name: input.name, tag: input.tag, remark: input.remark }, context, tx);
+      const stores = await this.replaceTemplateStores(id, metadata.version, input.storeIds, context, tx, input.confirmStoreReassignment);
+      const items = await this.replaceTemplateItems(id, stores.version, input.items, context, input.confirmCycleOverrideRemoval, tx);
+      return this.replaceSettlementCycles(id, items.version, input.rows, context, tx);
+    }, { timeout: 30000 });
   }
 
   async replaceSupplierSettings(templateId: string, expectedVersion: number, settings: TemplatePaymentSetting[], context?: MasterDataAuditContext) {
@@ -369,9 +411,6 @@ export class TemplatesService {
       const linkedIds = new Set(links.map(link => link.supplierId));
       if (settings.length !== linkedIds.size || new Set(settings.map(row => row.supplierId)).size !== settings.length || settings.some(row => !linkedIds.has(row.supplierId))) {
         throw new ConflictException({ code: 'SUPPLIER_NOT_IN_TEMPLATE', message: 'Settings must cover every linked supplier exactly once' });
-      }
-      for (const row of settings) {
-        if (row.settlementMode === SettlementMode.SUPPLIER_TERM) await this.requireDirectPrices(tx, templateId, row.supplierId);
       }
       await tx.templateSupplierSetting.deleteMany({ where: { templateId } });
       if (settings.length) await tx.templateSupplierSetting.createMany({ data: settings.map(row => ({ ...row, templateId })) });
@@ -397,10 +436,6 @@ export class TemplatesService {
       throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'Supplier was not found' });
     }
 
-    if (settlementMode === SettlementMode.SUPPLIER_TERM) {
-      await this.requireDirectPrices(tx, templateId, supplierId);
-    }
-
     const linked = await tx.templateItemSupplier.findFirst({ where: { supplierId, templateItem: { templateId } } });
     if (!linked) throw new ConflictException({ code: 'SUPPLIER_NOT_IN_TEMPLATE', message: 'Supplier is not associated with template products' });
     const setting = await tx.templateSupplierSetting.upsert({
@@ -418,19 +453,6 @@ export class TemplatesService {
       version: templateVersion(updated),
     };
     });
-  }
-
-  private async requireDirectPrices(tx: Prisma.TransactionClient, templateId: string, supplierId: string) {
-    const items = await tx.templateItem.findMany({ where: { templateId, suppliers: { some: { supplierId } } }, select: { productId: true } });
-    const now = new Date();
-    for (const item of items) {
-      const versions = await tx.priceVersion.findMany({ where: { scope: { productId: item.productId, supplierId, templateKey: { in: ['', templateId.toLowerCase()] } }, effectiveAt: { gt: now } }, select: { effectiveAt: true } });
-      const times = new Set([now.toISOString(), ...versions.map(version => version.effectiveAt.toISOString())]);
-      for (const time of times) {
-        const price = await effectivePriceVersion(tx, item.productId, supplierId, new Date(time), templateId);
-        if (price && !price.salesPrice.equals(price.supplyPrice)) throw new ConflictException({ code: 'DIRECT_TERM_PRICES_MUST_MATCH', message: 'Current and scheduled direct supplier-term prices must be equal' });
-      }
-    }
   }
 
   private async lockTemplate(tx: Prisma.TransactionClient, id: string, expectedVersion: number): Promise<void> {

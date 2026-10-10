@@ -109,6 +109,7 @@ for (const roleCode of roles) test(`role privacy HTTP ${roleCode}: scope states,
     const endpoints: Array<[string, string[]]> = [
       ['/categories', central], ['/units', central], ['/brands', central], ['/products', central], ['/templates', ['ADMIN', 'PURCHASER']], ['/users', ['ADMIN']],
       ['/suppliers', central], [`/suppliers/${own.supplier.id}`, [...central, 'SUPPLIER']], [`/suppliers/${own.supplier.id}/catalog`, [...central, 'SUPPLIER']],
+      [`/suppliers/${own.supplier.id}/managed-products`, ['ADMIN', 'PURCHASER', 'SUPPLIER']],
       ['/purchase-requests', ['ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE']], [`/stores/${own.store.id}/catalog`, [...central, 'STORE', 'STORE_FINANCE']],
       ['/supplier-orders', suppliers], ['/freight-confirmations', ['ADMIN', 'PURCHASER', 'SUPPLIER']], [`/shipments/${own.shipment.id}`, stores],
       ['/store-statements', bills], ['/supplier-statements', supplierBills], ['/supplier-store-statements', supplierBills], ['/direct-statements', directBills],
@@ -227,6 +228,7 @@ for (const roleCode of roles) test(`role privacy HTTP ${roleCode}: scope states,
       }
     }
     if (roleCode === 'SUPPLIER') {
+      assert.equal((await call(`/suppliers/${foreign.supplier.id}/managed-products`)).status, 403);
       const detail = await get(`/supplier-orders/${own.order.id}`);
       assert.equal(detail.salesGoodsAmount, undefined); assert.equal(detail.items[0].salesUnitPrice, undefined); assert.equal(detail.items[0].supplyUnitPrice, '9');
       assert.equal((await call(`/supplier-orders/${foreign.order.id}`)).status, 404);

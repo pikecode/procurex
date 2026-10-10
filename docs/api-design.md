@@ -1,5 +1,7 @@
 # 接口详细设计
 
+> 2026-10-10 当前主数据口径：供应商联系及银行等辅助资料选填，业务号码 `contactPhone` 与配送号码 `deliveryContactPhone` 分开。供应商唯一结算方式不可由模板覆盖，仅账期类配置周期。下方带日期的旧增量描述保留历史过程，与本节及 `template-current-spec.md` 冲突时按当前口径执行。
+
 2026-10-06储值时点更新：新`POST /purchase-requests`下单足额冻结，不扣账面余额；`funding.stored`新增reserved，paid只表示实际扣款，available扣除全店其他订单冻结。采购确认/拆单/发货仅调整冻结；供应商执行单收货完成（含差异处理）时同事务转实际扣款，重复命令和重算不重复扣款。
 
 `GET /stores/{id}/account`及财务总览account新增reservedBalance和availableBalance；balance为账面余额，availableBalance=balance-reservedBalance。`GET /purchase-requests/{id}`新增storedReservedAmount，列表/详情新增storedValueOnReceipt标识新旧计费策略。冻结不等于PAID；不足仍保留PENDING_FUNDS，补足后重新冻结并确认。减量/取消释放冻结，无实际现金变动时不造现金流水。充值增加balance不自动扣款；清账只减少creditUsed并恢复creditAvailable，不扣储值。历史请求策略保留，未回写金额或流水。
@@ -116,7 +118,7 @@ POST /commands/{id}/reviews仅ADMIN，必须Idempotency-Key，body为expectedSta
 | 项目 | 约定 |
 |---|---|
 | ID | UUID 字符串；展示单号另有 `documentNo`，不以单号代替归属校验 |
-| 金额/单价/数量 | 十进制字符串；金额 2 位、单价数量最多 6 位；禁止 NaN、Infinity、指数形式和浮点 JSON number |
+| 金额/单价/数量 | 十进制字符串；金额 2 位，价格录入和界面展示 2 位，数量最多 6 位；底层价格响应保留换算精度。禁止 NaN、Infinity、指数形式和浮点 JSON number |
 | 时间 | 时间戳带时区，如 `2026-09-15T10:00:00+08:00`；日期 `YYYY-MM-DD`；业务周期统一上海时区 |
 | 成功 | 单对象 `{data, traceId}`；分页 `{data:{items,page,pageSize,total},traceId}` |
 | 错误 | `{code,message,traceId,details}`；details 不泄露其他主体或公司成本 |
@@ -215,6 +217,8 @@ RequestItem/OrderItem新增可空JSON unitSnapshot，记录salesUnitId/name、pu
 | M04 | `GET/POST /categories`、`PATCH/DELETE /categories/{id}` | name、parentId、expectedVersion | PURCHASER/ADMIN；二级限制；存在商品阻止删除 |
 | M05 | `GET/POST /brands`、`PATCH/DELETE /brands/{id}`；单位同路径规则 `/units` | name、expectedVersion | PURCHASER/ADMIN；使用中不可删除 |
 | M06 | `GET/PUT /suppliers/{id}/products` | 产品 ID 列表、expectedVersion；逐条检查 | PURCHASER/ADMIN；调整当前关系不删除历史 |
+| M06a | `GET /suppliers/{id}/managed-products` | 自身关联商品，包括已下架；商品资料、supplyPrice、productActive、supplyEnabled、version | ADMIN/PURCHASER/SUPPLIER；供应商限定自身范围 |
+| M06b | `PATCH /suppliers/{id}/managed-products/{productId}` | supplyEnabled 布尔值、expectedVersion；返回更新行 | ADMIN/PURCHASER/SUPPLIER；只切换已有关联的供货状态 |
 | M07 | `GET/POST /collection-accounts`、`PATCH /collection-accounts/{id}` | 公司收款账户资料、状态 | HQ_FINANCE/ADMIN |
 
 供应商和商品写入字段与 [数据库设计 §3](./database-design.md) 一一对应；价格版本变更必须使用 P02，不允许 PATCH 商品或模板绕过价格历史及影响重算。`defaultSalesPrice` 只初始化配置，不改已有模板有效报价。
@@ -223,9 +227,11 @@ RequestItem/OrderItem新增可空JSON unitSnapshot，记录salesUnitId/name、pu
 
 后续模板价格批次覆盖上段“独立范围开放”的状态：POST /price-changes 和 /prices/impact-preview 支持可选templateId；省略仍为共享范围，指定仅维护有效模板中已关联商品/供应商的销售价。模板supplyPrice必须等于该生效时间的公共供货价，否则409 TEMPLATE_SUPPLY_PRICE_READ_ONLY，不借模板发布改供应商成本。模板价生效前共享销售价兼容，成本始终来自公共版本。POST /prices/quote（productId、supplierId、可选templateId/effectiveAt，缺时间取现在）返回真实有效价及销售versionId/供货supplyVersionId；未知有效价404，不以初始化值冒充。发布会更新模板版本；price versions中供货价及supplyVersionId是发布/复制时的来源快照，旧缺源允许NULL，不随当前公共价变动重写。
 
-模板PUT items支持isEnabled、minOrderQty/orderMultiple（正字符串、最多6位、可传null继承商品；省略保留已有）；GET template显示规则及供应商当前有效两价。首次关联初始化值仍不是有效价格发布。复制只建当前/未来销售配置、不复刻旧任务；供货价仍共享。新申请增加supplyPriceVersionId，原priceVersionId标识销售来源；新订单分别记录salesPriceVersionId/supplyPriceVersionId，旧NULL不回填。提交前版本变化409 VERSION_CONFLICT；直接账期当前/未来两价必须一致，不平衡发布回滚。
+模板PUT items支持isEnabled、minOrderQty/orderMultiple（正字符串、最多6位、可传null继承商品；省略保留已有），并在每个供应商关联项上提交独立salesPrice；GET template显示规则及供应商当前有效两价。新增关联的门店销售价默认取有效供货价，缺少供货价返回PRICE_VERSION_NOT_FOUND并包含商品、供应商标识及名称。复制只建当前/未来销售配置、不复刻旧任务；供货价仍共享。新申请增加supplyPriceVersionId，原priceVersionId标识销售来源；新订单分别记录salesPriceVersionId/supplyPriceVersionId，旧NULL不回填。提交前版本变化返回VERSION_CONFLICT；结算方式不强制两价一致。
 
-供应商结算/配送配置变更影响后续配置匹配，不改写订单结算快照。直接账期两价一致校验失败返回关联配置项，不允许保存半套非法配置。
+供应商结算/配送配置变更影响后续配置匹配，不改写订单结算快照。每个供应商只维护一种结算方式；模板不覆盖结算方式，仅可按门店覆盖账期类供应商的结算周期。
+
+供货状态写入校验供应商启用且未归档，按关联版本做并发检查；不存在关联返回 `SUPPLIER_PRODUCT_NOT_FOUND`，不可用供应商返回 `SUPPLIER_UNAVAILABLE`，旧版本返回 `VERSION_CONFLICT`。状态与审计同事务保存。下架保留关联、价格和历史订单，新目录与新分配排除 `supplyEnabled=false`；上架仍受商品全局状态和有效模板、价格约束。供应商不能借此修改商品资料、供货价或新增关联。
 
 ### 3.3 模板与价格接口
 
@@ -234,9 +240,11 @@ RequestItem/OrderItem新增可空JSON unitSnapshot，记录salesUnitId/name、pu
 | T01 | `GET/POST /templates`、`GET/PATCH /templates/{id}` | name、tag、remark、expectedVersion；PURCHASER/ADMIN |
 | T02 | `PUT /templates/{id}/stores` | storeIds、expectedVersion；整批原子绑定，任一门店已绑定其他模板则全部失败 |
 | T03 | `PUT /templates/{id}/items` | 商品、起订量、倍数、候选供应商和优先级、expectedVersion；返回逐项校验错误 |
-| T04 | `PUT /templates/{id}/supplier-settings/{supplierId}` | settlementOverride（枚举或 null）、expectedVersion；null 清除覆盖 |
+| T04 | `PUT /templates/{id}/settlement-cycles` | 门店×账期供应商的周期覆盖、expectedVersion；省略覆盖时使用供应商默认周期 |
 | T05 | `POST /templates/{id}/copy`、`POST /templates/{id}/archive` | copy 带新名称和来源版本；复制不带门店；归档解除当前绑定 |
 | T06 | `GET /stores/{id}/catalog` | categoryId、keyword、page；返回当前模板可订商品、销售价、起订规则和可用状态 |
+
+`PUT/DELETE /templates/{id}/supplier-settings...` 为历史兼容路由，当前写入返回 `TEMPLATE_SETTLEMENT_DISABLED`，不得作为新客户端能力使用。结算方式只在供应商资料维护，模板只通过 T04 维护账期周期覆盖。
 
 2026-10-03 正式 Web 增量：`GET /suppliers/{id}/products` 返回 supplierId、productIds、version，允许 ADMIN/PURCHASER/HQ_FINANCE；供应商不能读取其他供货方配置。`GET /templates/{id}` 允许 ADMIN/PURCHASER，返回模板、storeIds、商品/供货优先级、settings；模板列表同时返回有效 storeIds。模板三个写入口同事务锁定模板、验证版本、修改配置并单调更新版本；绑定跨模板串行校验，避免一门店并发双绑。门店/供应商 PATCH 原子版本更新，关联商品 PUT 锁定供应商并同事务更新版本。首次价格预览无范围时仍计算实际影响订单。以上不代表本表其余主数据字段/接口已完成，详见 formal-workspace-acceptance.md。
 | P01 | `POST /prices/impact-preview` | productId、supplierId、salesPrice、supplyPrice、effectiveAt；只读返回生效区间内未完成执行单及两侧金额净变化，排除已完成单 |
@@ -410,7 +418,6 @@ R04 `POST /exports` 返回 202 和 jobId；`GET /exports` 返回本人最近未�
 | `INVALID_STATE_TRANSITION` | 已完成再发货、已核销再撤销 | 刷新状态，不重复尝试不合法动作 |
 | `SUPPLIER_NOT_ELIGIBLE` | 批选供应商不供某商品 | 按商品显示原因；不部分应用 |
 | `TARGET_SUPPLIER_ALREADY_SHIPPED` | 拒单改分配目标已发货 | 改选可用供应商或取消对应商品 |
-| `DIRECT_PRICE_MISMATCH` | 直接账期两价不一致 | 引导采购修正关联价格配置 |
 | `REPLENISHMENT_EXCEEDS_GAP` | 超量或重复补发 | 刷新缺口及历史批次 |
 | `FREIGHT_CONFIRMATION_REQUIRED` | 补发录入未确认额外运费 | 等待采购费用确认 |
 | `PAYMENT_ALREADY_ALLOCATED` | 总单和分店单重复登记 | 刷新共享已占用明细 |

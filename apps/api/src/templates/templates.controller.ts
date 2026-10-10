@@ -20,9 +20,9 @@ import { SettlementMode } from '../../../../packages/backend/generated/prisma/en
 import { Decimal } from 'decimal.js';
 import { validateDecimalString, validateExpectedVersion, validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
 
-type CreateTemplateBody = { code?: unknown; name?: unknown; tag?: unknown; remark?: unknown };
+type CreateTemplateBody = { code?: unknown; name?: unknown; tag?: unknown; remark?: unknown; storeIds?: unknown; confirmStoreReassignment?: unknown };
 type TemplateVersionBody = { expectedVersion?: unknown };
-type PutTemplateStoresBody = { expectedVersion?: unknown; storeIds?: unknown };
+type PutTemplateStoresBody = { expectedVersion?: unknown; storeIds?: unknown; confirmStoreReassignment?: unknown };
 type PutTemplateItemsBody = { expectedVersion?: unknown; items?: unknown; confirmCycleOverrideRemoval?: unknown };
 type PutTemplateSupplierSettingBody = { expectedVersion?: unknown; settlementMode?: unknown; settlementCycle?: unknown };
 
@@ -45,14 +45,14 @@ export class TemplatesController {
 
   @Post()
   createTemplate(@Body() body: CreateTemplateBody, @Req() request: AuthenticatedRequest): Promise<TemplateView> {
-    const input = parseCreateTemplateBody(body);
+    const input = { ...parseCreateTemplateBody(body), storeIds: parseOptionalStoreIds(body.storeIds), confirmStoreReassignment: parseConfirmStoreReassignment(body.confirmStoreReassignment) };
     return this.templatesService.createTemplate(input, masterDataAuditContext(request));
   }
 
   @Put(':id/stores')
   replaceStores(@Param('id') id: string, @Body() body: PutTemplateStoresBody, @Req() request: AuthenticatedRequest): Promise<TemplateStoresView> {
     const input = parsePutTemplateStoresBody(id, body);
-    return this.templatesService.replaceTemplateStores(id, input.expectedVersion, input.storeIds, masterDataAuditContext(request));
+    return this.templatesService.replaceTemplateStores(id, input.expectedVersion, input.storeIds, masterDataAuditContext(request), undefined, input.confirmStoreReassignment);
   }
 
   @Patch(':id')
@@ -108,6 +108,24 @@ export class TemplatesController {
     return this.templatesService.replaceSettlementCycles(id, expectedVersion, rows, masterDataAuditContext(request));
   }
 
+  @Put(':id/configuration')
+  replaceConfiguration(@Param('id') id: string, @Body() body: CreateTemplateBody & PutTemplateStoresBody & PutTemplateItemsBody & { rows?: unknown }, @Req() request: AuthenticatedRequest) {
+    const metadata = parseCreateTemplateBody(body);
+    const stores = parsePutTemplateStoresBody(id, body);
+    const items = parsePutTemplateItemsBody(id, body);
+    const issues: ValidationIssue[] = [];
+    const rows: { storeId: string; supplierId: string; settlementCycle: string }[] = [];
+    if (!Array.isArray(body.rows) || body.rows.length > 10000) issues.push({ field: 'rows', code: 'INVALID_CYCLES', message: '请提交有效周期列表' });
+    else for (const [index, value] of body.rows.entries()) {
+      const row = isRecord(value) ? value : {};
+      issues.push(...validateUuid(`rows.${index}.storeId`, row.storeId), ...validateUuid(`rows.${index}.supplierId`, row.supplierId));
+      if (!['IMMEDIATE', 'WEEKLY', 'HALF_MONTHLY', 'MONTHLY'].includes(String(row.settlementCycle))) issues.push({ field: `rows.${index}.settlementCycle`, code: 'INVALID_CYCLE', message: '请选择有效周期' });
+      rows.push({ storeId: row.storeId as string, supplierId: row.supplierId as string, settlementCycle: row.settlementCycle as string });
+    }
+    throwIfInvalid(issues);
+    return this.templatesService.replaceConfiguration(id, items.expectedVersion, { name: metadata.name, tag: metadata.tag, remark: metadata.remark, storeIds: stores.storeIds, items: items.items, rows, confirmStoreReassignment: stores.confirmStoreReassignment, confirmCycleOverrideRemoval: items.confirmCycleOverrideRemoval }, masterDataAuditContext(request));
+  }
+
   @Put(':id/supplier-settings')
   replaceSupplierSettings(@Param('id') id: string, @Body() body: TemplateVersionBody & { settings?: unknown }, @Req() request: AuthenticatedRequest) {
     throw new ConflictException({ code: 'TEMPLATE_SETTLEMENT_DISABLED', message: '请在供应商资料中维护结算方式和周期' });
@@ -140,7 +158,28 @@ function parseCreateTemplateBody(body: CreateTemplateBody): { code?: string; nam
   return { code: code!, name: name!, tag: tag!, remark };
 }
 
-function parsePutTemplateStoresBody(id: string, body: PutTemplateStoresBody): { expectedVersion: number; storeIds: string[] } {
+function parseOptionalStoreIds(value: unknown): string[] {
+  if (value === undefined) return [];
+  const issues: ValidationIssue[] = [];
+  const storeIds: string[] = [];
+  if (!Array.isArray(value)) issues.push({ field: 'storeIds', code: 'INVALID_STORE_IDS', message: '请选择有效门店' });
+  else for (const [index, storeId] of value.entries()) {
+    issues.push(...validateUuid(`storeIds.${index}`, storeId));
+    if (typeof storeId === 'string') storeIds.push(storeId);
+  }
+  throwIfInvalid(issues);
+  return [...new Set(storeIds)];
+}
+
+function parseConfirmStoreReassignment(value: unknown): boolean {
+  if (value === undefined) return false;
+  const issues: ValidationIssue[] = [];
+  if (typeof value !== 'boolean') issues.push({ field: 'confirmStoreReassignment', code: 'INVALID_CONFIRM_STORE_REASSIGNMENT', message: 'confirmStoreReassignment must be a boolean' });
+  throwIfInvalid(issues);
+  return value === true;
+}
+
+function parsePutTemplateStoresBody(id: string, body: PutTemplateStoresBody): { expectedVersion: number; storeIds: string[]; confirmStoreReassignment: boolean } {
   const issues: ValidationIssue[] = [
     ...validateUuid('id', id),
     ...validateExpectedVersion('expectedVersion', body.expectedVersion),
@@ -158,7 +197,7 @@ function parsePutTemplateStoresBody(id: string, body: PutTemplateStoresBody): { 
   }
 
   throwIfInvalid(issues);
-  return { expectedVersion: body.expectedVersion as number, storeIds };
+  return { expectedVersion: body.expectedVersion as number, storeIds, confirmStoreReassignment: parseConfirmStoreReassignment(body.confirmStoreReassignment) };
 }
 
 function parsePutTemplateItemsBody(
@@ -188,6 +227,7 @@ function parsePutTemplateItemsBody(
       }
 
       issues.push(...validateUuid(`items.${itemIndex}.productId`, item.productId));
+      if (item.salesPrice !== undefined) issues.push(...validateDecimalString(`items.${itemIndex}.salesPrice`, item.salesPrice, 2));
       const suppliers: TemplateItemInput['suppliers'] = [];
       if (!Array.isArray(item.suppliers) || item.suppliers.length === 0) {
         issues.push({
@@ -206,8 +246,8 @@ function parsePutTemplateItemsBody(
             continue;
           }
           issues.push(...validateUuid(`items.${itemIndex}.suppliers.${supplierIndex}.supplierId`, supplier.supplierId));
-          const priority = optionalInteger(`items.${itemIndex}.suppliers.${supplierIndex}.priority`, supplier.priority, issues) ?? 100;
           if (supplier.salesPrice !== undefined) issues.push(...validateDecimalString(`items.${itemIndex}.suppliers.${supplierIndex}.salesPrice`, supplier.salesPrice, 2));
+          const priority = optionalInteger(`items.${itemIndex}.suppliers.${supplierIndex}.priority`, supplier.priority, issues) ?? 100;
           if (typeof supplier.supplierId === 'string') {
             suppliers.push({ supplierId: supplier.supplierId, priority, salesPrice: supplier.salesPrice as string | undefined });
           }
@@ -224,7 +264,7 @@ function parsePutTemplateItemsBody(
         if (!invalid.length && (!new Decimal(value as string).isInteger() || new Decimal(value as string).lte(0) || new Decimal(value as string).gte('100000000000000'))) issues.push({ field: `items.${itemIndex}.${field}`, code: 'INVALID_QUANTITY_RULE', message: '起订量和订货倍数必须为正整数，最多14位' });
       }
       if (typeof item.productId === 'string') {
-        items.push({ productId: item.productId, sortOrder, suppliers, isEnabled: item.isEnabled as boolean | undefined,
+        items.push({ productId: item.productId, salesPrice: item.salesPrice as string | undefined, sortOrder, suppliers, isEnabled: item.isEnabled as boolean | undefined,
           minOrderQty: item.minOrderQty as string | null | undefined, orderMultiple: item.orderMultiple as string | null | undefined });
       }
     }

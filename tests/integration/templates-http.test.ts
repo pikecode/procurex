@@ -52,6 +52,7 @@ test('templates endpoint creates templates and binds stores atomically', async (
   const storeCodeB = `TPLSTOREB${runId}`;
   const templateCodeA = `TPLA${runId}`;
   const templateCodeB = `TPLB${runId}`;
+  const templateCodeC = `TPLC${runId}`;
   const { app, baseUrl } = await createTestApp();
 
   try {
@@ -74,14 +75,14 @@ test('templates endpoint creates templates and binds stores atomically', async (
     ]);
 
     const token = await login(baseUrl, purchaserUsername);
-    const createTemplate = async (code: string): Promise<{ id: string; version: number }> => {
+    const createTemplate = async (code: string, storeIds: string[] = [], confirmStoreReassignment = false): Promise<{ id: string; version: number }> => {
       const response = await fetch(`${baseUrl}/templates`, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ code, name: code, tag: 'Test' }),
+        body: JSON.stringify({ code, name: code, tag: 'Test', storeIds, confirmStoreReassignment }),
       });
       assert.equal(response.status, 201);
       const body = (await response.json()) as { data: { id: string; version: number } };
@@ -129,10 +130,22 @@ test('templates endpoint creates templates and binds stores atomically', async (
 
     const bindingsForB = await prisma.storeTemplateBinding.findMany({ where: { templateId: templateB.id, expiredAt: null } });
     assert.equal(bindingsForB.length, 0);
+    const transferredB = await fetch(`${baseUrl}/templates/${templateB.id}/stores`, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedVersion: templateB.version, storeIds: [storeA.id], confirmStoreReassignment: true }),
+    });
+    assert.equal(transferredB.status, 200);
+    assert.equal(await prisma.storeTemplateBinding.count({ where: { templateId: templateA.id, storeId: storeA.id, expiredAt: null } }), 0);
+    assert.equal(await prisma.storeTemplateBinding.count({ where: { templateId: templateB.id, storeId: storeA.id, expiredAt: null } }), 1);
+
+    const templateC = await createTemplate(templateCodeC, [storeA.id], true);
+    assert.equal(await prisma.storeTemplateBinding.count({ where: { templateId: templateB.id, storeId: storeA.id, expiredAt: null } }), 0);
+    assert.deepEqual((await prisma.storeTemplateBinding.findMany({ where: { templateId: templateC.id, expiredAt: null }, select: { storeId: true } })).map(row => row.storeId), [storeA.id]);
   } finally {
     await app.close();
     await prisma.storeTemplateBinding.deleteMany({ where: { store: { code: { in: [storeCodeA, storeCodeB] } } } });
-    await prisma.orderTemplate.deleteMany({ where: { code: { in: [templateCodeA, templateCodeB] } } });
+    await prisma.orderTemplate.deleteMany({ where: { code: { in: [templateCodeA, templateCodeB, templateCodeC] } } });
     await prisma.store.deleteMany({ where: { code: { in: [storeCodeA, storeCodeB] } } });
     await prisma.userSession.deleteMany({ where: { user: { username: purchaserUsername } } });
     await prisma.userRole.deleteMany({ where: { user: { username: purchaserUsername } } });
@@ -190,6 +203,10 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
         baseUnitId: unit.id,
       },
     });
+    await prisma.supplierProduct.create({ data: { supplierId: supplier.id, productId: product.id } });
+    await prisma.priceScope.create({ data: { productId: product.id, supplierId: supplier.id, templateKey: '', versions: { create: {
+      salesPrice: '12.5', supplyPrice: '9', effectiveAt: new Date('2000-01-01T00:00:00.000Z'), reason: 'Template integration baseline', revision: 1,
+    } } } });
 
     const token = await login(baseUrl, purchaserUsername);
     const created = await fetch(`${baseUrl}/templates`, {
@@ -216,6 +233,7 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
           {
             productId: product.id,
             sortOrder: 5,
+            salesPrice: '15.80',
             suppliers: [{ supplierId: supplier.id, priority: 10 }],
           },
         ],
@@ -235,7 +253,7 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
     assert.deepEqual(replacedBody.data.items, [
       {
         productId: product.id,
-        initialSalesPrice: '12.5',
+        initialSalesPrice: '15.8',
         isEnabled: true,
         minOrderQty: null,
         orderMultiple: null,
@@ -252,7 +270,7 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
     });
     assert.equal(repeated.status, 200);
     const repeatedBody = await repeated.json() as { data: { version: number; items: Array<{ initialSalesPrice: string | null }> } };
-    assert.equal(repeatedBody.data.items[0]?.initialSalesPrice, '12.5');
+    assert.equal(repeatedBody.data.items[0]?.initialSalesPrice, '15.8');
     replacedBody.data.version = repeatedBody.data.version;
 
     // Settlement mode is maintained on the supplier only; templates keep per-store cycle overrides.
@@ -294,6 +312,32 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
     assert.equal(disabled.status, 409);
     assert.equal(((await disabled.json()) as { code: string }).code, 'TEMPLATE_SETTLEMENT_DISABLED');
     assert.equal(await prisma.templateSupplierSetting.count({ where: { templateId: template.id } }), 0);
+
+    const configure = (rows: unknown[], expectedVersion: number, storeIds = [store.id]) => fetch(`${baseUrl}/templates/${template.id}/configuration`, {
+      method: 'PUT', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedVersion, name: 'Unified Template', tag: 'Items', remark: 'Atomic configuration', storeIds,
+        items: [{ productId: product.id, sortOrder: 5, isEnabled: true, suppliers: [{ supplierId: supplier.id, priority: 0 }] }], rows, confirmCycleOverrideRemoval: true }),
+    });
+    // Fail at the final cycle write: metadata, bindings, items and audits must all roll back.
+    const invalid = await configure([{ ...row, supplierId: randomUUID() }], savedBody.data.version);
+    assert.equal(invalid.status, 409);
+    const unchanged = await prisma.orderTemplate.findUniqueOrThrow({ where: { id: template.id } });
+    assert.equal(unchanged.name, template.name);
+    assert.equal(unchanged.updatedAt.getTime(), savedBody.data.version);
+    assert.equal((await prisma.templateItemSupplier.findFirstOrThrow({ where: { templateItem: { templateId: template.id } } })).priority, 10);
+    assert.equal(await prisma.templateStoreSupplierCycle.count({ where: { templateId: template.id } }), 1);
+    const restoredDefault = await configure([], savedBody.data.version);
+    assert.equal(restoredDefault.status, 200);
+    const restored = await restoredDefault.json() as { data: { version: number } };
+    assert.equal(await prisma.templateStoreSupplierCycle.count({ where: { templateId: template.id } }), 0);
+    assert.equal((await prisma.orderTemplate.findUniqueOrThrow({ where: { id: template.id } })).name, 'Unified Template');
+    assert.equal((await configure([], savedBody.data.version)).status, 409);
+    const reconfigured = await configure([row], restored.data.version);
+    assert.equal(reconfigured.status, 200);
+    const next = await reconfigured.json() as { data: { version: number } };
+    assert.equal((await configure([], next.data.version, [])).status, 200);
+    assert.equal(await prisma.storeTemplateBinding.count({ where: { templateId: template.id, expiredAt: null } }), 0);
+    assert.equal(await prisma.templateStoreSupplierCycle.count({ where: { templateId: template.id } }), 0);
   } finally {
     await app.close();
     await prisma.templateStoreSupplierCycle.deleteMany({ where: { template: { code: templateCode } } });
@@ -302,6 +346,8 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
     await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
     await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
     await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
+    await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });
+    await prisma.supplierProduct.deleteMany({ where: { supplier: { code: supplierCode } } });
     await prisma.product.deleteMany({ where: { sku } });
     await prisma.supplier.deleteMany({ where: { code: { in: [supplierCode, `${supplierCode}_batch`] } } });
     await prisma.store.deleteMany({ where: { code: `${storeCodePrefix}${runId}` } });

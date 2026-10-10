@@ -274,7 +274,7 @@ export class CatalogService {
       const current = await effectivePriceVersion(tx, productId, price.supplierId, at);
       if ((current?.supplyVersionId ?? null) !== price.expectedVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: '采购价已变更，请刷新商品后重试' });
       if (current && new Decimal(price.supplyPrice).eq(current.supplyPrice)) continue;
-      await this.pricingService.publishPrice({ productId, supplierId: price.supplierId, supplyPrice: price.supplyPrice, salesPrice: link.supplier.defaultSettlementMode === 'SUPPLIER_TERM' ? price.supplyPrice : current?.salesPrice.toString() ?? product.defaultSalesPrice!.toString(), effectiveAt: at, reason: '商品资料维护采购价' }, tx);
+      await this.pricingService.publishPrice({ productId, supplierId: price.supplierId, supplyPrice: price.supplyPrice, salesPrice: current?.salesPrice.toString() ?? product.defaultSalesPrice!.toString(), effectiveAt: at, reason: '商品资料维护采购价' }, tx);
     }
   }
 
@@ -355,6 +355,11 @@ export class CatalogService {
 
   private async catalogView(storeId: string, store: Store, template: Prisma.OrderTemplateGetPayload<{ include: typeof catalogTemplateInclude }>, at: Date, transaction?: Prisma.TransactionClient): Promise<StoreCatalogView> {
     const client = transaction ?? (this.database.client as Prisma.TransactionClient);
+    const enabledLinks = await client.supplierProduct.findMany({
+      where: { supplyEnabled: true, productId: { in: template.items.map(item => item.productId) }, supplierId: { in: template.items.flatMap(item => item.suppliers.map(link => link.supplierId)) } },
+      select: { productId: true, supplierId: true },
+    });
+    const enabled = new Set(enabledLinks.map(link => `${link.productId}:${link.supplierId}`));
     return {
       storeId,
       store: storeDestination(store),
@@ -366,7 +371,7 @@ export class CatalogService {
             purchaseUnitName: item.product.conversion ? (await client.unit.findUnique({ where: { id: item.product.conversion.fromUnitId } }))?.name ?? null : null },
           sortOrder: item.sortOrder,
           suppliers: await Promise.all(
-            item.suppliers.map(async (supplier) => {
+            item.suppliers.filter(supplier => enabled.has(`${item.productId}:${supplier.supplierId}`)).map(async (supplier) => {
               const price = await this.tryGetEffectivePrice(item.productId, supplier.supplierId, at, template.id, transaction);
               const conversion = item.product.conversion && item.product.conversion.toUnitId === item.product.baseUnitId ? {
                 salesUnitId: item.product.baseUnitId, purchaseUnitId: item.product.conversion.fromUnitId, salesUnitsPerPurchaseUnit: item.product.conversion.ratio.toString(),
