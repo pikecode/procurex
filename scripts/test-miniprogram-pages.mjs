@@ -15,14 +15,193 @@ function page(role, request = async () => ({}), apiOverrides = {}, wxOverrides =
     wx: wxOverrides,
   });
   definition.setData = function (value) { Object.assign(this.data, value); };
+  definition.originalLoadWork = definition.loadWork;
   definition.loadWork = async () => {};
   definition.data.canWrite = true;
   return definition;
 }
 
 const tap = (id, extra = {}) => ({ currentTarget: { dataset: { id, ...extra } } });
+test('prices display two decimals and delivery contact calls the separate phone', () => {
+  const module = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/labels.wxs', 'utf8'), { module });
+  assert.equal(module.exports.money('8'), '8.00');
+  assert.equal(module.exports.money('1.005'), '1.01');
+  assert.equal(module.exports.money('9.999'), '10.00');
+  assert.equal(module.exports.money(null), '—');
+  let called;
+  const store = page('store', undefined, {}, { makePhoneCall: value => { called = value.phoneNumber; } });
+  store.callDeliveryContact(tap('', { phone: '13800000000' }));
+  assert.equal(called, '13800000000');
+  store.callDeliveryContact(tap('', { phone: '' }));
+  assert.equal(called, '13800000000');
+});
 const input = (id, value) => ({ ...tap(id), detail: { value } });
 const plain = value => JSON.parse(JSON.stringify(value));
+
+test('workspace forms reserve space for fixed actions and financial review has one submit control', () => {
+  const styles = readFileSync('apps/miniprogram/styles/workspace.wxss', 'utf8');
+  assert.match(styles, /has-action-bar.*padding-bottom/);
+  assert.match(styles, /\.action-bar.*position: fixed/);
+  for (const role of ['supplier', 'purchaser', 'finance']) {
+    const markup = readFileSync(`apps/miniprogram/pages/${role}/index.wxml`, 'utf8');
+    assert.ok(markup.includes('has-action-bar'));
+    assert.ok(markup.includes('action-bar'));
+  }
+  const finance = readFileSync('apps/miniprogram/pages/finance/index.wxml', 'utf8');
+  assert.equal((finance.match(/bindtap="submitReview"/g) || []).length, 1);
+  const labels = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/labels.wxs', 'utf8'), { module: labels });
+  assert.equal(labels.exports.status('SETTLED'), '已结清');
+  assert.equal(labels.exports.status('SHORTFALL'), '待补足资金');
+});
+
+test('evidence component loads authenticated image thumbnails but does not download PDFs eagerly', async () => {
+  let definition;
+  const calls = [];
+  vm.runInNewContext(readFileSync('apps/miniprogram/components/evidence/index.js', 'utf8'), {
+    Component: value => { definition = value; },
+    require: () => ({ currentUser: () => ({ id: 'actor' }), downloadEvidence: async file => { calls.push(file.id); return '/tmp/image.jpg'; } })
+  });
+  const component = { ...definition.methods, data: definition.data,
+    setData(patch) {
+      for (const [key, value] of Object.entries(patch)) {
+        const match = key.match(/^rows\[(\d+)\]\.(\w+)$/);
+        if (match) this.data.rows[Number(match[1])][match[2]] = value;
+        else this.data[key] = value;
+      }
+    } };
+  await component.loadFiles([{ id: 'image', mimeType: 'image/jpeg' }, { id: 'pdf', mimeType: 'application/pdf' }]);
+  assert.deepEqual(calls, ['image']);
+  assert.equal(component.data.rows[0].path, '/tmp/image.jpg');
+  assert.equal(component.data.rows[1].path, undefined);
+});
+
+test('finance query pagination preserves full searchable records', () => {
+  const workspace = page('finance');
+  workspace.data.payments = Array.from({ length: 25 }, (_, index) => ({ title: '付款' + index }));
+  workspace.refreshRecords(); assert.equal(workspace.data.visibleRecords.length, 10);
+  workspace.nextRecords(); assert.equal(workspace.data.visibleRecords.length, 20);
+  workspace.nextRecords(); assert.equal(workspace.data.visibleRecords.length, 25);
+  workspace.onSearch({ detail: { value: '付款24' } });
+  assert.equal(workspace.data.visibleRecords.length, 1);
+  assert.equal(workspace.data.moreRecords, false);
+});
+
+test('supplier does not restore another account order list after a delayed response', async () => {
+  let resolve;
+  const workspace = page('supplier', () => new Promise(done => { resolve = done; }));
+  workspace.data.user = { id: 'old' };
+  const pending = workspace.loadOrders();
+  workspace.data.user = { id: 'new' };
+  resolve([{ id: 'old-order', status: 'PUSHED' }]);
+  await pending;
+  assert.equal(workspace.data.orders.length, 0);
+});
+
+test('finance tasks contain only pending incoming company receipts', async () => {
+  const workspace = page('finance', async path => ({
+    '/payment-records': [
+      { id: 'incoming', paymentNo: 'R1', direction: 'STORE_TO_COMPANY', storeId: 's', status: 'PENDING' },
+      { id: 'outgoing', direction: 'COMPANY_TO_SUPPLIER', status: 'PENDING' },
+      { id: 'done', direction: 'STORE_TO_COMPANY', status: 'CONFIRMED' }
+    ], '/store-statements': [], '/supplier-statements': [],
+    '/stores': [{ id: 's', name: '验收门店' }], '/suppliers': []
+  })[path]);
+  await workspace.originalLoadWork();
+  assert.deepEqual(plain(workspace.data.tasks.map(item => item.id)), ['incoming']);
+  assert.equal(workspace.data.tasks[0].subtitle, '验收门店');
+});
+
+test('finance rejection requires a reason and sends version with idempotency protection', async () => {
+  const calls = [];
+  const workspace = page('finance', async (path, options) => {
+    calls.push({ path, options }); return { status: 'REJECTED' };
+  });
+  workspace.data.selected = { id: 'receipt', canReview: true, version: 3 };
+  workspace.startReview(tap('', { action: 'reject' }));
+  await workspace.submitReview();
+  assert.equal(calls.length, 0);
+  workspace.onReason({ detail: { value: '金额不符' } });
+  await workspace.submitReview();
+  assert.equal(calls[0].path, '/payment-records/receipt/reject');
+  assert.deepEqual(plain(calls[0].options.data), { expectedVersion: 3, reason: '金额不符' });
+  assert.ok(calls[0].options.header['idempotency-key']);
+  assert.equal(workspace.data.selected.canReview, false);
+});
+
+test('finance cannot review outgoing payments and ignores hidden-page detail responses', async () => {
+  let resolve;
+  const workspace = page('finance', () => new Promise(done => { resolve = done; }));
+  const pending = workspace.openRecord(tap('outgoing', { kind: 'payment' }));
+  workspace.onHide();
+  resolve({ id: 'outgoing', direction: 'COMPANY_TO_SUPPLIER', status: 'PENDING' });
+  await pending;
+  assert.equal(workspace.data.selected, null);
+  workspace.data.selected = { canReview: false };
+  workspace.startReview(tap('', { action: 'confirm' }));
+  assert.equal(workspace.data.reviewMode, '');
+});
+
+test('supplier starts with actionable orders and separates completed from awaiting receipt', async () => {
+  const workspace = page('supplier', async () => [
+    { id: 'new', status: 'PUSHED', productSummary: '珍珠粉圆' },
+    { id: 'accepted', status: 'ACCEPTED' },
+    { id: 'partial', status: 'PARTIAL_SHIPPED' },
+    { id: 'shipped', status: 'SHIPPED', fulfillmentStatus: 'PENDING' },
+    { id: 'done', status: 'SHIPPED', fulfillmentStatus: 'COMPLETED' },
+  ]);
+  await workspace.loadOrders();
+  workspace.filterStatus(tap('', { filter: 'pending' }));
+  assert.deepEqual(plain(workspace.data.visibleOrders.map(item => item.id)), ['new', 'accepted']);
+  workspace.filterStatus(tap('', { filter: 'SHIPPED' }));
+  assert.deepEqual(plain(workspace.data.visibleOrders.map(item => item.id)), ['shipped']);
+  workspace.filterStatus(tap('', { filter: 'COMPLETED' }));
+  assert.deepEqual(plain(workspace.data.visibleOrders.map(item => item.id)), ['done']);
+  workspace.filterStatus(tap('', { filter: 'all' }));
+  workspace.onSearch({ detail: { value: '珍珠' } });
+  assert.deepEqual(plain(workspace.data.visibleOrders.map(item => item.id)), ['new']);
+});
+
+test('supplier enters shipping or rejection only when permitted and cannot switch during submission', () => {
+  const workspace = page('supplier');
+  workspace.data.selectedOrder = { canShip: false, canReject: false };
+  workspace.changeOrderMode(tap('', { mode: 'ship' }));
+  assert.equal(workspace.data.orderMode, 'detail');
+  workspace.data.selectedOrder = { canShip: true, canReject: true };
+  workspace.changeOrderMode(tap('', { mode: 'ship' }));
+  assert.equal(workspace.data.orderMode, 'ship');
+  workspace.data.shipping = true;
+  workspace.changeOrderMode(tap('', { mode: 'reject' }));
+  assert.equal(workspace.data.orderMode, 'ship');
+  workspace.data.shipping = false;
+  workspace.changeOrderMode(tap('', { mode: 'reject' }));
+  assert.equal(workspace.data.orderMode, 'reject');
+  workspace.backToList();
+  assert.equal(workspace.data.orderMode, 'detail');
+});
+
+for (const role of ['supplier', 'purchaser']) {
+  test(`${role} workspace account navigation preserves filters and submission guards`, () => {
+    const workspace = page(role);
+    workspace.data.search = 'saved-search';
+    workspace.data.statusFilter = 'saved-filter';
+    workspace.changeView(tap('', { view: 'mine' }));
+    assert.equal(workspace.data.activeView, 'mine');
+    workspace.changeView(tap('', { view: 'history' }));
+    assert.equal(workspace.data.activeView, 'history');
+    workspace.changeView(tap('', { view: 'orders' }));
+    assert.equal(workspace.data.search, 'saved-search');
+    assert.equal(workspace.data.statusFilter, 'saved-filter');
+    workspace.data[role === 'supplier' ? 'shipping' : 'confirming'] = true;
+    workspace.changeView(tap('', { view: 'mine' }));
+    assert.equal(workspace.data.activeView, 'orders');
+    const markup = readFileSync(`apps/miniprogram/pages/${role}/index.wxml`, 'utf8');
+    assert.ok(markup.includes('data-view="mine"'));
+    assert.ok(markup.includes('本机提交记录'));
+    assert.ok(markup.includes('account-logout'));
+  });
+}
 
 test('native own profiles require a binding and never enumerate foreign entities', async () => {
   const calls = [];
@@ -349,6 +528,16 @@ function commandApi() {
 }
 const commandOptions = () => ({ method: 'POST', data: { expectedVersion: 7, items: [{ id: 'line', quantity: '2' }] }, header: { 'idempotency-key': 'original-key' } });
 
+test('finance durable commands retain the exact original key after response loss', async () => {
+  const harness = commandApi(), api = harness.reload();
+  await assert.rejects(api.roleCommand('finance', '/payment-records/receipt/confirm', commandOptions()));
+  const pending = plain(api.roleCommandState('finance').pending);
+  harness.handle(options => options.success({ statusCode: 201, data: { data: { status: 'CONFIRMED' } } }));
+  await harness.reload().retryRoleCommand('finance');
+  assert.equal(harness.calls[1].header['idempotency-key'], pending.key);
+  assert.equal(harness.reload().roleCommandState('finance').pending, null);
+});
+
 test('credit reincrease after an adjustment is a definite reconciliation failure', async () => {
   const harness = commandApi(), api = harness.reload();
   harness.handle(options => options.success({ statusCode: 409, data: { code: 'CLEARED_CREDIT_REINCREASE_RECONCILIATION_REQUIRED' } }));
@@ -379,7 +568,7 @@ test('role command survives restart and replays the exact original request after
   assert.equal(api.roleCommandState('supplier').history[0].status, 'SUCCEEDED');
 });
 
-test('role recovery isolates actors, workspaces and servers and preserves authentication failures', async () => {
+test('role recovery isolates actors and workspaces, ignores stale server settings and preserves authentication failures', async () => {
   const harness = commandApi(), api = harness.reload();
   await assert.rejects(api.roleCommand('purchaser', '/purchase-requests/id/confirm', commandOptions()));
   assert.equal(api.roleCommandState('supplier').pending, null);
@@ -387,7 +576,8 @@ test('role recovery isolates actors, workspaces and servers and preserves authen
   assert.equal(api.roleCommandState('purchaser').pending, null);
   harness.storage.set('procurexUser', { id: 'actor-a' });
   harness.storage.set('procurexApiBase', 'http://other/api/v1');
-  assert.equal(api.roleCommandState('purchaser').pending, null);
+  assert.equal(api.apiBase(), 'http://localhost/api/v1');
+  assert.ok(api.roleCommandState('purchaser').pending);
   harness.storage.delete('procurexApiBase');
   for (const status of [401, 403, 408, 429, 500]) {
     harness.handle(options => options.success({ statusCode: status, data: { message: 'Unavailable' } }));
@@ -720,13 +910,21 @@ test('role order lists search and filter without silently truncating twenty rows
     const screen = page(role, async () => rows);
     await screen[role === 'supplier' ? 'loadOrders' : 'loadRequests']();
     const list = role === 'supplier' ? 'visibleOrders' : 'visibleRequests';
+    if (role === 'supplier') screen.filterStatus(tap('', { filter: 'all' }));
+    assert.equal(screen.data[list].length, 10);
+    assert.equal(screen.data.orderTotal, 25);
+    screen.nextOrders();
+    assert.equal(screen.data[list].length, 20);
+    screen.nextOrders();
     assert.equal(screen.data[list].length, 25);
+    assert.equal(screen.data.moreOrders, false);
     screen.onSearch({ detail: { value: '24' } });
     assert.equal(screen.data[list][0].id, '24');
     screen.filterStatus(tap('', { filter: 'PUSHED' }));
     assert.equal(screen.data[list].length, 0);
     screen.onSearch({ detail: { value: '' } });
-    assert.equal(screen.data[list].length, 24);
+    assert.equal(screen.data[list].length, 10);
+    assert.equal(screen.data.orderTotal, 24);
     assert.match(screen.data.reportRange.from, /^\d{4}-\d{2}-01$/);
     assert.ok(screen.data.reportRange.to >= screen.data.reportRange.from);
   }
@@ -735,7 +933,7 @@ test('role order lists search and filter without silently truncating twenty rows
 test('role detail return preserves in-flight operations and clears completed selection', () => {
   const supplier = page('supplier');
   supplier.data.selectedOrder = { id: 'order' }; supplier.data.shipping = true;
-  supplier.changeView(tap('', { view: 'payments' })); assert.equal(supplier.data.activeView, 'orders');
+  supplier.changeView(tap('', { view: 'payments' })); assert.equal(supplier.data.activeView, 'tasks');
   supplier.backToList(); assert.equal(supplier.data.selectedOrder.id, 'order');
   supplier.data.shipping = false; supplier.backToList(); assert.equal(supplier.data.selectedOrder, null);
   const purchaser = page('purchaser');

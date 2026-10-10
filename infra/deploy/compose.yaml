@@ -1,0 +1,55 @@
+name: procurex
+services:
+  postgres:
+    image: postgres:18.3-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: procurex
+      POSTGRES_DB: procurex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U procurex -d procurex"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+  api:
+    image: procurex-api:${RELEASE:?required}
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile
+    restart: unless-stopped
+    env_file: ../../.env.runtime
+    volumes:
+      - /opt/procurex/shared/private-files:/app/data/files
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3100/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+  admin:
+    image: procurex-admin:${RELEASE:?required}
+    build:
+      context: ../..
+      dockerfile: infra/admin/Dockerfile
+    restart: unless-stopped
+    environment:
+      ADMIN_API_UPSTREAM: http://api:3100
+    ports:
+      - "${ADMIN_BIND_ADDRESS:-127.0.0.1}:8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+volumes:
+  postgres_data:

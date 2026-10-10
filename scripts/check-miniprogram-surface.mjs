@@ -50,6 +50,7 @@ assert.deepEqual(appJson.pages, [
   'pages/products/index',
   'pages/profile/index',
   'pages/prices/index',
+  'pages/finance/index',
 ], 'mini-program must expose login, store, supplier, and purchaser pages');
 
 for (const page of appJson.pages) {
@@ -113,7 +114,7 @@ assertIncludes(apiJs, "client: 'MINIPROGRAM'", 'mini-program login client marker
 assertIncludes(apiJs, 'wx.request', 'mini-program API client');
 assertIncludes(apiJs, 'timeout: options.timeout || 10000', 'mini-program API timeout');
 assertIncludes(apiJs, '/health/live', 'mini-program API health check');
-assertIncludes(apiJs, 'setApiBase', 'mini-program API base persistence');
+assertIncludes(apiJs, 'app.globalData.apiBase', 'mini-program configured API base');
 assertIncludes(loginJs, 'api.checkHealth()', 'login API connectivity check');
 assertIncludes(loginJs, '真机不能使用 127.0.0.1', 'login local device diagnostic');
 assertIncludes(loginJs, "wx.switchTab({ url: '/pages/store/index' })", 'store role routing');
@@ -132,7 +133,8 @@ assertIncludes(storeJs, 'receiptUploadSequence', 'receipt upload account isolati
 assertIncludes(storeWxml, 'chooseReceiptEvidence', 'receipt image selection');
 assertIncludes(storeWxml, 'retryReceiptEvidence', 'per-image upload retry');
 assertIncludes(storeWxml, '!receiptEvidenceReady', 'receipt upload readiness gate');
-assertIncludes(storeWxml, 'previewReceiptEvidence', 'authenticated receipt evidence preview');
+assertIncludes(storeWxml, 'evidence-files files="{{selectedShipment.evidenceFiles}}"', 'authenticated receipt evidence component');
+assertIncludes(await read('apps/miniprogram/components/evidence/index.js'), 'api.downloadEvidence(file)', 'authenticated thumbnails');
 assertIncludes(storeJs, '/reports/order-amounts', 'store order amount report');
 assertIncludes(storeJs, '/reports/product-quantities', 'store product quantity report');
 assertIncludes(storeJs, 'expectedOrderVersion', 'store receipt order version guard');
@@ -204,7 +206,7 @@ assertIncludes(purchaserJs, '/reports/order-amounts', 'purchaser order amount re
 assertIncludes(purchaserJs, '/reports/product-quantities', 'purchaser product quantity report');
 assertIncludes(purchaserJs, '/reports/profit', 'purchaser profit report');
 assertIncludes(purchaserWxml, '确认并推送', 'purchaser confirmation screen');
-assertIncludes(purchaserWxml, '读取详情', 'purchaser request detail action');
+assertIncludes(purchaserWxml, '刷新明细', 'purchaser request detail action');
 assertIncludes(purchaserWxml, '申请详情', 'purchaser request detail screen');
 assertIncludes(purchaserWxml, '缺口金额', 'purchaser shortfall signal');
 assertIncludes(purchaserWxml, '拒单通知', 'purchaser rejection notification screen');

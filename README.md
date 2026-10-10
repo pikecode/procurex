@@ -17,6 +17,8 @@ npm run build
 
 在不同终端启动：
 
+macOS 可直接双击根目录 `start-local.command`，调用 `start-local.sh` 自动启动本地 API 和 React 后台，并打开浏览器。数据库未启动时会尝试启动 Docker；关闭窗口会停止本次新启动的服务，已有服务不受影响。
+
 ```sh
 PORT=3114 npm run start:api
 npm start
@@ -26,6 +28,7 @@ npm run start:worker
 - 默认后台是 React：http://127.0.0.1:4174 。`npm start`、`npm run start:web` 和 `npm run start:admin` 均启动它；端口占用时使用 Vite 输出的地址。
 - API 使用3114，后台以同源 `/api` 代理访问，无需在浏览器URL传入API地址。API端口改变时通过 `ADMIN_API_TARGET` 配置后台代理目标。
 - 小程序在微信开发者工具打开 `apps/miniprogram`；真机登录、合法域名与正式发布另行验收。
+- 小程序当前默认连接本地 `http://127.0.0.1:3114/api/v1`，地址在 `apps/miniprogram/app.js` 统一配置。暂不部署；本地上传测试可使用 `FILE_STORAGE=local PORT=3114 npm run start:api`。
 - 旧后台只用于回退和历史验收：`npm run start:web:legacy`，地址 http://127.0.0.1:4173/app.html 。两套后台共用业务数据，切换入口不会回退数据库或撤销业务操作。
 - API默认端口为3100，因此本地启动务必显式设置 `PORT=3114`，不要仅运行 `start:api` 后期待3114可用。
 
@@ -41,6 +44,8 @@ npm run test:admin:recovery
 恢复验证仅接受受保护的本地数据库，使用临时账号和单据，真实写入后丢弃响应，再从React刷新恢复原键；结束清理夹具。不是银行转账或生产验收。先构建API，再运行脚本。
 
 ## 部署与回退
+
+服务器隔离部署与实际验收记录见 [服务器部署](docs/server-deployment.md)。当前服务器后台通过 SSH 隧道访问，尚未完成域名/HTTPS 正式公网发布。
 
 React生产产物在 `apps/admin/dist`，不要在生产运行Vite开发服务器。静态Nginx镜像和API代理配置见 `infra/admin`：
 

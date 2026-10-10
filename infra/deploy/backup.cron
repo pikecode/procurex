@@ -1,0 +1,3 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+15 3 * * * root /bin/sh /opt/procurex/current/infra/deploy/backup.sh >> /opt/procurex/backups/backup.log 2>&1
