@@ -4,7 +4,8 @@ page { background: #f4f6f5; color: #202b25; }
 .ledger-line .line-name { flex: 1; min-width: 0; }
 .receipt-counts { flex-wrap: wrap; gap: 16rpx; }
 .receipt-input-group { flex-shrink: 0; }
-.store-page { min-height: 100vh; padding-bottom: calc(230rpx + env(safe-area-inset-bottom)); box-sizing: border-box; font-size: 27rpx; }
+/* Two fixed bars stack here: .store-nav (96rpx) plus .order-bar above it; keep the tally safe-area inclusive. */
+.store-page { min-height: 100vh; padding-bottom: calc(268rpx + env(safe-area-inset-bottom)); box-sizing: border-box; font-size: 27rpx; }
 .store-heading { padding: 28rpx 28rpx 22rpx; background: #fff; border-bottom: 1rpx solid #e5eae7; }
 .heading-main, .entry-top, .entry-progress, .entry-bottom, .amount-row, .product-bottom, .receipt-counts, .section-caption { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; }
 .store-name { font-size: 32rpx; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }

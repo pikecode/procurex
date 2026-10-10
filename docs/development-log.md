@@ -1,5 +1,13 @@
 # 开发日志
 
+## 2026-10-10 修复小程序底部导航压扁与内容遮挡
+
+- 依据 `var/five-role-ui/` 与 `var/native-current-regression/journey/` 的真机截图复查小程序视觉交互，发现两个 P0 级问题并修复。
+- **导航压扁**：`styles/workspace.wxss` 中 `.business-nav .nav-item` 靠 `padding: 26rpx 0` 撑高，但 nav 项是 `<view>` 而非 `<text>`，padding 无法产生可视高度，导致采购、供应商、财务三页的底部导航只剩一条细线、选中项不可见。对照门店页 `.nav-item`（`height: 96rpx` + `display: flex` 居中）改为显式高度与居中，并给三页的 `.business-nav` 补上 `height: 96rpx`。注意页面级 wxss 优先级高于共享样式，purchaser / supplier / finance 三处定义需同步，否则会被覆盖。
+- **内容遮挡**：门店页同时存在 `.store-nav`（96rpx）与 `.order-bar`（位于 `bottom: 96rpx`，自身含 20rpx 上下内边距与 80rpx 按钮，约 120rpx），两层浮动叠加实际占用约 216rpx，而 `.store-page` 的 `padding-bottom` 仅为 230rpx 且未给足余量，滚到底时账单区被压。调整为 `calc(268rpx + env(safe-area-inset-bottom))`。其余页面的 `has-action-bar` 规则（260rpx 对应实际约 206rpx）经核算留白充足，未改动。
+- 验证：`npm run mini:check` 通过，`npm run mini:test` 109/109 通过。
+- 未做真机复验：本次仅依据既有截图与代码推算修正，导航高度与遮挡属视觉表现，仍需在微信开发者工具或真机上确认一遍。截图证据亦为历史产物，`var/five-role-ui/` 生成于本次修复之前。
+
 ## 2026-10-10 建立 12 门店结算验证夹具（仅数据，无代码改动）
 
 - 背景：结算配置改为左侧门店列表后，此前库中只有 7 个门店、单模板最多绑 4 个，列表滚动与门店搜索两条路径无法实测。经用户确认后新建专用夹具，不改绑现有门店，以免影响既有验证环境。

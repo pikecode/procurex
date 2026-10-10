@@ -14,8 +14,10 @@
 .business-search { height: 74rpx; font-size: 25rpx; border: 0; }
 .status-filters { gap: 12rpx 24rpx; padding: 20rpx 0 12rpx; font-size: 24rpx; }
 .status-filters text { padding: 12rpx 0; }
-.business-nav .nav-item { min-width: 0; padding: 26rpx 0; font-size: 25rpx; line-height: 1.4; border-bottom: 0; }
-.business-nav .nav-item.is-active { background: #f2faf5; color: #167e5a; border-top-color: #167e5a; }
+/* Match the store nav: a fixed 96rpx bar. Padding alone collapses because nav items are <view>, not <text>. */
+.business-nav { height: 96rpx; }
+.business-nav .nav-item { min-width: 0; height: 96rpx; display: flex; align-items: center; justify-content: center; font-size: 25rpx; line-height: 1.4; padding: 0; border-bottom: 0; box-sizing: border-box; }
+.business-nav .nav-item.is-active { background: #f2faf5; color: #167e5a; border-top-color: #167e5a; font-weight: 600; }
 .page .error-banner { margin: 20rpx 28rpx; padding: 20rpx; border-left: 5rpx solid #c95f59; font-size: 24rpx; line-height: 1.6; }
 .account-menu { margin-top: 18rpx; background: #fff; padding: 0 28rpx; }
 .account-menu-item { display: flex; align-items: center; justify-content: space-between; min-height: 92rpx; gap: 20rpx; border-bottom: 1rpx solid #e9eeeb; font-size: 27rpx; }
