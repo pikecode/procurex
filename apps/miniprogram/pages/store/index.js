@@ -38,6 +38,7 @@ Page({
     subcategories: [],
     categories: [],
     visibleProducts: [],
+    searchHitNames: [],
     estimatedAmount: '0.00',
     cartCount: 0,
     cartOpen: false,
@@ -181,13 +182,17 @@ Page({
       const ratio = product?.purchaseUnitConversion && line.unitId === product.purchaseUnitConversion.purchaseUnitId ? Number(product.purchaseUnitConversion.salesUnitsPerPurchaseUnit) : 1;
       return total + Number(line.quantity) * ratio * Number(product && product.salesPrice || 0);
     }, 0);
-    this.setData({ categories, primaryCategoryId, categoryId, subcategories: subcategories.length ? [{ id: '', name: '全部' }, ...subcategories] : [], visibleProducts, cartCount: this.data.cart.length, estimatedAmount: estimated.toFixed(2) });
+    // While searching, name the categories the results actually span so the sidebar highlight stays meaningful.
+    const searchHit = search.trim().toLowerCase();
+    const hitNames = searchHit ? [...new Set(products.filter(product => `${product.name} ${product.sku || ''}`.toLowerCase().includes(searchHit)).map(product => product.categoryName).filter(Boolean))] : [];
+    this.setData({ categories, primaryCategoryId, categoryId, subcategories: subcategories.length ? [{ id: '', name: '全部' }, ...subcategories] : [], visibleProducts, searchHitNames: hitNames, cartCount: this.data.cart.length, estimatedAmount: estimated.toFixed(2) });
   },
 
   onCatalogScroll(event) { this.data.catalogScrollTop = event.detail.scrollTop; },
   onSearch(event) { this.setData({ search: event.detail.value, primaryCategoryId: '', categoryId: '', catalogScrollTop: 0 }); this.refreshCatalogView(); },
   chooseCategory(event) { this.setData({ categoryId: event.currentTarget.dataset.id, search: '', catalogScrollTop: 0 }); this.refreshCatalogView(); },
   choosePrimaryCategory(event) { this.setData({ primaryCategoryId: event.currentTarget.dataset.id, categoryId: '', search: '', catalogScrollTop: 0 }); this.refreshCatalogView(); },
+  clearCatalogFilter() { this.setData({ search: '', primaryCategoryId: '', categoryId: '', catalogScrollTop: 0 }); this.refreshCatalogView(); },
   toggleCart() { this.setData({ cartOpen: !this.data.cartOpen }); },
   keepSheetOpen() {},
   chooseProductUnit(event) {
