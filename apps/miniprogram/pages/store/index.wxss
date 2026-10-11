@@ -45,14 +45,19 @@ page { background: #f4f6f5; color: #202b25; }
 .section-caption { padding: 22rpx 28rpx; color: #758078; font-size: 23rpx; }
 .product-list { background: #fff; padding: 0 28rpx; }
 .product-row { display: flex; gap: 22rpx; padding: 28rpx 0; border-bottom: 1rpx solid #e9eeeb; }
-.product-media { flex: 0 0 126rpx; width: 126rpx; height: 126rpx; background: #f1f4f2; border-radius: 8rpx; overflow: hidden; }
+.product-media { position: relative; flex: 0 0 126rpx; width: 126rpx; height: 126rpx; background: #f1f4f2; border-radius: 8rpx; overflow: hidden; }
+/* Per-row quantity badge: the running total stays readable while scrolling past the fixed bottom bar. */
+.cart-badge { position: absolute; top: 6rpx; right: 6rpx; z-index: 2; min-width: 36rpx; height: 36rpx; padding: 0 8rpx; border-radius: 18rpx; background: #167e5a; color: #fff; font-size: 22rpx; line-height: 36rpx; text-align: center; font-variant-numeric: tabular-nums; }
 .product-media image { width: 100%; height: 100%; }
 .missing-image { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12rpx; color: #8e9892; font-size: 19rpx; }
 .product-main { flex: 1; min-width: 0; }
 .product-name { display: block; font-size: 28rpx; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .product-meta { display: block; font-size: 21rpx; line-height: 1.5; color: #718078; margin-top: 7rpx; }
 .product-bottom { margin-top: 20rpx; flex-wrap: wrap; gap: 14rpx; }
+.product-price-group { display: flex; align-items: baseline; gap: 14rpx; flex-wrap: wrap; min-width: 0; }
 .product-price { font-size: 30rpx; font-weight: 700; color: #24332c; overflow-wrap: anywhere; }
+/* Minimum order and multiple are hard submission constraints, so they read at body size in a hint tone. */
+.product-rules { font-size: 24rpx; color: #8b601e; font-variant-numeric: tabular-nums; }
 .quantity-stepper { flex-shrink: 0; display: flex; align-items: center; height: 58rpx; border: 1rpx solid #dce5df; border-radius: 8rpx; overflow: hidden; }
 .step-button { width: 56rpx; height: 58rpx; line-height: 58rpx; font-size: 32rpx; margin: 0; padding: 0; border-radius: 0; background: #f2f6f3; color: #167e5a; }
 button::after { border: 0; }

@@ -285,6 +285,14 @@ Page({
     this.refreshList();
   },
 
+  // Empty groups point somewhere useful instead of dead-ending the page.
+  gotoView(event) {
+    const { view, filter } = event.currentTarget.dataset;
+    if (filter) this.setData({ statusFilter: filter });
+    this.changeView({ currentTarget: { dataset: { view } } });
+    if (filter) this.refreshList();
+  },
+
   nextOrders() { this.refreshList((this.data.orderLimit || 10) + 10); },
   refreshList(limit = 10) {
     const search = this.data.search.trim().toLowerCase();
