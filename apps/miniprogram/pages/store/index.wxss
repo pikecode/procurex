@@ -173,7 +173,5 @@ button::after { border: 0; }
 .empty-action { margin-top: 20rpx; padding: 0 28rpx; height: 64rpx; line-height: 62rpx; border: 1rpx solid #dbe8e1; background: #fff; color: #167e5a; font-size: 24rpx; }
 /* Mine view follows the same identity / menu / secondary / logout shape as the other roles. */
 .mine-identity { margin-top: 18rpx; }
-.account-menu-item > text:first-child { display: flex; flex-direction: column; gap: 6rpx; min-width: 0; }
-.account-menu-note { color: #8a9690; font-size: 23rpx; line-height: 1.45; overflow-wrap: anywhere; }
 .mine-secondary { margin-top: 18rpx; padding: 0 28rpx; }
 .mine-secondary button { width: 100%; margin: 0; }

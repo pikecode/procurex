@@ -23,6 +23,9 @@
 .account-menu-item { display: flex; align-items: center; justify-content: space-between; min-height: 92rpx; gap: 20rpx; border-bottom: 1rpx solid #e9eeeb; font-size: 27rpx; }
 .account-menu-item:last-child { border-bottom: 0; }
 .account-menu-item > text:last-child { color: #8a9690; font-size: 32rpx; }
+/* An entry may carry a description line below its label (address, scope of a page). */
+.account-menu-item > text:first-child { display: flex; flex-direction: column; gap: 6rpx; min-width: 0; }
+.account-menu-note { color: #8a9690; font-size: 23rpx; line-height: 1.45; overflow-wrap: anywhere; }
 .account-logout { margin: 24rpx 28rpx 0; background: #fff; color: #b34a40; }
 .account-logout::after { border: 0; }
 .command-history { padding: 24rpx 28rpx; background: #fff; margin-top: 18rpx; }
