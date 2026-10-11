@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "采购"
+  "navigationBarTitleText": "采购",
+  "usingComponents": {
+    "document-no": "../../components/document-no/index"
+  }
 }

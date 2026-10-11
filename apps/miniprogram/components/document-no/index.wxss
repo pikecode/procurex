@@ -1,0 +1,4 @@
+/* The date carries the visual weight; the sequence recedes so adjacent rows stay distinguishable. */
+.doc-no, .doc-no-plain { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.doc-no-date { font-weight: 600; }
+.doc-no-seq { font-weight: 400; color: #8a9690; }
