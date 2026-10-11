@@ -77,6 +77,7 @@ export type SupplierOrderItemView = ReturnType<typeof transactionUnitView> & {
   id: string;
   productId: string;
   productName?: string;
+  imageFile?: { id: string } | null;
   replenishmentGaps?: Array<{ id: string; quantity: string; remainingQuantity: string; status: ReplenishmentGapStatus }>;
   quantity: string;
   shippedQuantity: string;
@@ -232,7 +233,7 @@ export class SupplierOrdersService {
       include: {
         supplier: { select: { deliveryMode: true, name: true } },
         store: { select: { name: true, address: true, contactName: true, contactPhone: true, receiptAddress: true, receiptContactName: true, receiptContactPhone: true } },
-        items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true } }, shipmentItems: { select: { permanentlyReduced: true, gapAllocations: { select: { quantity: true } } } }, replenishmentGaps: { orderBy: { createdAt: 'asc' } } } },
+        items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true, imageFile: { select: { id: true } } } }, shipmentItems: { select: { permanentlyReduced: true, gapAllocations: { select: { quantity: true } } } }, replenishmentGaps: { orderBy: { createdAt: 'asc' } } } },
         freightConfirmations: { orderBy: { createdAt: 'desc' } },
       },
     });
@@ -251,7 +252,7 @@ export class SupplierOrdersService {
       storeName: order.store.name,
       destination: storeDestination(order.store),
       requiresFreightSnapshot: order.requiresFreightSnapshot,
-      items: order.items.map(item => ({ ...toSupplierOrderItemView(item), ...transactionUnitView(item.unitSnapshot, item.salesUnitPrice.toString(), item.supplyUnitPrice.toString(), names), productName: item.product.name,
+      items: order.items.map(item => ({ ...toSupplierOrderItemView(item), ...transactionUnitView(item.unitSnapshot, item.salesUnitPrice.toString(), item.supplyUnitPrice.toString(), names), productName: item.product.name, imageFile: item.product.imageFile,
         remainingToShipQuantity: remainingNormalShipmentQuantity(item).toString(),
         replenishmentGaps: item.replenishmentGaps.map(gap => ({ id: gap.id, quantity: gap.quantity.toString(), remainingQuantity: gap.remainingQuantity.toString(), status: gap.status })) })),
       freightConfirmations: order.freightConfirmations.map(toFreightConfirmationView),

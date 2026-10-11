@@ -86,6 +86,7 @@ test('purchaser draft preview, item edits and assignments guard approved prices 
     const assigned = await call(`/purchase-requests/${request.id}/assign`, 'POST', { ...assignment, expectedPrices: currentPrices }, `${prefix}assign`);
     assert.equal(assigned.status, 201); assert.equal(assigned.body.data.salesGoodsAmount, '75.00');
     assert.ok(assigned.body.data.items.every((item: any) => item.supplierId === suppliers[1]!.id));
+    assert.equal(assigned.body.data.supplierOrders.length, 0, 'supplier reassignment must not create execution orders');
     assert.deepEqual((await call(`/purchase-requests/${request.id}/assign`, 'POST', { ...assignment, expectedPrices: currentPrices }, `${prefix}assign`)).body.data, assigned.body.data);
     assert.equal(await db.auditLog.count({ where: { actorUserId: user.id, action: 'purchase-request.assign' } }), 1);
     assert.equal((await call(`/purchase-requests/${request.id}/items`, 'PATCH', edit, `${prefix}conflict`)).status, 409);
@@ -129,6 +130,9 @@ test('purchaser draft preview, item edits and assignments guard approved prices 
     await db.supplier.update({ where: { id: suppliers[0]!.id }, data: { status: 'ACTIVE' } });
     const confirm = await call(`/purchase-requests/${request.id}/confirm`, 'POST', { expectedVersion: assigned.body.data.version }, `${prefix}confirm`);
     assert.equal(confirm.status, 201); assert.equal(await db.supplierOrder.count({ where: { requestId: request.id } }), 1);
+    const finalOrders = (await call(`/purchase-requests/${request.id}`)).body.data.supplierOrders;
+    assert.ok(finalOrders.every((order: any) => order.supplierId === suppliers[1]!.id), 'final orders must use the adjusted supplier');
+    assert.equal((await call(`/purchase-requests/${request.id}/assign`, 'POST', { ...assignment, expectedVersion: assigned.body.data.version + 1, expectedPrices: currentPrices }, `${prefix}afterconfirm`)).status, 409);
     assert.equal((await call(`/purchase-requests/${request.id}/edit-catalog`)).status, 409);
     assert.equal((await call('/purchase-requests/not-a-uuid/edit-catalog')).status, 400);
     assert.equal((await call(`/purchase-requests/${request.id}/items-preview`, 'POST', { ...edit, expectedVersion: assigned.body.data.version + 1 })).status, 409);

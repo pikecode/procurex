@@ -1,12 +1,12 @@
-<test-context />
+<test-context wx:if="{{activeView === 'mine'}}" />
 <wxs src="../../utils/labels.wxs" module="labels" />
 <view class="page {{user.testWorkbenchEnabled && !user.testIdentity ? 'has-test-workbench-root' : ''}} {{requestId && selectedRequest && (activeView === 'rejections' || selectedRequest.status === 'PENDING_PROCUREMENT') || activeView === 'freight' && selectedFreight.status === 'PENDING' ? 'has-action-bar' : ''}}">
-  <view class="business-heading"><view><text class="business-title">采购管理</text><text class="muted">{{user.displayName}}</text></view><view class="heading-actions"><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{loading}}">刷新</button></view></view>
+  <view class="business-heading"><view><text class="business-title">采购管理</text><text class="muted">{{user.displayName}}</text></view><view class="heading-actions" wx:if="{{!requestId}}"><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{loading}}">刷新</button></view></view>
   <view class="workspace-loading" wx:if="{{loading}}">正在更新采购信息</view>
-  <view wx:if="{{error}}" class="error-banner"><text>{{error}}</text><button class="ghost" bindtap="loadWork" disabled="{{loading || confirming || reallocating || freightReviewing}}">刷新数据</button></view>
+  <view wx:if="{{error && !detailError}}" class="error-banner"><text>{{error}}</text><button class="ghost" bindtap="loadWork" disabled="{{loading || confirming || reallocating || freightReviewing}}">刷新数据</button></view>
   <view wx:if="{{pendingCommand}}" class="command-recovery"><view><text class="row-title">{{pendingCommand.title}} · 结果待确认</text><text class="muted">{{pendingCommand.dateText}}</text></view><button class="secondary" bindtap="recoverCommand" disabled="{{recovering || confirming || reallocating || freightReviewing}}" loading="{{recovering}}">确认提交结果</button></view>
   <view class="business-nav"><view class="nav-item {{activeView === 'tasks' || activeView === 'rejections' || activeView === 'freight' ? 'is-active' : ''}}" data-view="tasks" bindtap="changeView">待办</view><view class="nav-item {{activeView === 'orders' ? 'is-active' : ''}}" data-view="orders" bindtap="changeView">订单</view><view class="nav-item {{activeView === 'mine' || activeView === 'history' || activeView === 'reports' ? 'is-active' : ''}}" data-view="mine" bindtap="changeView">我的</view></view>
-  <block wx:if="{{activeView === 'tasks'}}"><view class="task-heading"><text>待审核订货</text><text>{{loading || error ? '—' : procurementTasks.length}}</text></view><view class="card"><view class="task-entry" wx:for="{{procurementTasks}}" wx:key="id" data-id="{{item.id}}" bindtap="openTaskRequest"><view><text>{{item.storeName || '门店订货'}}</text><text class="muted">{{item.requestNo}} · {{item.submittedText}}</text></view><text>审核 ›</text></view><view class="empty-state" wx:if="{{!procurementTasks.length && !loading && !error}}">暂无待审核订货</view></view><view class="task-heading"><text>异常与费用</text></view><view class="card"><view class="task-entry" data-view="rejections" bindtap="changeView"><view><text>供应商拒单改派</text></view><text>{{loading || error ? '—' : rejectionTodos.length}} ›</text></view><view class="task-entry" wx:for="{{pendingFreight}}" wx:key="id" data-id="{{item.id}}" bindtap="openTaskFreight"><view><text>{{item.storeName}} · 运费待确认</text><text class="muted">{{item.supplierName}} · {{item.supplierOrderNo}}</text></view><text>¥{{labels.money(item.amount)}} ›</text></view><view class="muted" wx:if="{{!pendingFreight.length && !loading && !error}}">暂无待确认运费</view></view></block>
+  <block wx:if="{{activeView === 'tasks'}}"><view class="task-heading"><text>待确认下货单</text><text>{{loading || error ? '—' : procurementTasks.length}}</text></view><view class="card"><view class="task-entry" wx:for="{{procurementTasks}}" wx:key="id" data-id="{{item.id}}" bindtap="openTaskRequest"><view><text>{{item.storeName || '门店订货'}}</text><text class="muted">{{item.requestNo}} · {{item.submittedText}}</text></view><text>审核 ›</text></view><view class="empty-state" wx:if="{{!procurementTasks.length && !loading && !error}}">暂无待确认下货单</view></view><view class="task-heading"><text>异常与费用</text></view><view class="card"><view class="task-entry" data-view="rejections" bindtap="changeView"><view><text>供应商拒单改派</text></view><text>{{loading || error ? '—' : rejectionTodos.length}} ›</text></view><view class="task-entry" wx:for="{{pendingFreight}}" wx:key="id" data-id="{{item.id}}" bindtap="openTaskFreight"><view><text>{{item.storeName}} · 运费待确认</text><text class="muted">{{item.supplierName}} · {{item.supplierOrderNo}}</text></view><text>¥{{labels.money(item.amount)}} ›</text></view><view class="muted" wx:if="{{!pendingFreight.length && !loading && !error}}">暂无待确认运费</view></view></block>
   <view class="card" wx:if="{{activeView === 'mine'}}"><view class="task-entry" data-view="reports" bindtap="changeView"><text>采购统计</text><text>›</text></view></view>
   <view class="card" wx:if="{{activeView === 'freight' || activeView === 'rejections'}}"><view class="back-link" data-view="tasks" bindtap="changeView">返回待办</view></view>
   <block wx:if="{{activeView === 'mine'}}"><view class="card"><text class="card-title">{{user.displayName}}</text><text class="muted">采购工作台</text></view><view class="account-menu"><view class="account-menu-item" bindtap="openProducts"><text>商品管理</text><text>›</text></view><view class="account-menu-item" bindtap="openPrices"><text>价格维护</text><text>›</text></view><view class="account-menu-item" data-view="history" bindtap="changeView"><text>本机提交记录</text><text>›</text></view></view><button class="account-logout" bindtap="logout">退出登录</button></block>
@@ -42,13 +42,35 @@
   </view>
 
   <view class="card" wx:if="{{(activeView === 'orders' || activeView === 'rejections') && requestId}}">
-    <view class="detail-heading"><text class="back-link" bindtap="backToList">返回列表</text><text class="card-title">{{selectedRequest.requestNo || '申请详情'}}</text></view>
+    <view class="detail-heading"><text class="back-link" bindtap="backToList">返回列表</text><text class="card-title">{{selectedRequest.requestNo || '下货单详情'}}</text></view>
+    <view class="request-store" wx:if="{{selectedRequest.storeName}}">{{selectedRequest.storeName}}</view>
     <view class="field" wx:if="{{activeView === 'rejections'}}"><text class="field-label">改派供应商</text><picker range="{{suppliers}}" range-key="name" value="{{supplierIndex}}" bindchange="selectSupplier"><view class="picker-value">{{supplierIndex >= 0 ? suppliers[supplierIndex].name : '选择供应商'}} ▾</view></picker></view>
     <view class="field" wx:if="{{activeView === 'rejections'}}"><text class="field-label">改派原因</text><input value="{{reallocateReason}}" data-field="reallocateReason" bindinput="onInput" placeholder="供应商拒单后改派" /></view>
     <view class="detail-status" wx:if="{{selectedRequest}}">{{labels.status(selectedRequest.status)}}</view>
-    <view class="button-row {{activeView === 'orders' && selectedRequest.status === 'PENDING_PROCUREMENT' ? 'action-bar' : ''}}">
-      <button class="secondary action-secondary" loading="{{detailing}}" disabled="{{confirming || reallocating || detailing}}" bindtap="loadRequestDetail">刷新明细</button>
-      <button class="primary" wx:if="{{activeView === 'orders' && selectedRequest.status === 'PENDING_PROCUREMENT'}}" disabled="{{confirming || detailing || reallocating}}" loading="{{confirming}}" bindtap="confirmRequest">确认并推送</button>
+    <view class="request-funding" wx:if="{{selectedRequest}}">资金状态 · {{labels.status(selectedRequest.paymentStatus)}}</view>
+    <view id="supplier-order-summary" class="supplier-order-summary" wx:if="{{selectedRequest.supplierOrders.length}}">
+      <view class="section-head"><text class="card-title">供应商订单</text><text class="order-count">已生成 {{selectedRequest.supplierOrders.length}} 张</text></view>
+      <view class="price-details-control"><text>供应商价格明细</text><switch aria-label="显示供应商价格明细" checked="{{showPriceDetails}}" bindchange="togglePriceDetails" color="#137951" /></view>
+      <view wx:for="{{selectedRequest.supplierOrders}}" wx:key="id" class="row">
+        <view class="row-title"><text>{{item.supplierName || '供应商订单'}}</text><text class="tag">{{labels.status(item.status)}}</text></view>
+        <view class="muted">{{item.supplierOrderNo}}</view>
+        <view class="muted">履约 {{labels.status(item.fulfillmentStatus)}}</view>
+        <view class="generated-order-products">
+          <view wx:for="{{item.items}}" wx:for-item="product" wx:key="id" class="generated-order-product-block">
+            <view class="procurement-product-media"><image wx:if="{{product.imageUrl}}" src="{{product.imageUrl}}" mode="aspectFit" data-url="{{product.imageUrl}}" bindtap="previewProductImage" /><text wx:else>{{product.imageFailed ? '图片失败' : product.imageFile ? '加载中' : '暂无图片'}}</text></view>
+            <view class="generated-order-product"><text>{{product.productName}}</text><text>¥{{labels.money(product.salesLineAmount)}}</text></view>
+            <view class="generated-order-product-meta"><text>{{product.quantity}} {{product.unitName || product.unitSnapshot.salesUnitName || ''}}</text><text>销售价格 ¥{{labels.money(product.salesUnitPrice)}} / {{product.unitName || product.unitSnapshot.salesUnitName || ''}}</text></view>
+            <view class="generated-order-product-meta" wx:if="{{showPriceDetails}}"><text>供应商价格 ¥{{labels.money(product.supplyUnitPrice)}}</text><text>供应商金额 ¥{{labels.money(product.supplyLineAmount)}}</text></view>
+          </view>
+          <view class="error-banner" wx:if="{{item.itemsError}}"><text>{{item.itemsError}}</text><button class="ghost" bindtap="loadRequestDetail" disabled="{{detailing || confirming || reallocating || recovering || pendingCommand}}">重试</button></view>
+        </view>
+      </view>
+    </view>
+    <view class="muted" wx:if="{{detailing}}">正在更新明细</view>
+    <view class="error-banner" wx:if="{{detailError}}"><text>{{detailError}}</text><button class="ghost" bindtap="loadRequestDetail" disabled="{{detailing || confirming || reallocating || recovering || pendingCommand}}">重试</button></view>
+    <view class="funding-shortfall" wx:if="{{selectedRequest.status === 'PENDING_FUNDS'}}"><text>待补资金 ¥{{labels.money(selectedRequest.shortfallAmount)}}</text></view>
+    <view class="button-row action-bar" wx:if="{{activeView === 'orders' && selectedRequest.status === 'PENDING_PROCUREMENT' && !selectedRequest.supplierOrders.length}}">
+      <button class="primary" disabled="{{confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" loading="{{confirming}}" bindtap="confirmRequest">确认并生成订单</button>
     </view>
     <view class="button-row action-bar" wx:if="{{activeView === 'rejections' && selectedRequest}}">
       <button class="secondary" loading="{{reallocating}}" disabled="{{!targetSupplierId || !rejectedOrderId || reallocating}}" bindtap="reallocateRequest">改派供应商</button>
@@ -56,36 +78,53 @@
   </view>
 
   <view class="card" wx:if="{{(activeView === 'orders' || activeView === 'rejections') && requestId && (selectedRequest)}}">
-    <text class="card-title">申请详情</text>
-    <view class="metric-grid">
-      <view class="metric"><text class="metric-label">资金状态</text><text class="metric-value">{{labels.status(selectedRequest.paymentStatus)}}</text></view>
-      <view class="metric"><text class="metric-label">缺口金额</text><text class="metric-value">{{selectedRequest.shortfallAmount}}</text></view>
-      <view class="metric"><text class="metric-label">销售额</text><text class="metric-value">{{selectedRequest.salesGoodsAmount}}</text></view>
-      <view class="metric"><text class="metric-label">供货额</text><text class="metric-value">{{selectedRequest.supplyGoodsAmount}}</text></view>
-    </view>
+    <view class="product-list-toolbar"><text class="card-title">商品清单</text><view class="price-details-control"><text>价格明细</text><switch aria-label="显示价格明细" checked="{{showPriceDetails}}" bindchange="togglePriceDetails" color="#137951" /></view></view>
+    <view class="procurement-summary"><text>订货金额 ¥{{labels.money(selectedRequest.salesGoodsAmount)}}</text><text wx:if="{{showPriceDetails}}">供应商金额 ¥{{labels.money(selectedRequest.supplyGoodsAmount)}}</text></view>
     <view class="list">
-      <view wx:for="{{selectedRequest.items}}" wx:key="id" class="row">
-        <view class="row-title"><text>{{item.productName || '商品'}}</text><text class="tag">{{item.quantity}}</text></view>
-        <view class="muted">销售 {{item.salesLineAmount}}，供货 {{item.supplyLineAmount}}</view>
+      <view class="assignment-caption" wx:if="{{assignmentGroups.length}}">供货分组 · {{assignmentGroups.length}} 家供应商</view>
+      <view class="assignment-group" wx:for="{{assignmentGroups}}" wx:key="supplierId" wx:for-item="group">
+        <view class="assignment-group-heading"><text>{{group.supplierName}}</text><text class="muted">{{group.itemCount}} 种商品</text></view>
+        <view class="assignment-group-totals" wx:if="{{showPriceDetails}}"><text>销售金额 ¥{{labels.money(group.salesAmount)}}</text><text>供应商金额 ¥{{labels.money(group.supplyAmount)}}</text></view>
+        <view wx:for="{{group.items}}" wx:key="id" class="row assignment-product">
+          <view class="procurement-product-media"><image wx:if="{{item.imageUrl}}" src="{{item.imageUrl}}" mode="aspectFit" data-url="{{item.imageUrl}}" bindtap="previewProductImage" /><text wx:else>{{item.imageFailed ? '图片失败' : item.imageFile ? '加载中' : '暂无图片'}}</text></view>
+          <view class="row-title assignment-product-heading"><text>{{item.productName}}</text>
+            <picker wx:if="{{item.options.length > 1 || (item.options.length && item.supplierIndex < 0)}}" class="assignment-change" range="{{item.options}}" range-key="supplierName" value="{{item.supplierIndex >= 0 ? item.supplierIndex : 0}}" data-id="{{item.id}}" bindchange="changeItemSupplier" disabled="{{confirming || reallocating || detailing || pendingCommand || detailError}}"><view class="assignment-change-label {{confirming || reallocating || detailing || pendingCommand || detailError ? 'is-disabled' : ''}}">更换供应商</view></picker>
+          </view>
+          <view class="product-line-summary"><text class="product-quantity">订货 {{item.quantity}} {{item.unitName || item.unitSnapshot.salesUnitName || ''}}</text><text class="product-line-amount">¥{{labels.money(item.salesLineAmount)}}</text></view>
+          <view class="assignment-price-grid" wx:if="{{showPriceDetails}}">
+            <view><text class="price-label">销售价格</text><text class="price-value">¥{{labels.money(item.salesUnitPrice)}}<text class="price-unit"> / {{item.unitName || item.unitSnapshot.salesUnitName || ''}}</text></text></view>
+            <view><text class="price-label">供应商价格</text><text class="price-value">¥{{labels.money(item.supplyUnitPrice)}}<text class="price-unit"> / {{item.unitName || item.unitSnapshot.salesUnitName || ''}}</text></text></view>
+            <view><text class="price-label">销售金额</text><text class="price-value amount-value">¥{{labels.money(item.salesLineAmount)}}</text></view>
+            <view><text class="price-label">供应商金额</text><text class="price-value amount-value">¥{{labels.money(item.supplyLineAmount)}}</text></view>
+          </view>
+        </view>
       </view>
-      <view wx:for="{{selectedRequest.supplierOrders}}" wx:key="id" class="row">
-        <view class="row-title"><text>{{item.supplierOrderNo}}</text><text class="tag">{{labels.status(item.status)}}</text></view>
-        <view class="muted">履约 {{labels.status(item.fulfillmentStatus)}}</view>
+      <view wx:if="{{!assignmentItems.length}}" wx:for="{{selectedRequest.items}}" wx:key="id" class="row procurement-product-row">
+        <view class="procurement-product-media"><image wx:if="{{item.imageUrl}}" src="{{item.imageUrl}}" mode="aspectFit" data-url="{{item.imageUrl}}" bindtap="previewProductImage" /><text wx:else>{{item.imageFailed ? '图片失败' : item.imageFile ? '加载中' : '暂无图片'}}</text></view>
+        <view class="row-title"><text>{{item.productName || '商品'}}</text></view>
+        <view class="product-line-summary"><text class="product-quantity">订货 {{item.quantity}} {{item.unitName || item.unitSnapshot.salesUnitName || ''}}</text><text class="product-line-amount">¥{{labels.money(item.salesLineAmount)}}</text></view>
+        <view class="assignment-price-grid" wx:if="{{showPriceDetails}}">
+          <view><text class="price-label">销售价格</text><text class="price-value">¥{{labels.money(item.salesUnitPrice)}}<text class="price-unit"> / {{item.unitName || item.unitSnapshot.salesUnitName || ''}}</text></text></view>
+          <view><text class="price-label">供应商价格</text><text class="price-value">¥{{labels.money(item.supplyUnitPrice)}}<text class="price-unit"> / {{item.unitName || item.unitSnapshot.salesUnitName || ''}}</text></text></view>
+          <view><text class="price-label">销售金额</text><text class="price-value amount-value">¥{{labels.money(item.salesLineAmount)}}</text></view>
+          <view><text class="price-label">供应商金额</text><text class="price-value amount-value">¥{{labels.money(item.supplyLineAmount)}}</text></view>
+        </view>
       </view>
     </view>
   </view>
 
   <view class="card" wx:if="{{activeView === 'orders' && !requestId}}">
-    <input class="business-search" value="{{search}}" bindinput="onSearch" placeholder="搜索申请号" />
-    <view class="status-filters"><text class="{{statusFilter === 'all' ? 'selected' : ''}}" data-filter="all" bindtap="filterStatus">全部</text><text class="{{statusFilter === 'PENDING_PROCUREMENT' ? 'selected' : ''}}" data-filter="PENDING_PROCUREMENT" bindtap="filterStatus">待确认</text><text class="{{statusFilter === 'PENDING_FUNDS' ? 'selected' : ''}}" data-filter="PENDING_FUNDS" bindtap="filterStatus">待补款</text><text class="{{statusFilter === 'CONFIRMED' ? 'selected' : ''}}" data-filter="CONFIRMED" bindtap="filterStatus">已推送</text></view>
+    <input class="business-search" value="{{search}}" bindinput="onSearch" placeholder="搜索下货单号" />
+    <view class="status-filters"><text class="{{statusFilter === 'all' ? 'selected' : ''}}" data-filter="all" bindtap="filterStatus">全部</text><text class="{{statusFilter === 'PENDING_PROCUREMENT' ? 'selected' : ''}}" data-filter="PENDING_PROCUREMENT" bindtap="filterStatus">待确认</text><text class="{{statusFilter === 'PENDING_FUNDS' ? 'selected' : ''}}" data-filter="PENDING_FUNDS" bindtap="filterStatus">待补款</text><text class="{{statusFilter === 'CONFIRMED' ? 'selected' : ''}}" data-filter="CONFIRMED" bindtap="filterStatus">已生成订单</text></view>
     <view class="list">
       <view wx:for="{{visibleRequests}}" wx:key="id" class="row" bindtap="selectRequest" data-id="{{item.id}}">
         <view class="row-title"><text>{{item.storeName || item.requestNo || item.id}}</text><text class="tag {{item.paymentStatus === 'SHORTFALL' ? 'tag-warn' : ''}}">{{labels.status(item.status)}}</text></view>
         <view class="muted" wx:if="{{item.storeName}}">{{item.requestNo}}</view>
         <view class="muted">资金 {{labels.status(item.paymentStatus)}}</view>
+        <view class="request-list-total">订货金额 <text>¥{{labels.money(item.salesGoodsAmount)}}</text></view>
         <view class="list-amount" wx:if="{{item.paymentStatus === 'SHORTFALL'}}">待补货款 ¥{{labels.money(item.shortfallAmount || '0.00')}}</view>
       </view>
-      <view wx:if="{{!visibleRequests.length}}" class="row"><view class="muted">暂无待办</view></view>
+      <view wx:if="{{!visibleRequests.length && !loading && !error}}" class="row"><view class="muted">{{search || statusFilter !== 'all' ? '没有符合条件的下货单' : '暂无下货单'}}</view></view>
     </view>
   </view>
 

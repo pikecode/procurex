@@ -129,7 +129,6 @@ test('purchase request preview prices catalog items and reports stored-value sho
         suppliers: { create: [{ supplierId: supplier.id, priority: 1 }] },
       },
     });
-    await prisma.storeTemplateBinding.create({ data: { storeId: store.id, templateId: template.id } });
     const scope = await prisma.priceScope.create({ data: { productId: product.id, supplierId: supplier.id } });
     const priceVersion = await prisma.priceVersion.create({
       data: {
@@ -141,6 +140,18 @@ test('purchase request preview prices catalog items and reports stored-value sho
     });
 
     const token = await login(baseUrl, storeUsername);
+    const unboundInput = { storeId: store.id, items: [{ productId: product.id, quantity: '10.000000' }] };
+    for (const path of [`/stores/${store.id}/catalog`, '/purchase-requests/preview', '/purchase-requests']) {
+      const rejected = await fetch(`${baseUrl}${path}`, {
+        method: path.endsWith('/catalog') ? 'GET' : 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'idempotency-key': `unbound-${runId}-${path}` },
+        ...(path.endsWith('/catalog') ? {} : { body: JSON.stringify(unboundInput) }),
+      });
+      assert.equal(rejected.status, 404, path);
+      assert.equal((await rejected.json() as { code: string }).code, 'STORE_TEMPLATE_NOT_FOUND', path);
+    }
+    assert.equal(await prisma.purchaseRequest.count({ where: { storeId: store.id } }), 0);
+    await prisma.storeTemplateBinding.create({ data: { storeId: store.id, templateId: template.id } });
     const response = await fetch(`${baseUrl}/purchase-requests/preview`, {
       method: 'POST',
       headers: {
@@ -199,6 +210,7 @@ test('purchase request preview prices catalog items and reports stored-value sho
     });
   } finally {
     await app.close();
+    await prisma.commandRecord.deleteMany({ where: { actor: { username: storeUsername } } });
     await cleanupFunding(prisma, storeCode);
     await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: supplierCode } } } });
     await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });

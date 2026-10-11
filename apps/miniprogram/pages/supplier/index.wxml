@@ -1,4 +1,4 @@
-<test-context />
+<test-context wx:if="{{activeView === 'mine'}}" />
 <wxs src="../../utils/labels.wxs" module="labels" />
 <view class="page {{activeView === 'orders' && selectedOrder && (selectedOrder.canShip || selectedOrder.canReject) || activeView === 'payments' && selectedPayment.status === 'PENDING' ? 'has-action-bar' : ''}}">
   <view class="business-heading"><view><text class="business-title">供货管理</text><text class="muted">{{user.displayName}}</text></view><view class="heading-actions"><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{loading}}">刷新</button></view></view>

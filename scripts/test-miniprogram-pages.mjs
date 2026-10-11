@@ -39,6 +39,30 @@ test('prices display two decimals and delivery contact calls the separate phone'
 const input = (id, value) => ({ ...tap(id), detail: { value } });
 const plain = value => JSON.parse(JSON.stringify(value));
 
+test('admin role switch is only available in mine and normal accounts do not see it', () => {
+  for (const name of ['store', 'supplier', 'purchaser', 'finance', 'region']) {
+    const template = readFileSync(`apps/miniprogram/pages/${name}/index.wxml`, 'utf8');
+    assert.ok(template.includes('<test-context wx:if="{{activeView === \'mine\'}}" />'));
+    assert.equal(template.includes('<test-context />'), false);
+  }
+  let user = { roles: ['STORE'], displayName: '门店用户', username: 'store1' };
+  let definition;
+  const calls = [];
+  vm.runInNewContext(readFileSync('apps/miniprogram/components/test-context/index.js', 'utf8'), {
+    Component: value => { definition = value; }, require: () => ({ currentUser: () => user }),
+    wx: { navigateTo: value => calls.push(value.url) },
+  });
+  const component = { data: { ...definition.data }, ...definition.methods, setData(value) { Object.assign(this.data, value); } };
+  component.refresh();
+  assert.equal(component.data.enabled, false);
+  user = { ...user, testWorkbenchEnabled: true, testIdentity: { userId: 'store1' } };
+  component.refresh();
+  assert.equal(component.data.enabled, true);
+  assert.equal(component.data.roleText, '门店厨政经理');
+  component.open();
+  assert.deepEqual(calls, ['/pages/test-workbench/index']);
+});
+
 function workbenchApi() {
   const storage = new Map([['procurexToken', 'root-session'], ['procurexUser', { id: 'target', testWorkbenchEnabled: true, roles: ['STORE'], scope: { storeId: 'store' }, testIdentity: { userId: 'target' } }]]);
   const calls = [], pages = [], module = { exports: {} };
@@ -1230,6 +1254,226 @@ test('role detail return preserves in-flight operations and clears completed sel
   assert.equal(purchaser.data.requestId, ''); assert.equal(purchaser.data.selectedRequest, null);
 });
 
+test('store confirmed request groups items by supplier', async () => {
+  const store = page('store', async () => ({ items: [
+    { id: 'i1', productId: 'p1', supplierId: 's1', supplierName: '粮油供应商', supplierContactName: '张经理', supplierContactPhone: '13800000001', deliveryContactPhone: '13800000002', supplierAddress: '上海市浦东新区', productName: '大米', salesLineAmount: '12.50' },
+    { id: 'i2', productId: 'p1', supplierId: 's2', productName: '大米', salesLineAmount: '8.25' },
+    { id: 'i3', productId: 'p2', supplierId: 's1', supplierName: '粮油供应商', productName: '面粉', salesLineAmount: '3.50' },
+  ], supplierOrders: [{ id: 'o2', supplierId: 's2', supplierName: '备用供应商', shipments: [] }] }));
+  await store.selectRequest(tap('r1'));
+  const groups = plain(store.data.selectedRequest.itemGroups);
+  assert.equal(groups.length, 2);
+  assert.equal(groups[0].supplierName, '粮油供应商');
+  assert.equal(groups[0].itemCount, 2);
+  assert.equal(groups[0].groupAmount, '16.00');
+  assert.equal(groups[1].supplierName, '备用供应商');
+  assert.equal(groups[1].groupAmount, '8.25');
+  assert.equal(groups[1].items[0].id, 'i2');
+  assert.equal(groups[0].contactName, '张经理');
+  assert.equal(groups[0].contactPhone, '13800000001');
+  assert.equal(groups[0].deliveryContactPhone, '13800000002');
+  assert.equal(groups[0].address, '上海市浦东新区');
+  store.toggleRequestGroup(tap('', { supplierId: 's1' }));
+  assert.equal(store.data.selectedRequest.itemGroups[0].open, false);
+  assert.equal(store.data.selectedRequest.itemGroups[1].open, true);
+  store.toggleRequestGroup(tap('', { supplierId: 's1' }));
+  assert.equal(store.data.selectedRequest.itemGroups[0].open, true);
+});
+
+test('pending store requests do not expose tentative supplier groups', async () => {
+  const store = page('store', async () => ({ status: 'PENDING_PROCUREMENT', items: [{ id: 'i', supplierId: 's', supplierName: '暂定供应商', productName: '大米' }], supplierOrders: [] }));
+  await store.selectRequest(tap('request'));
+  assert.deepEqual(plain(store.data.selectedRequest.itemGroups), []);
+  assert.equal(store.data.selectedRequest.items.length, 1);
+  const template = readFileSync('apps/miniprogram/pages/store/index.wxml', 'utf8');
+  const confirmation = template.slice(template.indexOf('wx:if="{{activeView === \'order\' && orderStep === \'confirm\'}}"'), template.indexOf('wx:if="{{activeView === \'orders\''));
+  assert.ok(!confirmation.includes('group.supplierName'));
+  assert.ok(!confirmation.includes('group.deliveryContactPhone'));
+});
+
+test('purchaser replaces one product supplier only after valid price preview and confirmation', async () => {
+  const calls = [];
+  const detail = { id: 'r', version: 2, status: 'PENDING_PROCUREMENT', supplierOrders: [], items: [{ id: 'i', productId: 'p', supplierId: 'a', productName: '大米', salesLineAmount: '10.00', supplyLineAmount: '8.00' }] };
+  const purchaser = page('purchaser', async (path, options) => {
+    calls.push({ path, options });
+    if (path.endsWith('/edit-catalog')) return { items: [{ product: { id: 'p' }, suppliers: [{ supplierId: 'a', supplierName: '原供应商' }, { supplierId: 'b', supplierName: '新供应商' }] }] };
+    if (path.endsWith('/reassign-preview')) return { requestId: 'r', supplierId: 'b', items: [{ requestItemId: 'i', eligible: true, salesLineAmount: '12.00', supplyLineAmount: '9.00', priceVersionId: 'v', supplyPriceVersionId: 'sv' }] };
+    return detail;
+  }, {}, { showModal: options => options.success({ confirm: true }) });
+  purchaser.data.requestId = 'r';
+  await purchaser.loadRequestDetail('r');
+  purchaser.loadRequests = async () => {};
+  await purchaser.changeItemSupplier(input('i', '1'));
+  const command = calls.find(call => call.path.endsWith('/assign'));
+  assert.deepEqual(plain(command.options.data), { expectedVersion: 2, itemIds: ['i'], supplierId: 'b', expectedPrices: [{ requestItemId: 'i', priceVersionId: 'v', supplyPriceVersionId: 'sv' }] });
+  assert.ok(command.options.header['idempotency-key']);
+  assert.ok(!calls.some(call => call.path.endsWith('/confirm')));
+  assert.equal(purchaser.data.reallocating, false);
+});
+
+test('purchaser groups confirmation products by supplier and rebuilds groups after reassignment', async () => {
+  let reassigned = false;
+  const purchaser = page('purchaser', async path => {
+    if (path.endsWith('/edit-catalog')) return { items: ['p1', 'p2', 'p3'].map(id => ({ product: { id }, suppliers: [{ supplierId: 'a', supplierName: '粮油供应商' }, { supplierId: 'b', supplierName: '蔬菜供应商' }] })) };
+    if (path.endsWith('/reassign-preview')) return { requestId: 'r', supplierId: 'b', items: [{ requestItemId: 'i1', eligible: true, salesLineAmount: '15.00', supplyLineAmount: '12.00', priceVersionId: 'v', supplyPriceVersionId: 'sv' }] };
+    if (path.endsWith('/assign')) { reassigned = true; return {}; }
+    return { id: 'r', version: reassigned ? 2 : 1, status: 'PENDING_PROCUREMENT', supplierOrders: [], items: [
+      { id: 'i1', productId: 'p1', supplierId: reassigned ? 'b' : 'a', productName: '大米', salesLineAmount: reassigned ? '15.00' : '12.50', supplyLineAmount: reassigned ? '12.00' : '10.00' },
+      { id: 'i2', productId: 'p2', supplierId: 'b', productName: '青菜', salesLineAmount: '8.25', supplyLineAmount: '6.00' },
+      { id: 'i3', productId: 'p3', supplierId: 'a', productName: '面粉', salesLineAmount: '3.50', supplyLineAmount: '2.00' }
+    ] };
+  }, {}, { showModal: options => options.success({ confirm: true }) });
+  purchaser.data.requestId = 'r'; purchaser.loadRequests = async () => {};
+  await purchaser.loadRequestDetail();
+  assert.deepEqual(plain(purchaser.data.assignmentGroups.map(group => [group.supplierId, group.itemCount, group.salesAmount, group.supplyAmount])), [
+    ['a', 2, '16.00', '12.00'], ['b', 1, '8.25', '6.00']
+  ]);
+  assert.equal(purchaser.data.assignmentGroups[0].supplierName, '粮油供应商');
+  await purchaser.changeItemSupplier(input('i1', '1'));
+  const groupB = purchaser.data.assignmentGroups.find(group => group.supplierId === 'b');
+  assert.equal(groupB.itemCount, 2);
+  assert.equal(groupB.salesAmount, '23.25');
+  assert.equal(groupB.supplyAmount, '18.00');
+  assert.deepEqual(plain(groupB.items.map(item => item.id)), ['i1', 'i2']);
+  assert.equal(purchaser.data.assignmentGroups.find(group => group.supplierId === 'a').itemCount, 1);
+  purchaser.backToList();
+  assert.deepEqual(plain(purchaser.data.assignmentGroups), []);
+});
+
+test('purchaser prices distinguish snapshot unit prices from amounts in both detail layouts', () => {
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  assert.equal((markup.match(/labels\.money\(item\.salesUnitPrice\)/g) || []).length, 2);
+  assert.equal((markup.match(/labels\.money\(item\.supplyUnitPrice\)/g) || []).length, 2);
+  for (const label of ['销售价格', '供应商价格', '销售金额', '供应商金额']) assert.ok(markup.includes(label));
+  assert.ok(!markup.includes('供货金额'));
+  assert.ok(!markup.includes('defaultSalesPrice'));
+  assert.ok(markup.includes('!visibleRequests.length && !loading && !error'));
+  assert.equal((markup.match(/class="assignment-price-grid" wx:if="\{\{showPriceDetails\}\}"/g) || []).length, 2);
+  assert.ok(markup.includes('class="assignment-group-totals" wx:if="{{showPriceDetails}}"'));
+  const purchaser = page('purchaser');
+  assert.equal(purchaser.data.showPriceDetails, false);
+  purchaser.togglePriceDetails({ detail: { value: true } });
+  assert.equal(purchaser.data.showPriceDetails, true);
+  purchaser.togglePriceDetails({ detail: { value: false } });
+  assert.equal(purchaser.data.showPriceDetails, false);
+  purchaser.togglePriceDetails({ detail: { value: true } });
+  purchaser.backToList();
+  assert.equal(purchaser.data.showPriceDetails, false);
+});
+
+test('purchaser detail retries failures and blocks commands until refreshed', async () => {
+  let fail = true;
+  const purchaser = page('purchaser', async () => {
+    if (fail) throw new Error('网络暂不可用');
+    return { id: 'r', status: 'CONFIRMED', supplierOrders: [{ id: 'o' }] };
+  });
+  purchaser.data.requestId = 'r';
+  await purchaser.loadRequestDetail();
+  assert.equal(purchaser.data.detailError, '网络暂不可用');
+  assert.equal(purchaser.data.detailing, false);
+  await purchaser.confirmRequest();
+  assert.equal(purchaser.data.confirming, false);
+  fail = false;
+  await purchaser.loadRequestDetail();
+  assert.equal(purchaser.data.detailError, '');
+  assert.equal(purchaser.data.selectedRequest.id, 'r');
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  assert.ok(!markup.includes('刷新明细'));
+  assert.ok(markup.includes('wx:if="{{detailError}}"'));
+  assert.ok(markup.includes('更换供应商'));
+  assert.ok(!markup.includes('class="field-label">供货供应商'));
+  assert.ok(!markup.includes('item.options[item.supplierIndex].supplierName'));
+  assert.ok(markup.includes('item.options.length > 1'));
+  assert.ok(markup.includes('待补资金 ¥'));
+});
+
+test('purchaser detail refreshes when returning to the page, but not during a write', () => {
+  const user = { id: 'buyer', displayName: '采购经理' };
+  const purchaser = page('purchaser', undefined, { openWorkspace: () => user });
+  purchaser.data.user = user; purchaser.data.requestId = 'r';
+  let reads = 0;
+  purchaser.loadRequestDetail = () => { reads++; };
+  purchaser.onShow();
+  assert.equal(reads, 1);
+  purchaser.data.reallocating = true;
+  purchaser.onShow();
+  assert.equal(reads, 1);
+});
+
+test('purchaser confirmation exposes generated orders and scrolls to their summary', async () => {
+  const scrolls = [];
+  const detail = { id: 'r', requestNo: 'PR-001', version: 2, status: 'CONFIRMED', supplierOrders: [
+    { id: 'o1', supplierName: '粮油供应商', supplierOrderNo: 'SO-001' },
+    { id: 'o2', supplierName: '蔬菜供应商', supplierOrderNo: 'SO-002' }
+  ] };
+  const purchaser = page('purchaser', async path => path.endsWith('/confirm') ? { status: 'CONFIRMED', supplierOrderIds: ['o1', 'o2'] }
+    : path.startsWith('/supplier-orders/') ? { items: [{ id: path, productName: '订单商品', quantity: '3', unitName: '袋' }] } : detail,
+    {}, { pageScrollTo: options => scrolls.push(options) });
+  purchaser.data.requestId = 'r'; purchaser.data.selectedRequest = { ...detail, status: 'PENDING_PROCUREMENT', supplierOrders: [] };
+  await purchaser.confirmRequest();
+  assert.equal(purchaser.data.error, '');
+  assert.equal(purchaser.data.result.title, '采购确认成功');
+  assert.equal(purchaser.data.result.detail, '已生成 2 张供应商订单');
+  assert.equal(purchaser.data.selectedRequest.supplierOrders.length, 2);
+  assert.equal(purchaser.data.selectedRequest.supplierOrders[0].items[0].productName, '订单商品');
+  assert.equal(scrolls[0].selector, '#supplier-order-summary');
+  const template = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  assert.ok(template.includes('已生成 {{selectedRequest.supplierOrders.length}} 张'));
+  assert.ok(template.includes('wx:for="{{item.items}}"'));
+  for (const field of ['salesUnitPrice', 'salesLineAmount', 'supplyUnitPrice', 'supplyLineAmount']) {
+    assert.ok(template.includes(`labels.money(product.${field})`));
+  }
+  assert.ok(template.indexOf('id="supplier-order-summary"') < template.indexOf('bindtap="confirmRequest"'));
+});
+
+test('purchaser thumbnails use authenticated file loading once per file and ignore stale details', async () => {
+  const calls = [];
+  const purchaser = page('purchaser', undefined, { imagePath: async file => { calls.push(file.id); return '/tmp/product.jpg'; } });
+  const item = { id: 'i', imageFile: { id: 'f' } };
+  const request = { id: 'r', items: [item], supplierOrders: [{ id: 'o', items: [item] }] };
+  purchaser.data.requestId = 'r'; purchaser.detailRequestSequence = 1;
+  purchaser.data.selectedRequest = request;
+  purchaser.data.assignmentItems = [item]; purchaser.data.assignmentGroups = [{ items: [item] }];
+  await purchaser.loadProductImages(request, 1);
+  assert.deepEqual(calls, ['f']);
+  assert.equal(purchaser.data.selectedRequest.supplierOrders[0].items[0].imageUrl, '/tmp/product.jpg');
+  assert.equal(purchaser.data.assignmentGroups[0].items[0].imageUrl, '/tmp/product.jpg');
+  purchaser.data.requestId = 'other';
+  purchaser.data.assignmentItems = [item];
+  await purchaser.loadProductImages(request, 1);
+  assert.equal(purchaser.data.assignmentItems[0].imageUrl, undefined);
+});
+
+test('purchaser thumbnail failures leave an explicit placeholder', async () => {
+  const purchaser = page('purchaser', undefined, { imagePath: async () => { throw new Error('download failed'); } });
+  const request = { id: 'r', items: [{ id: 'i', imageFile: { id: 'f' } }] };
+  purchaser.data.requestId = 'r'; purchaser.detailRequestSequence = 1; purchaser.data.selectedRequest = request;
+  await purchaser.loadProductImages(request, 1);
+  assert.equal(purchaser.data.selectedRequest.items[0].imageFailed, true);
+  assert.equal(purchaser.data.selectedRequest.items[0].imageUrl, '');
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  assert.equal((markup.match(/bindtap="previewProductImage"/g) || []).length, 3);
+  assert.ok(markup.includes('暂无图片'));
+});
+
+test('supplier adjustment cancellation and ineligible preview do not submit writes', async () => {
+  for (const eligible of [true, false]) {
+    const calls = [];
+    const purchaser = page('purchaser', async (path) => {
+      calls.push(path);
+      return { requestId: 'r', supplierId: 'b', items: [{ requestItemId: 'i', eligible, priceVersionId: 'v', supplyPriceVersionId: 'sv' }] };
+    }, {}, { showModal: options => options.success({ confirm: false }) });
+    purchaser.data.requestId = 'r';
+    purchaser.data.selectedRequest = { id: 'r', version: 1 };
+    purchaser.data.assignmentItems = [{ id: 'i', supplierId: 'a', options: [{ supplierId: 'b' }] }];
+    await purchaser.changeItemSupplier(input('i', '0'));
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].endsWith('/reassign-preview'));
+    assert.equal(purchaser.data.reallocating, false);
+    assert.equal(Boolean(purchaser.data.error), !eligible);
+  }
+});
+
 test('store catalog searches and filters real product units and hides invalid prices', async () => {
   const store = page('store', async () => ({ store: { name: '门店一', address: '上海市' }, items: [
     { product: { id: 'p1', name: '大米', sku: 'RICE', isActive: true, categoryId: 'food', categoryName: '粮食', unitName: '袋', minOrderQty: '2', orderMultiple: '2' }, suppliers: [{ supplierId: 's1', supplierName: '粮食供应商', salesPrice: '12', priceVersionId: 'v1' }] },
@@ -1243,11 +1487,50 @@ test('store catalog searches and filters real product units and hides invalid pr
   store.onSearch({ detail: { value: 'rice' } }); assert.equal(store.data.visibleProducts.length, 1);
   store.stepProduct(tap('p1', { direction: 1 })); assert.equal(store.data.cart[0].quantity, '2');
   assert.equal(store.data.estimatedAmount, '24.00');
+  const template = readFileSync('apps/miniprogram/pages/store/index.wxml', 'utf8');
+  assert.equal((template.match(/>¥\{\{labels.money\(estimatedAmount\)\}\}/g) || []).length, 2);
+  assert.ok(!template.includes('商品合计 ¥'));
+  assert.ok(!template.includes('预估 ¥'));
   store.stepProduct(tap('p1', { direction: 1 })); assert.equal(store.data.cart[0].quantity, '4');
   store.stepProduct(tap('p1', { direction: -1 })); assert.equal(store.data.cart[0].quantity, '2');
   store.stepProduct(tap('p1', { direction: -1 })); assert.equal(store.data.cart.length, 0);
-  store.onSearch({ detail: { value: '' } }); store.chooseCategory(tap('clean'));
+  store.onSearch({ detail: { value: '' } }); store.choosePrimaryCategory(tap('clean'));
   assert.equal(store.data.visibleProducts[0].id, 'p2');
+});
+
+test('store catalog groups two-level categories and omits absent optional text', async () => {
+  const store = page('store', async () => ({ items: [
+    { product: { id: 'a', name: '大米', isActive: true, categoryId: 'rice', categoryName: '米类', categoryParentId: 'food', categoryParentName: '粮油', brand: null, specification: 'null', storageCondition: 'AMBIENT' }, suppliers: [] },
+    { product: { id: 'b', name: '面粉', isActive: true, categoryId: 'flour', categoryName: '面类', categoryParentId: 'food', categoryParentName: '粮油', brand: 'undefined' }, suppliers: [] },
+    { product: { id: 'c', name: '清洁剂', isActive: true, categoryId: 'clean', categoryName: '清洁' }, suppliers: [] },
+  ] }));
+  await store.loadCatalog();
+  assert.deepEqual(plain(store.data.categories.map(item => item.name)), ['全部商品', '粮油', '清洁']);
+  assert.equal(store.data.products[0].brand, '');
+  assert.equal(store.data.products[0].specification, '');
+  store.choosePrimaryCategory(tap('food'));
+  assert.equal(store.data.visibleProducts.length, 2);
+  assert.deepEqual(plain(store.data.subcategories.map(item => item.name)), ['全部', '米类', '面类']);
+  store.chooseCategory(tap('rice'));
+  assert.equal(store.data.visibleProducts[0].id, 'a');
+  store.choosePrimaryCategory(tap('clean'));
+  assert.equal(store.data.categoryId, '');
+  assert.equal(store.data.subcategories.length, 0);
+  assert.equal(store.data.visibleProducts[0].id, 'c');
+  store.choosePrimaryCategory(tap('food'));
+  store.chooseCategory(tap('rice'));
+  store.onCatalogScroll({ detail: { scrollTop: 180 } });
+  store.onSearch({ detail: { value: '清洁' } });
+  assert.equal(store.data.primaryCategoryId, '');
+  assert.equal(store.data.categoryId, '');
+  assert.equal(store.data.catalogScrollTop, 0);
+  assert.equal(store.data.visibleProducts[0].id, 'c');
+  store.choosePrimaryCategory(tap('food'));
+  assert.equal(store.data.search, '');
+  assert.equal(store.data.visibleProducts.length, 2);
+  const template = readFileSync('apps/miniprogram/pages/store/index.wxml', 'utf8');
+  assert.match(template, /scroll-y class="category-sidebar"/);
+  assert.match(template, /scroll-y class="catalog-products"/);
 });
 
 test('unbound store shows a binding state before loading and cannot expose checkout controls', () => {
@@ -1260,7 +1543,7 @@ test('unbound store shows a binding state before loading and cannot expose check
   const template = readFileSync('apps/miniprogram/pages/store/index.wxml', 'utf8');
   const binding = template.indexOf('class="empty-state store-unbound" wx:if="{{!storeId}}"');
   assert.ok(binding >= 0 && binding < template.indexOf('class="catalog-skeleton"'));
-  assert.match(template, /class="order-bar" wx:if="\{\{canWrite && storeId\}\}"/);
+  assert.match(template, /class="order-bar" wx:if="\{\{canWrite && storeId && !templateMissing\}\}"/);
   assert.match(template, /class="search-input"[^>]*disabled="\{\{!storeId\}\}"/);
   user.scope = { storeId: 'own-store' }; store.onShow();
   assert.equal(store.data.storeId, 'own-store');
@@ -1585,6 +1868,7 @@ test('workspace navigation follows role and assigned-store permissions', () => {
     assert.deepEqual(names({ roles: [role] }), [expected]);
   }
   assert.deepEqual(names({ roles: ['ADMIN'] }), ['purchaser', 'finance']);
+  assert.deepEqual(names({ roles: ['ADMIN', 'STORE', 'SUPPLIER'], scope: { type: 'ALL' } }), ['purchaser', 'finance']);
   assert.deepEqual(names({ roles: ['STORE', 'SUPPLIER', 'STORE'] }), ['store', 'supplier']);
   for (const role of ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER']) {
     assert.deepEqual(names({ roles: [role], scope: { type: 'MULTI_STORE', storeIds: ['s1'] } }), ['region']);
@@ -1592,8 +1876,23 @@ test('workspace navigation follows role and assigned-store permissions', () => {
   }
 });
 
+test('admin login uses the shared workspace routing even with a store role', async () => {
+  const module = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/api.js', 'utf8'), { module });
+  const calls = [];
+  const login = page('login', undefined, {
+    checkHealth: async () => ({}),
+    login: async () => ({ id: 'admin', roles: ['ADMIN', 'STORE'], scope: { type: 'ALL' } }),
+    workspaceNames: module.exports.workspaceNames,
+  }, { setStorageSync() {}, switchTab: value => calls.push(value.url) });
+  login.setData({ username: 'admin', password: 'test' });
+  await login.submit();
+  assert.deepEqual(calls, ['/pages/purchaser/index']);
+  assert.equal(login.data.error, '');
+});
+
 test('custom navigation refreshes account permissions and guards workspace switches', () => {
-  let user = { roles: ['ADMIN'] };
+  let user = { roles: ['PURCHASER', 'HQ_FINANCE'] };
   let route = 'pages/purchaser/index';
   let definition;
   const calls = [];
@@ -1610,6 +1909,9 @@ test('custom navigation refreshes account permissions and guards workspace switc
   assert.deepEqual(plain(bar.data.items.map(item => item.name)), ['purchaser', 'finance']);
   assert.equal(bar.data.visible, true);
   assert.equal(bar.data.selected, 'purchaser');
+  user = { roles: ['ADMIN'], testWorkbenchEnabled: true }; bar.refresh();
+  assert.equal(bar.data.visible, false);
+  user = { roles: ['PURCHASER', 'HQ_FINANCE'] }; bar.refresh();
   bar.switchWorkspace({ currentTarget: { dataset: { name: 'store' } } });
   assert.equal(calls.length, 0);
   bar.switchWorkspace({ currentTarget: { dataset: { name: 'finance' } } });
@@ -1702,6 +2004,40 @@ test('purchaser reviews selected freight version and blocks repeated review', as
   purchaser.selectFreight(tap('f1')); await purchaser.reviewFreight(tap('', { action: 'confirm' }));
   assert.deepEqual(plain(payload), { expectedVersion: 3 }); assert.equal(purchaser.data.selectedFreight.supplierOrderNo, 'O1');
   payload = null; await purchaser.reviewFreight(tap('', { action: 'confirm' })); assert.equal(payload, null);
+});
+
+test('store without an active template clears stale goods and blocks new requests', async () => {
+  let calls = 0;
+  const store = page('store', async () => {
+    calls += 1;
+    const error = new Error('Store does not have an active template');
+    error.code = 'STORE_TEMPLATE_NOT_FOUND';
+    throw error;
+  });
+  store.setData({ storeId: 'store', catalogLoaded: true, products: [{ id: 'old', name: '旧商品' }],
+    cart: [{ productId: 'old', quantity: '1' }], preview: { items: [] }, orderStep: 'confirm', cartOpen: true });
+  await store.loadCatalog();
+  assert.equal(store.data.templateMissing, true);
+  assert.match(store.data.catalogError, /未配置有效订货模板/);
+  assert.equal(store.data.products.length, 0);
+  assert.equal(store.data.cartCount, 0);
+  assert.equal(store.data.preview, null);
+  assert.equal(store.data.orderStep, 'catalog');
+  assert.equal(store.data.cartOpen, false);
+  store.updateCart({ id: 'old' }, '1');
+  assert.equal(store.data.cart.length, 0);
+  await store.previewOrder();
+  assert.equal(calls, 1);
+  assert.match(store.data.error, /未配置有效订货模板/);
+});
+
+test('missing store template preserves an uncertain submission for reconciliation', async () => {
+  const store = page('store', async () => { const error = new Error('missing'); error.code = 'STORE_TEMPLATE_NOT_FOUND'; throw error; });
+  const pending = { key: 'existing-command', body: { storeId: 'store', items: [] } };
+  store.setData({ storeId: 'store', pendingOrder: pending });
+  await store.loadCatalog();
+  assert.equal(store.data.pendingOrder, pending);
+  assert.equal(store.data.orderStep, 'confirm');
 });
 
 test('evidence download authenticates and never opens unsuccessful responses', async () => {

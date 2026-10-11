@@ -135,9 +135,8 @@ assertIncludes(apiJs, '/health/live', 'mini-program API health check');
 assertIncludes(apiJs, 'app.globalData.apiBase', 'mini-program configured API base');
 assertIncludes(loginJs, 'api.checkHealth()', 'login API connectivity check');
 assertIncludes(loginJs, '真机不能使用 127.0.0.1', 'login local device diagnostic');
-assertIncludes(loginJs, "wx.switchTab({ url: '/pages/store/index' })", 'store role routing');
-assertIncludes(loginJs, "wx.switchTab({ url: '/pages/supplier/index' })", 'supplier role routing');
-assertIncludes(loginJs, "wx.switchTab({ url: '/pages/purchaser/index' })", 'purchaser role routing');
+assertIncludes(loginJs, 'api.workspaceNames(user)[0]', 'shared login workspace routing');
+assertIncludes(loginJs, 'wx.switchTab({ url: `/pages/${workspace}/index` })', 'workspace tab routing');
 
 assertIncludes(storeJs, '/purchase-requests/preview', 'store order preview');
 assertIncludes(storeJs, '/purchase-requests', 'store order creation');
@@ -160,7 +159,7 @@ assertIncludes(storeJs, 'expectedReceiptRevision', 'store receipt revision guard
 assertIncludes(storeWxml, '商品目录', 'store catalog screen');
 assertIncludes(storeWxml, '账户余额', 'store account screen');
 assertIncludes(storeWxml, '核对订货单', 'store checkout button');
-assertIncludes(storeWxml, '提交订货', 'store order submit button');
+assertIncludes(storeWxml, '提交下货单', 'store request submit button');
 assertIncludes(storeWxml, '订单进度', 'store order progress screen');
 assertIncludes(storeWxml, '收货处理', 'store shipment notification screen');
 assertIncludes(storeWxml, 'class="order-entry shipment-todo"', 'store shipment notification list');
@@ -223,10 +222,12 @@ assertIncludes(purchaserJs, 'rejectionHandled', 'purchaser handled rejection gua
 assertIncludes(purchaserJs, '/reports/order-amounts', 'purchaser order amount report');
 assertIncludes(purchaserJs, '/reports/product-quantities', 'purchaser product quantity report');
 assertIncludes(purchaserJs, '/reports/profit', 'purchaser profit report');
-assertIncludes(purchaserWxml, '确认并推送', 'purchaser confirmation screen');
-assertIncludes(purchaserWxml, '刷新明细', 'purchaser request detail action');
-assertIncludes(purchaserWxml, '申请详情', 'purchaser request detail screen');
-assertIncludes(purchaserWxml, '缺口金额', 'purchaser shortfall signal');
+assertIncludes(purchaserWxml, '确认并生成订单', 'purchaser confirmation screen');
+assertIncludes(purchaserWxml, 'changeItemSupplier', 'purchaser per-item supplier assignment');
+assertIncludes(purchaserWxml, '重试', 'purchaser request detail failure recovery');
+assert.ok(!purchaserWxml.includes('刷新明细'), 'purchaser detail must not expose redundant refresh action');
+assertIncludes(purchaserWxml, '下货单详情', 'purchaser request detail screen');
+assertIncludes(purchaserWxml, '待补资金', 'purchaser shortfall signal');
 assertIncludes(purchaserWxml, '拒单通知', 'purchaser rejection notification screen');
 assertIncludes(purchaserWxml, '改派原因', 'purchaser reallocation reason screen');
 assertIncludes(purchaserWxml, '改派供应商', 'purchaser reallocation screen');

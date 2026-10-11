@@ -1,1 +1,1 @@
-<view wx:if="{{enabled}}" class="test-context"><view><text class="badge">测试视角</text><text class="identity">{{label}}</text></view><button bindtap="open">切换</button></view>
+<view wx:if="{{enabled}}" class="test-context"><view><text class="badge">当前角色：{{roleText}}</text><text class="identity">{{label}}</text></view><button bindtap="open">切换角色</button></view>

@@ -1,4 +1,3 @@
-<test-context />
 <view class="profile-page">
   <view class="profile-heading">
     <view class="profile-heading-main"><text class="profile-title">{{profile.name || (kind === 'supplier' ? '我的供应商' : '我的门店')}}</text><button class="ghost profile-refresh" bindtap="loadProfile" loading="{{loading}}" disabled="{{loading}}" aria-label="刷新资料">刷新</button></view>

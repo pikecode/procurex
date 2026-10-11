@@ -1,5 +1,5 @@
 <view class="page">
-  <view class="workbench-heading"><text class="title">测试身份</text><button wx:if="{{user.testIdentity}}" class="secondary" bindtap="select" disabled="{{switching || loading}}">返回管理员</button></view>
+  <view class="workbench-heading"><text class="title">切换角色</text><button wx:if="{{user.testIdentity}}" class="secondary" bindtap="select" disabled="{{switching || loading}}">返回管理员</button></view>
   <view class="current-identity">当前：{{user.testIdentity ? user.testIdentity.displayName : '管理员'}}</view>
   <input class="search" placeholder="搜索账号、门店或供应商" value="{{search}}" bindinput="onSearch" />
   <view wx:if="{{error}}" class="error-banner">{{error}}</view>

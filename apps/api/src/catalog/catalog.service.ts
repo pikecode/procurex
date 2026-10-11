@@ -18,7 +18,7 @@ const catalogTemplateInclude = {
     where: { isEnabled: true, product: { isActive: true } },
     orderBy: [{ sortOrder: 'asc' }, { productId: 'asc' }],
     include: {
-      product: { include: { category: true, baseUnit: true, imageFile: true, conversion: true } },
+      product: { include: { category: { include: { parent: true } }, baseUnit: true, imageFile: true, conversion: true } },
       suppliers: { where: { supplier: { status: 'ACTIVE', isArchived: false } },
         orderBy: [{ priority: 'asc' }, { supplierId: 'asc' }], include: { supplier: true } },
     },
@@ -73,7 +73,7 @@ export type StoreCatalogView = {
   store: { name: string; address: string | null; contactName: string | null; contactPhone: string | null };
   templateId: string;
   items: Array<{
-    product: ProductView & { categoryName: string; unitName: string; purchaseUnitName: string | null };
+    product: ProductView & { categoryName: string; categoryParentId: string | null; categoryParentName: string | null; unitName: string; purchaseUnitName: string | null };
     sortOrder: number;
     suppliers: Array<{
       supplierId: string;
@@ -367,6 +367,7 @@ export class CatalogService {
       items: await Promise.all(
         template.items.map(async (item) => ({
           product: { ...toProductView(item.product), categoryName: item.product.category.name, unitName: item.product.baseUnit.name,
+            categoryParentId: item.product.category.parentId, categoryParentName: item.product.category.parent?.name ?? null,
             minOrderQty: (item.minOrderQty ?? item.product.minOrderQty).toString(), orderMultiple: (item.orderMultiple ?? item.product.orderMultiple).toString(),
             purchaseUnitName: item.product.conversion ? (await client.unit.findUnique({ where: { id: item.product.conversion.fromUnitId } }))?.name ?? null : null },
           sortOrder: item.sortOrder,

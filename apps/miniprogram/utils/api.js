@@ -161,6 +161,7 @@ function retryRoleCommand(workspace) {
 function workspaceNames(user) {
   if (!user) return [];
   const roles = user.roles || [];
+  if (roles.includes('ADMIN') && !user.testIdentity) return ['purchaser', 'finance'];
   const workspaces = [];
   if (roles.includes('STORE') || roles.includes('STORE_FINANCE')) workspaces.push('store');
   if (roles.includes('SUPPLIER')) workspaces.push('supplier');

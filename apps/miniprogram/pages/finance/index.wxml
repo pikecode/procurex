@@ -1,4 +1,4 @@
-<test-context />
+<test-context wx:if="{{activeView === 'mine'}}" />
 <wxs src="../../utils/labels.wxs" module="labels" />
 <view class="page {{user.testWorkbenchEnabled && !user.testIdentity ? 'has-test-workbench-root' : ''}} {{selected.canReview && !pendingCommand ? 'has-action-bar' : ''}}">
   <view class="business-heading"><view><text class="business-title">公司财务</text><text class="muted">{{user.displayName}}</text></view><button class="ghost" bindtap="loadWork" disabled="{{loading || reviewing}}" loading="{{loading}}">刷新</button></view>

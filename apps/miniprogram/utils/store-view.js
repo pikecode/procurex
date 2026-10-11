@@ -54,6 +54,24 @@ function previewGroups(preview, products, expandedKey) {
   });
 }
 
+function requestGroups(items, orders) {
+  if (!orders.length) return [];
+  const groups = [];
+  for (const item of items) {
+    let group = groups.find(group => group.supplierId === item.supplierId);
+    if (!group) {
+      const order = orders.find(order => order.supplierId === item.supplierId) || {};
+      group = { supplierId: item.supplierId, supplierName: item.supplierName || order.supplierName || '配送供应商',
+        contactName: item.supplierContactName || '', contactPhone: item.supplierContactPhone || '',
+        deliveryContactPhone: item.deliveryContactPhone || order.deliveryContactPhone || '', address: item.supplierAddress || '', open: true, items: [] };
+      groups.push(group);
+    }
+    group.items.push(item);
+  }
+  return groups.map(group => ({ ...group, itemCount: group.items.length,
+    groupAmount: group.items.reduce((sum, item) => sum + Number(item.salesLineAmount || 0), 0).toFixed(2) }));
+}
+
 function previewSignature(preview) {
   return JSON.stringify({ items: (preview.items || []).map(item => [item.productId, item.quantity, item.salesUnitPrice, item.priceVersionId, item.supplyPriceVersionId, item.unitSnapshot]),
     total: preview.totals && preview.totals.salesGoodsAmount, stored: preview.funding && preview.funding.stored,
@@ -77,4 +95,4 @@ function statementPeriod(statement) {
   return `${statement.periodStart} 至 ${end.toISOString().slice(0, 10)}`;
 }
 
-module.exports = { dateText, decimalText, orderStage, orderStageTone, statusTone, previewGroups, previewSignature, monthRange, statementPeriod };
+module.exports = { dateText, decimalText, orderStage, orderStageTone, statusTone, previewGroups, requestGroups, previewSignature, monthRange, statementPeriod };

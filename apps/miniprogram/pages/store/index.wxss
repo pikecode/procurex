@@ -16,8 +16,32 @@ page { background: #f4f6f5; color: #202b25; }
 .search-input { width: 100%; border: 0; background: transparent; padding: 0; height: 74rpx; font-size: 25rpx; }
 .category-strip { white-space: nowrap; width: 100%; }
 .category-track { display: inline-flex; gap: 32rpx; }
-.category-option { padding: 25rpx 0 20rpx; font-size: 25rpx; color: #718078; border-bottom: 4rpx solid transparent; }
-.category-selected { color: #167e5a; border-color: #167e5a; font-weight: 700; }
+.category-option { padding: 28rpx 12rpx; font-size: 24rpx; color: #718078; border-left: 5rpx solid transparent; text-align: center; line-height: 1.5; overflow-wrap: anywhere; }
+.category-selected { color: #167e5a; border-color: #167e5a; font-weight: 700; background: #fff; }
+.subcategory-strip { padding: 12rpx 0; border-top: 1rpx solid #e3e9e6; }
+.subcategory-strip .category-track { gap: 16rpx; }
+.subcategory-option { padding: 10rpx 20rpx; font-size: 24rpx; border-radius: 6rpx; color: #718078; background: #f2f5f3; }
+.subcategory-selected { background: #e2f1e8; color: #167e5a; font-weight: 600; }
+.catalog-page { height: 100vh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: calc(97rpx + env(safe-area-inset-bottom)); }
+.catalog-page.has-checkout { padding-bottom: calc(218rpx + env(safe-area-inset-bottom)); }
+.catalog-page .store-heading, .catalog-tools { flex-shrink: 0; }
+.catalog-page .catalog-tools { padding: 18rpx 24rpx; border-bottom: 1rpx solid #e5eae7; }
+.catalog-browser { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.category-sidebar { width: 154rpx; flex: 0 0 154rpx; height: 100%; background: #f1f4f2; }
+.catalog-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
+.catalog-content .subcategory-strip { flex-shrink: 0; padding: 16rpx 0; border-top: 0; border-bottom: 1rpx solid #edf0ee; }
+.catalog-content .category-track { padding: 0 18rpx; }
+.catalog-content .subcategory-option { padding: 10rpx 16rpx; font-size: 23rpx; }
+.catalog-content .section-caption { padding: 16rpx 18rpx; flex-shrink: 0; font-size: 22rpx; }
+.catalog-products { flex: 1; height: 0; min-height: 0; }
+.catalog-content .product-list { padding: 0 18rpx; }
+.catalog-content .product-row { gap: 16rpx; padding: 24rpx 0; }
+.catalog-content .product-media { width: 94rpx; height: 94rpx; flex-basis: 94rpx; }
+.catalog-content .missing-image { gap: 6rpx; font-size: 18rpx; }
+.catalog-content .product-name { font-size: 26rpx; }
+.catalog-content .product-bottom { flex-direction: column; align-items: flex-start; gap: 12rpx; margin-top: 14rpx; }
+.catalog-content .product-price { font-size: 28rpx; }
+.catalog-content .quantity-stepper { align-self: flex-end; margin-left: 0; }
 .section-caption { padding: 22rpx 28rpx; color: #758078; font-size: 23rpx; }
 .product-list { background: #fff; padding: 0 28rpx; }
 .product-row { display: flex; gap: 22rpx; padding: 28rpx 0; border-bottom: 1rpx solid #e9eeeb; }
@@ -74,6 +98,16 @@ button::after { border: 0; }
 .group-toggle { display: flex; align-items: center; gap: 12rpx; flex: 1; min-width: 0; }
 .group-toggle .section-title { flex: 0 1 auto; }
 .group-summary { flex-shrink: 0; color: #718078; font-size: 23rpx; font-variant-numeric: tabular-nums; }
+.request-supplier-group .section-title { flex: 1; min-width: 0; }
+.supplier-group-heading { padding: 4rpx 0; }
+.supplier-group-name { display: flex; align-items: center; gap: 12rpx; }
+.supplier-group-summary { display: flex; justify-content: space-between; gap: 16rpx; padding: 10rpx 0 0 28rpx; font-size: 23rpx; color: #718078; }
+.supplier-fold-label { color: #167e5a; flex-shrink: 0; }
+.supplier-contact-info { padding: 18rpx 0; margin-top: 16rpx; border-top: 1rpx solid #e9eeeb; border-bottom: 1rpx solid #e9eeeb; color: #718078; font-size: 24rpx; line-height: 1.6; }
+.supplier-contact-info > text { display: block; overflow-wrap: anywhere; }
+.supplier-phone-row { display: flex; align-items: center; gap: 16rpx; }
+.supplier-phone { width: auto; min-width: 0; margin: 0; padding: 6rpx 0; background: transparent; color: #167e5a; font-size: 24rpx; line-height: 1.6; overflow-wrap: anywhere; text-align: left; }
+.request-supplier-group .confirm-line:last-child { border-bottom: 0; padding-bottom: 0; }
 .group-chevron { flex-shrink: 0; color: #8a9690; font-size: 30rpx; transition: transform .18s ease; }
 .group-chevron.is-open { transform: rotate(90deg); }
 .status-label { flex-shrink: 0; font-size: 22rpx; color: #167e5a; background: #eef7f0; padding: 5rpx 10rpx; border-radius: 6rpx; }

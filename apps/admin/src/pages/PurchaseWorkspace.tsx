@@ -87,13 +87,13 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
     try {
       if (mode === 'reject') {
         const values = await form.validateFields();
-        if (await command.submit({ path: `/purchase-requests/${detail!.id}/reject`, method: 'POST', label: '取消采购申请', body: { expectedVersion: detail!.version, reason: values.reason!.trim() } })) { close(); refresh(); message.success('采购申请已取消'); }
+        if (await command.submit({ path: `/purchase-requests/${detail!.id}/reject`, method: 'POST', label: '取消下货单', body: { expectedVersion: detail!.version, reason: values.reason!.trim() } })) { close(); refresh(); message.success('下货单已取消'); }
         return;
       }
       const body = await draft();
       if (!preview || JSON.stringify(body) !== signature) { invalidate(); throw new Error('内容已变化，请重新预览。'); }
       const items = body.items.map((item, index) => ({ ...item, expectedPriceVersionId: preview.items[index].priceVersionId, expectedSupplyPriceVersionId: preview.items[index].supplyPriceVersionId }));
-      if (await command.submit({ path: mode === 'edit' ? `/purchase-requests/${detail!.id}/items` : '/purchase-requests', method: mode === 'edit' ? 'PATCH' : 'POST', label: mode === 'edit' ? '修改采购明细' : '提交采购申请', body: { ...body, items } })) { close(); refresh(); message.success('采购申请已保存'); }
+      if (await command.submit({ path: mode === 'edit' ? `/purchase-requests/${detail!.id}/items` : '/purchase-requests', method: mode === 'edit' ? 'PATCH' : 'POST', label: mode === 'edit' ? '修改采购明细' : '提交下货单', body: { ...body, items } })) { close(); refresh(); message.success('下货单已保存'); }
     } catch (failure) { if (!('errorFields' in (failure as object))) setError((failure as Error).message); }
   }
   const itemColumns = [
@@ -107,16 +107,16 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
   return <>
     {!selected && !mode && command.error && <Alert type="error" showIcon title={command.error} />}
     {!selected && !mode && recoveryNotice}
-    <ListPage title="采购申请" rows={list.rows.map(row => ({ ...row, name: row.requestNo, storeName: stores.rows.find(store => store.id === row.storeId)?.name || row.storeId }))}
+    <ListPage title="下货单" rows={list.rows.map(row => ({ ...row, name: row.requestNo, storeName: stores.rows.find(store => store.id === row.storeId)?.name || row.storeId }))}
       loading={list.loading} error={list.error || stores.error} reload={refresh} create={canWrite && !command.blocked ? () => open('create') : undefined}
       filters={[{ key: 'status', label: '申请状态', options: ['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'CONFIRMED', 'PARTIAL_PUSHED', 'COMPLETED', 'CANCELED'].map(value => ({ value, label: workflowName(value) })) }, { key: 'storeId', label: '门店', options: stores.rows.map(store => ({ value: store.id, label: store.name })) }]}
       columns={[{ title: '申请编号', dataIndex: 'requestNo', width: 205 }, { title: '门店', dataIndex: 'storeName', width: 170 },
         { title: '状态', dataIndex: 'status', width: 125, render: value => <Tag>{workflowName(value)}</Tag> }, { title: '储值/挂账入账', dataIndex: 'paymentStatus', width: 130, render: accountFundingName },
         { title: '销售金额', dataIndex: 'salesGoodsAmount', width: 110 }, { title: '资金缺口', dataIndex: 'shortfallAmount', width: 110 },
-        { title: '提交时间', dataIndex: 'submittedAt', width: 165, render: workflowTime }, { title: '操作', width: 64, fixed: 'right', render: (_, row) => <Tooltip title="查看采购申请"><Button type="text" aria-label={`查看${row.requestNo}`} icon={<Eye size={16} />} onClick={() => setParams({ request: row.id })} /></Tooltip> }]} />
+        { title: '提交时间', dataIndex: 'submittedAt', width: 165, render: workflowTime }, { title: '操作', width: 64, fixed: 'right', render: (_, row) => <Tooltip title="查看下货单"><Button type="text" aria-label={`查看${row.requestNo}`} icon={<Eye size={16} />} onClick={() => setParams({ request: row.id })} /></Tooltip> }]} />
     {canWrite && <RejectionTodos revision={revision} onOpen={openRejection} />}
     {canWrite && selected && rejectedOrder && <RejectionEditor key={`${selected}:${rejectedOrder}`} requestId={selected} orderId={rejectedOrder} command={command} canRecover={canRecoverWorkflow(user, command.pending?.path)} onClose={closeRejection} onSaved={() => { setParams({ request: selected }); refresh(); }} />}
-    <Modal title={detail?.requestNo || '采购申请详情'} open={Boolean(selected) && !(canWrite && rejectedOrder)} onCancel={() => { if (!command.busy && !mode && !assigning) setParams({}); }} footer={null} width={1000} closable={!mode && !assigning && !command.busy}>
+    <Modal title={detail?.requestNo || '下货单详情'} open={Boolean(selected) && !(canWrite && rejectedOrder)} onCancel={() => { if (!command.busy && !mode && !assigning) setParams({}); }} footer={null} width={1000} closable={!mode && !assigning && !command.busy}>
       {!mode && !assigning && recoveryNotice}
       {!mode && !assigning && command.error && <Alert type="error" showIcon title={command.error} />}
       {loading ? <Spin /> : error && !mode ? <Alert type="error" title={error} action={<Button onClick={() => setRevision(value => value + 1)}>重试</Button>} /> : detail && <>
@@ -129,7 +129,7 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
         <div className="actions workflow-actions"><Button icon={<Printer size={16} />} disabled={Boolean(mode) || assigning || command.busy} onClick={() => setPrinting(true)}>打印订单</Button></div>
         {canConfirm && editable && <div className="actions workflow-actions">{canWrite && <Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => open('edit')}>修改明细</Button>}
           {canWrite && <Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => { command.clearError(); setAssigning(true); }}>调整供应商</Button>}
-          <Popconfirm title="确认采购并生成供应商订单？" onConfirm={async () => { if (await command.submit({ path: `/purchase-requests/${detail.id}/confirm`, method: 'POST', label: '确认采购', body: { expectedVersion: detail.version } })) { refresh(); message.success('采购已确认'); } }} disabled={command.blocked}><Button type="primary" icon={<Check size={16} />} disabled={command.blocked}>确认采购</Button></Popconfirm>
+          <Popconfirm title="确认下货单并按最终供应商生成订单？" onConfirm={async () => { if (await command.submit({ path: `/purchase-requests/${detail.id}/confirm`, method: 'POST', label: '确认采购', body: { expectedVersion: detail.version } })) { refresh(); message.success('采购已确认'); } }} disabled={command.blocked}><Button type="primary" icon={<Check size={16} />} disabled={command.blocked}>确认并生成订单</Button></Popconfirm>
           <Button danger icon={<X size={16} />} disabled={command.blocked} onClick={() => open('reject')}>取消申请</Button></div>}
         <Table rowKey="id" size="small" columns={itemColumns} dataSource={detail.items} scroll={{ x: 850 }} pagination={{ defaultPageSize: 10, showSizeChanger: true }} />
         <section className="price-band"><h2>供应商订单</h2><Table<Order> rowKey="id" size="small" dataSource={detail.supplierOrders} pagination={{ defaultPageSize: 10 }} scroll={{ x: 680 }} columns={[
@@ -141,9 +141,9 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
     </Modal>
     {printing && selected && <PurchasePrint key={JSON.stringify([selected, user.id, user.roles, user.scope])} id={selected} user={user} onClose={() => setPrinting(false)} />}
     {assigning && detail && canWrite && <SupplierAssignment purchase={detail} command={command} onClose={() => { if (!command.busy) setAssigning(false); }} onSaved={() => { setAssigning(false); refresh(); message.success('供应商调整已确认'); }} />}
-    <Modal zIndex={1200} title={mode === 'create' ? '新增采购申请' : mode === 'edit' ? '修改采购明细' : '取消采购申请'} open={Boolean(mode)} onCancel={close} width={mode === 'reject' ? 520 : 960} closable={!command.busy && !previewing} maskClosable={false}
+    <Modal zIndex={1200} title={mode === 'create' ? '新增下货单' : mode === 'edit' ? '修改采购明细' : '取消下货单'} open={Boolean(mode)} onCancel={close} width={mode === 'reject' ? 520 : 960} closable={!command.busy && !previewing} maskClosable={false}
       footer={<div className="actions workflow-actions"><Button onClick={close} disabled={command.busy || previewing}>取消</Button>{mode !== 'reject' && <Button icon={<Eye size={16} />} onClick={readPreview} loading={previewing} disabled={command.blocked || catalogLoading || !catalog || Boolean(catalogError)}>预览金额</Button>}
-        <Popconfirm key={mode} zIndex={1400} title={mode === 'reject' ? '确认取消此申请？' : '确认保存采购申请？'} onConfirm={save} disabled={command.blocked || previewing || (mode !== 'reject' && !preview)}><Button type="primary" icon={<Check size={16} />} loading={command.busy} disabled={command.blocked || previewing || (mode !== 'reject' && !preview)}>{mode === 'reject' ? '确认取消' : '确认保存'}</Button></Popconfirm></div>}>
+        <Popconfirm key={mode} zIndex={1400} title={mode === 'reject' ? '确认取消此申请？' : '确认保存下货单？'} onConfirm={save} disabled={command.blocked || previewing || (mode !== 'reject' && !preview)}><Button type="primary" icon={<Check size={16} />} loading={command.busy} disabled={command.blocked || previewing || (mode !== 'reject' && !preview)}>{mode === 'reject' ? '确认取消' : '确认保存'}</Button></Popconfirm></div>}>
       {(error || command.error || catalogError) && <Alert type="error" title={error || command.error || catalogError} />}
       {recoveryNotice}
       <Form form={form} layout="vertical" className="compact-form" disabled={command.blocked || previewing} onValuesChange={changed => { invalidate(); if ('storeId' in changed) form.setFieldValue('items', [{}]); }}>

@@ -10,7 +10,7 @@ Component({
       const route = pages[pages.length - 1]?.route;
       const user = api.currentUser();
       const items = api.workspaceNames(user).map(name => ({ name, label: labels[name], path: `pages/${name}/index` }));
-      this.setData({ items, visible: items.length > 1,
+      this.setData({ items, visible: items.length > 1 && !(user?.roles || []).includes('ADMIN') && !user?.testWorkbenchEnabled,
         testEnabled: Boolean(user?.testWorkbenchEnabled), testLabel: user?.testIdentity ? user.testIdentity.displayName : '',
         selected: items.find(item => item.path === route)?.name || '' });
     },

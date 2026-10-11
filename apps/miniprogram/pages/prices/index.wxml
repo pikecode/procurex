@@ -1,4 +1,3 @@
-<test-context />
 <wxs src="../../utils/labels.wxs" module="labels" />
 <view class="prices-page">
   <text class="prices-title">快速改价</text>

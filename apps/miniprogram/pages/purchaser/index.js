@@ -1,6 +1,22 @@
 const api = require('../../utils/api');
 const view = require('../../utils/store-view');
 
+function groupAssignments(items) {
+  const groups = new Map();
+  for (const item of items) {
+    if (!groups.has(item.supplierId)) {
+      const supplier = item.options.find(option => option.supplierId === item.supplierId);
+      groups.set(item.supplierId, { supplierId: item.supplierId, supplierName: item.supplierName || supplier?.supplierName || '供应商不可用', items: [], salesCents: 0, supplyCents: 0 });
+    }
+    const group = groups.get(item.supplierId);
+    group.items.push(item);
+    group.salesCents += Math.round(Number(item.salesLineAmount || 0) * 100);
+    group.supplyCents += Math.round(Number(item.supplyLineAmount || 0) * 100);
+  }
+  return Array.from(groups.values(), group => ({ supplierId: group.supplierId, supplierName: group.supplierName, items: group.items,
+    itemCount: group.items.length, salesAmount: (group.salesCents / 100).toFixed(2), supplyAmount: (group.supplyCents / 100).toFixed(2) }));
+}
+
 Page({
   data: {
     activeView: 'tasks',
@@ -22,6 +38,9 @@ Page({
     targetSupplierId: '',
     suppliers: [],
     supplierIndex: -1,
+    assignmentItems: [],
+    assignmentGroups: [],
+    showPriceDetails: false,
     reallocateReason: '供应商拒单后改派',
     reportRange: view.monthRange(),
     reports: {
@@ -31,6 +50,7 @@ Page({
     },
     loading: false,
     detailing: false,
+    detailError: '',
     confirming: false,
     reallocating: false,
     result: null,
@@ -47,12 +67,13 @@ Page({
     if (this.data.user.id !== user.id) {
       this.setData({ visibleRequests: [], search: '', statusFilter: 'all', activeView: 'tasks' });
       this.setData({ requests: [], rejectionTodos: [], selectedRequest: null, requestId: '', rejectedOrderId: '', targetSupplierId: '',
-        suppliers: [], supplierIndex: -1, result: null, freightConfirmations: [], selectedFreight: null, procurementTasks: [], pendingFreight: [],
+        suppliers: [], supplierIndex: -1, assignmentItems: [], assignmentGroups: [], showPriceDetails: false, detailError: '', result: null, freightConfirmations: [], selectedFreight: null, procurementTasks: [], pendingFreight: [],
         reports: { orderAmount: null, productQuantity: null, profit: null } });
     }
     this.setData({ user, roleText: '采购', reportRange: view.monthRange() });
     this.syncCommands();
     this.loadWork();
+    if (this.data.requestId && !this.data.detailing && !this.data.confirming && !this.data.reallocating && !this.data.recovering) this.loadRequestDetail();
   },
 
   syncCommands() {
@@ -114,7 +135,11 @@ Page({
 
   backToList() {
     if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
-    this.setData({ requestId: '', selectedRequest: null, selectedFreight: null, rejectedOrderId: '', targetSupplierId: '', supplierIndex: -1 });
+    this.setData({ requestId: '', selectedRequest: null, assignmentItems: [], assignmentGroups: [], showPriceDetails: false, detailError: '', selectedFreight: null, rejectedOrderId: '', targetSupplierId: '', supplierIndex: -1 });
+  },
+
+  togglePriceDetails(event) {
+    this.setData({ showPriceDetails: !!event.detail.value });
   },
 
   onSearch(event) {
@@ -159,7 +184,7 @@ Page({
   async selectRequest(event) {
     if (this.data.confirming || this.data.reallocating) return;
     const requestId = event.currentTarget.dataset.id;
-    this.setData({ requestId, rejectedOrderId: '', targetSupplierId: '', supplierIndex: -1, selectedRequest: null });
+    this.setData({ requestId, rejectedOrderId: '', targetSupplierId: '', supplierIndex: -1, selectedRequest: null, showPriceDetails: false });
     await this.loadRequestDetail(requestId);
   },
 
@@ -260,16 +285,57 @@ Page({
       return;
     }
 
-    this.setData({ detailing: true, error: '' });
+    const sequence = this.detailRequestSequence = (this.detailRequestSequence || 0) + 1;
+    this.setData({ detailing: true, detailError: '', error: '' });
     try {
       const selectedRequest = await api.request(`/purchase-requests/${id}`);
-      if (this.data.requestId !== id) return;
-      this.setData({ selectedRequest });
+      selectedRequest.storeName = selectedRequest.storeName || (this.data.requests || []).find(row => row.id === id)?.storeName || '';
+      selectedRequest.supplierOrders = await Promise.all((selectedRequest.supplierOrders || []).map(async order => {
+        try {
+          const detail = await api.request(`/supplier-orders/${order.id}`);
+          return { ...order, items: detail.items || [] };
+        } catch (error) {
+          return { ...order, items: [], itemsError: error.message || '商品清单加载失败' };
+        }
+      }));
+      if (this.data.requestId !== id || sequence !== this.detailRequestSequence) return;
+      this.setData({ selectedRequest, assignmentItems: [], assignmentGroups: [] });
+      if (['PENDING_PROCUREMENT', 'PENDING_FUNDS'].includes(selectedRequest.status) && !(selectedRequest.supplierOrders || []).length) {
+        const catalog = await api.request(`/purchase-requests/${id}/edit-catalog`);
+        if (this.data.requestId !== id || sequence !== this.detailRequestSequence) return;
+        const assignmentItems = (selectedRequest.items || []).map(item => {
+          const options = ((catalog.items || []).find(row => row.product.id === item.productId) || {}).suppliers || [];
+          return { ...item, options, supplierIndex: options.findIndex(option => option.supplierId === item.supplierId) };
+        });
+        this.setData({ assignmentItems, assignmentGroups: groupAssignments(assignmentItems) });
+      }
+      this.loadProductImages(selectedRequest, sequence);
     } catch (error) {
-      this.setData({ error: error.message });
+      if (this.data.requestId === id && sequence === this.detailRequestSequence) this.setData({ detailError: error.message, error: error.message });
     } finally {
-      this.setData({ detailing: false });
+      if (sequence === this.detailRequestSequence) this.setData({ detailing: false });
     }
+  },
+
+  async loadProductImages(request, sequence) {
+    const items = [...(request.items || []), ...(request.supplierOrders || []).flatMap(order => order.items || [])];
+    const files = [...new Map(items.filter(item => item.imageFile?.id).map(item => [item.imageFile.id, item.imageFile])).values()];
+    for (const file of files) {
+      let imageUrl = '', imageFailed = false;
+      try { imageUrl = await api.imagePath(file); } catch { imageFailed = true; }
+      if (this.data.requestId !== request.id || this.detailRequestSequence !== sequence) return;
+      const update = item => item.imageFile?.id === file.id ? { ...item, imageUrl, imageFailed } : item;
+      const current = this.data.selectedRequest;
+      this.setData({ selectedRequest: { ...current, items: (current.items || []).map(update),
+        supplierOrders: (current.supplierOrders || []).map(order => ({ ...order, items: (order.items || []).map(update) })) },
+        assignmentItems: this.data.assignmentItems.map(update),
+        assignmentGroups: this.data.assignmentGroups.map(group => ({ ...group, items: group.items.map(update) })) });
+    }
+  },
+
+  previewProductImage(event) {
+    const url = event.currentTarget.dataset.url;
+    if (url) wx.previewImage({ current: url, urls: [url] });
   },
 
   async loadReports(toggleLoading = true) {
@@ -290,7 +356,7 @@ Page({
   },
 
   async confirmRequest() {
-    if (this.data.confirming || this.data.reallocating || !this.data.requestId) return;
+    if (this.data.confirming || this.data.reallocating || this.data.detailing || this.data.detailError || this.data.pendingCommand || !this.data.requestId) return;
     this.setData({ confirming: true, error: '', result: null });
     try {
       const detail = this.data.selectedRequest || await api.request(`/purchase-requests/${this.data.requestId}`);
@@ -302,18 +368,48 @@ Page({
       });
       this.setData({
         result: {
-          title: confirmed.requestNo || this.data.requestId,
+          title: '采购确认成功',
           status: confirmed.status || 'CONFIRMED',
-          detail: `已推送 ${(confirmed.supplierOrderIds || []).length} 张供应商单`
+          detail: `已生成 ${(confirmed.supplierOrderIds || []).length} 张供应商订单`
         }
       });
       await this.loadWork();
       await this.loadRequestDetail(this.data.requestId);
+      if (wx.pageScrollTo && (this.data.selectedRequest?.supplierOrders || []).length) {
+        const scroll = () => wx.pageScrollTo({ selector: '#supplier-order-summary', duration: 200 });
+        if (wx.nextTick) wx.nextTick(scroll); else scroll();
+      }
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
       this.setData({ confirming: false });
     }
+  },
+
+  async changeItemSupplier(event) {
+    if (this.data.reallocating || this.data.confirming || this.data.detailing || this.data.detailError || this.data.pendingCommand) return;
+    const detail = this.data.selectedRequest;
+    const item = this.data.assignmentItems.find(row => row.id === event.currentTarget.dataset.id);
+    const target = item && item.options[Number(event.detail.value)];
+    if (!detail || !target || target.supplierId === item.supplierId) return;
+    this.setData({ reallocating: true, error: '' });
+    try {
+      const body = { expectedVersion: detail.version, itemIds: [item.id], supplierId: target.supplierId };
+      const preview = await api.request(`/purchase-requests/${detail.id}/reassign-preview`, { method: 'POST', data: body });
+      const line = preview.items && preview.items[0];
+      if (preview.requestId !== detail.id || preview.supplierId !== target.supplierId || preview.items.length !== 1 || !line || line.requestItemId !== item.id || !line.eligible || !line.priceVersionId || !line.supplyPriceVersionId) throw new Error('该供应商当前不可供货，请刷新后重新选择');
+      const decision = await new Promise((resolve, reject) => wx.showModal({ title: '核对供应商调整',
+        content: `${item.productName || '商品'} → ${target.supplierName}\n销售金额 ¥${item.salesLineAmount} → ¥${line.salesLineAmount}\n供应商金额 ¥${item.supplyLineAmount} → ¥${line.supplyLineAmount}`,
+        confirmText: '保存调整', success: resolve, fail: reject }));
+      if (!decision.confirm) return;
+      if (this.data.requestId !== detail.id) throw new Error('下货单已切换，请刷新');
+      await this.submitCommand(`/purchase-requests/${detail.id}/assign`, { method: 'POST', data: { ...body,
+        expectedPrices: [{ requestItemId: item.id, priceVersionId: line.priceVersionId, supplyPriceVersionId: line.supplyPriceVersionId }] },
+        header: { 'idempotency-key': `mini-purchaser-assign-${Date.now()}` } });
+      await this.loadRequestDetail(detail.id);
+      await this.loadRequests();
+    } catch (error) { this.setData({ error: error.message }); }
+    finally { this.setData({ reallocating: false }); }
   },
 
   async reallocateRequest() {

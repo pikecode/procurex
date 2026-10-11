@@ -20,6 +20,50 @@
 .status-filters .selected { color: #137951; font-weight: 600; border-bottom: 4rpx solid #137951; padding-bottom: 10rpx; }
 .back-link { color: #137951; font-size: 26rpx; padding: 8rpx 0 24rpx; display: block; }
 .detail-heading { margin-bottom: 20rpx; }
+.supplier-order-summary { margin-top: 24rpx; padding-top: 24rpx; border-top: 1rpx solid #e2e6e4; }
+.generated-order-products { margin-top: 12rpx; }
+.assignment-product, .generated-order-product-block, .procurement-product-row { position: relative; padding-left: 112rpx; min-height: 92rpx; }
+.procurement-product-media { position: absolute; left: 0; top: 16rpx; width: 92rpx; height: 92rpx; background: #f1f4f2; border: 1rpx solid #e2e6e4; border-radius: 6rpx; display: flex; align-items: center; justify-content: center; }
+.procurement-product-media image { width: 100%; height: 100%; }
+.procurement-product-media text { font-size: 20rpx; color: #89958e; }
+.generated-order-product-block { padding: 8rpx 0 12rpx 112rpx; border-bottom: 1rpx solid #e2e6e4; }
+.generated-order-product-block:last-child { border-bottom: 0; }
+.generated-order-product-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8rpx 20rpx; font-size: 24rpx; color: #69756e; }
+.generated-order-product { display: flex; justify-content: space-between; gap: 24rpx; padding: 8rpx 0; font-size: 26rpx; color: #35473c; }
+.generated-order-product text:first-child { min-width: 0; overflow-wrap: anywhere; }
+.generated-order-product text:last-child { flex-shrink: 0; color: #69756e; }
+.order-count { color: #137951; font-size: 28rpx; font-weight: 600; flex-shrink: 0; }
+.funding-shortfall { margin-top: 24rpx; padding: 20rpx 0; color: #a76613; font-size: 28rpx; border-top: 1rpx solid #e2e6e4; }
+.assignment-caption { margin-top: 24rpx; font-size: 26rpx; color: #69756e; }
+.assignment-group { margin-top: 24rpx; border-top: 2rpx solid #dfe5e1; }
+.assignment-group-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; padding: 20rpx 16rpx; background: #f1f4f2; font-size: 28rpx; font-weight: 600; }
+.assignment-group-heading > text:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.assignment-group-heading .muted { flex-shrink: 0; font-weight: 400; }
+.assignment-group-totals { display: flex; flex-wrap: wrap; gap: 8rpx 28rpx; padding: 0 16rpx 20rpx; background: #f1f4f2; font-size: 26rpx; color: #4e5d54; }
+.page .assignment-product { padding: 24rpx 0 24rpx 112rpx; }
+.product-quantity { flex-shrink: 0; font-size: 26rpx; color: #69756e; }
+.assignment-change { flex-shrink: 0; }
+.assignment-change-label { padding: 4rpx 0 12rpx 12rpx; min-height: 44rpx; color: #137951; font-size: 26rpx; }
+.assignment-change-label.is-disabled { color: #98a39c; }
 .error-banner { padding: 20rpx 32rpx; background: #fff0ef; color: #b63a32; font-size: 26rpx; overflow-wrap: anywhere; }
 
 @import "../../styles/workspace.wxss";
+
+.request-store { font-size: 30rpx; font-weight: 600; color: #24392c; overflow-wrap: anywhere; }
+.request-funding { font-size: 25rpx; color: #69756e; margin-top: 8rpx; }
+.product-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.price-details-control { display: flex; align-items: center; gap: 8rpx; flex-shrink: 0; font-size: 24rpx; color: #69756e; }
+.price-details-control switch { zoom: .7; }
+.procurement-summary { display: flex; flex-wrap: wrap; gap: 8rpx 24rpx; margin-top: 12rpx; font-size: 25rpx; color: #69756e; }
+.product-line-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 16rpx; margin-top: 8rpx; }
+.product-line-summary .product-quantity { font-size: 28rpx; color: #35473c; flex-shrink: 1; min-width: 0; overflow-wrap: anywhere; }
+.product-line-amount { font-size: 25rpx; color: #69756e; flex-shrink: 0; }
+.assignment-product-heading { align-items: flex-start; }
+.assignment-price-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16rpx 24rpx; margin-top: 20rpx; }
+.assignment-price-grid > view { min-width: 0; }
+.price-label { display: block; font-size: 23rpx; color: #69756e; margin-bottom: 4rpx; }
+.price-value { display: block; font-size: 27rpx; color: #35473c; overflow-wrap: anywhere; }
+.price-unit { font-size: 23rpx; color: #69756e; }
+.amount-value { color: #24392c; font-weight: 600; }
+.request-list-total { display: flex; justify-content: space-between; gap: 16rpx; margin-top: 12rpx; font-size: 25rpx; color: #69756e; }
+.request-list-total > text { color: #24392c; font-weight: 600; }

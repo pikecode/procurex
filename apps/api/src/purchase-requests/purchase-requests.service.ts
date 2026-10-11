@@ -69,6 +69,7 @@ export type PurchaseRequestItemView = ReturnType<typeof transactionUnitView> & {
   id: string;
   productId: string;
   productName?: string;
+  imageFile?: { id: string } | null;
   supplierId: string;
   priceVersionId: string | null;
   quantity: string;
@@ -174,7 +175,7 @@ export class PurchaseRequestsService {
     const request = await (transaction ?? (this.database.client as Prisma.TransactionClient)).purchaseRequest.findUnique({
       where: { id, storeId: scope?.type === 'MULTI_STORE' ? storeFilter(undefined, assignedStoreIds(scope)) : isStoreScope(scope?.type) ? scope?.storeId : undefined },
       include: {
-        items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true } } } },
+        items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true, imageFile: { select: { id: true } } } }, supplier: { select: { name: true, deliveryContactPhone: true, contactName: true, contactPhone: true, address: true } } } },
         supplierOrders: { orderBy: { createdAt: 'asc' }, include: { items: { select: { productId: true } }, supplier: { select: { name: true, deliveryContactPhone: true } }, shipments: { orderBy: { sequence: 'asc' }, include: { receipts: { where: { isCurrent: true }, select: { submittedAt: true, revision: true } } } } } },
       },
     });
@@ -189,7 +190,7 @@ export class PurchaseRequestsService {
     const reservations = await (transaction ?? (this.database.client as Prisma.TransactionClient)).fundingAllocation.aggregate({
       where: { requestId: request.id, active: true, method: 'STORED_VALUE' }, _sum: { reservedAmount: true },
     });
-    return { ...toPurchaseRequestDetailView(request), storedReservedAmount: reservations._sum.reservedAmount?.toFixed(2) ?? '0.00', ...requestProgress(request), items: request.items.map(item => ({ ...toPurchaseRequestItemView(item), ...transactionUnitView(item.unitSnapshot, item.salesUnitPrice.toString(), item.supplyUnitPrice.toString(), names), productName: item.product.name })),
+    return { ...toPurchaseRequestDetailView(request), storedReservedAmount: reservations._sum.reservedAmount?.toFixed(2) ?? '0.00', ...requestProgress(request), items: request.items.map(item => ({ ...toPurchaseRequestItemView(item), ...transactionUnitView(item.unitSnapshot, item.salesUnitPrice.toString(), item.supplyUnitPrice.toString(), names), productName: item.product.name, imageFile: item.product.imageFile, supplierName: item.supplier.name, deliveryContactPhone: item.supplier.deliveryContactPhone, supplierContactName: item.supplier.contactName, supplierContactPhone: item.supplier.contactPhone, supplierAddress: item.supplier.address })),
       supplierOrders: request.supplierOrders.map(order => ({ ...toSupplierOrderSummaryView(order), supplierName: order.supplier.name, deliveryContactPhone: order.supplier.deliveryContactPhone, rejectionHandled: isHistoricalRejection(request, order),
         shipments: order.shipments.map(shipment => ({ id: shipment.id, shipmentNo: shipment.shipmentNo, kind: shipment.kind, shippedAt: shipment.shippedAt.toISOString(), trackingNo: shipment.trackingNo, deliveryModeSnapshot: shipment.deliveryModeSnapshot,
           receivedAt: shipment.receipts[0]?.submittedAt.toISOString() ?? null, receiptRevision: shipment.receipts[0]?.revision ?? 0 })) })) };

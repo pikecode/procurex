@@ -31,17 +31,9 @@ Page({
       await api.checkHealth();
       this.setData({ loadingText: '登录中...' });
       const user = await api.login(this.data.username, this.data.password);
-      const roles = user.roles || [];
-      if (roles.includes('STORE') || roles.includes('STORE_FINANCE')) {
-        wx.switchTab({ url: '/pages/store/index' });
-      } else if (roles.includes('SUPPLIER')) {
-        wx.switchTab({ url: '/pages/supplier/index' });
-      } else if (roles.includes('PURCHASER') || roles.includes('ADMIN')) {
-        wx.switchTab({ url: '/pages/purchaser/index' });
-      } else if (roles.includes('HQ_FINANCE')) {
-        wx.switchTab({ url: '/pages/finance/index' });
-      } else if (user.scope?.type === 'MULTI_STORE' && user.scope.storeIds?.length && roles.some(role => ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER'].includes(role))) {
-        wx.switchTab({ url: '/pages/region/index' });
+      const workspace = api.workspaceNames(user)[0];
+      if (workspace) {
+        wx.switchTab({ url: `/pages/${workspace}/index` });
       } else {
         this.setData({ error: '当前账号没有小程序角色入口' });
       }

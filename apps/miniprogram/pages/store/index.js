@@ -2,6 +2,8 @@ const api = require('../../utils/api');
 const quantity = require('../../utils/quantity');
 function orderError(error) {
   const messages = { VERSION_CONFLICT: '商品资料已更新，请返回商品目录刷新并重新选择数量。',
+    STORE_TEMPLATE_NOT_FOUND: '当前门店未配置有效订货模板，请联系采购配置后再订货。',
+    PRODUCT_NOT_IN_CATALOG: '该商品不在当前门店的订货模板中，请刷新商品目录后重新选择。',
     UNIT_CONVERSION_INVALID: '采购单位或数量换算无效，请刷新商品目录后重试。',
     INVALID_ITEM_QUANTITY: '换算后的销售数量不满足起订量或订货倍数。' };
   return messages[error.code] || error.message;
@@ -18,6 +20,12 @@ Page({
     const expanded = this.data.expandedSupplierId === supplierId ? '' : supplierId;
     this.setData({ expandedSupplierId: expanded, previewGroups: storeView.previewGroups(this.data.preview, this.data.products, expanded) });
   },
+  toggleRequestGroup(event) {
+    if (!this.data.selectedRequest) return;
+    const supplierId = event.currentTarget.dataset.supplierId;
+    const itemGroups = this.data.selectedRequest.itemGroups.map(group => group.supplierId === supplierId ? { ...group, open: !group.open } : group);
+    this.setData({ selectedRequest: { ...this.data.selectedRequest, itemGroups } });
+  },
   data: {
     activeView: 'order',
     orderStep: 'catalog',
@@ -25,6 +33,9 @@ Page({
     orderDate: '',
     search: '',
     categoryId: '',
+    primaryCategoryId: '',
+    catalogScrollTop: 0,
+    subcategories: [],
     categories: [],
     visibleProducts: [],
     estimatedAmount: '0.00',
@@ -40,6 +51,7 @@ Page({
     pendingReceipt: null,
     canWrite: false,
     catalogLoaded: false,
+    templateMissing: false,
     catalogError: '',
     user: {},
     roleText: '未登录',
@@ -93,9 +105,9 @@ Page({
     if (this.data.user.id !== user.id || this.data.storeId !== scopedStoreId) {
       this.catalogRequestSequence = (this.catalogRequestSequence || 0) + 1;
       this.receiptUploadSequence = (this.receiptUploadSequence || 0) + 1;
-      this.setData({ cart: [], requests: [], account: null, ledgers: [], products: [], productId: '', productIndex: -1,
+      this.setData({ cart: [], requests: [], account: null, ledgers: [], products: [], productId: '', productIndex: -1, primaryCategoryId: '', categoryId: '', categories: [], subcategories: [],
         created: null, preview: null, selectedRequest: null, selectedShipment: null, shipmentId: '', receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false, receiptUploading: false, shipmentTodos: [], receiptResult: null,
-        reports: { orderAmount: null, productQuantity: null }, statements: [], selectedStatement: null, orderStep: 'catalog', pendingOrder: null, pendingReceipt: null, store: {}, catalogLoaded: false });
+        reports: { orderAmount: null, productQuantity: null }, statements: [], selectedStatement: null, orderStep: 'catalog', pendingOrder: null, pendingReceipt: null, store: {}, catalogLoaded: false, templateMissing: false });
     }
     const canWrite = (user.roles || []).includes('STORE');
     this.setData({
@@ -154,17 +166,28 @@ Page({
       displayPrice: product.unitIndex === 1 ? product.purchaseSalesPrice || '' : product.salesPrice,
       displayUnitName: product.unitIndex === 1 ? product.purchaseUnitName : product.unitName,
       cartQuantity: (this.data.cart.find(line => line.productId === product.id) || {}).quantity || '0' }));
-    const visibleProducts = products.filter(product => (!this.data.categoryId || product.categoryId === this.data.categoryId) && (!search || `${product.name} ${product.sku || ''}`.toLowerCase().includes(search)));
+    const categories = [{ id: '', name: '全部商品' }];
+    for (const product of products) {
+      const id = product.categoryParentId || product.categoryId;
+      if (id && !categories.some(item => item.id === id)) categories.push({ id, name: product.categoryParentName || product.categoryName || '未分类' });
+    }
+    const primaryCategoryId = categories.some(item => item.id === this.data.primaryCategoryId) ? this.data.primaryCategoryId : '';
+    const subcategories = [];
+    for (const product of products) if (primaryCategoryId && product.categoryParentId === primaryCategoryId && !subcategories.some(item => item.id === product.categoryId)) subcategories.push({ id: product.categoryId, name: product.categoryName || '未分类' });
+    const categoryId = subcategories.some(item => item.id === this.data.categoryId) ? this.data.categoryId : '';
+    const visibleProducts = products.filter(product => (!primaryCategoryId || (product.categoryParentId || product.categoryId) === primaryCategoryId) && (!categoryId || product.categoryId === categoryId) && (!search || `${product.name} ${product.sku || ''}`.toLowerCase().includes(search)));
     const estimated = this.data.cart.reduce((total, line) => {
       const product = products.find(product => product.id === line.productId);
       const ratio = product?.purchaseUnitConversion && line.unitId === product.purchaseUnitConversion.purchaseUnitId ? Number(product.purchaseUnitConversion.salesUnitsPerPurchaseUnit) : 1;
       return total + Number(line.quantity) * ratio * Number(product && product.salesPrice || 0);
     }, 0);
-    this.setData({ visibleProducts, cartCount: this.data.cart.length, estimatedAmount: estimated.toFixed(2) });
+    this.setData({ categories, primaryCategoryId, categoryId, subcategories: subcategories.length ? [{ id: '', name: '全部' }, ...subcategories] : [], visibleProducts, cartCount: this.data.cart.length, estimatedAmount: estimated.toFixed(2) });
   },
 
-  onSearch(event) { this.setData({ search: event.detail.value }); this.refreshCatalogView(); },
-  chooseCategory(event) { this.setData({ categoryId: event.currentTarget.dataset.id }); this.refreshCatalogView(); },
+  onCatalogScroll(event) { this.data.catalogScrollTop = event.detail.scrollTop; },
+  onSearch(event) { this.setData({ search: event.detail.value, primaryCategoryId: '', categoryId: '', catalogScrollTop: 0 }); this.refreshCatalogView(); },
+  chooseCategory(event) { this.setData({ categoryId: event.currentTarget.dataset.id, search: '', catalogScrollTop: 0 }); this.refreshCatalogView(); },
+  choosePrimaryCategory(event) { this.setData({ primaryCategoryId: event.currentTarget.dataset.id, categoryId: '', search: '', catalogScrollTop: 0 }); this.refreshCatalogView(); },
   toggleCart() { this.setData({ cartOpen: !this.data.cartOpen }); },
   keepSheetOpen() {},
   chooseProductUnit(event) {
@@ -184,7 +207,7 @@ Page({
   closeShipment() { if (!this.data.receiving && !this.data.pendingReceipt && !this.data.receiptUploading) this.setData({ selectedShipment: null, shipmentId: '', receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false }); },
 
   updateCart(product, value) {
-    if (!this.data.canWrite || this.data.submitting || this.data.previewing || this.data.pendingOrder) return;
+    if (!this.data.canWrite || this.data.templateMissing || this.data.submitting || this.data.previewing || this.data.pendingOrder) return;
     try {
       if (product.canOrder === false) throw new Error('该商品暂不可订货');
       const normalized = String(value).trim();
@@ -369,7 +392,8 @@ Page({
       const products = catalog.items.filter(item => item.product.isActive).map(item => {
         const supplier = item.suppliers[0] || {};
         const cartLine = this.data.cart.find(line => line.productId === item.product.id);
-        return { ...item.product, unitIndex: cartLine?.unitId === item.product.purchaseUnitConversion?.purchaseUnitId && item.product.purchaseUnitConversion ? 1 : 0,
+        const optionalText = value => value == null || ['null', 'undefined'].includes(String(value).trim().toLowerCase()) ? '' : String(value).trim();
+        return { ...item.product, brand: optionalText(item.product.brand), specification: optionalText(item.product.specification), storageCondition: optionalText(item.product.storageCondition), unitIndex: cartLine?.unitId === item.product.purchaseUnitConversion?.purchaseUnitId && item.product.purchaseUnitConversion ? 1 : 0,
           unitChoices: [item.product.unitName, item.product.purchaseUnitName].filter(Boolean),
           salesPrice: supplier.salesPrice == null ? '' : supplier.salesPrice,
           purchaseSalesPrice: supplier.purchaseSalesPrice == null ? '' : supplier.purchaseSalesPrice,
@@ -378,13 +402,16 @@ Page({
           canOrder: supplier.salesPrice != null && !!supplier.priceVersionId,
           imageUrl: '', imageFailed: false };
       });
-      const categories = [{ id: '', name: '全部商品' }];
-      for (const product of products) if (!categories.some(category => category.id === product.categoryId)) categories.push({ id: product.categoryId, name: product.categoryName || '未分类' });
-      this.setData({ products, categories, store: catalog.store || {}, catalogLoaded: true });
+      this.setData({ products, store: catalog.store || {}, catalogLoaded: true, templateMissing: false });
       this.refreshCatalogView();
       this.loadCatalogImages(products, sequence);
     } catch (error) {
-      if (sequence === this.catalogRequestSequence) this.setData({ catalogError: error.code === 'STORE_TEMPLATE_NOT_FOUND' ? '当前门店暂无可订商品' : '商品目录加载失败，请重试', catalogLoaded: false });
+      if (sequence !== this.catalogRequestSequence) return;
+      const templateMissing = error.code === 'STORE_TEMPLATE_NOT_FOUND';
+      this.setData({ catalogError: templateMissing ? orderError(error) : '商品目录加载失败，请重试', catalogLoaded: false,
+        ...(templateMissing ? { templateMissing: true, products: [], cart: [], preview: null, previewGroups: [], productId: '', productIndex: -1,
+          cartOpen: false, orderStep: this.data.pendingOrder ? 'confirm' : 'catalog' } : {}) });
+      if (templateMissing) this.refreshCatalogView();
     }
   },
 
@@ -416,8 +443,9 @@ Page({
       const detail = await api.request(`/purchase-requests/${id}`);
       if (this.data.selectedRequestId !== id) return;
       const names = new Map(this.data.products.map(product => [product.id, product.name]));
+      const items = detail.items.map(item => ({ ...item, productName: item.productName || names.get(item.productId) || '商品' }));
       this.setData({ selectedRequest: { ...detail, stage: storeView.orderStage(detail), stageTone: storeView.orderStageTone(detail), submittedDate: storeView.dateText(detail.submittedAt),
-        items: detail.items.map(item => ({ ...item, productName: item.productName || names.get(item.productId) || '商品' })),
+        items, itemGroups: storeView.requestGroups(items, detail.supplierOrders || []),
         supplierOrders: (detail.supplierOrders || []).map(order => ({ ...order, fulfillmentTone: order.rejectionHandled ? 'done' : storeView.statusTone(order.fulfillmentStatus), shipments: (order.shipments || []).map(shipment => ({ ...shipment,
           shippedDate: storeView.dateText(shipment.shippedAt), receivedDate: storeView.dateText(shipment.receivedAt) })) })) } });
     } catch (error) {
@@ -524,6 +552,7 @@ Page({
 
   orderInput() {
     if (!this.data.storeId) throw new Error('账号尚未绑定门店');
+    if (this.data.templateMissing) throw new Error(orderError({ code: 'STORE_TEMPLATE_NOT_FOUND' }));
     if (!this.data.cart.length) throw new Error('请先添加订货商品');
     return {
       storeId: this.data.storeId,
