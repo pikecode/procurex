@@ -4,7 +4,7 @@ import { DatabaseService } from '../database/database.service.js';
 
 export type AuditScope = {
   roles: string[];
-  scope?: { type: string; storeId?: string; supplierId?: string };
+  scope?: { type: string; storeId?: string; supplierId?: string; testUserId?: string; testUsername?: string };
 };
 
 export type RecordAuditInput = {

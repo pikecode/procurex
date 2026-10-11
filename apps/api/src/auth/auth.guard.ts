@@ -1,5 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { AuthService, type AuthenticatedSession } from './auth.service.js';
+import { AuthService, tokenHash, type AuthenticatedSession } from './auth.service.js';
 import { headerValue, type TraceableRequest } from '../common/request-context.js';
 
 export type AuthenticatedRequest = TraceableRequest & {
@@ -29,7 +29,10 @@ export class AuthGuard implements CanActivate {
       });
     }
 
-    request.auth = authenticated;
+    const testUserId = headerValue(request.headers, 'x-test-user-id');
+    request.auth = testUserId ? { ...authenticated, user: await this.authService.testIdentity(authenticated, testUserId) } : authenticated;
+    const key = headerValue(request.headers, 'idempotency-key');
+    if (testUserId && key) request.headers['idempotency-key'] = `test-${tokenHash(`${testUserId}:${key}`)}`;
     return true;
   }
 }

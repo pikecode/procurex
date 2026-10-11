@@ -8,6 +8,7 @@ import { type AuthenticatedSession } from '../auth/auth.service.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
+import { AllowAssignedStores } from '../auth/store-scope.js';
 import { CommandsService } from '../commands/commands.service.js';
 import { getOrCreateTraceId } from '../common/request-context.js';
 import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contract.js';
@@ -37,7 +38,8 @@ export class ShipmentsController {
   ) {}
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER')
   async get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<ShipmentDetailView> {
     throwIfInvalid(validateUuid('id', id));
     return this.shipmentsService.get(id, storeScope(request));
@@ -54,7 +56,7 @@ export class ShipmentsController {
     const input = parseCreateReceiptBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'shipment.receipt.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -76,7 +78,7 @@ export class ShipmentsController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'shipment.receipt.create',
         entityType: 'Receipt',
@@ -95,9 +97,9 @@ export class ShipmentsController {
   }
 }
 
-function storeScope(request: AuthenticatedRequest): { type: string; storeId?: string } | undefined {
+function storeScope(request: AuthenticatedRequest): { type: string; storeId?: string; storeIds?: string[] } | undefined {
   const scope = request.auth?.user.scope;
-  return scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? scope : undefined;
+  return scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' || scope?.type === 'MULTI_STORE' ? scope : undefined;
 }
 
 function auditScope(auth: AuthenticatedSession) {

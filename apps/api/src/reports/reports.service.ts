@@ -2,8 +2,9 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { Decimal } from 'decimal.js';
 import { SettlementMode, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { DatabaseService } from '../database/database.service.js';
+import { assignedStoreIds, storeFilter, type BusinessScope } from '../auth/store-scope.js';
 
-export type ReportFilters = { from?: string; to?: string; storeId?: string; supplierId?: string; productId?: string; amountBasis?: 'SALES' | 'SUPPLY' };
+export type ReportFilters = { from?: string; to?: string; storeId?: string; storeIds?: string[]; supplierId?: string; productId?: string; amountBasis?: 'SALES' | 'SUPPLY' };
 export type ReportType = 'order-amounts' | 'product-quantities' | 'profit';
 export type ExportHealthView = {
   generatedAt: string;
@@ -214,14 +215,20 @@ function authorizedExport(job: { reportType: string; permissionScope: unknown; f
   // Historical supplier order exports were sales-based; never expose their cached CSV.
   if (job.reportType === 'order-amounts' && roles.includes('SUPPLIER') && !roles.some(role => ['ADMIN', 'HQ_FINANCE', 'PURCHASER'].includes(role))
     && (job.filters as ReportFilters | undefined)?.amountBasis !== 'SUPPLY') return false;
-  const saved = job.permissionScope as { type?: string; storeId?: string; supplierId?: string };
-  const current = (scope ?? {}) as { type?: string; storeId?: string; supplierId?: string };
+  const saved = (job.permissionScope ?? {}) as BusinessScope;
+  const current = (scope ?? {}) as BusinessScope;
+  if (current.type === 'MULTI_STORE') {
+    // An old CSV can contain records from stores that have since been revoked.
+    const ids = assignedStoreIds(current)!;
+    const filters = job.filters as ReportFilters | undefined;
+    if (saved.type !== 'MULTI_STORE' || !filters?.storeIds?.length || filters.storeIds.some(id => !ids.includes(id.toLowerCase()))) return false;
+  }
   return saved.type === current.type && saved.storeId === current.storeId && saved.supplierId === current.supplierId;
 }
 
 function where(filters: ReportFilters, dateField: 'completedAt' | 'firstShippedAt') {
   return {
-    status: SupplierOrderStatus.COMPLETED, storeId: filters.storeId, supplierId: filters.supplierId,
+    status: SupplierOrderStatus.COMPLETED, storeId: storeFilter(filters.storeId, filters.storeIds), supplierId: filters.supplierId,
     [dateField]: { not: null, ...(filters.from && filters.to ? { gte: shanghaiMidnight(filters.from), lt: shanghaiMidnight(addDays(filters.to)) } : {}) },
     ...(filters.productId ? { items: { some: { productId: filters.productId } } } : {}),
   };

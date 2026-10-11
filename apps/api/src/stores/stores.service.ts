@@ -197,8 +197,9 @@ export type UpdateStoreInput = StoreProfile & {
 export class StoresService {
   constructor(private readonly database: DatabaseService, private readonly audit: AuditService = new AuditService(database)) {}
 
-  async listStores(): Promise<StoreView[]> {
+  async listStores(storeIds?: string[]): Promise<StoreView[]> {
     const stores = await this.database.client.store.findMany({
+      ...(storeIds ? { where: { id: { in: storeIds } } } : {}),
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
 
@@ -301,8 +302,8 @@ export class StoresService {
     });
   }
 
-  async listFinanceStores() {
-    const rows = await this.database.client.store.findMany({ include: { accounts: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] });
+  async listFinanceStores(storeIds?: string[]) {
+    const rows = await this.database.client.store.findMany({ ...(storeIds ? { where: { id: { in: storeIds } } } : {}), include: { accounts: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] });
     return rows.map(({ accounts, ...store }) => ({ ...toStoreView(store), account: toStoreAccountView(store.id, accounts[0] ?? null) }));
   }
 

@@ -24,7 +24,7 @@ type Movement = { id: string; occurredAt: string; kind: string; amount: string; 
 type HistoryRow = { id: string; occurredAt: string; amount: string; note: string; kind: string; documentId?: string; documentKind?: 'RECHARGE' | 'CLEARING' };
 export default function StoreFinance({ user }: { user: User }) {
   const screens = Grid.useBreakpoint();
-  const scoped = ['STORE', 'STORE_FINANCE'].includes(user.scope?.type || '') || !hasRole(user, 'ADMIN', 'HQ_FINANCE');
+  const scoped = ['STORE', 'STORE_FINANCE'].includes(user.scope?.type || '') || user.scope?.type !== 'MULTI_STORE' && !hasRole(user, 'ADMIN', 'HQ_FINANCE');
   const writable = !scoped && hasRole(user, 'ADMIN', 'HQ_FINANCE'); const [params, setParams] = useSearchParams();
   const storeId = scoped ? user.scope?.storeId : params.get('store'); const [rows, setRows] = useState<FinanceStore[]>([]);
   const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [revision, setRevision] = useState(0);
@@ -34,7 +34,7 @@ export default function StoreFinance({ user }: { user: User }) {
     ...[...new Set(rows.map(row => row.groupName).filter((name): name is string => Boolean(name)))].sort((a, b) => a.localeCompare(b, 'zh-CN')).map(name => ({ value: `name:${name}`, label: `${name} (${rows.filter(row => row.groupName === name).length})` }))];
   const groupedRows = rows.filter(row => groupKey === 'all' || (groupKey === 'ungrouped' ? !row.groupName : `name:${row.groupName}` === groupKey));
   const changeGroup = (value: string) => setParams(current => { const next = new URLSearchParams(current); if (value === 'all') next.delete('group'); else next.set('group', value); next.delete('store'); return next; });
-  const action = writable ? params.get('action') : null;
+  const action = writable || params.get('action') === 'history' ? params.get('action') : null;
   const directMode = action === 'credit' || action === 'recharge' ? action : null;
   const clearingWorkspace = action === 'clearing';
   const openAccount = (id?: string, operation?: 'credit' | 'recharge' | 'clearing' | 'history') => setParams(current => { const next = new URLSearchParams(current); if (id) next.set('store', id); else next.delete('store'); if (operation) next.set('action', operation); else next.delete('action'); return next; });

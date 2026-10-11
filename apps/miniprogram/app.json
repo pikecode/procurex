@@ -1,13 +1,16 @@
 {
   "pages": [
     "pages/login/index",
+    "pages/test-workbench/index",
     "pages/store/index",
     "pages/supplier/index",
     "pages/purchaser/index",
     "pages/products/index",
     "pages/profile/index",
     "pages/prices/index",
-    "pages/finance/index"
+    "pages/finance/index",
+    "pages/region/index",
+    "pages/finance-accounts/index"
   ],
   "window": {
     "navigationBarTitleText": "ProcureX",
@@ -15,7 +18,9 @@
     "navigationBarTextStyle": "white",
     "backgroundColor": "#f7f9f8"
   },
+  "usingComponents": { "test-context": "/components/test-context/index" },
   "tabBar": {
+    "custom": true,
     "color": "#7f8b85",
     "selectedColor": "#167e5a",
     "backgroundColor": "#ffffff",
@@ -36,6 +41,10 @@
       {
         "pagePath": "pages/finance/index",
         "text": "公司财务"
+      },
+      {
+        "pagePath": "pages/region/index",
+        "text": "授权门店"
       }
     ]
   }

@@ -71,7 +71,8 @@ async function fixture(db: PrismaClient, code: string, source: Source) {
   if (source === 'STORE_CREDIT') {
     await db.$transaction(async tx => { await lockFundingRequest(tx, store.id, request.id); await synchronizeRequestFunding(tx, request.id, { initial: true }); });
     const funding = await db.fundingAllocation.findFirstOrThrow({ where: { requestId: request.id } });
-    await accounts.createClearing(store.id, { businessDate: new Date(), items: [{ fundingAllocationId: funding.id, expectedVersion: funding.version, expectedAmount: '120.00' }] });
+    const proof = await db.fileObject.create({ data: { filename: 'clearing.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: `${code}/clearing`, uploadTokenHash: 'isolated', purpose: 'CLEARING', status: 'READY', ownerId: user.id } });
+    await accounts.createClearing(store.id, { actorUserId: user.id, evidenceFileIds: [proof.id], businessDate: new Date(), items: [{ fundingAllocationId: funding.id, expectedVersion: funding.version, expectedAmount: '120.00' }] });
     const price = await pricing.publishPrice({ templateId: template.id, productId: product.id, supplierId: supplier.id, salesPrice: '11', supplyPrice: '9', effectiveAt: new Date('2026-09-10'), reason: 'Actual excess paid credit' });
     await pricing.processRun(price.runId!);
     creditId = (await db.adjustmentDocument.findFirstOrThrow({ where: { supplierOrderId: order.id, side: 'STORE' } })).id;

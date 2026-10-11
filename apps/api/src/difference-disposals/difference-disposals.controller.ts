@@ -61,7 +61,7 @@ export class DifferenceDisposalsController {
     const input = parseCreateBody(body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'difference-disposal.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: body as never,
@@ -81,7 +81,7 @@ export class DifferenceDisposalsController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'difference-disposal.create',
         entityType: 'DifferenceDisposal',
@@ -113,7 +113,7 @@ export class DifferenceDisposalsController {
     const input = parseConfirmBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'difference-disposal.confirm',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -134,7 +134,7 @@ export class DifferenceDisposalsController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'difference-disposal.confirm',
         entityType: 'DifferenceDisposal',

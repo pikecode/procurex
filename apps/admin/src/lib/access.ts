@@ -1,11 +1,12 @@
-type AccessUser = { roles: string[]; scope?: { type?: string } | null };
+type AccessUser = { roles: string[]; scope?: { type?: string; storeIds?: string[] } | null };
 
-const companyPages = ['/stores', '/store-groups', '/suppliers', '/products', '/categories', '/brands', '/units', '/purchase-requests', '/supplier-orders', '/reports'];
+const companyPages = ['/stores', '/store-groups', '/suppliers', '/products', '/categories', '/brands', '/units', '/purchase-requests', '/supplier-orders', '/reports', '/finance'];
 const financePages = ['/store-finance', '/finance', '/settlement-differences', '/collection-accounts'];
 const storePages = ['/store-orders', '/store-finance', '/finance', '/settlement-differences', '/reports'];
 const supplierPages = ['/supplier-orders', '/discrepancies', '/finance', '/settlement-differences', '/reports'];
 
 export function allowedPages(user: AccessUser): string[] {
+  if (user.scope?.type === 'MULTI_STORE') return user.scope.storeIds?.length && user.roles.some(role => ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER'].includes(role)) ? ['/purchase-requests', '/supplier-orders', '/store-finance', '/finance', '/reports'] : [];
   if (user.scope?.type === 'SUPPLIER') return user.roles.includes('SUPPLIER') ? supplierPages : [];
   if (['STORE', 'STORE_FINANCE'].includes(user.scope?.type || '')) return user.roles.some(role => ['STORE', 'STORE_FINANCE'].includes(role)) ? storePages : [];
   if (user.roles.includes('ADMIN')) return [...companyPages, ...financePages, '/templates', '/discrepancies', '/users', '/commands'];

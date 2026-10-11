@@ -60,7 +60,7 @@ for (const action of actions) for (const fault of [false, true]) {
         'category.create': ['/categories', 'POST', { code: `${code}NEW`, name: code }],
         'category.update': [`/categories/${category.id}`, 'PATCH', { expectedVersion: category.version, name: `${code}edited` }],
         'category.delete': [`/categories/${spareCategory.id}`, 'DELETE', { expectedVersion: spareCategory.version }],
-        'unit.create': ['/units', 'POST', { code: `${code}NEW`, name: code }],
+        'unit.create': ['/units', 'POST', { code: `${code}NEW`, name: `${code}NEW` }],
         'unit.update': [`/units/${unit.id}`, 'PATCH', { expectedVersion: unit.version, name: `${code}edited` }],
         'unit.delete': [`/units/${spareUnit.id}`, 'DELETE', { expectedVersion: spareUnit.version }],
         'brand.create': ['/brands', 'POST', { name: `${code}NEW` }],
@@ -101,6 +101,14 @@ for (const action of actions) for (const fault of [false, true]) {
       const before = await snapshot();
       assert.equal((await call(finance.token)).status, 403);
       assert.equal(await snapshot(), before);
+      if (action === 'template.supplier-setting.set') {
+        const denied = await call(admin.token);
+        assert.equal(denied.status, 409);
+        assert.equal((await denied.json() as { code: string }).code, 'TEMPLATE_SETTLEMENT_DISABLED');
+        assert.equal(await snapshot(), before);
+        assert.equal(await db.auditLog.count({ where: { action, traceId: code } }), 0);
+        return;
+      }
       const audit = app.get(AuditService), original = audit.record.bind(audit);
       if (fault) {
         audit.record = async (input, tx) => { await original(input, tx); if (input.action === action) throw new Error('Injected audit failure'); };
@@ -117,7 +125,11 @@ for (const action of actions) for (const fault of [false, true]) {
       assert.deepEqual(logs[0]!.activeScope, { roles: ['ADMIN'] });
       assert.ok(logs[0]!.entityId);
       assert.equal(logs[0]!.entityType, action.startsWith('template.') ? 'OrderTemplate' : action.split('.')[0]!.replace(/^./, letter => letter.toUpperCase()));
-      assert.match(JSON.stringify(logs[0]!.after), /SUCCEEDED|DELETED/);
+      if (action === 'user.update') {
+        const after = logs[0]!.after as { displayName: string; scope: { storeId: string } };
+        assert.equal(after.displayName, `${code}edited`);
+        assert.equal(after.scope.storeId, store.id);
+      } else assert.match(JSON.stringify(logs[0]!.after), /SUCCEEDED|DELETED/);
       assert.doesNotMatch(JSON.stringify(logs), /private-phone|private-bank|private-remark|passwordHash|spoofed/);
       if ('expectedVersion' in body && !action.endsWith('.delete') && action !== 'template.copy') {
         assert.equal((await call(admin.token)).status, action === 'template.archive' ? 404 : 409);

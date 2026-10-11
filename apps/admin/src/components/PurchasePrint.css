@@ -1,0 +1,29 @@
+.purchase-print-sheet { color: #171717; background: #fff; font-size: 13px; }
+.purchase-print-sheet h1 { font-size: 22px; text-align: center; margin: 8px 0 22px; }
+.purchase-print-sheet dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 24px; margin: 0 0 18px; }
+.purchase-print-sheet dl > div { display: flex; min-width: 0; gap: 12px; }
+.purchase-print-sheet dt { flex: 0 0 65px; color: #555; }
+.purchase-print-sheet dd { margin: 0; overflow-wrap: anywhere; }
+.purchase-print-sheet .print-address { grid-column: 1 / -1; }
+.purchase-print-sheet table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.purchase-print-sheet th, .purchase-print-sheet td { border: 1px solid #999; padding: 8px; text-align: right; overflow-wrap: anywhere; }
+.purchase-print-sheet th:first-child, .purchase-print-sheet td:first-child { width: 36%; text-align: left; }
+.purchase-print-sheet th:nth-child(2), .purchase-print-sheet td:nth-child(2) { text-align: center; }
+.purchase-print-sheet .print-total { margin-top: 16px; text-align: right; font-weight: 600; }
+@media (max-width: 540px) {
+  .purchase-print-sheet dl { grid-template-columns: minmax(0, 1fr); }
+  .purchase-print-sheet th, .purchase-print-sheet td { padding: 5px 3px; font-size: 11px; }
+}
+@page { size: A4 portrait; margin: 15mm; }
+@media print {
+  body:has(> .purchase-print-container) > :not(.purchase-print-container) { display: none !important; }
+  .purchase-print-container .ant-modal-mask, .purchase-print-container .ant-modal-header,
+  .purchase-print-container .ant-modal-footer, .purchase-print-container .ant-modal-close { display: none !important; }
+  .purchase-print-container .ant-modal-wrap { position: static !important; overflow: visible !important; }
+  .purchase-print-container .ant-modal { width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; top: 0 !important; }
+  .purchase-print-container .ant-modal-content, .purchase-print-container .ant-modal-container, .purchase-print-container .ant-modal-body { padding: 0 !important; box-shadow: none !important; max-height: none !important; overflow: visible !important; }
+  .purchase-print-sheet dl { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .purchase-print-sheet thead { display: table-header-group; }
+  .purchase-print-sheet tr { break-inside: avoid; }
+  .purchase-print-sheet .print-total { break-inside: avoid; }
+}

@@ -1,3 +1,4 @@
+<test-context />
 <view class="profile-page">
   <view class="profile-heading">
     <view class="profile-heading-main"><text class="profile-title">{{profile.name || (kind === 'supplier' ? '我的供应商' : '我的门店')}}</text><button class="ghost profile-refresh" bindtap="loadProfile" loading="{{loading}}" disabled="{{loading}}" aria-label="刷新资料">刷新</button></view>
@@ -10,7 +11,7 @@
   <view wx:if="{{activeView === 'catalog'}}">
     <view class="catalog-tools"><view class="catalog-search"><icon type="search" size="18" /><input placeholder="商品名称、货号或规格" value="{{search}}" bindinput="onSearch" /></view></view>
     <view class="catalog-caption"><text>供货商品</text><text>{{visibleProducts.length}} 件</text></view>
-    <view class="catalog-list"><view class="catalog-row" wx:for="{{visibleProducts}}" wx:key="id"><view class="catalog-row-head"><text class="catalog-name">{{item.name}}</text><text class="tag {{item.isActive ? '' : 'tag-warn'}}">{{item.isActive ? '启用' : '停用'}}</text></view><text class="muted">{{item.sku ? item.sku + ' · ' : ''}}{{item.specification || '未填规格'}}</text><text class="supply-price">{{item.supplyPrice === null ? '供货价未发布' : '¥' + labels.money(item.supplyPrice) + ' / ' + item.unitName}}</text></view></view>
+    <view class="catalog-list"><view class="catalog-row" wx:for="{{visibleProducts}}" wx:key="id"><view class="catalog-row-head"><text class="catalog-name">{{item.name}}</text><text class="tag {{item.productActive && item.supplyEnabled ? '' : 'tag-warn'}}">{{!item.productActive ? '商品已停用' : item.supplyEnabled ? '已上架' : '已下架'}}</text></view><text class="muted">{{item.specification || '未填规格'}} · {{item.unitName}}</text><button class="secondary" data-id="{{item.id}}" bindtap="changeListing" disabled="{{!item.productActive || !!saving}}" loading="{{saving === item.id}}">{{item.supplyEnabled ? '下架' : '上架'}}</button></view></view>
     <view wx:if="{{!loading && !error && !visibleProducts.length}}" class="muted loading-state">{{products.length ? '没有匹配的商品' : '暂无供货商品'}}</view>
   </view>
 </view>

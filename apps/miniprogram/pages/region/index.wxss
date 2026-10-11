@@ -1,0 +1,18 @@
+@import "../../styles/workspace.wxss";
+.page { min-height: 100vh; padding: 0 0 calc(132rpx + env(safe-area-inset-bottom)); }
+.business-heading { display: flex; justify-content: space-between; background: #fff; }
+.business-heading > view { flex: 1; min-width: 0; }
+.business-title, .muted { display: block; }
+.business-heading > button { margin: 0; flex-shrink: 0; }
+.business-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 20; display: flex; background: #fff; border-top: 1rpx solid #e5eae7; padding-bottom: env(safe-area-inset-bottom); }
+.business-nav .nav-item { flex: 1; border-top: 4rpx solid transparent; }
+.page .card { background: #fff; border: 0; border-radius: 0; box-shadow: none; }
+.scope-filter { padding: 16rpx 28rpx; background: #fff; }
+.picker-value { display: flex; align-items: center; justify-content: space-between; min-height: 72rpx; gap: 16rpx; overflow-wrap: anywhere; }
+.picker-value text { flex-shrink: 0; }
+.business-search { background: #f1f4f2; padding: 0 20rpx; border-radius: 8rpx; }
+.date-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 20rpx; font-size: 24rpx; }
+.date-controls picker { flex: 1; min-width: 180rpx; padding: 16rpx 0; }
+.date-controls button { margin: 0; font-size: 24rpx; }
+.back-link { color: #167e5a; padding-bottom: 24rpx; }
+.command-recovery { margin: 18rpx 0 0; padding: 24rpx 28rpx; background: #fff; }

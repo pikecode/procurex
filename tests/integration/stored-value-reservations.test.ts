@@ -84,15 +84,19 @@ for (const scenario of ['reserve-release', 'receipt-revision', 'shortage', 'lega
             expectedReceiptRevision: revision, items: [{ shipmentItemId: shipment.items[0]!.id, receivedQuantity: quantity }],
           }, undefined, undefined, tx);
           if (scenario === 'receipt-revision') {
-            await receipt('6', 0);
-            assert.deepEqual([(await f.account()).balance.toFixed(2), (await f.account()).reservedBalance.toFixed(2)], ['40.00', '0.00']);
+            await receipt('4', 0);
+            assert.deepEqual([(await f.account()).balance.toFixed(2), (await f.account()).reservedBalance.toFixed(2)], ['100.00', '60.00']);
             await f.sync();
-            assert.equal(await cashCount(), 1);
-            await receipt('4', 1);
+            assert.equal(await cashCount(), 0);
+            await receipt('5', 1);
             assert.deepEqual([(await f.account()).balance.toFixed(2), (await f.account()).reservedBalance.toFixed(2)], ['100.00', '60.00']);
             await receipt('6', 2);
             assert.equal((await f.account()).balance.toFixed(2), '40.00');
-            assert.equal(await cashCount(), 3);
+            assert.equal(await cashCount(), 1);
+            await assert.rejects(receipt('4', 3), (error: unknown) =>
+              error instanceof Error && error.message === 'Receipt has no open or returned discrepancies to revise');
+            assert.deepEqual([(await f.account()).balance.toFixed(2), (await f.account()).reservedBalance.toFixed(2)], ['40.00', '0.00']);
+            assert.equal(await cashCount(), 1);
           } else {
             await receipt('4', 0);
             assert.equal((await f.account()).balance.toFixed(2), '100.00');

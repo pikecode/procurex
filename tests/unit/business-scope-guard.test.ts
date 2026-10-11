@@ -2,9 +2,26 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ForbiddenException } from '@nestjs/common';
 import { BusinessScopeGuard } from '../../apps/api/src/auth/business-scope.guard.js';
+import { MULTI_STORE_READY } from '../../apps/api/src/auth/store-scope.js';
 
 const guard = new BusinessScopeGuard();
 const context = (roles: string[], scope?: object) => ({ switchToHttp: () => ({ getRequest: () => ({ auth: { user: { roles, scope } } }) }) }) as never;
+
+test('assigned roles can only use explicitly migrated endpoints', () => {
+  const handler = () => undefined;
+  const scopedContext = (role: string) => ({ switchToHttp: () => ({ getRequest: () => ({ auth: { user: { roles: [role], scope: { type: 'MULTI_STORE', storeIds: ['store'] } } } }) }), getHandler: () => handler, getClass: () => Object }) as never;
+  for (const role of ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER']) assert.throws(() => guard.canActivate(scopedContext(role)), ForbiddenException);
+  Reflect.defineMetadata(MULTI_STORE_READY, true, handler);
+  for (const role of ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER']) assert.equal(guard.canActivate(scopedContext(role)), true);
+});
+
+test('unknown and pending regional roles cannot fall through to company access', () => {
+  for (const roles of [[], ['UNKNOWN'], ['REGION_MANAGER'], ['REGION_FINANCE'], ['PURCHASE_FOLLOWER']]) {
+    for (const scope of [undefined, { type: 'COMPANY' }, { type: 'STORE', storeId: 'store' }]) {
+      assert.throws(() => guard.canActivate(context(roles, scope)), ForbiddenException);
+    }
+  }
+});
 
 test('pure business roles require matching scope type and participant id', () => {
   for (const role of ['STORE', 'STORE_FINANCE', 'SUPPLIER']) {

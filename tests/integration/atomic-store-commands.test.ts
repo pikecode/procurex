@@ -20,6 +20,7 @@ for (const operation of ['recharge', 'limit', 'clearing'] as const) {
         const user = await db.user.create({ data: { username: code, displayName: code } });
         const store = await db.store.create({ data: { code, name: code } });
         const collection = await db.collectionAccount.create({ data: { name: code, bankName: '测试银行', accountName: '测试户名', accountNo: code } });
+        const proof = await db.fileObject.create({ data: { filename: 'proof.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: code, uploadTokenHash: 'isolated', purpose: operation === 'clearing' ? 'CLEARING' : 'RECHARGE', status: 'READY', ownerId: user.id } });
         const account = await db.storeAccount.create({ data: { storeId: store.id, balance: '50', creditLimit: '100', creditUsed: '20' } });
         const funding = await db.fundingAllocation.create({ data: { storeId: store.id, method: 'CREDIT', targetAmount: '20', creditOutstanding: '20' } });
         const database = { client: db } as never;
@@ -28,10 +29,10 @@ for (const operation of ['recharge', 'limit', 'clearing'] as const) {
         const auth = { user: { id: user.id, roles: ['HQ_FINANCE'] } } as never;
         const request = { headers: { 'idempotency-key': code }, auth } as never;
         const run = () => operation === 'recharge'
-          ? controller.createRecharge(request, auth, store.id, { amount: '10.00', businessDate: '2026-10-04', collectionAccountId: collection.id })
+          ? controller.createRecharge(request, auth, store.id, { amount: '10.00', businessDate: '2026-10-04', collectionAccountId: collection.id, evidenceFileIds: [proof.id] })
           : operation === 'limit'
             ? controller.updateCreditLimit(request, auth, store.id, { limit: '150.00', expectedVersion: account.version, reason: 'Isolated approved limit' })
-            : controller.createClearing(request, auth, store.id, { businessDate: '2026-10-04', items: [{ fundingAllocationId: funding.id, expectedAmount: '20.00', expectedVersion: funding.version }] });
+            : controller.createClearing(request, auth, store.id, { businessDate: '2026-10-04', evidenceFileIds: [proof.id], items: [{ fundingAllocationId: funding.id, expectedAmount: '20.00', expectedVersion: funding.version }] });
         if (failure === 'completion') {
           const succeed = commands.succeed.bind(commands);
           commands.succeed = async (...args) => { await succeed(...args); throw new Error('Injected failure after response saved'); };
@@ -77,6 +78,7 @@ for (const operation of ['recharge', 'limit', 'clearing'] as const) {
         const own = { storeId: { in: storeIds } };
         await db.auditLog.deleteMany({ where: { actor: { username: code } } });
         await db.commandRecord.deleteMany({ where: { actor: { username: code } } });
+        await db.fileObject.deleteMany({ where: { owner: { username: code } } });
         await db.accountLedger.deleteMany({ where: { account: own } });
         await db.clearingDocument.deleteMany({ where: own });
         await db.rechargeDocument.deleteMany({ where: own });
@@ -98,13 +100,16 @@ test('atomic commands serialize a stale started handle and credit-limit updates 
     const user = await db.user.create({ data: { username: code, displayName: code } });
     const store = await db.store.create({ data: { code, name: code } });
     const account = await db.storeAccount.create({ data: { storeId: store.id, creditLimit: '100' } });
+    const collection = await db.collectionAccount.create({ data: { name: code, bankName: 'Test bank', accountName: code, accountNo: code } });
+    const proof = await db.fileObject.create({ data: { filename: 'proof.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: code, uploadTokenHash: 'isolated', purpose: 'RECHARGE', status: 'READY', ownerId: user.id } });
+    const secondProof = await db.fileObject.create({ data: { filename: 'proof.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: `${code}/second`, uploadTokenHash: 'isolated', purpose: 'RECHARGE', status: 'READY', ownerId: user.id } });
     const database = { client: db } as never;
     const commands = new CommandsService(database), stores = new StoresService(database), audit = new AuditService(database);
     const started = await commands.begin({ actorUserId: user.id, action: 'store.recharge.create', idempotencyKey: code, requestBody: { storeId: store.id }, traceId: code });
     let calls = 0;
     const run = () => commands.performAtomic(started, async tx => {
       calls++;
-      const result = await stores.createRecharge(store.id, { amount: '10', businessDate: new Date(), collectionAccountId: 'isolated' }, tx);
+      const result = await stores.createRecharge(store.id, { amount: '10', businessDate: new Date(), collectionAccountId: collection.id, actorUserId: user.id, evidenceFileIds: [proof.id] }, tx);
       await commands.succeed({ commandId: started.command.id, responseBody: result as never }, tx);
       await audit.record({ actorUserId: user.id, activeScope: { roles: ['HQ_FINANCE'] }, action: 'store.recharge.create', entityType: 'RechargeDocument', entityId: result.id, traceId: code }, tx);
       return result;
@@ -122,7 +127,7 @@ test('atomic commands serialize a stale started handle and credit-limit updates 
     assert.equal((await db.storeAccount.findUniqueOrThrow({ where: { id: account.id } })).version, current.version + 1);
     const before = await db.storeAccount.findUniqueOrThrow({ where: { id: account.id } });
     const incomplete = await commands.begin({ actorUserId: user.id, action: 'store.recharge.create', idempotencyKey: `${code}-incomplete`, requestBody: { storeId: store.id }, traceId: code });
-    await assert.rejects(commands.performAtomic(incomplete, tx => stores.createRecharge(store.id, { amount: '10', businessDate: new Date(), collectionAccountId: 'isolated' }, tx)), /must save its successful response/);
+    await assert.rejects(commands.performAtomic(incomplete, tx => stores.createRecharge(store.id, { amount: '10', businessDate: new Date(), collectionAccountId: collection.id, actorUserId: user.id, evidenceFileIds: [secondProof.id] }, tx)), /must save its successful response/);
     assert.deepEqual(await db.storeAccount.findUniqueOrThrow({ where: { id: account.id } }), before);
     assert.equal(await db.rechargeDocument.count({ where: { storeId: store.id } }), 1);
   } finally {
@@ -130,11 +135,13 @@ test('atomic commands serialize a stale started handle and credit-limit updates 
     const ids = (await db.store.findMany({ where: { code }, select: { id: true } })).map(row => row.id);
     await db.auditLog.deleteMany({ where: { actor: { username: code } } });
     await db.commandRecord.deleteMany({ where: { actor: { username: code } } });
+    await db.fileObject.deleteMany({ where: { owner: { username: code } } });
     await db.accountLedger.deleteMany({ where: { account: { storeId: { in: ids } } } });
     await db.rechargeDocument.deleteMany({ where: own });
     await db.storeAccount.deleteMany({ where: { storeId: { in: ids } } });
     await db.store.deleteMany({ where: { code } });
     await db.user.deleteMany({ where: { username: code } });
+    await db.collectionAccount.deleteMany({ where: { name: code } });
     await db.$disconnect();
   }
 });

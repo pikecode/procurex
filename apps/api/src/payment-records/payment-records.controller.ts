@@ -80,13 +80,13 @@ export class PaymentRecordsController {
   }
 
   @Post('preview')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE')
   preview(@Body() body: PreviewBody, @Req() request: AuthenticatedRequest): Promise<PaymentPreviewView> {
     return this.paymentRecordsService.preview(parsePreviewBody(body), undefined, request.auth?.user.scope);
   }
 
   @Post()
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE')
   async create(
     @Req() request: AuthenticatedRequest,
     @CurrentAuth() auth: AuthenticatedSession,
@@ -95,7 +95,7 @@ export class PaymentRecordsController {
     const input = parseCreateBody(body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'payment-record.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: body as never,
@@ -116,7 +116,7 @@ export class PaymentRecordsController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'payment-record.create',
         entityType: 'PaymentRecord',
@@ -141,7 +141,7 @@ export class PaymentRecordsController {
     const input = parseConfirmBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'payment-record.confirm',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -162,7 +162,7 @@ export class PaymentRecordsController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'payment-record.confirm',
         entityType: 'PaymentRecord',
@@ -186,7 +186,7 @@ export class PaymentRecordsController {
     const input = parseRejectBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'payment-record.reject',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -207,7 +207,7 @@ export class PaymentRecordsController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'payment-record.reject',
         entityType: 'PaymentRecord',
@@ -222,7 +222,7 @@ export class PaymentRecordsController {
   }
 
   @Post(':id/cancel')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE')
   async cancel(
     @Req() request: AuthenticatedRequest,
     @CurrentAuth() auth: AuthenticatedSession,
@@ -232,7 +232,7 @@ export class PaymentRecordsController {
     const input = parseCancelBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'payment-record.cancel',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -253,7 +253,7 @@ export class PaymentRecordsController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'payment-record.cancel',
         entityType: 'PaymentRecord',

@@ -105,7 +105,7 @@ function ManagedProducts({ supplierId }: { supplierId: string }) {
     {error && <Alert type="error" showIcon title={error} />}
     <Table rowKey="id" size="small" loading={loading} dataSource={items} pagination={{ defaultPageSize: 10, showSizeChanger: true }} scroll={{ x: 760 }} columns={[
       { title: '商品名称', dataIndex: 'name' }, { title: '规格', dataIndex: 'specification', render: value => value || '-' },
-      { title: '单位', dataIndex: 'unitName', width: 100 }, { title: '供货价', dataIndex: 'supplyPrice', width: 120, render: value => value === null ? '-' : `¥${Number(value).toFixed(2)}` },
+      { title: '单位', dataIndex: 'unitName', width: 100 },
       { title: '供货状态', width: 110, render: (_, row) => !row.productActive ? <Tag>商品已停用</Tag> : row.supplyEnabled ? <Tag color="success">已上架</Tag> : <Tag>已下架</Tag> },
       { title: '操作', fixed: 'right', width: 110, render: (_, row) => row.supplyEnabled ? <Popconfirm title={`下架“${row.name}”？`} description="门店将不能再向当前供应商新订购此商品，历史订单不受影响。" okText="确认下架" cancelText="取消" onConfirm={() => change(row)}>
         <Button size="small" danger disabled={!row.productActive || Boolean(saving)} loading={saving === row.id} icon={<EyeOff size={14} />}>下架</Button>

@@ -2,7 +2,8 @@ import { money } from '../lib/money';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Alert, App, Button, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Select, Spin, Table, Tag, Tooltip } from 'antd';
-import { Check, Eye, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Eye, Pencil, Plus, Printer, Trash2, X } from 'lucide-react';
+import { PurchasePrint } from '../components/PurchasePrint';
 import { ListPage } from '../components/ListPage';
 import { hasRole, request, type User } from '../lib/api';
 import { decimalRule } from '../lib/catalogTypes';
@@ -16,13 +17,15 @@ type Draft = { storeId: string; reason?: string; items: { productId: string; sup
 type Store = { id: string; name: string; status: string };
 export default function PurchaseWorkspace({ user }: { user: User }) {
   const list = useRows<Purchase>('/purchase-requests'); const stores = useRows<Store>('/stores');
-  const canWrite = hasRole(user, 'ADMIN', 'PURCHASER'); const command = useWorkflowCommand(user.id); const { message } = App.useApp();
+  const canWrite = hasRole(user, 'ADMIN', 'PURCHASER'); const canConfirm = canWrite || hasRole(user, 'PURCHASE_FOLLOWER'); const command = useWorkflowCommand(user.id); const { message } = App.useApp();
   const [params, setParams] = useSearchParams(); const selected = params.get('request');
   const rejectedOrder = params.get('rejectedOrder');
   const openRejection = (requestId: string, orderId: string) => { command.clearError(); setParams({ request: requestId, rejectedOrder: orderId }); };
   const closeRejection = () => { if (!command.busy) setParams(selected ? { request: selected } : {}); };
   const [detail, setDetail] = useState<Purchase | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [revision, setRevision] = useState(0);
   const [assigning, setAssigning] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => { setPrinting(false); }, [selected]);
   const [mode, setMode] = useState<'create' | 'edit' | 'reject' | null>(null); const [catalog, setCatalog] = useState<Catalog | null>(null); const [catalogError, setCatalogError] = useState('');
   const [catalogLoading, setCatalogLoading] = useState(false); const [preview, setPreview] = useState<PurchasePreview | null>(null); const [signature, setSignature] = useState('');
   const [previewing, setPreviewing] = useState(false); const previewLock = useRef(false); const [form] = Form.useForm<Draft>();
@@ -48,6 +51,7 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
   const refresh = () => { list.reload(); setRevision(value => value + 1); };
   const close = () => { if (command.busy || previewing) return; setMode(null); invalidate(); form.resetFields(); };
   function open(mode: 'create' | 'edit' | 'reject') {
+    if (!canWrite && !(canConfirm && mode === 'reject')) return;
     command.clearError(); setError(''); invalidate(); form.resetFields();
     form.setFieldsValue(mode === 'create' ? { items: [{} as Draft['items'][number]] } : { storeId: detail!.storeId,
       items: detail!.items.map(item => ({ productId: item.productId, supplierId: item.supplierId, unitId: item.unitSnapshot?.inputUnitId, quantity: item.unitSnapshot?.inputQuantity || item.quantity })) });
@@ -122,8 +126,9 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
           { key: 'sales', label: '销售金额', children: detail.salesGoodsAmount }, { key: 'supply', label: '供货金额', children: detail.supplyGoodsAmount }, { key: 'reserved', label: '储值占用', children: detail.storedReservedAmount ?? '-' },
           { key: 'shortfall', label: '资金缺口', children: detail.shortfallAmount }, { key: 'reason', label: '取消原因', children: detail.rejectedReason || '-' },
         ]} />
-        {canWrite && editable && <div className="actions workflow-actions"><Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => open('edit')}>修改明细</Button>
-          <Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => { command.clearError(); setAssigning(true); }}>调整供应商</Button>
+        <div className="actions workflow-actions"><Button icon={<Printer size={16} />} disabled={Boolean(mode) || assigning || command.busy} onClick={() => setPrinting(true)}>打印订单</Button></div>
+        {canConfirm && editable && <div className="actions workflow-actions">{canWrite && <Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => open('edit')}>修改明细</Button>}
+          {canWrite && <Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => { command.clearError(); setAssigning(true); }}>调整供应商</Button>}
           <Popconfirm title="确认采购并生成供应商订单？" onConfirm={async () => { if (await command.submit({ path: `/purchase-requests/${detail.id}/confirm`, method: 'POST', label: '确认采购', body: { expectedVersion: detail.version } })) { refresh(); message.success('采购已确认'); } }} disabled={command.blocked}><Button type="primary" icon={<Check size={16} />} disabled={command.blocked}>确认采购</Button></Popconfirm>
           <Button danger icon={<X size={16} />} disabled={command.blocked} onClick={() => open('reject')}>取消申请</Button></div>}
         <Table rowKey="id" size="small" columns={itemColumns} dataSource={detail.items} scroll={{ x: 850 }} pagination={{ defaultPageSize: 10, showSizeChanger: true }} />
@@ -134,6 +139,7 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
         ]} /></section>
       </>}
     </Modal>
+    {printing && selected && <PurchasePrint key={JSON.stringify([selected, user.id, user.roles, user.scope])} id={selected} user={user} onClose={() => setPrinting(false)} />}
     {assigning && detail && canWrite && <SupplierAssignment purchase={detail} command={command} onClose={() => { if (!command.busy) setAssigning(false); }} onSaved={() => { setAssigning(false); refresh(); message.success('供应商调整已确认'); }} />}
     <Modal zIndex={1200} title={mode === 'create' ? '新增采购申请' : mode === 'edit' ? '修改采购明细' : '取消采购申请'} open={Boolean(mode)} onCancel={close} width={mode === 'reject' ? 520 : 960} closable={!command.busy && !previewing} maskClosable={false}
       footer={<div className="actions workflow-actions"><Button onClick={close} disabled={command.busy || previewing}>取消</Button>{mode !== 'reject' && <Button icon={<Eye size={16} />} onClick={readPreview} loading={previewing} disabled={command.blocked || catalogLoading || !catalog || Boolean(catalogError)}>预览金额</Button>}

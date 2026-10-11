@@ -1,0 +1,12 @@
+<view class="page">
+  <view class="workbench-heading"><text class="title">测试身份</text><button wx:if="{{user.testIdentity}}" class="secondary" bindtap="select" disabled="{{switching || loading}}">返回管理员</button></view>
+  <view class="current-identity">当前：{{user.testIdentity ? user.testIdentity.displayName : '管理员'}}</view>
+  <input class="search" placeholder="搜索账号、门店或供应商" value="{{search}}" bindinput="onSearch" />
+  <view wx:if="{{error}}" class="error-banner">{{error}}</view>
+  <view wx:if="{{loading}}" class="muted">正在加载测试账号</view>
+  <view class="identity-row" wx:for="{{filtered}}" wx:key="id">
+    <view class="identity-info"><text class="identity-name">{{item.displayName}}</text><text class="muted">{{item.roleText}} · {{item.username}}</text><text wx:if="{{item.entityName}}" class="muted">{{item.entityName}}</text></view>
+    <button class="secondary" data-id="{{item.id}}" bindtap="select" disabled="{{switching || loading || user.testIdentity.userId === item.id}}">{{user.testIdentity.userId === item.id ? '当前' : '进入'}}</button>
+  </view>
+  <view wx:if="{{!loading && !error && !filtered.length}}" class="empty-state">暂无可用测试账号</view>
+</view>

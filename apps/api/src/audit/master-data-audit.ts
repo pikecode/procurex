@@ -9,7 +9,7 @@ export type MasterDataAuditContext = Pick<RecordAuditInput, 'actorUserId' | 'act
 
 export function masterDataAuditContext(request: AuthenticatedRequest): MasterDataAuditContext {
   if (!request.auth) throw new UnauthorizedException({ code: 'MISSING_AUTH_TOKEN', message: 'Authentication is required' });
-  return { actorUserId: request.auth.user.id,
+  return { actorUserId: request.auth.user.actorUserId ?? request.auth.user.id,
     activeScope: { roles: request.auth.user.roles, scope: request.auth.user.scope },
     traceId: getOrCreateTraceId(request) };
 }

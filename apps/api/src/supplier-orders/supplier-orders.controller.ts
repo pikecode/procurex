@@ -1,5 +1,6 @@
 import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, UseGuards, UseInterceptors } from '@nestjs/common';
 import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
+import { AllowAssignedStores, assignedStoreIds, ASSIGNED_STORE_ROLES, isCompanyUser } from '../auth/store-scope.js';
 import { SupplierPricePrivacyInterceptor } from './supplier-price-privacy.interceptor.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
@@ -75,10 +76,12 @@ export class SupplierOrdersController {
   ) {}
 
   @Get()
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
   list(@Req() request: AuthenticatedRequest, @Query() query: ListQuery): Promise<SupplierOrderSummaryView[]> {
     const scope = supplierScope(request);
     const input = parseListQuery(query);
+    if (!isCompanyUser(request.auth!.user)) input.storeIds = assignedStoreIds(request.auth!.user.scope);
     if (scope) {
       if (!scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
       if (input.supplierId && input.supplierId !== scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Supplier orders are outside the current supplier scope' });
@@ -88,11 +91,12 @@ export class SupplierOrdersController {
   }
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
   get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<SupplierOrderDetailView> {
     throwIfInvalid(validateUuid('id', id));
-    const scope = supplierScope(request);
-    if (scope && !scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
+    const scope = supplierScope(request) ?? (!isCompanyUser(request.auth!.user) && request.auth!.user.scope?.type === 'MULTI_STORE' ? request.auth!.user.scope : undefined);
+    if (scope?.type === 'SUPPLIER' && !scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
     return this.supplierOrdersService.get(id, scope);
   }
 
@@ -114,7 +118,7 @@ export class SupplierOrdersController {
     const input = parseShipmentPreviewBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'supplier-order.shipment.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -135,7 +139,7 @@ export class SupplierOrdersController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'supplier-order.shipment.create',
         entityType: 'Shipment',
@@ -166,7 +170,7 @@ export class SupplierOrdersController {
     const input = parseCreateFreightConfirmationBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'supplier-order.freight-confirmation.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -187,7 +191,7 @@ export class SupplierOrdersController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'supplier-order.freight-confirmation.create',
         entityType: 'FreightConfirmation',
@@ -216,7 +220,7 @@ export class SupplierOrdersController {
     const input = parseRejectBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'supplier-order.reject',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -237,7 +241,7 @@ export class SupplierOrdersController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'supplier-order.reject',
         entityType: 'SupplierOrder',
@@ -267,7 +271,7 @@ export class SupplierOrdersController {
     const input = parseReconcileFundingBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'supplier-order.funding.reconcile',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -287,7 +291,7 @@ export class SupplierOrdersController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'supplier-order.funding.reconcile',
         entityType: 'SupplierOrder',

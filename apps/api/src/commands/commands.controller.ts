@@ -33,12 +33,12 @@ export class CommandsController {
       throw new BadRequestException({ code: 'INVALID_COMMAND_REVIEW', message: 'A current status and reason of 1 to 500 characters are required' });
     }
     const traceId = getOrCreateTraceId(request);
-    const command = await this.commands.begin({ actorUserId: request.auth!.user.id, action: 'command.review',
+    const command = await this.commands.begin({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id, action: 'command.review',
       idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, expectedStatus: body.expectedStatus, reason: body.reason },
       traceId, resourceType: 'CommandRecord', resourceId: id });
     return this.commands.performAtomic(command, async tx => {
       const result = await this.commands.reviewSnapshot(id, body.expectedStatus as string, tx);
-      await this.audit.record({ actorUserId: request.auth!.user.id, activeScope: { roles: request.auth!.user.roles },
+      await this.audit.record({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id, activeScope: { roles: request.auth!.user.roles },
         action: 'command.review', entityType: 'CommandRecord', entityId: id, traceId, reason: body.reason as string, after: result }, tx);
       await this.commands.succeed({ commandId: command.command.id, resourceType: 'CommandRecord', resourceId: id, responseBody: result }, tx);
       return result;
@@ -53,11 +53,11 @@ export class CommandsController {
       throw new BadRequestException({ code: 'INVALID_COMMAND_REVIEW', message: 'A reason of 1 to 500 characters is required' });
     }
     const traceId = getOrCreateTraceId(request);
-    const command = await this.commands.begin({ actorUserId: request.auth!.user.id, action: 'command.close-rolled-back-price',
+    const command = await this.commands.begin({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id, action: 'command.close-rolled-back-price',
       idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, reason: body.reason }, traceId });
     return this.commands.performAtomic(command, async tx => {
       const result = await this.commands.closeRolledBackPriceCommand(id, tx);
-      await this.audit.record({ actorUserId: request.auth!.user.id, activeScope: { roles: request.auth!.user.roles }, action: 'command.close-rolled-back-price',
+      await this.audit.record({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id, activeScope: { roles: request.auth!.user.roles }, action: 'command.close-rolled-back-price',
         entityType: 'CommandRecord', entityId: id, traceId, reason: body.reason as string, after: result }, tx);
       await this.commands.succeed({ commandId: command.command.id, resourceType: 'CommandRecord', resourceId: id, responseBody: result }, tx);
       return result;
@@ -72,11 +72,11 @@ export class CommandsController {
       throw new BadRequestException({ code: 'INVALID_COMMAND_REVIEW', message: 'A reason of 1 to 500 characters is required' });
     }
     const traceId = getOrCreateTraceId(request);
-    const command = await this.commands.begin({ actorUserId: request.auth!.user.id, action: 'command.close-uncommitted-price',
+    const command = await this.commands.begin({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id, action: 'command.close-uncommitted-price',
       idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, reason: body.reason }, traceId });
     return this.commands.performAtomic(command, async tx => {
       const result = await this.commands.closeUncommittedPriceCommand(id, tx);
-      await this.audit.record({ actorUserId: request.auth!.user.id, activeScope: { roles: request.auth!.user.roles }, action: 'command.close-uncommitted-price',
+      await this.audit.record({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id, activeScope: { roles: request.auth!.user.roles }, action: 'command.close-uncommitted-price',
         entityType: 'CommandRecord', entityId: id, traceId, reason: body.reason as string, after: result }, tx);
       await this.commands.succeed({ commandId: command.command.id, resourceType: 'CommandRecord', resourceId: id, responseBody: result }, tx);
       return result;

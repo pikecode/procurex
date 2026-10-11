@@ -44,3 +44,8 @@ skills-lock.json
 /var/five-role-ui/
 /var/five-role-ui-chef/
 /var/five-role-ui-purchaser/
+/var/native-current-regression/
+/var/native-assigned-stores/
+/var/native-test-workbench/
+/var/react-admin-stored-value-recheck/
+/var/react-admin-final-acceptance/

@@ -65,7 +65,7 @@ export class SuppliersController {
   getCatalog(@Param('id') id: string, @CurrentAuth() auth: AuthenticatedSession) {
     throwIfInvalid(validateUuid('id', id));
     requireSupplierScope(id, auth);
-    return this.suppliersService.getSupplierCatalog(id);
+    return this.suppliersService.getSupplierCatalog(id).then(result => supplierProductProjection(result, auth));
   }
 
   @Get(':id/managed-products')
@@ -73,7 +73,7 @@ export class SuppliersController {
   getManagedProducts(@Param('id') id: string, @CurrentAuth() auth: AuthenticatedSession) {
     throwIfInvalid(validateUuid('id', id));
     requireSupplierScope(id, auth);
-    return this.suppliersService.getManagedProducts(id);
+    return this.suppliersService.getManagedProducts(id).then(result => supplierProductProjection(result, auth));
   }
 
   @Patch(':id/managed-products/:productId')
@@ -84,7 +84,7 @@ export class SuppliersController {
     if (typeof body.supplyEnabled !== 'boolean') issues.push({ field: 'supplyEnabled', code: 'INVALID_BOOLEAN', message: 'supplyEnabled must be a boolean' });
     throwIfInvalid(issues);
     requireSupplierScope(id, auth);
-    return this.suppliersService.updateManagedProduct(id, productId, body.supplyEnabled as boolean, body.expectedVersion as number, masterDataAuditContext(request));
+    return this.suppliersService.updateManagedProduct(id, productId, body.supplyEnabled as boolean, body.expectedVersion as number, masterDataAuditContext(request)).then(result => supplierProductProjection(result, auth));
   }
 
   @Get()
@@ -118,6 +118,11 @@ export class SuppliersController {
     const input = parsePutSupplierProductsBody(id, body);
     return this.suppliersService.replaceSupplierProducts(id, input.expectedVersion, input.productIds, masterDataAuditContext(request), input.prices);
   }
+}
+
+function supplierProductProjection<T>(result: T, auth: AuthenticatedSession): T {
+  if (auth.user.roles.some(role => ['ADMIN', 'PURCHASER', 'HQ_FINANCE'].includes(role))) return result;
+  return JSON.parse(JSON.stringify(result, (key, value) => ['supplyPrice', 'supplyPriceVersionId'].includes(key) ? undefined : value)) as T;
 }
 
 function requireSupplierScope(id: string, auth: AuthenticatedSession): void {

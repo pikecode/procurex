@@ -52,7 +52,7 @@ export class DiscrepanciesController {
     const input = parseResolveBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'discrepancy.resolve',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -73,7 +73,7 @@ export class DiscrepanciesController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'discrepancy.resolve',
         entityType: 'Discrepancy',

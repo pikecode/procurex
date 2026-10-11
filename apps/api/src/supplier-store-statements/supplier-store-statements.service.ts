@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { assignedStoreIds, assertAssignedStore, storeFilter, type BusinessScope } from '../auth/store-scope.js';
 import { Decimal } from 'decimal.js';
 import { settlementPeriod, type SettlementCycle } from '../../../../packages/domain/src/settlement-period.js';
 import { PaymentAllocationState, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
@@ -12,6 +13,7 @@ import { validateUuid } from '../../../../packages/domain/src/validation.js';
 export type SupplierStoreStatementStatus = 'OPEN' | 'SETTLED';
 
 export type ListSupplierStoreStatementsInput = {
+  storeIds?: string[];
   storeId?: string;
   supplierId?: string;
   cycle?: SettlementCycle;
@@ -87,10 +89,12 @@ export class SupplierStoreStatementsService {
     return groups.map(toSummaryView);
   }
 
-  async get(id: string, scope?: { type?: string; supplierId?: string }): Promise<SupplierStoreStatementDetailView> {
+  async get(id: string, scope?: BusinessScope): Promise<SupplierStoreStatementDetailView> {
     const key = decodeStatementId(id);
+    assertAssignedStore(scope, key.storeId);
     if (scope?.type === 'SUPPLIER' && scope.supplierId !== key.supplierId) throw new NotFoundException({ code: 'SUPPLIER_STORE_STATEMENT_NOT_FOUND', message: 'Supplier store statement was not found' });
     const groups = await this.loadGroups({
+      storeIds: assignedStoreIds(scope),
       storeId: key.storeId,
       supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId,
       cycle: key.cycle,
@@ -114,7 +118,7 @@ export class SupplierStoreStatementsService {
   private async loadGroups(input: ListSupplierStoreStatementsInput): Promise<StatementGroup[]> {
     const orders = await this.database.client.supplierOrder.findMany({
       where: {
-        storeId: input.storeId,
+        storeId: storeFilter(input.storeId, input.storeIds),
         supplierId: input.supplierId,
         status: SupplierOrderStatus.COMPLETED,
         settlementMode: { not: 'SUPPLIER_TERM' },
@@ -179,7 +183,7 @@ export class SupplierStoreStatementsService {
       groups.set(key, group);
     }
 
-    const adjustmentDocuments = await this.database.client.adjustmentDocument?.findMany({ where: { storeId: input.storeId, supplierId: input.supplierId, side: 'SUPPLIER' } }) ?? [];
+    const adjustmentDocuments = await this.database.client.adjustmentDocument?.findMany({ where: { storeId: storeFilter(input.storeId, input.storeIds), supplierId: input.supplierId, side: 'SUPPLIER' } }) ?? [];
     const adjustmentOrders = adjustmentDocuments.length ? await this.database.client.supplierOrder.findMany({
       where: { id: { in: adjustmentDocuments.map(document => document.supplierOrderId) } }, select: { id: true, settlementMode: true },
     }) : [];

@@ -14,6 +14,7 @@ import { DatabaseService } from '../database/database.service.js';
 import { resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
 import { lockFundingRequest, synchronizeRequestFunding } from '../purchase-requests/request-funding.js';
 import { applyEffectiveOrderPrices, lockPricePublication } from '../pricing/price-checkpoint.js';
+import { assignedStoreIds, type BusinessScope } from '../auth/store-scope.js';
 
 export type CreateReceiptInput = {
   expectedOrderVersion: number;
@@ -78,11 +79,12 @@ export type ShipmentDetailItemView = {
 export class ShipmentsService {
   constructor(private readonly database: DatabaseService) {}
 
-  async get(id: string, scope?: { type: string; storeId?: string }): Promise<ShipmentDetailView> {
+  async get(id: string, scope?: BusinessScope): Promise<ShipmentDetailView> {
+    const storeIds = assignedStoreIds(scope);
     const shipment = await this.database.client.shipment.findUnique({
       where: {
         id,
-        supplierOrder: scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? { storeId: scope?.storeId } : undefined,
+        supplierOrder: storeIds ? { storeId: { in: storeIds } } : scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? { storeId: scope?.storeId } : undefined,
       },
       include: {
         supplierOrder: true,
@@ -368,6 +370,7 @@ function toShipmentDetailView(shipment: Shipment & {
 }
 
 export function isReceiptItemLocked(history: Array<{ discrepancy: { status: DiscrepancyStatus; returnRecord?: unknown } | null }>): boolean {
+  if (history.some(item => item.discrepancy === null)) return true;
   const active = history.flatMap(item => item.discrepancy && item.discrepancy.status !== DiscrepancyStatus.SUPERSEDED ? [item.discrepancy] : []);
   return active.some(item => item.status !== DiscrepancyStatus.OPEN && !(item.status === DiscrepancyStatus.RESOLVED && item.returnRecord));
 }

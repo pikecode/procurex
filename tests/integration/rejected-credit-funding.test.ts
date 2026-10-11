@@ -20,11 +20,18 @@ for (const scenario of ['CANCEL', 'REASSIGN', 'SAME', 'TERM', 'MIXED', 'AFTER_RE
     const requests = new PurchaseRequestsService(database, {} as never, pricing);
     const adjustments = new AdjustmentsService(database), disposals = new DifferenceDisposalsService(database);
     try {
+      const actor = await db.user.create({ data: { username: code, displayName: code } });
+      let evidenceSequence = 0;
+      const clearingEvidence = async () => {
+        const file = await db.fileObject.create({ data: { filename: 'clearing.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: `${code}/${++evidenceSequence}`, uploadTokenHash: 'isolated', purpose: 'CLEARING', status: 'READY', ownerId: actor.id } });
+        return { actorUserId: actor.id, evidenceFileIds: [file.id] };
+      };
       const category = await db.category.create({ data: { code, name: code } });
       const unit = await db.unit.create({ data: { code, name: 'piece' } });
       const product = await db.product.create({ data: { sku: code, name: code, categoryId: category.id, baseUnitId: unit.id } });
       const supplier = await db.supplier.create({ data: { code, name: code, deliveryMode: 'SELF', defaultSettlementMode: 'CREDIT', defaultSettlementCycle: 'MONTHLY' } });
       const store = await db.store.create({ data: { code, name: code } });
+      await db.supplierProduct.create({ data: { supplierId: supplier.id, productId: product.id, supplyEnabled: true } });
       const template = await db.orderTemplate.create({ data: { code, name: code, items: { create: { productId: product.id, initialSalesPrice: '12', suppliers: { create: { supplierId: supplier.id } } } } } });
       await db.storeAccount.create({ data: { storeId: store.id, balance: '500', creditLimit: '1000' } });
       await pricing.publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: '12', supplyPrice: '9', effectiveAt: new Date('2000-01-01'), reason: 'Isolated refusal baseline' });
@@ -34,7 +41,7 @@ for (const scenario of ['CANCEL', 'REASSIGN', 'SAME', 'TERM', 'MIXED', 'AFTER_RE
         status: 'PUSHED', salesGoodsAmount: '120', supplyGoodsAmount: '90', items: { create: { productId: product.id, quantity: '10', salesUnitPrice: '12', supplyUnitPrice: '9', salesLineAmount: '120', supplyLineAmount: '90' } } } });
       await db.$transaction(async tx => { await lockFundingRequest(tx, store.id, request.id); await synchronizeRequestFunding(tx, request.id, { initial: true }); });
       const originalFunding = await db.fundingAllocation.findFirstOrThrow({ where: { requestId: request.id } });
-      await stores.createClearing(store.id, { businessDate: new Date(), items: [{ fundingAllocationId: originalFunding.id, expectedVersion: originalFunding.version, expectedAmount: '120.00' }] });
+      await stores.createClearing(store.id, { ...await clearingEvidence(), businessDate: new Date(), items: [{ fundingAllocationId: originalFunding.id, expectedVersion: originalFunding.version, expectedAmount: '120.00' }] });
       const originalClearings = await db.clearingItem.findMany({ where: { fundingAllocationId: originalFunding.id } });
       let priorPriceCreditId: string | undefined;
       if (scenario === 'MIXED' || scenario === 'AFTER_RETURN' || scenario === 'PENDING_PRICE_CREDIT') {
@@ -75,6 +82,7 @@ for (const scenario of ['CANCEL', 'REASSIGN', 'SAME', 'TERM', 'MIXED', 'AFTER_RE
         const target = scenario === 'SAME' ? supplier : await db.supplier.create({ data: { code: `${code}N`, name: `${code}N`, deliveryMode: 'SELF',
           defaultSettlementMode: scenario === 'TERM' ? 'COMPANY_TERM' : 'CREDIT', defaultSettlementCycle: 'MONTHLY' } });
         if (target.id !== supplier.id) {
+          await db.supplierProduct.create({ data: { supplierId: target.id, productId: product.id, supplyEnabled: true } });
           const templateItem = await db.templateItem.findFirstOrThrow({ where: { templateId: template.id } });
           await db.templateItemSupplier.create({ data: { templateItemId: templateItem.id, supplierId: target.id } });
           await pricing.publishPrice({ productId: product.id, supplierId: target.id, salesPrice: '12', supplyPrice: '9', effectiveAt: new Date('2000-01-01'), reason: 'Replacement supplier quote' });
@@ -113,7 +121,7 @@ for (const scenario of ['CANCEL', 'REASSIGN', 'SAME', 'TERM', 'MIXED', 'AFTER_RE
       await assert.rejects(disposals.create({ method: 'OFFLINE_RETURN', creditItemIds: [credit.id], amount: returnAmount, businessDate: new Date() }));
       if (replacementFundingId) {
         const replacement = await db.fundingAllocation.findUniqueOrThrow({ where: { id: replacementFundingId } });
-        await stores.createClearing(store.id, { businessDate: new Date(), items: [{ fundingAllocationId: replacement.id, expectedVersion: replacement.version, expectedAmount: '120.00' }] });
+        await stores.createClearing(store.id, { ...await clearingEvidence(), businessDate: new Date(), items: [{ fundingAllocationId: replacement.id, expectedVersion: replacement.version, expectedAmount: '120.00' }] });
         assert.equal((await db.purchaseRequest.findUniqueOrThrow({ where: { id: request.id } })).paidAmount.toFixed(2), '120.00');
       }
       await db.$transaction(async tx => { await lockFundingRequest(tx, store.id, request.id); await synchronizeRequestFunding(tx, request.id); });
@@ -123,6 +131,7 @@ for (const scenario of ['CANCEL', 'REASSIGN', 'SAME', 'TERM', 'MIXED', 'AFTER_RE
       assert.equal((await db.storeAccount.findUniqueOrThrow({ where: { storeId: store.id } })).balance.toFixed(2), '500.00');
       assert.equal(await db.accountLedger.count({ where: { account: { storeId: store.id }, sourceType: 'ADJUSTMENT' } }), 0);
     } finally {
+      await db.fileObject.deleteMany({ where: { owner: { username: code } } });
       const storeWhere = { store: { code } };
       const storeIds = (await db.store.findMany({ where: { code }, select: { id: true } })).map(row => row.id);
       await db.differenceDisposal.deleteMany({ where: { storeId: { in: storeIds } } });
@@ -133,10 +142,13 @@ for (const scenario of ['CANCEL', 'REASSIGN', 'SAME', 'TERM', 'MIXED', 'AFTER_RE
       await db.accountLedger.deleteMany({ where: { account: { storeId: { in: storeIds } } } });
       await db.supplierOrder.deleteMany({ where: storeWhere }); await db.purchaseRequest.deleteMany({ where: storeWhere });
       await db.priceScope.deleteMany({ where: { supplier: { code: { startsWith: code } } } });
-      await db.orderTemplate.deleteMany({ where: { code } }); await db.product.deleteMany({ where: { sku: code } });
+      await db.orderTemplate.deleteMany({ where: { code } });
+      await db.supplierProduct.deleteMany({ where: { product: { sku: code } } });
+      await db.product.deleteMany({ where: { sku: code } });
       await db.supplier.deleteMany({ where: { code: { startsWith: code } } });
       await db.storeAccount.deleteMany({ where: { storeId: { in: storeIds } } }); await db.store.deleteMany({ where: { code } });
-      await db.category.deleteMany({ where: { code } }); await db.unit.deleteMany({ where: { code } }); await db.$disconnect();
+      await db.category.deleteMany({ where: { code } }); await db.unit.deleteMany({ where: { code } });
+      await db.user.deleteMany({ where: { username: code } }); await db.$disconnect();
     }
   });
 }

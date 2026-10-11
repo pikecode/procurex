@@ -6,10 +6,12 @@ import { PaymentAllocationState, SupplierOrderStatus } from '../../../../package
 import type { Shipment, Supplier, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import { summarizeAllocations } from '../payment-records/payment-records.service.js';
+import { assignedStoreIds, assertAssignedStore, storeFilter, type BusinessScope } from '../auth/store-scope.js';
 
 export type StoreStatementStatus = 'OPEN' | 'SETTLED';
 
 export type ListStoreStatementsInput = {
+  storeIds?: string[];
   storeId?: string;
   supplierId?: string;
   cycle?: SettlementCycle;
@@ -80,9 +82,11 @@ export class StoreStatementsService {
     return groups.map(toSummaryView);
   }
 
-  async get(id: string, scope?: { type?: string; storeId?: string }): Promise<StoreStatementDetailView> {
+  async get(id: string, scope?: BusinessScope): Promise<StoreStatementDetailView> {
     const key = decodeStatementId(id);
+    assertAssignedStore(scope, key.storeId);
     const groups = await this.loadGroups({
+      storeIds: assignedStoreIds(scope),
       storeId: scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? scope.storeId : key.storeId,
       supplierId: key.supplierId,
       cycle: key.cycle,
@@ -106,7 +110,7 @@ export class StoreStatementsService {
   private async loadGroups(input: ListStoreStatementsInput): Promise<StatementGroup[]> {
     const orders = await this.database.client.supplierOrder.findMany({
       where: {
-        storeId: input.storeId,
+        storeId: storeFilter(input.storeId, input.storeIds),
         supplierId: input.supplierId,
         status: SupplierOrderStatus.COMPLETED,
         settlementMode: 'COMPANY_TERM',
@@ -163,11 +167,11 @@ export class StoreStatementsService {
     }
 
     const adjustmentOrders = await this.database.client.supplierOrder.findMany({
-      where: { storeId: input.storeId, supplierId: input.supplierId, settlementMode: 'COMPANY_TERM' },
+      where: { storeId: storeFilter(input.storeId, input.storeIds), supplierId: input.supplierId, settlementMode: 'COMPANY_TERM' },
       select: { id: true, settlementMode: true },
     });
     const adjustmentDocuments = await this.database.client.adjustmentDocument?.findMany({ where: {
-      storeId: input.storeId, supplierId: input.supplierId, side: 'STORE',
+      storeId: storeFilter(input.storeId, input.storeIds), supplierId: input.supplierId, side: 'STORE',
       supplierOrderId: { in: adjustmentOrders.filter(order => order.settlementMode === 'COMPANY_TERM').map(order => order.id) },
     } }) ?? [];
     for (const document of adjustmentDocuments) {

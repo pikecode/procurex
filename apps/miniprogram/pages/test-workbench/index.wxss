@@ -1,0 +1,9 @@
+.workbench-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.title { font-size: 36rpx; font-weight: 600; }
+.current-identity { margin: 24rpx 0; padding: 16rpx; background: #fff3ce; color: #66531a; font-size: 26rpx; }
+.search { margin-bottom: 20rpx; padding: 16rpx 20rpx; background: #fff; border: 1rpx solid #dce5df; border-radius: 6rpx; }
+.identity-row { display: flex; align-items: center; gap: 20rpx; padding: 24rpx 0; border-bottom: 1rpx solid #dce5df; }
+.identity-info { flex: 1; min-width: 0; }
+.identity-info text { display: block; overflow-wrap: anywhere; }
+.identity-name { font-size: 30rpx; font-weight: 600; }
+.identity-row button { margin: 0; flex-shrink: 0; }

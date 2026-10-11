@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { Agent } from 'node:http';
 import { join, resolve } from 'node:path';
 import sharp from 'sharp';
 import OSS from 'ali-oss';
-import { chromium } from 'playwright';
+import { launchAcceptanceBrowser } from './acceptance-browser.mjs';
 import { createServer } from '../apps/admin/node_modules/vite/dist/node/index.js';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../dist/apps/api/src/app.module.js';
@@ -33,7 +34,9 @@ if (ossMode) {
     accessKeyId: process.env.OSS_ACCESS_KEY_ID, accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET,
     secure: true, cname: process.env.OSS_CNAME === 'true', timeout: 15000 });
 }
-const output = recoveryMode ? 'var/react-admin-recovery-evidence' : attachmentMode ? 'var/react-admin-oss-attachments-evidence' : ossMode ? 'var/react-admin-oss-journey-evidence' : 'var/react-admin-real-journey-evidence'; await mkdir(output, { recursive: true });
+const acceptanceModes = process.env.ACCEPTANCE_MODES?.split(',');
+if (acceptanceModes) assert.ok(acceptanceModes.length && acceptanceModes.every(mode => ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM'].includes(mode)));
+const output = process.env.ACCEPTANCE_OUTPUT || (recoveryMode ? 'var/react-admin-recovery-evidence' : attachmentMode ? 'var/react-admin-oss-attachments-evidence' : ossMode ? 'var/react-admin-oss-journey-evidence' : 'var/react-admin-real-journey-evidence'); await mkdir(output, { recursive: true });
 const storage = await mkdtemp(join(tmpdir(), 'procurex-react-journey-'));
 if (!ossMode) process.env.FILE_STORAGE = 'local';
 process.env.PRIVATE_FILE_DIR = storage;
@@ -75,6 +78,7 @@ async function cleanup(prefix) {
   await db.priceChangeRun.deleteMany({ where: { versions: { some: { priceVersion: { scope: { supplier: { code: prefix } } } } } } });
   await db.priceScope.deleteMany({ where: { supplier: { code: prefix } } });
   await db.supplierProduct.deleteMany({ where: { supplier: { code: prefix } } });
+  await db.userScopeStore.deleteMany({ where: { scope: { user: { username: { startsWith: prefix } } } } });
   await db.product.deleteMany({ where: { sku: prefix } }); await db.supplier.deleteMany({ where: { code: prefix } });
   await db.storeAccount.deleteMany({ where: own }); await db.store.deleteMany({ where: { code: prefix } });
   await db.category.deleteMany({ where: { code: prefix } }); await db.unit.deleteMany({ where: { code: prefix } });
@@ -89,14 +93,14 @@ try {
   await app.listen(0, '127.0.0.1'); db = app.get(DatabaseService).client;
   const apiRoot = `http://127.0.0.1:${app.getHttpServer().address().port}`;
   vite = await createServer({ root: resolve('apps/admin'), configFile: resolve('apps/admin/vite.config.mjs'),
-    server: { host: '127.0.0.1', port: 0, proxy: { '/api': { target: apiRoot, changeOrigin: true } } } });
-  await vite.listen(); const base = `http://127.0.0.1:${vite.httpServer.address().port}`;
-  browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
+    server: { host: process.env.WORKSPACE_BROWSER_WS ? '0.0.0.0' : '127.0.0.1', allowedHosts: ['host.docker.internal'], port: 0, proxy: { '/api': { target: apiRoot, changeOrigin: true, agent: new Agent({ keepAlive: false }) } } } });
+  await vite.listen(); const base = `http://${process.env.ACCEPTANCE_HOST || (process.env.WORKSPACE_BROWSER_WS ? 'host.docker.internal' : '127.0.0.1')}:${vite.httpServer.address().port}`;
+  browser = await launchAcceptanceBrowser();
   const proof = await sharp({ create: { width: 160, height: 100, channels: 3, background: '#248b72' } }).png().toBuffer();
-  for (const mode of attachmentMode ? ['COMPANY_TERM', 'SUPPLIER_TERM'] : ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM']) {
+  for (const mode of acceptanceModes || (attachmentMode ? ['COMPANY_TERM', 'SUPPLIER_TERM'] : ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM'])) {
     const prefix = `RXJ${Date.now()}${mode[0]}`, password = randomUUID();
     const result = { mode, prefix, status: 'RUNNING', steps: [], screenshots: [], recoveries: [] }; report.modes.push(result); await save();
-    const context = await browser.newContext({ viewport: { width: 390, height: 1000 } }); const page = await context.newPage();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }); const page = await context.newPage();
     page.on('pageerror', error => report.errors.push(error.message));
     const shot = async name => { await page.waitForTimeout(250); assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)); let file = `${mode}-${name}.png`; let sequence = 1; while (result.screenshots.includes(file)) file = `${mode}-${name}-${++sequence}.png`; await page.screenshot({ path: `${output}/${file}` }); result.screenshots.push(file); };
     const step = name => { result.steps.push(name); console.log(`${mode}: ${name}`); };
@@ -163,7 +167,7 @@ try {
     };
     try {
       const category = await db.category.create({ data: { code: prefix, name: '真链路验收分类' } });
-      const unit = await db.unit.create({ data: { code: prefix, name: '袋' } });
+      const unit = await db.unit.create({ data: { code: prefix, name: `验收袋${prefix}` } });
       const product = await db.product.create({ data: { sku: prefix, name: '真链路验收大米', categoryId: category.id, baseUnitId: unit.id } });
       const supplier = await db.supplier.create({ data: { code: prefix, name: '真链路验收供应商', deliveryMode: 'SELF', defaultSettlementMode: mode, defaultSettlementCycle: 'MONTHLY' } });
       await db.supplierProduct.create({ data: { productId: product.id, supplierId: supplier.id } });
@@ -173,14 +177,47 @@ try {
       await db.orderTemplate.create({ data: { code: prefix, name: '真链路验收模板', bindings: { create: { storeId: store.id } }, items: { create: { productId: product.id, suppliers: { create: { supplierId: supplier.id } } } } } });
       await app.get(PricingService).publishPrice({ productId: product.id, supplierId: supplier.id, salesPrice: mode === 'SUPPLIER_TERM' ? '9' : '12', supplyPrice: '9', effectiveAt: new Date('2000-01-01'), reason: prefix });
       const users = {};
-      for (const code of ['STORE', 'SUPPLIER', 'STORE_FINANCE', 'HQ_FINANCE', 'PURCHASER']) {
+      for (const code of ['STORE', 'SUPPLIER', 'STORE_FINANCE', 'HQ_FINANCE', 'PURCHASER', 'ADMIN', 'REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER']) {
         const role = await db.role.findUniqueOrThrow({ where: { code } });
         users[code] = await db.user.create({ data: { username: prefix + code, displayName: '真链路验收账号', passwordHash: await hashPassword(password), roles: { create: { roleId: role.id } } } });
         if (code.startsWith('STORE')) await db.userScope.create({ data: { userId: users[code].id, scopeType: 'STORE', storeId: store.id } });
         if (code === 'SUPPLIER') await db.userScope.create({ data: { userId: users[code].id, scopeType: 'SUPPLIER', supplierId: supplier.id } });
+        if (['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER'].includes(code)) await db.userScope.create({ data: { userId: users[code].id, scopeType: 'MULTI_STORE', stores: { create: { storeId: store.id } } } });
       }
       let loggedIn = false;
-      const login = async (role, path) => { await page.goto(`${base}${path}`); if (loggedIn) await page.getByLabel('退出登录').click(); await page.getByLabel('用户名').fill(users[role].username); await page.getByLabel('密码', { exact: true }).fill(password); await page.getByRole('button', { name: '登录', exact: true }).click(); await page.getByLabel('用户名').waitFor({ state: 'hidden' }); loggedIn = true; await page.getByRole('heading', { level: 1 }).first().waitFor(); await page.goto(`${base}${path}`); };
+      const waitForWorkspace = async () => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await page.waitForFunction(() => document.querySelector('h1') || [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === '重试'));
+          if (await page.getByRole('heading', { level: 1 }).count()) return;
+          result.sessionReadRetries = (result.sessionReadRetries || 0) + 1;
+          await page.getByRole('button', { name: '重试', exact: true }).click();
+        }
+        await page.getByRole('heading', { level: 1 }).first().waitFor();
+      };
+      const login = async (role, path) => { await page.goto(base, { waitUntil: 'domcontentloaded' }); if (loggedIn) { await waitForWorkspace(); await page.getByLabel('退出登录').click(); } await page.getByLabel('用户名').fill(users[role].username); await page.getByLabel('密码', { exact: true }).fill(password); await page.getByRole('button', { name: '登录', exact: true }).click(); await page.getByLabel('用户名').waitFor({ state: 'hidden' }); loggedIn = true; await page.getByLabel('退出登录').waitFor(); await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded' }); await waitForWorkspace(); };
+      const expectedMenus = {
+        STORE: ['门店订单', '门店账户', '账单与付款', '结算差异', '业务报表'],
+        STORE_FINANCE: ['门店订单', '门店账户', '账单查询', '结算差异', '业务报表'],
+        SUPPLIER: ['供应商工作台', '收货差异', '账单与收款', '结算差异', '业务报表'],
+        REGION_MANAGER: ['采购申请', '供应商订单', '门店财务', '账单查询', '业务报表'],
+        REGION_FINANCE: ['采购申请', '供应商订单', '门店财务', '账单查询', '业务报表'],
+        PURCHASE_FOLLOWER: ['采购申请', '供应商订单', '门店财务', '账单查询', '业务报表'],
+        PURCHASER: ['门店管理', '门店分组', '供应商管理', '商品管理', '商品分类', '品牌管理', '单位管理', '订货模板', '采购申请', '供应商订单', '账单查询', '业务报表'],
+        HQ_FINANCE: ['门店管理', '门店分组', '供应商管理', '商品管理', '商品分类', '品牌管理', '单位管理', '采购申请', '供应商订单', '门店财务', '账单与付款', '结算差异', '收款账户', '业务报表'],
+        ADMIN: ['门店管理', '门店分组', '供应商管理', '商品管理', '商品分类', '品牌管理', '单位管理', '订货模板', '采购申请', '供应商订单', '收货差异', '门店财务', '账单与付款', '结算差异', '收款账户', '业务报表', '用户管理', '命令诊断'],
+      };
+      for (const role of mode === 'STORED_VALUE' ? Object.keys(users) : []) {
+        await login(role, '/finance');
+        await page.locator('.sidebar .ant-menu-item').first().waitFor();
+        const menus = new Set((await page.locator('.sidebar .ant-menu-item').allTextContents()).map(value => value.trim()));
+        for (const title of await page.locator('.sidebar .ant-menu-submenu-title').all()) {
+          if (!await title.evaluate(node => node.parentElement.classList.contains('ant-menu-submenu-open'))) await title.click();
+          for (const name of await page.locator('.sidebar .ant-menu-item').allTextContents()) menus.add(name.trim());
+        }
+        assert.deepEqual([...menus].sort(), expectedMenus[role].sort(), `${role}: menu boundary`);
+        await shot(`${role}-menus`);
+        step(`${role}: menu boundary verified`);
+      }
       if (attachmentMode) {
         const documentPage = await context.newPage();
         await documentPage.setContent('<!doctype html><html><body><h1>ProcureX synthetic payment proof</h1><p>Local acceptance only. No bank transfer.</p></body></html>');
@@ -216,7 +253,13 @@ try {
         const dialog = page.getByRole('dialog', { name: mode === 'STORED_VALUE' ? '门店充值' : '调整挂账额度', exact: true });
         if (mode === 'STORED_VALUE') { await page.getByLabel('充值金额', { exact: true }).fill('1000'); await page.getByLabel('收款账户', { exact: true }).click(); await page.locator('.ant-select-dropdown:visible').getByText(new RegExp(prefix)).click(); await upload(dialog, 'recharge.png'); }
         else { await page.getByLabel('挂账额度', { exact: true }).fill('1000'); await page.getByLabel('调整原因', { exact: true }).fill('临时验收额度'); }
-        await dialog.getByRole('button', { name: '核对提交', exact: true }).click(); await shot('account-review'); await confirm('确认提交'); await dialog.waitFor({ state: 'hidden' });
+        if (mode === 'CREDIT') {
+          await dialog.getByRole('button', { name: '保存', exact: true }).click();
+          await page.getByRole('dialog', { name: '确认调整挂账额度', exact: true }).getByRole('button', { name: '确认保存', exact: true }).click();
+        } else {
+          await dialog.getByRole('button', { name: '核对提交', exact: true }).click(); await shot('account-review'); await confirm('确认提交');
+        }
+        await dialog.waitFor({ state: 'hidden' });
         assert.equal((await account())[mode === 'STORED_VALUE' ? 'balance' : 'creditLimit'].toFixed(2), '1000.00'); step('Account setup through finance UI');
       }
       await login('STORE', '/store-orders'); await page.getByRole('button', { name: '门店订货', exact: true }).click();
@@ -227,13 +270,17 @@ try {
       if (mode === 'STORED_VALUE') { const a = await account(); assert.equal(a.balance.toFixed(2), '1000.00'); assert.equal(a.reservedBalance.toFixed(2), '24.00'); }
       if (mode === 'CREDIT') assert.equal((await account()).creditUsed.toFixed(2), '24.00');
       step('Store creates one pending request; stored value reserved, not debited');
-      await login('PURCHASER', `/purchase-requests?request=${request.id}`); await page.getByRole('button', { name: '确认采购', exact: true }).waitFor(); await shot('purchase'); await confirm('确认采购');
+      const confirmer = mode === 'CREDIT' ? 'PURCHASE_FOLLOWER' : mode === 'COMPANY_TERM' ? 'ADMIN' : 'PURCHASER';
+      await login(confirmer, `/purchase-requests?request=${request.id}`); await page.getByRole('button', { name: '确认采购', exact: true }).waitFor(); await shot('purchase'); await confirm('确认采购');
       let order; for (let i = 0; i < 40; i++) { order = await db.supplierOrder.findFirst({ where: { requestId: request.id }, include: { items: true } }); if (order) break; await page.waitForTimeout(100); }
       assert.ok(order); assert.equal(order.settlementMode, mode); assert.equal(order.supplierId, supplier.id); assert.equal(await db.supplierOrder.count({ where: { requestId: request.id } }), 1); result.requestId = request.id; result.orderId = order.id; step('Purchaser confirms exact request into one supplier order');
       await login('SUPPLIER', '/supplier-orders'); await page.getByRole('row').filter({ hasText: order.supplierOrderNo }).getByRole('button', { name: '查看', exact: true }).click(); await page.getByRole('button', { name: '发货与补发', exact: true }).click();
       await page.getByLabel(`发货数量${order.items[0].id}`, { exact: true }).fill('2'); await page.getByRole('button', { name: '预览发货', exact: true }).click(); await page.getByRole('heading', { name: '发货预览', exact: true }).waitFor(); await shot('supplier-shipping'); await confirm('确认发货'); await page.getByRole('dialog', { name: '发货与补发', exact: true }).waitFor({ state: 'hidden' });
       const shipments = await db.shipment.findMany({ where: { supplierOrderId: order.id } }); assert.equal(shipments.length, 1); const shipment = shipments[0]; step('Bound supplier ships original order');
-      await login('STORE', `/store-orders?order=${request.id}`); await page.getByRole('button', { name: shipment.shipmentNo, exact: true }).click(); await page.getByRole('button', { name: '登记收货', exact: true }).click();
+      await login('STORE', `/store-orders?order=${request.id}`);
+      try { await page.getByRole('button', { name: shipment.shipmentNo, exact: true }).waitFor(); }
+      catch (error) { const retry = page.getByRole('dialog').getByRole('button', { name: '重试', exact: true }); if (!await retry.isVisible()) throw error; await retry.click(); }
+      await page.getByRole('button', { name: shipment.shipmentNo, exact: true }).click(); await page.getByRole('button', { name: '登记收货', exact: true }).click();
       const receiptDialog = page.getByRole('dialog', { name: '登记收货', exact: true }); await receiptDialog.getByRole('button', { name: '全部到货', exact: true }).click(); await upload(receiptDialog, 'receipt.png'); await receiptDialog.getByRole('button', { name: '核对收货', exact: true }).click(); await shot('store-receipt'); await confirm('确认收货'); await receiptDialog.waitFor({ state: 'hidden' });
       assert.equal((await db.supplierOrder.findUniqueOrThrow({ where: { id: order.id } })).status, 'COMPLETED');
       const receipt = await db.receipt.findFirstOrThrow({ where: { shipmentId: shipment.id }, include: { evidenceFiles: true } }); assert.equal(receipt.evidenceFiles.length, 1); assert.equal(receipt.evidenceFiles[0].ownerId, users.STORE.id);
@@ -244,6 +291,62 @@ try {
       const metadata = await sharp(Buffer.from(await download.arrayBuffer())).metadata(); assert.equal(metadata.width, 160); assert.equal(metadata.height, 100);
       assert.equal((await fetch(privateUrl)).status, 401);
       step('Store completes receipt with real private upload; balances match settlement mode');
+      for (const role of ['STORE_FINANCE', 'REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER', 'PURCHASER']) {
+        if (role === 'STORE_FINANCE' && ['STORED_VALUE', 'CREDIT'].includes(mode)) {
+          await login(role, `/store-finance?store=${store.id}`);
+          await page.getByRole('heading', { name: '门店账户', exact: true }).waitFor();
+          await page.getByRole('tab', { name: '储值流水', exact: true }).waitFor();
+          assert.equal(await page.getByRole('button', { name: '充值', exact: true }).count(), 0);
+          assert.equal(await page.getByRole('button', { name: '调整额度', exact: true }).count(), 0);
+          await shot(`${role}-readonly-account`);
+          step(`${role}: real account history is visible and read-only`);
+          continue;
+        }
+        await login(role, '/finance');
+        await page.getByRole('tab', { name: '门店账单', exact: true }).waitFor();
+        if (role !== 'STORE_FINANCE') assert.equal(await page.getByRole('tab', { name: '付款记录', exact: true }).count(), 0);
+        const readToken = await page.evaluate(() => JSON.parse(sessionStorage.getItem('procurex-react-admin-session-v1')).accessToken);
+        const endpoint = mode === 'SUPPLIER_TERM' ? '/direct-statements' : role === 'STORE_FINANCE' ? '/store-statements' : '/supplier-store-statements';
+        const tab = mode === 'SUPPLIER_TERM' ? '直付账单' : role === 'STORE_FINANCE' ? '门店账单' : '供应商门店账单';
+        const response = await fetch(`${apiRoot}/api/v1${endpoint}?storeId=${store.id}`, { headers: { authorization: `Bearer ${readToken}` } });
+        assert.equal(response.status, 200);
+        const bill = (await response.json()).data.find(row => row.storeId === store.id && row.supplierId === supplier.id);
+        assert.ok(bill, `${role}: completed-order bill exists`);
+        await page.getByRole('tab', { name: tab, exact: true }).click();
+        await page.getByLabel('搜索账单查询', { exact: true }).fill(bill.id);
+        await page.locator(`tr[data-row-key=${JSON.stringify(bill.id)}]`).getByLabel('账单详情').click();
+        const dialog = page.getByRole('dialog', { name: '账单明细', exact: true });
+        await dialog.getByRole('row').filter({ hasText: order.supplierOrderNo }).waitFor();
+        assert.equal(await dialog.getByRole('checkbox').count(), 0);
+        assert.equal(await dialog.getByRole('button', { name: /登记付款/ }).count(), 0);
+        await shot(`${role}-readonly-bill`);
+        await page.setViewportSize({ width: 390, height: 1000 });
+        await shot(`${role}-readonly-bill-mobile`);
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        step(`${role}: real completed-order billing is visible and read-only`);
+        if (role === 'REGION_MANAGER') {
+          await page.goto(`${base}/purchase-requests?request=${request.id}`, { waitUntil: 'domcontentloaded' });
+          await page.getByRole('button', { name: '打印订单', exact: true }).click();
+          const print = page.getByRole('dialog', { name: '采购订单打印预览', exact: true });
+          await print.getByText(product.name, { exact: true }).waitFor();
+          await print.getByRole('button', { name: '打印', exact: true }).click();
+          const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true });
+          assert.equal(pdf.subarray(0, 4).toString(), '%PDF');
+          await writeFile(`${output}/${mode}-A4-purchase.pdf`, pdf);
+          await shot(`${role}-print-preview`);
+          await page.setViewportSize({ width: 390, height: 1000 }); await shot(`${role}-print-mobile`);
+          await page.setViewportSize({ width: 1440, height: 1000 });
+          await db.userScopeStore.deleteMany({ where: { scope: { userId: users[role].id }, storeId: store.id } });
+          await print.getByRole('button', { name: '打印', exact: true }).click();
+          await print.getByRole('alert').waitFor();
+          assert.equal(await print.locator('.purchase-print-sheet').count(), 0);
+          assert.equal(await print.getByRole('button', { name: '打印', exact: true }).isDisabled(), true);
+          await shot(`${role}-print-revoked`);
+          const scope = await db.userScope.findFirstOrThrow({ where: { userId: users[role].id } });
+          await db.userScopeStore.create({ data: { scopeId: scope.id, storeId: store.id } });
+          step(`${role}: A4 browser PDF, mobile preview and live print-scope revocation verified`);
+        }
+      }
       if (mode === 'CREDIT') {
         await login('HQ_FINANCE', `/store-finance?store=${store.id}`); await page.getByRole('tab', { name: '未销账明细', exact: true }).click(); await page.getByRole('row').filter({ hasText: order.supplierOrderNo }).getByRole('checkbox').check(); await page.getByRole('button', { name: '销账核对（1）', exact: true }).click();
         const dialog = page.getByRole('dialog', { name: '门店销账', exact: true }); await upload(dialog, 'clearing.png'); await dialog.getByRole('button', { name: '核对提交', exact: true }).click(); await shot('credit-clearing'); await confirm('确认提交'); await dialog.waitFor({ state: 'hidden' });
@@ -287,8 +390,8 @@ try {
         await confirmPayment(recipient, await registerPayment(payer, tab, endpoint, direction, amount, attachmentMode ? 2 : 1));
         assert.equal(await db.paymentAllocation.count({ where: { supplierOrderId: order.id, state: 'CONFIRMED', payment: { direction } } }), 1);
       };
-      if (mode === 'COMPANY_TERM') await settle('STORE_FINANCE', 'HQ_FINANCE', '门店账单', '/store-statements', 'STORE_TO_COMPANY', '24.00');
-      if (mode === 'SUPPLIER_TERM') await settle('STORE_FINANCE', 'SUPPLIER', '直付账单', '/direct-statements', 'STORE_TO_SUPPLIER', '18.00');
+      if (mode === 'COMPANY_TERM') await settle('STORE', 'HQ_FINANCE', '门店账单', '/store-statements', 'STORE_TO_COMPANY', '24.00');
+      if (mode === 'SUPPLIER_TERM') await settle('STORE', 'SUPPLIER', '直付账单', '/direct-statements', 'STORE_TO_SUPPLIER', '18.00');
       else await settle('HQ_FINANCE', 'SUPPLIER', '供应商账单', '/supplier-statements', 'COMPANY_TO_SUPPLIER', '18.00');
       const finalAccount = await account(); assert.equal(finalAccount.balance.toFixed(2), mode === 'STORED_VALUE' ? '976.00' : '0.00'); assert.equal(finalAccount.creditUsed.toFixed(2), '0.00');
       const finalRequest = await db.purchaseRequest.findUniqueOrThrow({ where: { id: request.id } });
@@ -340,7 +443,7 @@ try {
       }
       result.finalAccount = { balance: finalAccount.balance.toFixed(2), reserved: finalAccount.reservedBalance.toFixed(2), creditUsed: finalAccount.creditUsed.toFixed(2) };
       result.status = 'PASS';
-    } catch (error) { result.status = 'FAIL'; result.error = error.message; report.errors.push(`${mode}: ${error.message}`); await page.screenshot({ path: `${output}/${mode}-failure.png` }).catch(() => {}); }
+    } catch (error) { result.status = 'FAIL'; result.error = error.message; report.errors.push(`${mode}: ${error.message}`); await page.screenshot({ path: `${output}/${mode}-failure.png` }).catch(() => {}); await writeFile(`${output}/${mode}-failure.txt`, await page.locator('body').innerText()).catch(() => {}); }
     finally { await context.close(); try { await cleanup(prefix); result.cleanup = 'PASS'; } catch (error) { result.cleanup = 'FAIL'; report.errors.push(`${prefix} cleanup: ${error.message}`); } await save(); }
   }
   report.status = report.errors.length === 0 && report.modes.every(mode => mode.status === 'PASS' && mode.cleanup === 'PASS') ? 'PASS' : 'FAIL';

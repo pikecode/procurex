@@ -1,4 +1,5 @@
 import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
+import { AllowAssignedStores, assignedStoreIds, ASSIGNED_STORE_ROLES, storeFilter } from '../auth/store-scope.js';
 import { BadRequestException, Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -11,11 +12,13 @@ export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Get('order-amounts')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER', 'STORE', 'STORE_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
   orderAmounts(@Query() query: Record<string, unknown>, @Req() request: AuthenticatedRequest) { return this.reports.orderAmounts(scopedFilters(parseFilters(query), request)); }
 
   @Get('product-quantities')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER', 'STORE', 'STORE_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
   productQuantities(@Query() query: Record<string, unknown>, @Req() request: AuthenticatedRequest) {
     const filters = parseFilters(query, true);
     if (filters.from && filters.to && addMonths(filters.from, 3) < filters.to) {
@@ -42,6 +45,11 @@ function parseFilters(query: Record<string, unknown>, requiredRange = false): Re
 function scopedFilters(filters: ReportFilters, request: AuthenticatedRequest): ReportFilters {
   const roles = request.auth?.user.roles ?? [];
   if (roles.some((role) => ['ADMIN', 'HQ_FINANCE', 'PURCHASER'].includes(role))) return filters;
+  if (request.auth?.user.scope?.type === 'MULTI_STORE') {
+    const storeIds = assignedStoreIds(request.auth.user.scope)!;
+    storeFilter(filters.storeId, storeIds);
+    return { ...filters, storeIds };
+  }
   if (roles.includes('STORE') || roles.includes('STORE_FINANCE')) {
     const storeId = request.auth?.user.scope?.storeId;
     if (!storeId || (filters.storeId && filters.storeId !== storeId)) throw new BadRequestException({ code: 'SCOPE_MISMATCH', message: 'Report is outside the current store scope' });

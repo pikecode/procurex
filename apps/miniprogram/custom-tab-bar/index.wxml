@@ -1,0 +1,6 @@
+<view wx:if="{{visible}}" class="workspace-navigation">
+  <view class="workspace-items">
+    <button wx:for="{{items}}" wx:key="name" class="workspace-tab workspace-{{item.name}} {{selected === item.name ? 'is-active' : ''}}" data-name="{{item.name}}" bindtap="switchWorkspace" aria-label="{{item.label}}" aria-role="button">{{item.label}}</button>
+    <button wx:if="{{testEnabled}}" class="workspace-tab test-workbench-entry" bindtap="openTestWorkbench">测试身份</button>
+  </view>
+</view>

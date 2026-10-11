@@ -39,18 +39,18 @@ export class PricingController {
     // Legacy calls remain compatible and audited, but have no durable command identity.
     if (request.headers['idempotency-key'] === undefined) return this.database.client.$transaction(async tx => {
       const result = await this.pricingService.publishPrice({ ...input, reason: input.reason! }, tx);
-      await this.audit.record({ actorUserId: request.auth!.user.id,
+      await this.audit.record({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id,
         activeScope: { roles: request.auth!.user.roles, ...(request.auth!.user.scope ? { scope: request.auth!.user.scope } : {}) },
         action: 'price.publish', entityType: 'PriceVersion', entityId: result.versionId, traceId, reason: input.reason,
         after: { ...result, submissionMode: 'LEGACY_HEADERLESS' } }, tx);
       return result;
     });
-    const command = await this.commands.begin({ actorUserId: request.auth!.user.id, action: 'price.publish',
+    const command = await this.commands.begin({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id, action: 'price.publish',
       idempotencyKey: requireIdempotencyKey(request.headers), requestBody: body as never, traceId });
     return this.commands.performAtomic(command, async tx => {
       const result = await this.pricingService.publishPrice({ ...input, reason: input.reason! }, tx);
       await this.commands.succeed({ commandId: command.command.id, resourceType: 'PriceVersion', resourceId: result.versionId, responseBody: result }, tx);
-      await this.audit.record({ actorUserId: request.auth!.user.id,
+      await this.audit.record({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id,
         activeScope: { roles: request.auth!.user.roles, ...(request.auth!.user.scope ? { scope: request.auth!.user.scope } : {}) },
         action: 'price.publish', entityType: 'PriceVersion', entityId: result.versionId, traceId, reason: input.reason,
         after: { ...result },
@@ -93,19 +93,19 @@ export class PricingController {
     const traceId = getOrCreateTraceId(request);
     if (request.headers['idempotency-key'] === undefined) return this.database.client.$transaction(async tx => {
       const result = await this.pricingService.processRun(id, tx);
-      await this.audit.record({ actorUserId: request.auth!.user.id,
+      await this.audit.record({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id,
         activeScope: { roles: request.auth!.user.roles, ...(request.auth!.user.scope ? { scope: request.auth!.user.scope } : {}) },
         action: 'price.process', entityType: 'PriceChangeRun', entityId: id, traceId,
         after: { ...result, submissionMode: 'LEGACY_HEADERLESS' } }, tx);
       return result;
     });
-    const command = await this.commands.begin({ actorUserId: request.auth!.user.id, action: 'price.process',
+    const command = await this.commands.begin({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id, action: 'price.process',
       idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id }, traceId,
       resourceType: 'PriceChangeRun', resourceId: id, atomicPriceExecution: true });
     return this.commands.performAtomic(command, async tx => {
       const result = await this.pricingService.processRun(id, tx);
       await this.commands.succeed({ commandId: command.command.id, resourceType: 'PriceChangeRun', resourceId: id, responseBody: result }, tx);
-      await this.audit.record({ actorUserId: request.auth!.user.id,
+      await this.audit.record({ actorUserId: request.auth!.user.actorUserId ?? request.auth!.user.id,
         activeScope: { roles: request.auth!.user.roles, ...(request.auth!.user.scope ? { scope: request.auth!.user.scope } : {}) },
         action: 'price.process', entityType: 'PriceChangeRun', entityId: id, traceId, after: { ...result },
       }, tx);

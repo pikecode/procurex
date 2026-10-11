@@ -2,6 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { StoreStatementsService } from '../../apps/api/src/store-statements/store-statements.service.js';
 
+test('assigned stores constrain both base orders and adjustment-only statements', async () => {
+  const queries: Array<{ where: { storeId: unknown } }> = [];
+  const service = new StoreStatementsService({ client: {
+    supplierOrder: { findMany: async (query: typeof queries[number]) => { queries.push(query); return []; } },
+    adjustmentDocument: { findMany: async (query: typeof queries[number]) => { queries.push(query); return []; } },
+  } } as never);
+  await service.list({ storeIds: ['store-a', 'store-b'] });
+  assert.equal(queries.length, 3);
+  for (const query of queries) assert.deepEqual(query.where.storeId, { in: ['store-a', 'store-b'] });
+  await assert.rejects(service.list({ storeIds: ['store-a'], storeId: 'store-c' }), { status: 403 });
+});
+
 test('store receivables include only company terms, never account or direct orders', async () => {
   const queries: Array<{ where: { settlementMode: string } }> = [];
   let adjustmentQuery: unknown;

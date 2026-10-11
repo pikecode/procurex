@@ -1,7 +1,9 @@
+<test-context />
 <wxs src="../../utils/labels.wxs" module="labels" />
-<view class="page {{selected.canReview && !pendingCommand ? 'has-action-bar' : ''}}">
+<view class="page {{user.testWorkbenchEnabled && !user.testIdentity ? 'has-test-workbench-root' : ''}} {{selected.canReview && !pendingCommand ? 'has-action-bar' : ''}}">
   <view class="business-heading"><view><text class="business-title">公司财务</text><text class="muted">{{user.displayName}}</text></view><button class="ghost" bindtap="loadWork" disabled="{{loading || reviewing}}" loading="{{loading}}">刷新</button></view>
-  <view class="error-banner" wx:if="{{error}}"><text>{{error}}</text><button class="ghost" bindtap="loadWork" disabled="{{loading || reviewing}}">刷新数据</button></view>
+<view class="error-banner" wx:if="{{error}}"><text>{{error}}</text><button class="ghost" bindtap="loadWork" disabled="{{loading || reviewing}}">刷新数据</button></view>
+  <view class="card account-entry" bindtap="openAccounts"><view class="row-title"><text>门店账户</text><text>›</text></view><text class="muted">充值 · 销账 · 挂账额度</text></view>
   <view class="workspace-loading" wx:if="{{loading}}">正在读取账款</view>
   <view class="card" wx:if="{{pendingCommand}}"><text class="card-title">上次操作结果待确认</text><button class="secondary" bindtap="recoverCommand" disabled="{{reviewing}}" loading="{{reviewing}}">核对提交结果</button></view>
   <view class="card" wx:if="{{detailLoading}}">正在读取明细</view>

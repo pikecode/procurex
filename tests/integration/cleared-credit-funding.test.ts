@@ -23,6 +23,12 @@ for (const [index, checkpoint] of (['PRICE_RUN', 'FINAL_RECEIPT', 'SHORTAGE', 'S
     const pricing = new PricingService(database), stores = new StoresService(database);
     const shipping = new SupplierOrdersService(database), receiving = new ShipmentsService(database);
     try {
+      const actor = await db.user.create({ data: { username: code, displayName: code } });
+      let evidenceSequence = 0;
+      const clearingEvidence = async () => {
+        const file = await db.fileObject.create({ data: { filename: 'clearing.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: `${code}/${++evidenceSequence}`, uploadTokenHash: 'isolated', purpose: 'CLEARING', status: 'READY', ownerId: actor.id } });
+        return { actorUserId: actor.id, evidenceFileIds: [file.id] };
+      };
       const category = await db.category.create({ data: { code, name: code } });
       const unit = await db.unit.create({ data: { code, name: 'piece' } });
       const product = await db.product.create({ data: { sku: code, name: code, categoryId: category.id, baseUnitId: unit.id } });
@@ -41,7 +47,7 @@ for (const [index, checkpoint] of (['PRICE_RUN', 'FINAL_RECEIPT', 'SHORTAGE', 'S
       const allocation = await db.fundingAllocation.findFirstOrThrow({ where: { requestId: request.id, active: true } });
       const clear = async () => {
         const current = await db.fundingAllocation.findUniqueOrThrow({ where: { id: allocation.id } });
-        return stores.createClearing(store.id, { businessDate: new Date(), items: [{ fundingAllocationId: current.id, expectedVersion: current.version, expectedAmount: current.creditOutstanding.toFixed(2) }] });
+        return stores.createClearing(store.id, { ...await clearingEvidence(), businessDate: new Date(), items: [{ fundingAllocationId: current.id, expectedVersion: current.version, expectedAmount: current.creditOutstanding.toFixed(2) }] });
       };
       const initialClearing = await clear();
       assert.equal(initialClearing.amount, '120.00');
@@ -242,7 +248,7 @@ for (const [index, checkpoint] of (['PRICE_RUN', 'FINAL_RECEIPT', 'SHORTAGE', 'S
         assert.equal((await db.purchaseRequest.findUniqueOrThrow({ where: { id: request.id } })).paymentStatus, 'UNPAID');
         await assert.rejects(pricing.processRun(increase.runId!), (error: any) => error.getResponse?.().code === 'PRICE_CHANGE_RUN_ALREADY_PROCESSED');
         const current = await db.fundingAllocation.findUniqueOrThrow({ where: { id: allocation.id } });
-        const clearingInput = { businessDate: new Date(), items: [{ fundingAllocationId: current.id,
+        const clearingInput = { ...await clearingEvidence(), businessDate: new Date(), items: [{ fundingAllocationId: current.id,
           expectedVersion: current.version, expectedAmount: current.creditOutstanding.toFixed(2) }] };
         const attempts = await Promise.allSettled([
           stores.createClearing(store.id, clearingInput), stores.createClearing(store.id, clearingInput),
@@ -262,6 +268,7 @@ for (const [index, checkpoint] of (['PRICE_RUN', 'FINAL_RECEIPT', 'SHORTAGE', 'S
       assert.equal(await db.accountLedger.count({ where: { account: { storeId: store.id }, sourceType: 'ADJUSTMENT' } }), 0);
     } finally {
       const storeWhere = { store: { code } };
+      await db.fileObject.deleteMany({ where: { owner: { username: code } } });
       await db.priceChangeRun.deleteMany({ where: { versions: { some: { priceVersion: { scope: { supplier: { code } } } } } } });
       await db.clearingDocument.deleteMany({ where: storeWhere });
       const storeIds = (await db.store.findMany({ where: { code }, select: { id: true } })).map(row => row.id);
@@ -279,7 +286,8 @@ for (const [index, checkpoint] of (['PRICE_RUN', 'FINAL_RECEIPT', 'SHORTAGE', 'S
       await db.orderTemplate.deleteMany({ where: { code } });
       await db.product.deleteMany({ where: { sku: code } }); await db.supplier.deleteMany({ where: { code } });
       await db.storeAccount.deleteMany({ where: storeWhere }); await db.store.deleteMany({ where: { code } });
-      await db.category.deleteMany({ where: { code } }); await db.unit.deleteMany({ where: { code } }); await db.$disconnect();
+      await db.category.deleteMany({ where: { code } }); await db.unit.deleteMany({ where: { code } });
+      await db.user.deleteMany({ where: { username: code } }); await db.$disconnect();
     }
   });
 }

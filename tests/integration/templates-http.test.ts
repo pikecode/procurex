@@ -258,7 +258,7 @@ test('templates endpoint replaces items and supplier settlement overrides', asyn
         minOrderQty: null,
         orderMultiple: null,
         sortOrder: 5,
-        suppliers: [{ supplierId: supplier.id, priority: 10 }],
+        suppliers: [{ supplierId: supplier.id, priority: 10, salesPrice: '15.8' }],
       },
     ]);
 

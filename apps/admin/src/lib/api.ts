@@ -1,4 +1,4 @@
-export interface User { id: string; username?: string; displayName?: string; roles: string[]; scope?: { type?: string; storeId?: string; supplierId?: string } }
+export interface User { id: string; username?: string; displayName?: string; roles: string[]; scope?: { type?: string; storeId?: string; supplierId?: string; storeIds?: string[] } }
 export interface Session { accessToken: string; expiresAt: string; user: User }
 const sessionKey = 'procurex-react-admin-session-v1';
 let session: Session | null = null;

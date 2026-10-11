@@ -38,12 +38,19 @@ function assertIncludes(source, expected, label) {
 }
 
 const appJson = JSON.parse(await read('apps/miniprogram/app.json'));
+assert.equal(appJson.tabBar.custom, true, 'workspace navigation must use permission-filtered custom tabs');
+assert.equal(JSON.parse(await read('apps/miniprogram/custom-tab-bar/index.json')).component, true);
+for (const extension of ['js', 'json', 'wxml', 'wxss']) {
+  assert.ok(await exists(`apps/miniprogram/custom-tab-bar/index.${extension}`));
+}
+checkSyntax('apps/miniprogram/custom-tab-bar/index.js');
 const projectConfig = JSON.parse(await read('apps/miniprogram/project.config.json'));
 const packageJson = JSON.parse(await read('package.json'));
 
 assert.equal(projectConfig.compileType, 'miniprogram', 'project config must target WeChat mini-program');
 assert.deepEqual(appJson.pages, [
   'pages/login/index',
+  'pages/test-workbench/index',
   'pages/store/index',
   'pages/supplier/index',
   'pages/purchaser/index',
@@ -51,6 +58,8 @@ assert.deepEqual(appJson.pages, [
   'pages/profile/index',
   'pages/prices/index',
   'pages/finance/index',
+  'pages/region/index',
+  'pages/finance-accounts/index',
 ], 'mini-program must expose login, store, supplier, and purchaser pages');
 
 for (const page of appJson.pages) {
@@ -95,8 +104,9 @@ for (const fragment of ['/prices/impact-preview', '/price-changes', 'api.roleCom
 for (const control of ['previewPrice', 'publishPrice', 'recoverPrice', 'processRun', 'chooseTemplate']) assertIncludes(pricesMarkup, control, 'native rapid pricing controls');
 const profileSource = await read('apps/miniprogram/pages/profile/index.js');
 assertIncludes(profileSource, 'user.scope', 'own profile scope');
-assertIncludes(profileSource, '/catalog', 'own supplier catalog');
-assert.ok(!profileSource.includes("method: 'PATCH'") && !profileSource.includes('/prices/'), 'own profile/catalog must be read only');
+assertIncludes(profileSource, '/managed-products', 'own supplier catalog');
+assertIncludes(profileSource, 'supplyEnabled', 'supplier listing state');
+assert.ok(!profileSource.includes('/prices/'), 'supplier catalog cannot manage prices');
 assertIncludes(productSource, 'expectedVersion', 'product version protection');
 assertIncludes(productSource, "'PRODUCT'", 'product image purpose');
 assert.equal(files.filter((file) => file.endsWith('.html')).length, 0, 'mini-program surface must not use HTML pages');
@@ -106,6 +116,14 @@ const storeJs = await read('apps/miniprogram/pages/store/index.js');
 const supplierJs = await read('apps/miniprogram/pages/supplier/index.js');
 const purchaserJs = await read('apps/miniprogram/pages/purchaser/index.js');
 const apiJs = await read('apps/miniprogram/utils/api.js');
+const regionJs = await read('apps/miniprogram/pages/region/index.js');
+const regionWxml = await read('apps/miniprogram/pages/region/index.wxml');
+for (const role of ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER']) assertIncludes(regionJs, role, 'assigned-store roles');
+for (const endpoint of ['/stores', 'store-statements', 'direct-statements', '/reports/order-amounts', '/reports/product-quantities']) assertIncludes(regionJs, endpoint, 'assigned-store queries');
+assertIncludes(regionJs, 'storeIds.includes', 'authorized store picker');
+assertIncludes(regionJs, 'expectedVersion', 'follower decision version');
+assertIncludes(regionWxml, 'canConfirm', 'read-only decision visibility');
+assert.ok(!regionJs.includes('/reports/profit') && !regionJs.includes('/price-changes') && !regionJs.includes("api.request('/suppliers')"), 'assigned-store workspace must not request headquarters master data or profit');
 const storeWxml = await read('apps/miniprogram/pages/store/index.wxml');
 const supplierWxml = await read('apps/miniprogram/pages/supplier/index.wxml');
 const purchaserWxml = await read('apps/miniprogram/pages/purchaser/index.wxml');

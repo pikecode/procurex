@@ -1,0 +1,5 @@
+.test-context { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; padding: 12rpx 24rpx; background: #fff3ce; color: #66531a; font-size: 24rpx; }
+.test-context > view { flex: 1; min-width: 0; }
+.badge { display: block; font-weight: 600; }
+.identity { display: block; overflow-wrap: anywhere; }
+.test-context button { margin: 0; padding: 0 16rpx; line-height: 60rpx; font-size: 24rpx; background: #fff; color: #66531a; border-radius: 6rpx; }

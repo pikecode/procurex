@@ -111,7 +111,7 @@ test('catalog endpoints create and archive basic product data', async () => {
         categoryId: categoryBody.data.id,
         baseUnitId: unitBody.data.id,
         minOrderQty: '1.000000',
-        orderMultiple: '0.500000',
+        orderMultiple: '2',
       }),
     });
     assert.equal(product.status, 201);
@@ -122,7 +122,7 @@ test('catalog endpoints create and archive basic product data', async () => {
     assert.equal(productBody.traceId, 'trace-catalog-product');
     assert.equal(productBody.data.sku, sku);
     assert.equal(productBody.data.minOrderQty, '1');
-    assert.equal(productBody.data.orderMultiple, '0.5');
+    assert.equal(productBody.data.orderMultiple, '2');
     assert.equal(productBody.data.isActive, true);
 
     const list = await fetch(`${baseUrl}/products`, {
@@ -232,6 +232,7 @@ test('store catalog endpoint returns active template products with supplier pric
         data: {
           code: supplierCode,
           name: 'Catalog Supplier',
+          deliveryContactPhone: '13800000001',
           deliveryMode: DeliveryMode.SELF,
           defaultSettlementMode: SettlementMode.COMPANY_TERM,
           defaultSettlementCycle: 'MONTHLY',
@@ -243,6 +244,7 @@ test('store catalog endpoint returns active template products with supplier pric
       data: {
         sku,
         name: 'Catalog Product',
+        suppliers: { create: { supplierId: supplier.id, supplyEnabled: true } },
         categoryId: category.id,
         baseUnitId: unit.id,
         minOrderQty: '2.000000',
@@ -307,6 +309,7 @@ test('store catalog endpoint returns active template products with supplier pric
       {
         supplierId: supplier.id,
         supplierName: 'Catalog Supplier',
+        deliveryContactPhone: '13800000001',
         purchaseSalesPrice: null,
         purchaseSupplyPrice: null,
         priority: 3,
@@ -323,6 +326,7 @@ test('store catalog endpoint returns active template products with supplier pric
     await prisma.priceVersion.deleteMany({ where: { scope: { supplier: { code: supplierCode } } } });
     await prisma.priceScope.deleteMany({ where: { supplier: { code: supplierCode } } });
     await prisma.storeTemplateBinding.deleteMany({ where: { store: { code: storeCode } } });
+    await prisma.supplierProduct.deleteMany({ where: { supplier: { code: supplierCode } } });
     await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
     await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
     await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });

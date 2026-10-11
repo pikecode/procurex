@@ -7,6 +7,7 @@ import type { Prisma } from '../../../../packages/backend/generated/prisma/clien
 import { CatalogService } from '../catalog/catalog.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
+import { AllowAssignedStores, assignedStoreIds, ASSIGNED_STORE_ROLES, isCompanyUser } from '../auth/store-scope.js';
 import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
@@ -93,10 +94,12 @@ export class PurchaseRequestsController {
   ) {}
 
   @Get()
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   list(@Req() request: AuthenticatedRequest, @Query() query: ListQuery): Promise<PurchaseRequestSummaryView[]> {
     const scope = storeScope(request);
     const input = parseListQuery(query);
+    if (!isCompanyUser(request.auth!.user)) input.storeIds = assignedStoreIds(request.auth!.user.scope);
     if (scope) {
       if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
       if (input.storeId && input.storeId !== scope.storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Purchase requests are outside the current store scope' });
@@ -112,11 +115,12 @@ export class PurchaseRequestsController {
   }
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<PurchaseRequestDetailView> {
     throwIfInvalid(validateUuid('id', id));
-    const scope = storeScope(request);
-    if (scope && !scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+    const scope = storeScope(request) ?? (!isCompanyUser(request.auth!.user) && request.auth!.user.scope?.type === 'MULTI_STORE' ? request.auth!.user.scope : undefined);
+    if (scope && scope.type !== 'MULTI_STORE' && !scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
     return this.purchaseRequestsService.get(id, scope);
   }
 
@@ -150,7 +154,7 @@ export class PurchaseRequestsController {
     assertStoreScope(request, input.storeId);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'purchase-request.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: body as never,
@@ -170,7 +174,7 @@ export class PurchaseRequestsController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'purchase-request.create',
         entityType: 'PurchaseRequest',
@@ -225,13 +229,13 @@ export class PurchaseRequestsController {
     id: string, body: object, operation: (tx?: Prisma.TransactionClient) => Promise<PurchaseRequestDetailView>): Promise<PurchaseRequestDetailView> {
     const traceId = getOrCreateTraceId(request);
     const command = request.headers['idempotency-key'] === undefined ? null : await this.commandsService.begin({
-      actorUserId: auth.user.id, action, idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, ...body } as never, traceId,
+      actorUserId: auth.user.actorUserId ?? auth.user.id, action, idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, ...body } as never, traceId,
     });
     if (command?.state === 'replay') return command.command.responseBody as PurchaseRequestDetailView;
     const execute = async (tx: Prisma.TransactionClient) => {
       const result = await operation(tx);
       if (command) await this.commandsService.succeed({ commandId: command.command.id, resourceType: 'PurchaseRequest', resourceId: id, responseBody: result as never }, tx);
-      await this.audit.record({ actorUserId: auth.user.id, activeScope: auditScope(auth), action, entityType: 'PurchaseRequest', entityId: id,
+      await this.audit.record({ actorUserId: auth.user.actorUserId ?? auth.user.id, activeScope: auditScope(auth), action, entityType: 'PurchaseRequest', entityId: id,
         traceId, reason: 'reason' in body && typeof body.reason === 'string' ? body.reason.trim() : undefined,
         after: { version: result.version, salesGoodsAmount: result.salesGoodsAmount, items: result.items.map(item => ({ productId: item.productId, supplierId: item.supplierId, quantity: item.quantity })),
           ...(!command ? { submissionMode: 'LEGACY_HEADERLESS' } : {}) } }, tx);
@@ -245,20 +249,21 @@ export class PurchaseRequestsController {
   async reallocate(@Req() request: AuthenticatedRequest, @CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string, @Body() body: ReallocateBody): Promise<PurchaseRequestDetailView> {
     const input = parseReallocateBody(id, body);
     const traceId = getOrCreateTraceId(request);
-    const command = await this.commandsService.begin({ actorUserId: auth.user.id, action: 'purchase-request.reallocate',
+    const command = await this.commandsService.begin({ actorUserId: auth.user.actorUserId ?? auth.user.id, action: 'purchase-request.reallocate',
       idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, ...body } as never, traceId });
     if (command.state === 'replay') return command.command.responseBody as PurchaseRequestDetailView;
     return this.commandsService.performAtomic(command, async tx => {
       const result = await this.purchaseRequestsService.reallocate(input.id, input.expectedVersion, input.rejectedOrderId, input.assignments, tx);
       await this.commandsService.succeed({ commandId: command.command.id, resourceType: 'PurchaseRequest', resourceId: result.id, responseBody: result as never }, tx);
-      await this.audit.record({ actorUserId: auth.user.id, activeScope: auditScope(auth), action: 'purchase-request.reallocate',
+      await this.audit.record({ actorUserId: auth.user.actorUserId ?? auth.user.id, activeScope: auditScope(auth), action: 'purchase-request.reallocate',
         entityType: 'PurchaseRequest', entityId: result.id, traceId, reason: input.reason, after: { rejectedOrderId: input.rejectedOrderId, assignments: input.assignments } }, tx);
       return result;
     });
   }
 
   @Post(':id/confirm')
-  @RequireRoles('ADMIN', 'PURCHASER')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'PURCHASE_FOLLOWER')
   async confirm(
     @Req() request: AuthenticatedRequest,
     @CurrentAuth() auth: AuthenticatedSession,
@@ -266,9 +271,10 @@ export class PurchaseRequestsController {
     @Body() body: ConfirmBody,
   ): Promise<ConfirmPurchaseRequestResult> {
     const input = parseConfirmBody(id, body);
+    if (!isCompanyUser(auth.user)) await this.purchaseRequestsService.get(id, auth.user.scope);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'purchase-request.confirm',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -280,6 +286,7 @@ export class PurchaseRequestsController {
     }
 
     return this.commandsService.performAtomic(command, async tx => {
+      if (!isCompanyUser(auth.user)) await this.purchaseRequestsService.get(id, auth.user.scope, tx);
       const result = await this.purchaseRequestsService.confirm(input.id, input.expectedVersion, tx);
       await this.commandsService.succeed({
         commandId: command.command.id,
@@ -288,7 +295,7 @@ export class PurchaseRequestsController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'purchase-request.confirm',
         entityType: 'PurchaseRequest',
@@ -305,7 +312,8 @@ export class PurchaseRequestsController {
   }
 
   @Post(':id/reject')
-  @RequireRoles('ADMIN', 'PURCHASER')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'PURCHASE_FOLLOWER')
   async reject(
     @Req() request: AuthenticatedRequest,
     @CurrentAuth() auth: AuthenticatedSession,
@@ -313,9 +321,10 @@ export class PurchaseRequestsController {
     @Body() body: RejectBody,
   ): Promise<RejectPurchaseRequestResult> {
     const input = parseRejectBody(id, body);
+    if (!isCompanyUser(auth.user)) await this.purchaseRequestsService.get(id, auth.user.scope);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'purchase-request.reject',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -327,6 +336,7 @@ export class PurchaseRequestsController {
     }
 
     return this.commandsService.performAtomic(command, async tx => {
+      if (!isCompanyUser(auth.user)) await this.purchaseRequestsService.get(id, auth.user.scope, tx);
       const result = await this.purchaseRequestsService.reject(input.id, input.expectedVersion, input.reason, tx);
       await this.commandsService.succeed({
         commandId: command.command.id,
@@ -335,7 +345,7 @@ export class PurchaseRequestsController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'purchase-request.reject',
         entityType: 'PurchaseRequest',

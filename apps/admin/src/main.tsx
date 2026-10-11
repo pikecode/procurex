@@ -9,6 +9,7 @@ import './styles.css';
 import { Notifications } from './components/Notifications';
 import { ChangePassword } from './components/ChangePassword';
 import { allowedPages, canAccessPage } from './lib/access';
+import { billingAccess } from './lib/billingAccess';
 
 const Stores = lazy(() => import('./pages/Stores'));
 const Directories = lazy(() => import('./pages/Directories'));
@@ -55,8 +56,10 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
   const { message } = AntApp.useApp(); const location = useLocation(); const navigate = useNavigate();
   const central = hasRole(user, 'ADMIN', 'HQ_FINANCE'); const storeRole = ['STORE', 'STORE_FINANCE'].includes(user.scope?.type || '') || (!hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER') && hasRole(user, 'STORE', 'STORE_FINANCE'));
   const supplierRole = user.scope?.type === 'SUPPLIER' || (!storeRole && !hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER') && hasRole(user, 'SUPPLIER'));
-  const home = supplierRole ? '/supplier-orders' : storeRole ? '/store-orders' : '/stores'; const supported = allowedPages(user).length > 0;
-  const items: { key: string; label: string; icon: ReactNode; children?: { key: string; label: string; icon: ReactNode }[] }[] = storeRole ? [{ key: '/store-orders', label: '门店订单', icon: <StoreIcon size={16} /> }, { key: '/store-finance', label: '门店账户', icon: <Landmark size={16} /> }, { key: '/finance', label: '账单与付款', icon: <Landmark size={16} /> }] : [
+  const multiStore = user.scope?.type === 'MULTI_STORE';
+  const billingLabel = billingAccess(user).readonly ? '账单查询' : supplierRole ? '账单与收款' : '账单与付款';
+  const home = supplierRole ? '/supplier-orders' : storeRole ? '/store-orders' : multiStore ? hasRole(user, 'REGION_FINANCE') ? '/store-finance' : '/purchase-requests' : '/stores'; const supported = allowedPages(user).length > 0;
+  const items: { key: string; label: string; icon: ReactNode; children?: { key: string; label: string; icon: ReactNode }[] }[] = storeRole ? [{ key: '/store-orders', label: '门店订单', icon: <StoreIcon size={16} /> }, { key: '/store-finance', label: '门店账户', icon: <Landmark size={16} /> }, { key: '/finance', label: billingLabel, icon: <Landmark size={16} /> }] : [
     { key: 'master', label: '基础资料', icon: <StoreIcon size={17} />, children: [
       { key: '/stores', label: '门店管理', icon: <StoreIcon size={16} /> },
       { key: '/store-groups', label: '门店分组', icon: <Folders size={16} /> },
@@ -65,7 +68,7 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
     { key: 'catalog', label: '商品资料', icon: <Package size={17} />, children: ['products', 'categories', 'brands', 'units'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) },
     ...(hasRole(user, 'ADMIN', 'PURCHASER') ? [{ key: 'ordering', label: '订货配置', icon: <SlidersHorizontal size={17} />, children: ['templates'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) }] : []),
     { key: 'procurement', label: '采购履约', icon: <ShoppingCart size={17} />, children: ['purchase-requests', 'supplier-orders', ...(hasRole(user, 'ADMIN') ? ['discrepancies'] : [])].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) },
-    ...(central ? [{ key: 'finance', label: '财务结算', icon: <Landmark size={17} />, children: [{ key: '/store-finance', label: '门店财务', icon: <Landmark size={16} /> }, { key: '/finance', label: '账单与付款', icon: <Landmark size={16} /> }, { key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> }, { key: '/collection-accounts', label: '收款账户', icon: <Landmark size={16} /> }] }] : []),
+    ...(central || multiStore || hasRole(user, 'PURCHASER') ? [{ key: 'finance', label: '财务结算', icon: <Landmark size={17} />, children: [{ key: '/store-finance', label: '门店财务', icon: <Landmark size={16} /> }, { key: '/finance', label: billingLabel, icon: <Landmark size={16} /> }, { key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> }, { key: '/collection-accounts', label: '收款账户', icon: <Landmark size={16} /> }] }] : []),
   ];
   if (storeRole) items.push({ key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> });
   if (supplierRole) items.splice(0, items.length, { key: '/supplier-orders', label: '供应商工作台', icon: <Folders size={16} /> }, { key: '/discrepancies', label: '收货差异', icon: <Folders size={16} /> }, { key: 'finance', label: '财务管理', icon: <Landmark size={17} />, children: [{ key: '/finance', label: '账单与收款', icon: <Landmark size={16} /> }, { key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> }] }, { key: '/reports', label: '业务报表', icon: <Folders size={16} /> });
@@ -90,7 +93,7 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
     <div className="main-column"><header className="topbar"><div className="actions">
       <Tooltip title={collapsed ? '展开菜单' : '收起菜单'}><Button className="desktop-menu" type="text" aria-label={collapsed ? '展开菜单' : '收起菜单'} icon={<ChevronLeft size={18} style={{ transform: collapsed ? 'rotate(180deg)' : undefined }} />} onClick={() => setCollapsed(!collapsed)} /></Tooltip>
       <Button className="mobile-menu" type="text" aria-label="打开菜单" icon={<MenuIcon size={18} />} onClick={() => setMobileOpen(true)} />
-      <span className="breadcrumb">{location.pathname === '/finance' ? (supplierRole ? '账单与收款' : '账单与付款') : location.pathname === '/store-finance' ? (storeRole ? '门店账户' : '门店财务') : location.pathname === '/store-orders' ? '门店订单' : labels[location.pathname] || '后台管理'}</span></div>
+      <span className="breadcrumb">{location.pathname === '/finance' ? billingLabel : location.pathname === '/store-finance' ? (storeRole ? '门店账户' : '门店财务') : location.pathname === '/store-orders' ? '门店订单' : labels[location.pathname] || '后台管理'}</span></div>
       <div className="actions"><Notifications key={user.id} userId={user.id} /><a className="legacy-link" href={legacyUrl} target="_blank" rel="noreferrer">原后台<ExternalLink size={13} /></a>
         <span className="user-name">{user.displayName || user.username || '管理员'}</span>
         <ChangePassword signedOut={signedOut} />

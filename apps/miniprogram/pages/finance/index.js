@@ -35,6 +35,7 @@ Page({
     this.setData({ book, selected: null, detailLoading: false, error: '' }); this.refreshRecords();
   },
   onSearch(event) { this.setData({ search: event.detail.value }); this.refreshRecords(); },
+  openAccounts() { if (!this.busy()) wx.navigateTo({ url: '/pages/finance-accounts/index' }); },
   nextRecords() { this.refreshRecords((this.data.recordLimit || 10) + 10); },
   refreshRecords(limit = 10) {
     const source = this.data.book === 'payments' ? this.data.payments : this.data.book === 'stores' ? this.data.storeStatements : this.data.supplierStatements;

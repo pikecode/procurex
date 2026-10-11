@@ -1,0 +1,4 @@
+{
+  "navigationBarTitleText": "授权门店",
+  "usingComponents": { "evidence-files": "../../components/evidence/index" }
+}

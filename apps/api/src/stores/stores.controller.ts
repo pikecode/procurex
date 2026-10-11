@@ -7,6 +7,7 @@ import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
+import { AllowAssignedStores, assignedStoreIds, assertAssignedStore, ASSIGNED_STORE_ROLES, isCompanyUser } from '../auth/store-scope.js';
 import { CommandsService } from '../commands/commands.service.js';
 import { getOrCreateTraceId } from '../common/request-context.js';
 import { requireIdempotencyKey, throwIfInvalid } from '../common/request-contract.js';
@@ -83,24 +84,23 @@ export class StoresController {
   ) {}
 
   @Get()
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE')
-  listStores(): Promise<StoreView[]> {
-    return this.storesService.listStores();
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', ...ASSIGNED_STORE_ROLES)
+  listStores(@Req() request: AuthenticatedRequest): Promise<StoreView[]> {
+    return this.storesService.listStores(request?.auth && !isCompanyUser(request.auth.user) ? assignedStoreIds(request.auth.user.scope) : undefined);
   }
 
   @Get('finance-overview')
-  @RequireRoles('ADMIN', 'HQ_FINANCE')
-  financeOverview() { return this.storesService.listFinanceStores(); }
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', ...ASSIGNED_STORE_ROLES)
+  financeOverview(@Req() request: AuthenticatedRequest) { return this.storesService.listFinanceStores(!isCompanyUser(request.auth!.user) ? assignedStoreIds(request.auth!.user.scope) : undefined); }
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   getStore(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<StoreView> {
     throwIfInvalid(validateUuid('id', id));
-    const user = request.auth!.user;
-    if (!user.roles.some(role => ['ADMIN', 'PURCHASER', 'HQ_FINANCE'].includes(role))) {
-      if (!user.scope?.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
-      if (user.scope.storeId.toLowerCase() !== id.toLowerCase()) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Store is outside the current scope' });
-    }
+    applyStoreScope(id, request);
     return this.storesService.getStore(id);
   }
 
@@ -134,7 +134,8 @@ export class StoresController {
   }
 
   @Get(':id/account')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   getAccount(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<StoreAccountView> {
     throwIfInvalid(validateUuid('id', id));
     applyStoreScope(id, request);
@@ -142,7 +143,8 @@ export class StoresController {
   }
 
   @Get(':id/ledgers')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   listLedgers(@Param('id') id: string, @Query() query: LedgerQuery, @Req() request: AuthenticatedRequest): Promise<AccountLedgerView[]> {
     throwIfInvalid(validateUuid('id', id));
     applyStoreScope(id, request);
@@ -150,7 +152,8 @@ export class StoresController {
   }
 
   @Get(':id/credit-items')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   listCreditItems(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<CreditItemView[]> {
     throwIfInvalid(validateUuid('id', id));
     applyStoreScope(id, request);
@@ -158,7 +161,8 @@ export class StoresController {
   }
 
   @Get(':id/credit-movements')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   listCreditMovements(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     throwIfInvalid(validateUuid('id', id));
     applyStoreScope(id, request);
@@ -166,7 +170,8 @@ export class StoresController {
   }
 
   @Get(':id/recharges/:documentId')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   getRecharge(@Param('id') id: string, @Param('documentId') documentId: string, @Req() request: AuthenticatedRequest) {
     throwIfInvalid([...validateUuid('id', id), ...validateUuid('documentId', documentId)]);
     applyStoreScope(id, request);
@@ -174,7 +179,8 @@ export class StoresController {
   }
 
   @Get(':id/clearings/:documentId')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   getClearing(@Param('id') id: string, @Param('documentId') documentId: string, @Req() request: AuthenticatedRequest) {
     throwIfInvalid([...validateUuid('id', id), ...validateUuid('documentId', documentId)]);
     applyStoreScope(id, request);
@@ -192,7 +198,7 @@ export class StoresController {
     const input = parseCreateRechargeBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'store.recharge.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -212,7 +218,7 @@ export class StoresController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'store.recharge.create',
         entityType: 'RechargeDocument',
@@ -244,7 +250,7 @@ export class StoresController {
     const input = parseUpdateCreditLimitBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'store.credit-limit.update',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -264,7 +270,7 @@ export class StoresController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'store.credit-limit.update',
         entityType: 'StoreAccount',
@@ -302,7 +308,7 @@ export class StoresController {
     const input = parseCreateClearingBody(id, body);
     const traceId = getOrCreateTraceId(request);
     const command = await this.commandsService.begin({
-      actorUserId: auth.user.id,
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
       action: 'store.clearing.create',
       idempotencyKey: requireIdempotencyKey(request.headers),
       requestBody: { id, ...body } as never,
@@ -322,7 +328,7 @@ export class StoresController {
         responseBody: result as never,
       }, tx);
       await this.audit.record({
-        actorUserId: auth.user.id,
+        actorUserId: auth.user.actorUserId ?? auth.user.id,
         activeScope: auditScope(auth),
         action: 'store.clearing.create',
         entityType: 'ClearingDocument',
@@ -355,6 +361,7 @@ function applyStoreScope(storeId: string, request: AuthenticatedRequest): void {
   const user = request.auth!.user;
   if (user.roles.some(role => ['ADMIN', 'HQ_FINANCE', 'PURCHASER'].includes(role))) return;
   const scope = user.scope;
+  if (scope?.type === 'MULTI_STORE') { assertAssignedStore(scope, storeId); return; }
   if (!scope?.storeId || !['STORE', 'STORE_FINANCE'].includes(scope.type)) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
   if (scope.storeId.toLowerCase() !== storeId.toLowerCase()) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Store is outside the current store scope' });
 }

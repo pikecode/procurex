@@ -14,14 +14,16 @@ import { workflowName, workflowTime, type Order, type ShippingOrder, type Purcha
 
 type Shipment = ShipmentDetail & { trackingNo: string | null; shippedAt: string };
 export default function SupplierOrders({ user }: { user: User }) {
-  const orders = useRows<Order>('/supplier-orders'); const suppliers = useRows<{ id: string; name: string }>('/suppliers'); const stores = useRows<{ id: string; name: string }>('/stores');
+  const multiStore = user.scope?.type === 'MULTI_STORE';
+  const orders = useRows<Order>('/supplier-orders'); const suppliers = useRows<{ id: string; name: string }>(multiStore ? null : '/suppliers'); const stores = useRows<{ id: string; name: string }>('/stores');
+  const supplierChoices = multiStore ? [...new Map(orders.rows.map(row => [row.supplierId, { id: row.supplierId, name: row.supplierName || '供应商' }])).values()] : suppliers.rows;
   const [params, setParams] = useSearchParams(); const id = params.get('order'); const [detail, setDetail] = useState<ShippingOrder | null>(null);
   const [editor, setEditor] = useState<'ship' | 'freight' | null>(null); const [review, setReview] = useState<{ id: string; action: 'confirm' | 'reject' }>();
   const [shipments, setShipments] = useState<ShipmentSummary[]>([]); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [revision, setRevision] = useState(0);
   const [canReallocate, setCanReallocate] = useState(false);
   const [receiving, setReceiving] = useState(false);
   const [shipmentId, setShipmentId] = useState<string | null>(null); const [shipment, setShipment] = useState<Shipment | null>(null); const [shipmentError, setShipmentError] = useState(''); const [shipmentLoading, setShipmentLoading] = useState(false); const [shipmentRevision, setShipmentRevision] = useState(0);
-  const command = useWorkflowCommand(user.id); const { message } = App.useApp(); const canWrite = hasRole(user, 'ADMIN', 'PURCHASER'); const canReadShipment = hasRole(user, 'ADMIN', 'HQ_FINANCE');
+  const command = useWorkflowCommand(user.id); const { message } = App.useApp(); const canWrite = hasRole(user, 'ADMIN', 'PURCHASER'); const canReadShipment = hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER', 'PURCHASE_FOLLOWER', 'REGION_MANAGER', 'REGION_FINANCE');
   const refresh = () => { orders.reload(); setRevision(value => value + 1); };
   useEffect(() => {
     const controller = new AbortController(); setDetail(null); setShipments([]); setError(''); setCanReallocate(false);
@@ -45,16 +47,16 @@ export default function SupplierOrders({ user }: { user: User }) {
   return <>
     {!id && command.error && <Alert type="error" title={command.error} showIcon />}
     {!id && recoveryNotice}
-    <ListPage title="供应商订单" rows={orders.rows.map(order => ({ ...order, name: order.supplierOrderNo, supplierName: suppliers.rows.find(supplier => supplier.id === order.supplierId)?.name || order.supplierId }))}
+    <ListPage title="供应商订单" rows={orders.rows.map(order => ({ ...order, name: order.supplierOrderNo, supplierName: order.supplierName || supplierChoices.find(supplier => supplier.id === order.supplierId)?.name || '-' }))}
       loading={orders.loading} error={orders.error || suppliers.error || stores.error} reload={refresh}
-      filters={[{ key: 'storeId', label: '门店', options: stores.rows.map(row => ({ value: row.id, label: row.name })) }, { key: 'supplierId', label: '供应商', options: suppliers.rows.map(row => ({ value: row.id, label: row.name })) }, { key: 'status', label: '订单状态', options: [...new Set(orders.rows.map(row => row.status))].map(value => ({ value, label: workflowName(value) })) }]}
+      filters={[{ key: 'storeId', label: '门店', options: stores.rows.map(row => ({ value: row.id, label: row.name })) }, { key: 'supplierId', label: '供应商', options: supplierChoices.map(row => ({ value: row.id, label: row.name })) }, { key: 'status', label: '订单状态', options: [...new Set(orders.rows.map(row => row.status))].map(value => ({ value, label: workflowName(value) })) }]}
       columns={[{ title: '订单编号', dataIndex: 'supplierOrderNo', width: 205 }, { title: '门店', dataIndex: 'storeName', width: 155 }, { title: '供应商', dataIndex: 'supplierName', width: 155 }, { title: '状态', dataIndex: 'status', render: workflowName, width: 110 }, { title: '履约状态', dataIndex: 'fulfillmentStatus', render: workflowName, width: 115 }, { title: '销售金额', dataIndex: 'salesGoodsAmount', width: 110 }, { title: '供货金额', dataIndex: 'supplyGoodsAmount', width: 110 }, { title: '创建时间', dataIndex: 'createdAt', render: workflowTime, width: 165 }, { title: '操作', width: 64, fixed: 'right', render: (_, row) => <Tooltip title="查看供应商订单"><Button type="text" aria-label={`查看${row.supplierOrderNo}`} icon={<Eye size={16} />} onClick={() => setParams({ order: row.id })} /></Tooltip> }]} />
     <Modal title={detail?.supplierOrderNo || '供应商订单详情'} width={1000} open={Boolean(id)} onCancel={() => { if (!command.busy && !shipmentId && !editor) setParams({}); }} closable={!command.busy && !shipmentId && !editor} footer={null}>
       {!editor && !receiving && recoveryNotice}
       {!editor && !receiving && command.error && <Alert type="error" title={command.error} showIcon />}
       {loading ? <Spin /> : error ? <Alert type="error" title={error} action={<Button onClick={() => setRevision(value => value + 1)}>重试</Button>} /> : detail && <>
         <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} items={[
-          { key: 'store', label: '门店', children: detail.storeName || stores.rows.find(row => row.id === detail.storeId)?.name || '-' }, { key: 'supplier', label: '供应商', children: suppliers.rows.find(row => row.id === detail.supplierId)?.name || '-' }, { key: 'status', label: '状态', children: workflowName(detail.status) }, { key: 'fulfillment', label: '履约状态', children: workflowName(detail.fulfillmentStatus) }, { key: 'sales', label: '销售金额', children: detail.salesGoodsAmount }, { key: 'supply', label: '供货金额', children: detail.supplyGoodsAmount }, { key: 'contact', label: '收货联系人', children: detail.destination?.contactName || '-' }, { key: 'phone', label: '联系电话', children: detail.destination?.contactPhone || '-' }, { key: 'address', label: '收货地址', children: detail.destination?.address || '-' },
+          { key: 'store', label: '门店', children: detail.storeName || stores.rows.find(row => row.id === detail.storeId)?.name || '-' }, { key: 'supplier', label: '供应商', children: detail.supplierName || supplierChoices.find(row => row.id === detail.supplierId)?.name || '-' }, { key: 'status', label: '状态', children: workflowName(detail.status) }, { key: 'fulfillment', label: '履约状态', children: workflowName(detail.fulfillmentStatus) }, { key: 'sales', label: '销售金额', children: detail.salesGoodsAmount }, { key: 'supply', label: '供货金额', children: detail.supplyGoodsAmount }, { key: 'contact', label: '收货联系人', children: detail.destination?.contactName || '-' }, { key: 'phone', label: '联系电话', children: detail.destination?.contactPhone || '-' }, { key: 'address', label: '收货地址', children: detail.destination?.address || '-' },
         ]} />
         <div className="actions workflow-actions"><Link onClick={() => setParams({})} to={`/purchase-requests?request=${detail.requestId}`}><Button icon={<Eye size={16} />}>采购申请</Button></Link>
           {hasRole(user, 'ADMIN') && ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED', 'SHIPPED'].includes(detail.status) && <Button disabled={command.blocked} icon={<Truck size={16} />} onClick={() => setEditor('ship')}>发货与补发</Button>}

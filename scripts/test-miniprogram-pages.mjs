@@ -39,6 +39,173 @@ test('prices display two decimals and delivery contact calls the separate phone'
 const input = (id, value) => ({ ...tap(id), detail: { value } });
 const plain = value => JSON.parse(JSON.stringify(value));
 
+function workbenchApi() {
+  const storage = new Map([['procurexToken', 'root-session'], ['procurexUser', { id: 'target', testWorkbenchEnabled: true, roles: ['STORE'], scope: { storeId: 'store' }, testIdentity: { userId: 'target' } }]]);
+  const calls = [], pages = [], module = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/api.js', 'utf8'), { module, getApp: () => ({ globalData: { apiBase: 'http://local/api/v1' } }), getCurrentPages: () => pages, wx: {
+    getStorageSync: key => storage.get(key), setStorageSync: (key, value) => storage.set(key, value), request: options => calls.push(options)
+  } });
+  return { api: module.exports, storage, calls, pages };
+}
+test('test identity headers preserve root token and switching returns to administrator', async () => {
+  const { api, calls, storage } = workbenchApi();
+  assert.deepEqual(plain(api.authHeaders()), { authorization: 'Bearer root-session', 'x-test-user-id': 'target' });
+  const switching = api.switchTestIdentity('supplier');
+  assert.equal(calls[0].header['x-test-user-id'], undefined);
+  assert.equal(calls[0].header.authorization, 'Bearer root-session');
+  calls[0].success({ statusCode: 201, data: { data: { user: { id: 'supplier', testWorkbenchEnabled: true, roles: ['SUPPLIER'], testIdentity: { userId: 'supplier' } } } } });
+  await switching;
+  assert.equal(storage.get('procurexToken'), 'root-session');
+  const returning = api.switchTestIdentity(null);
+  assert.ok(calls[1].url.endsWith('/me')); assert.equal(calls[1].header['x-test-user-id'], undefined);
+  calls[1].success({ statusCode: 200, data: { data: { user: { id: 'admin', roles: ['ADMIN'], testWorkbenchEnabled: true } } } });
+  await returning; assert.equal(api.authHeaders()['x-test-user-id'], undefined);
+});
+test('test identity switching blocks active requests, pending submissions and uploads', async () => {
+  const { api, calls, storage, pages } = workbenchApi();
+  const reading = api.request('/stores');
+  await assert.rejects(api.switchTestIdentity('other'), /等待当前操作/);
+  calls[0].success({ statusCode: 200, data: { data: [] } }); await reading;
+  storage.set('procurex-order-target-store', { key: 'pending' });
+  await assert.rejects(api.switchTestIdentity('other'), /待确认/);
+  storage.delete('procurex-order-target-store');
+  storage.set('procurexRoleCommands:http%3A%2F%2Flocal%2Fapi%2Fv1:target:supplier', { pending: { key: 'pending' } });
+  await assert.rejects(api.switchTestIdentity('other'), /原提交结果/);
+  storage.delete('procurexRoleCommands:http%3A%2F%2Flocal%2Fapi%2Fv1:target:supplier');
+  pages.push({ route: 'pages/store/index', data: { receiptUploading: true } });
+  await assert.rejects(api.switchTestIdentity('other'), /完成或取消/);
+  assert.equal(calls.length, 1);
+});
+test('test workbench confirmation cancellation does not change identity', async () => {
+  let switched = false;
+  const workbench = page('test-workbench', undefined, { switchTestIdentity: () => { switched = true; } }, { showModal: options => options.success({ confirm: false }) });
+  workbench.data.items = [{ id: 'a', displayName: '测试门店' }];
+  await workbench.select(tap('a'));
+  assert.equal(switched, false); assert.equal(workbench.data.switching, false);
+});
+
+for (const role of ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER']) {
+  test(`assigned-store workspace routes ${role} and rejects empty authorization`, () => {
+    const calls = [], module = { exports: {} };
+    let user = { id: 'assigned', roles: [role], scope: { type: 'MULTI_STORE', storeIds: ['a', 'b'] } };
+    vm.runInNewContext(readFileSync('apps/miniprogram/utils/api.js', 'utf8'), { module, wx: {
+      getStorageSync: () => user, hideTabBar: () => calls.push('hide'), showTabBar: () => calls.push('show'),
+      switchTab: options => calls.push(options.url), redirectTo: options => calls.push(options.url)
+    } });
+    assert.equal(module.exports.openWorkspace('region').id, 'assigned');
+    assert.equal(module.exports.openWorkspace('purchaser'), null);
+    assert.equal(calls.at(-1), '/pages/region/index');
+    user = { ...user, scope: { type: 'MULTI_STORE', storeIds: [] } };
+    assert.equal(module.exports.openWorkspace('region'), null);
+    assert.equal(calls.at(-1), '/pages/login/index');
+  });
+  test(`assigned-store workspace ${role} starts with role-specific tasks and scoped queries`, async () => {
+    const user = { id: role, roles: [role], scope: { type: 'MULTI_STORE', storeIds: ['a', 'b'] } }, calls = [];
+    const region = page('region', async path => {
+      calls.push(path);
+      if (path === '/stores') return [{ id: 'a', name: '授权A' }, { id: 'b', name: '授权B' }, { id: 'c', name: '范围外C' }];
+      if (path.startsWith('/supplier-orders')) return [];
+      return [{ id: 'one', storeId: 'a', status: 'PENDING_PROCUREMENT', requestNo: '订货一' }, { id: 'foreign', storeId: 'c', status: 'PENDING_PROCUREMENT' }];
+    }, { currentUser: () => user, openWorkspace: () => user, roleCommandState: () => ({ pending: null }) });
+    await region.onShow();
+    assert.equal(region.data.canConfirm, role === 'PURCHASE_FOLLOWER');
+    assert.equal(region.data.activeView, role === 'PURCHASE_FOLLOWER' ? 'tasks' : role === 'REGION_FINANCE' ? 'books' : 'orders');
+    await region.originalLoadWork();
+    assert.deepEqual(plain(region.data.stores.map(store => store.id)), ['a', 'b']);
+    assert.deepEqual(plain(region.data.rows.map(row => row.id)), ['one']);
+    assert.ok(!calls.includes('/suppliers') && !calls.includes('/products') && !calls.includes('/payment-records'));
+    region.data.storeIndex = 2;
+    await region.originalLoadWork();
+    assert.ok(calls.some(path => path.endsWith('?storeId=b')));
+  });
+}
+
+test('assigned-store reports validate dates and request no company profit', async () => {
+  const user = { id: 'region', roles: ['REGION_MANAGER'], scope: { type: 'MULTI_STORE', storeIds: ['a'] } }, calls = [];
+  const region = page('region', async path => {
+    calls.push(path);
+    if (path === '/stores') return [{ id: 'a', name: '授权A' }];
+    return path.includes('order-amounts') ? { months: [{ month: '2026-10', totalAmount: '12.00', orderCount: 1 }] } : { products: [] };
+  }, { currentUser: () => user });
+  region.data.user = user; region.data.activeView = 'reports'; region.data.range = { from: '2026-10-01', to: '2026-10-10' };
+  await region.originalLoadWork();
+  assert.equal(region.data.report.months[0].totalAmount, '12.00');
+  assert.ok(calls.every(path => !path.includes('profit')));
+  region.data.range = { from: '2026-10-11', to: '2026-10-01' }; calls.length = 0;
+  await region.originalLoadWork();
+  assert.equal(region.data.report, null);
+  assert.match(region.data.error, /开始日期/);
+  assert.deepEqual(calls, ['/stores']);
+});
+
+test('assigned-store statement lines display first shipment dates without invented order status', async () => {
+  const user = { id: 'finance', scope: { storeIds: ['a'] } };
+  const region = page('region', async () => ({ lines: [{ supplierOrderId: 'order', firstShippedAt: '2026-10-10T08:00:00Z' }] }), { currentUser: () => user });
+  region.data.user = user; region.data.activeView = 'books'; region.data.rows = [{ id: 'book', title: '门店账单' }];
+  await region.openRecord(tap('book'));
+  assert.match(region.data.selected.lines[0].dateText, /2026-10-10/);
+  const markup = readFileSync('apps/miniprogram/pages/region/index.wxml', 'utf8');
+  assert.ok(markup.includes('首发 {{item.dateText}}'));
+  assert.ok(!markup.includes('{{item.completedAt}}'));
+});
+
+test('assigned-store query ignores stale account and page-hidden responses', async () => {
+  let resolveStores, user = { id: 'old', scope: { storeIds: ['a'] } };
+  const region = page('region', () => new Promise(resolve => { resolveStores = resolve; }), { currentUser: () => user });
+  region.data.user = user;
+  const load = region.originalLoadWork();
+  region.onHide(); user = { id: 'new', scope: { storeIds: ['b'] } };
+  resolveStores([{ id: 'a', name: '旧账号门店' }]); await load;
+  assert.deepEqual(plain(region.data.stores), []);
+});
+
+test('assigned-store decisions are blocked for read-only roles and retain version on follower cancellation', async () => {
+  const user = { id: 'follow', scope: { storeIds: ['a'] } }, commands = [];
+  const region = page('region', undefined, {
+    currentUser: () => user, roleCommandState: () => ({ pending: null }),
+    roleCommand: async (...args) => { commands.push(args); }
+  }, { showModal: options => options.success({ confirm: true, content: '门店取消订货' }), showToast: () => {} });
+  region.data.user = user; region.data.selectedKind = 'order'; region.data.selected = { id: 'order', version: 3, status: 'PENDING_PROCUREMENT' };
+  region.sequence = 1;
+  await region.submitDecision(tap('', { action: 'confirm' }));
+  assert.equal(commands.length, 0);
+  region.data.canConfirm = true;
+  await region.submitDecision(tap('', { action: 'reject' }));
+  assert.equal(commands[0][1], '/purchase-requests/order/reject');
+  assert.deepEqual(plain(commands[0][2].data), { expectedVersion: 3, reason: '门店取消订货' });
+  assert.equal(region.data.selected, null);
+});
+
+test('assigned-store recovery never replays manager pricing or reallocation commands', async () => {
+  let recovered = 0, pending = { path: '/price-changes' };
+  const region = page('region', undefined, { roleCommandState: () => ({ pending }), retryRoleCommand: async () => { recovered += 1; } });
+  region.data.canConfirm = true;
+  region.syncCommand();
+  assert.equal(region.data.blockedCommand, true);
+  await region.recoverCommand();
+  assert.equal(recovered, 0);
+  pending = { path: '/purchase-requests/a/reallocate' }; region.syncCommand();
+  assert.equal(region.data.pendingCommand, null);
+  pending = { path: '/purchase-requests/a/confirm' }; region.syncCommand();
+  assert.equal(region.data.pendingCommand.path, pending.path);
+});
+
+test('store receipt reminders exclude received shipments and retain returned editable receipts', async () => {
+  const workspace = page('store', async path => {
+    if (path === '/notifications') return { notifications: [
+      { payload: { shipmentId: 'done', type: 'SHIPMENT_CREATED' } },
+      { payload: { shipmentId: 'new', type: 'SHIPMENT_CREATED' } },
+      { payload: { shipmentId: 'returned', type: 'DISCREPANCY_RESOLVED', action: 'RETURN' } },
+      { payload: { shipmentId: 'locked', type: 'DISCREPANCY_RESOLVED', action: 'RETURN' } },
+    ] };
+    return { currentReceiptRevision: path.endsWith('/new') ? 0 : 1,
+      items: [{ receiptLocked: !path.endsWith('/returned') }] };
+  });
+  await workspace.loadShipments();
+  assert.equal(workspace.data.error, '');
+  assert.deepEqual(plain(workspace.data.shipmentTodos.map(item => item.id)), ['new', 'returned']);
+});
+
 test('workspace forms reserve space for fixed actions and financial review has one submit control', () => {
   const styles = readFileSync('apps/miniprogram/styles/workspace.wxss', 'utf8');
   assert.match(styles, /has-action-bar.*padding-bottom/);
@@ -208,16 +375,48 @@ test('native own profiles require a binding and never enumerate foreign entities
   const user = { id: 'supplier-user', roles: ['SUPPLIER'], scope: { supplierId: 'own' } };
   const profile = page('profile', async path => {
     calls.push(path);
-    return path.endsWith('/catalog') ? { items: [{ id: 'p', name: 'Water', sku: 'W', supplyPrice: '8', isActive: true }] }
+    return path.endsWith('/managed-products') ? { items: [{ id: 'p', name: 'Water', sku: 'W', productActive: true, supplyEnabled: true, version: 1 }] }
       : { id: 'own', name: 'Own supplier', bankAccount: 'own-bank', defaultSettlementMode: 'COMPANY_TERM', status: 'ACTIVE' };
   }, { currentUser: () => user });
   profile.onLoad({ kind: 'supplier' }); await profile.loadProfile();
-  assert.deepEqual(calls, ['/suppliers/own', '/suppliers/own/catalog']);
+  assert.deepEqual(calls, ['/suppliers/own', '/suppliers/own/managed-products']);
   assert.equal(profile.data.profile.id, 'own');
   assert.equal(profile.data.fields.find(item => item.label === '银行账号').value, 'own-bank');
   profile.onSearch({ detail: { value: 'NO-MATCH' } }); assert.equal(profile.data.visibleProducts.length, 0);
   user.scope = {}; await profile.loadProfile();
   assert.equal(calls.length, 2); assert.equal(profile.data.profile, null); assert.match(profile.data.error, /尚未配置/);
+});
+
+test('supplier listing prevents duplicate confirmation and sends versioned status only', async () => {
+  const calls = [];
+  let confirm;
+  const user = { id: 'supplier', roles: ['SUPPLIER'], scope: { supplierId: 'own' } };
+  const profile = page('profile', async (path, options) => calls.push({ path, options }),
+    { currentUser: () => user }, { showModal: options => { confirm = options.success; } });
+  profile.data.products = [{ id: 'p', name: 'Rice', productActive: true, supplyEnabled: true, version: 3 }];
+  profile.loadProfile = async () => {};
+  const pending = profile.changeListing(tap('p'));
+  await profile.changeListing(tap('p'));
+  assert.equal(calls.length, 0);
+  confirm({ confirm: true }); await pending;
+  assert.deepEqual(plain(calls), [{ path: '/suppliers/own/managed-products/p', options: { method: 'PATCH', data: { supplyEnabled: false, expectedVersion: 3 } } }]);
+  assert.equal(profile.data.saving, '');
+});
+
+test('supplier listing confirmation cannot submit after leaving page or switching account', async () => {
+  for (const invalidate of ['hide', 'account']) {
+    let confirm;
+    let user = { id: 'supplier', roles: ['SUPPLIER'], scope: { supplierId: 'own' } };
+    const calls = [];
+    const profile = page('profile', async path => calls.push(path), { currentUser: () => user },
+      { showModal: options => { confirm = options.success; } });
+    profile.data.products = [{ id: 'p', productActive: true, supplyEnabled: true, version: 1 }];
+    const pending = profile.changeListing(tap('p'));
+    if (invalidate === 'hide') profile.onHide(); else user = { ...user, id: 'other' };
+    confirm({ confirm: true }); await pending;
+    assert.equal(calls.length, 0);
+    assert.equal(profile.data.saving, '');
+  }
 });
 
 test('native store profile uses independent receipt details and cannot save data', async () => {
@@ -527,6 +726,92 @@ function commandApi() {
   return { storage, calls, reload, handle: value => { handler = value; } };
 }
 const commandOptions = () => ({ method: 'POST', data: { expectedVersion: 7, items: [{ id: 'line', quantity: '2' }] }, header: { 'idempotency-key': 'original-key' } });
+
+test('finance account credit recovery preserves PATCH and the original body and key', async () => {
+  const harness = commandApi(), api = harness.reload();
+  await assert.rejects(api.roleCommand('finance', '/stores/store/credit-limit', { ...commandOptions(), method: 'PATCH', data: { expectedVersion: 2, limit: '100.00', reason: '调整额度' } }));
+  const pending = plain(api.roleCommandState('finance').pending);
+  assert.equal(pending.title, '挂账额度调整');
+  harness.handle(options => options.success({ statusCode: 200, data: { data: { version: 3 } } }));
+  await harness.reload().retryRoleCommand('finance');
+  assert.equal(harness.calls[0].method, 'PATCH'); assert.equal(harness.calls[1].method, 'PATCH');
+  assert.equal(harness.calls[1].header['idempotency-key'], pending.key);
+  assert.deepEqual(plain(harness.calls[1].data), pending.body);
+});
+
+function financeAccounts(request = async () => ({}), overrides = {}) {
+  const user = { id: 'finance-user', roles: ['HQ_FINANCE'] };
+  const instance = page('finance-accounts', request, { currentUser: () => user, roleCommandState: () => ({ pending: null }), ...overrides }, { showToast: () => {} });
+  instance.data.user = user; instance.sequence = 1;
+  instance.data.store = { id: 'store', name: '测试门店' };
+  instance.data.account = { version: 3, creditLimit: '100.00', creditUsed: '20.00' };
+  instance.data.businessDate = '2026-10-11';
+  return instance;
+}
+
+test('finance account write is denied to regional finance and invalid recharge cannot proceed', async () => {
+  let writes = 0;
+  const account = financeAccounts(async () => { writes++; });
+  account.data.user.roles = ['REGION_FINANCE'];
+  account.startAction(tap('', { mode: 'recharge' })); assert.equal(account.data.mode, '');
+  account.data.mode = 'recharge'; await account.prepare(); assert.equal(writes, 0); assert.equal(account.data.confirming, false);
+  account.data.user.roles = ['HQ_FINANCE'];
+  await account.prepare(); assert.match(account.data.error, /凭证/);
+  account.data.evidenceFiles = [{ id: 'file' }]; account.data.amount = '10.123';
+  await account.prepare(); assert.match(account.data.error, /充值金额/);
+  account.data.amount = '10.00'; account.data.collectionAccounts = [{ id: 'collection' }]; account.data.collectionIndex = 0;
+  await account.prepare(); assert.equal(account.data.confirming, true); assert.equal(writes, 0);
+});
+
+test('finance clearing filters selections and submits exact service preview versions and amounts once', async () => {
+  const commands = []; let finish;
+  const account = financeAccounts(async path => path.endsWith('/preview') ? { totalAmount: '12.34', items: [{ fundingAllocationId: 'one', version: 7, clearableAmount: '12.34' }] } : [],
+    { roleCommand: (...args) => { commands.push(args); return new Promise(resolve => { finish = resolve; }); } });
+  account.loadAccount = async () => {};
+  account.data.credits = [{ fundingAllocationId: 'one', date: '2026-10-10', supplierName: '供应商A' }, { fundingAllocationId: 'two', date: '2026-09-01', supplierName: '供应商B' }];
+  account.data.from = '2026-10-01'; account.filterCredits();
+  account.chooseCredits({ detail: { value: ['one', 'two', 'one'] } }); assert.deepEqual(plain(account.data.chosen), ['one']);
+  account.data.mode = 'clearing'; account.data.evidenceFiles = [{ id: 'evidence' }];
+  await account.prepare(); assert.equal(account.data.confirming, true);
+  const first = account.submit(); await account.submit(); assert.equal(commands.length, 1);
+  assert.deepEqual(plain(commands[0][2].data.items), [{ fundingAllocationId: 'one', expectedVersion: 7, expectedAmount: '12.34' }]);
+  assert.deepEqual(plain(commands[0][2].data.evidenceFileIds), ['evidence']); finish({}); await first;
+  assert.equal(account.data.mode, '');
+});
+
+test('finance credit adjustment uses displayed account version and cannot fall below outstanding debt', async () => {
+  const commands = [];
+  const account = financeAccounts(undefined, { roleCommand: async (...args) => { commands.push(args); } });
+  account.loadAccount = async () => {};
+  account.data.mode = 'credit'; account.data.amount = '19.99'; account.data.reason = '调整';
+  await account.prepare(); assert.equal(account.data.confirming, false); assert.match(account.data.error, /不能低于/);
+  account.data.amount = '200'; await account.prepare(); await account.submit();
+  assert.equal(commands[0][2].method, 'PATCH');
+  assert.deepEqual(plain(commands[0][2].data), { expectedVersion: 3, limit: '200.00', reason: '调整' });
+  account.data.mode = 'credit'; account.data.amount = '90071992547409.91'; await account.prepare(); await account.submit();
+  assert.equal(commands[1][2].data.limit, '90071992547409.91');
+});
+
+test('finance account recharge and clearing history retain document links and evidence metadata', async () => {
+  const account = financeAccounts(async path => path.endsWith('/account') ? { version: 4 } : path.endsWith('/credit-items') ? [] : path.endsWith('/ledgers')
+    ? [{ sourceType: 'RECHARGE', sourceId: 'r', amount: '15.00', occurredAt: '2026-10-10T00:00:00Z' }]
+    : path.endsWith('/credit-movements') ? [1, 2].map(value => ({ sourceType: 'CLEARING', sourceId: 'c', amount: value === 1 ? '10.10' : '2.24', occurredAt: '2026-10-10T00:00:00Z' }))
+    : { documentNo: '充值单', operatorName: '财务人员', evidenceFiles: [{ id: 'image' }] });
+  account.data.stores = [{ id: 'store', name: '测试门店', account: { version: 3 } }];
+  await account.loadAccount(account.data.store, 1, account.data.user.id);
+  assert.equal(account.data.visibleStores[0].account.version, 4);
+  assert.equal(account.data.history.length, 2); assert.equal(account.data.history.find(row => row.kind === 'clearings').amount, 12.34);
+  await account.openDocument(tap('r', { kind: 'recharges' }));
+  assert.equal(account.data.document.documentNo, '充值单'); assert.equal(account.data.document.evidenceFiles[0].id, 'image');
+});
+
+test('finance account request ignores a response received after leaving the page', async () => {
+  let finish;
+  const account = financeAccounts(() => new Promise(resolve => { finish = resolve; }));
+  account.data.history = [{ id: 'r', kind: 'recharges', title: '充值' }];
+  const work = account.openDocument(tap('r', { kind: 'recharges' })); account.onHide(); finish({ documentNo: '旧单据' }); await work;
+  assert.equal(account.data.document, null);
+});
 
 test('finance durable commands retain the exact original key after response loss', async () => {
   const harness = commandApi(), api = harness.reload();
@@ -1287,8 +1572,65 @@ test('single-role navigation hides other role entries and redirects unauthorized
     },
   });
   assert.equal(module.exports.openWorkspace('supplier'), null);
-  assert.deepEqual(calls, ['hide', '/pages/store/index']);
+  assert.deepEqual(calls, ['/pages/store/index']);
   assert.equal(module.exports.openWorkspace('store').id, 'u1');
+});
+
+test('workspace navigation follows role and assigned-store permissions', () => {
+  const module = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/api.js', 'utf8'), { module });
+  const names = user => plain(module.exports.workspaceNames(user));
+  assert.deepEqual(names(null), []);
+  for (const [role, expected] of [['STORE', 'store'], ['STORE_FINANCE', 'store'], ['SUPPLIER', 'supplier'], ['PURCHASER', 'purchaser'], ['HQ_FINANCE', 'finance']]) {
+    assert.deepEqual(names({ roles: [role] }), [expected]);
+  }
+  assert.deepEqual(names({ roles: ['ADMIN'] }), ['purchaser', 'finance']);
+  assert.deepEqual(names({ roles: ['STORE', 'SUPPLIER', 'STORE'] }), ['store', 'supplier']);
+  for (const role of ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER']) {
+    assert.deepEqual(names({ roles: [role], scope: { type: 'MULTI_STORE', storeIds: ['s1'] } }), ['region']);
+    assert.deepEqual(names({ roles: [role], scope: { type: 'MULTI_STORE', storeIds: [] } }), []);
+  }
+});
+
+test('custom navigation refreshes account permissions and guards workspace switches', () => {
+  let user = { roles: ['ADMIN'] };
+  let route = 'pages/purchaser/index';
+  let definition;
+  const calls = [];
+  const module = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/api.js', 'utf8'), { module });
+  vm.runInNewContext(readFileSync('apps/miniprogram/custom-tab-bar/index.js', 'utf8'), {
+    require: () => ({ ...module.exports, currentUser: () => user }),
+    Component: value => { definition = value; },
+    getCurrentPages: () => [{ route }],
+    wx: { switchTab: options => calls.push(options) },
+  });
+  const bar = { data: { ...definition.data }, ...definition.methods, setData(value) { Object.assign(this.data, value); } };
+  definition.lifetimes.attached.call(bar);
+  assert.deepEqual(plain(bar.data.items.map(item => item.name)), ['purchaser', 'finance']);
+  assert.equal(bar.data.visible, true);
+  assert.equal(bar.data.selected, 'purchaser');
+  bar.switchWorkspace({ currentTarget: { dataset: { name: 'store' } } });
+  assert.equal(calls.length, 0);
+  bar.switchWorkspace({ currentTarget: { dataset: { name: 'finance' } } });
+  assert.equal(calls[0].url, '/pages/finance/index');
+  assert.equal(bar.data.selected, 'purchaser');
+  bar.switchWorkspace({ currentTarget: { dataset: { name: 'finance' } } });
+  assert.equal(calls.length, 1);
+  calls[0].complete();
+  assert.equal(bar.data.switching, false);
+  assert.equal(bar.data.selected, 'purchaser');
+  bar.switchWorkspace({ currentTarget: { dataset: { name: 'finance' } } });
+  route = 'pages/finance/index'; calls[1].complete();
+  assert.equal(bar.data.selected, 'finance');
+  user = { roles: ['STORE'] }; bar.refresh();
+  assert.equal(bar.data.visible, false);
+  assert.deepEqual(plain(bar.data.items.map(item => item.name)), ['store']);
+  bar.switchWorkspace({ currentTarget: { dataset: { name: 'finance' } } });
+  assert.equal(calls.length, 2);
+  user = null; bar.refresh();
+  assert.deepEqual(plain(bar.data.items), []);
+  assert.equal(bar.data.visible, false);
 });
 
 test('supplier allocates replenishment gaps and uses only confirmed unused freight', async () => {

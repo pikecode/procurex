@@ -3,6 +3,7 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException } 
 import sharp from 'sharp';
 import { DatabaseService } from '../database/database.service.js';
 import { PrivateStorage } from './private-storage.js';
+import { assignedStoreIds, isCompanyUser, type BusinessScope } from '../auth/store-scope.js';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const mimeTypes = new Set(['image/jpeg', 'image/png', 'application/pdf']);
@@ -61,11 +62,18 @@ export class FilesService {
     return { id, status: 'READY' };
   }
 
-  async download(ownerId: string, id: string, scope?: { type?: string; storeId?: string; supplierId?: string }, roles: string[] = []) {
+  async download(ownerId: string, id: string, scope?: BusinessScope, roles: string[] = []) {
+    const storeIds = isCompanyUser({ roles }) ? undefined : assignedStoreIds(scope);
     const file = await this.database.client.fileObject.findFirst({ where: { id, status: 'READY' }, include: { payment: { select: { storeId: true, supplierId: true, direction: true } }, receipt: { select: { shipment: { select: { supplierOrder: { select: { storeId: true, supplierId: true } } } } } }, recharge: { select: { storeId: true } }, clearing: { select: { storeId: true } } } });
     if (!file) throw new NotFoundException();
     const accountDocument = file.recharge ?? file.clearing;
     const document = file.payment ?? file.receipt?.shipment.supplierOrder;
+    if (storeIds) {
+      const documentStoreId = document?.storeId ?? accountDocument?.storeId;
+      const permitted = !!documentStoreId && storeIds.includes(documentStoreId);
+      if (!permitted) throw new NotFoundException();
+      return { file, bytes: await this.storage.get(file.objectKey) };
+    }
     let productAllowed = false;
     if (file.purpose === 'PRODUCT') {
       if (roles.includes('PURCHASER')) productAllowed = await this.database.client.product.count({ where: { imageFileId: id } }) > 0;

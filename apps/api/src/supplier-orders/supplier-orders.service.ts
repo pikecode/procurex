@@ -30,16 +30,19 @@ import type {
 } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
 import { storeDestination } from '../common/master-data-profile.js';
+import { assignedStoreIds, storeFilter, type BusinessScope } from '../auth/store-scope.js';
 import { lockFundingRequest, synchronizeRequestFunding } from '../purchase-requests/request-funding.js';
 import { toFreightConfirmationView, type FreightConfirmationView } from '../freight-confirmations/freight-confirmations.service.js';
 
 export type ListSupplierOrdersInput = {
+  storeIds?: string[];
   storeId?: string;
   supplierId?: string;
   status?: SupplierOrderStatus;
 };
 
 export type SupplierOrderSummaryView = {
+  supplierName?: string;
   storeName?: string;
   productSummary?: string;
   id: string;
@@ -208,25 +211,26 @@ export class SupplierOrdersService {
   async list(input: ListSupplierOrdersInput): Promise<SupplierOrderSummaryView[]> {
     const orders = await this.database.client.supplierOrder.findMany({
       where: {
-        storeId: input.storeId,
+        storeId: storeFilter(input.storeId, input.storeIds),
         supplierId: input.supplierId,
         status: input.status,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      include: { store: { select: { name: true } }, items: {
+      include: { supplier: { select: { name: true } }, store: { select: { name: true } }, items: {
         orderBy: { createdAt: 'asc' }, select: { product: { select: { name: true } } },
       } },
     });
 
-    return orders.map(order => ({ ...toSupplierOrderSummaryView(order), storeName: order.store.name,
+    return orders.map(order => ({ ...toSupplierOrderSummaryView(order), supplierName: order.supplier.name, storeName: order.store.name,
       productSummary: order.items.map(item => item.product.name).join('、') }));
   }
 
-  async get(id: string, scope?: { type: string; supplierId?: string }): Promise<SupplierOrderDetailView> {
+  async get(id: string, scope?: BusinessScope): Promise<SupplierOrderDetailView> {
     const order = await this.database.client.supplierOrder.findUnique({
-      where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
+      where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined,
+        ...(scope?.type === 'MULTI_STORE' ? { storeId: storeFilter(undefined, assignedStoreIds(scope)) } : {}) },
       include: {
-        supplier: { select: { deliveryMode: true } },
+        supplier: { select: { deliveryMode: true, name: true } },
         store: { select: { name: true, address: true, contactName: true, contactPhone: true, receiptAddress: true, receiptContactName: true, receiptContactPhone: true } },
         items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true } }, shipmentItems: { select: { permanentlyReduced: true, gapAllocations: { select: { quantity: true } } } }, replenishmentGaps: { orderBy: { createdAt: 'asc' } } } },
         freightConfirmations: { orderBy: { createdAt: 'desc' } },
@@ -243,6 +247,7 @@ export class SupplierOrdersService {
     return {
       ...toSupplierOrderDetailView(order),
       defaultDeliveryMode: order.supplier.deliveryMode,
+      supplierName: order.supplier.name,
       storeName: order.store.name,
       destination: storeDestination(order.store),
       requiresFreightSnapshot: order.requiresFreightSnapshot,

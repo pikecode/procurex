@@ -41,22 +41,25 @@ test('store finance: scoped overview, account registry, stale edits and selected
     assert.equal(edited.status, 200);
     assert.equal((await call('HQ_FINANCE', `/collection-accounts/${collectionId}`, 'PATCH', { ...accountBody, expectedVersion: 1 })).status, 409);
     const store = await db.store.create({ data: { code: prefix, name: '门店财务测试门店' } });
+    const actor = await db.user.findUniqueOrThrow({ where: { username: `${prefix}HQ_FINANCE` } });
+    const rechargeProof = await db.fileObject.create({ data: { filename: 'recharge.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: `${prefix}/recharge`, uploadTokenHash: 'isolated', purpose: 'RECHARGE', status: 'READY', ownerId: actor.id } });
+    const clearingProof = await db.fileObject.create({ data: { filename: 'clearing.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: `${prefix}/clearing`, uploadTokenHash: 'isolated', purpose: 'CLEARING', status: 'READY', ownerId: actor.id } });
     const limit = await call('ADMIN', `/stores/${store.id}/credit-limit`, 'PATCH', { expectedVersion: 0, limit: '100', reason: '初始授权' });
     assert.equal(limit.status, 200);
     assert.equal((await call('ADMIN', `/stores/${store.id}/credit-limit`, 'PATCH', { expectedVersion: 0, limit: '100', reason: '重复授权' })).status, 409);
     for (const id of [collectionId, randomUUID(), 'arbitrary-reference']) {
-      assert.equal((await call('HQ_FINANCE', `/stores/${store.id}/recharges`, 'POST', { amount: '10', businessDate: '2026-10-06', collectionAccountId: id })).status, 409);
+      assert.equal((await call('HQ_FINANCE', `/stores/${store.id}/recharges`, 'POST', { amount: '10', businessDate: '2026-10-06', collectionAccountId: id, evidenceFileIds: [rechargeProof.id] })).status, 409);
     }
     assert.equal(await db.rechargeDocument.count({ where: { storeId: store.id } }), 0);
     assert.equal((await call('ADMIN', `/collection-accounts/${collectionId}`, 'PATCH', { ...accountBody, expectedVersion: 2 })).status, 200);
-    assert.equal((await call('HQ_FINANCE', `/stores/${store.id}/recharges`, 'POST', { amount: '10', businessDate: '2026-10-06', collectionAccountId: collectionId })).status, 201);
+    assert.equal((await call('HQ_FINANCE', `/stores/${store.id}/recharges`, 'POST', { amount: '10', businessDate: '2026-10-06', collectionAccountId: collectionId, evidenceFileIds: [rechargeProof.id] })).status, 201);
     await db.storeAccount.update({ where: { storeId: store.id }, data: { creditUsed: '50', creditCumulative: '50' } });
     const first = await db.fundingAllocation.create({ data: { storeId: store.id, method: 'CREDIT', targetAmount: '20', creditOutstanding: '20' } });
     const second = await db.fundingAllocation.create({ data: { storeId: store.id, method: 'CREDIT', targetAmount: '30', creditOutstanding: '30' } });
     const items = await call('HQ_FINANCE', `/stores/${store.id}/credit-items`);
     assert.equal(items.status, 200); assert.equal(items.body.data.length, 2);
     assert.ok(items.body.data.every((item: { occurredAt: string; supplierName: string | null }) => Number.isFinite(Date.parse(item.occurredAt)) && item.supplierName === null));
-    const clearing = await call('HQ_FINANCE', `/stores/${store.id}/clearings`, 'POST', { businessDate: '2026-10-06', items: [{ fundingAllocationId: first.id, expectedVersion: 1, expectedAmount: '20' }] });
+    const clearing = await call('HQ_FINANCE', `/stores/${store.id}/clearings`, 'POST', { businessDate: '2026-10-06', evidenceFileIds: [clearingProof.id], items: [{ fundingAllocationId: first.id, expectedVersion: 1, expectedAmount: '20' }] });
     assert.equal(clearing.status, 201);
     assert.equal((await db.fundingAllocation.findUniqueOrThrow({ where: { id: second.id } })).creditOutstanding.toFixed(2), '30.00');
     const overview = await call('HQ_FINANCE', '/stores/finance-overview');
@@ -69,6 +72,7 @@ test('store finance: scoped overview, account registry, stale edits and selected
   } finally {
     await app.close();
     const userWhere = { username: { startsWith: prefix } };
+    await db.fileObject.deleteMany({ where: { owner: userWhere } });
     const own = { store: { code: prefix } };
     await db.auditLog.deleteMany({ where: { actor: userWhere } }); await db.commandRecord.deleteMany({ where: { actor: userWhere } });
     await db.creditMovement.deleteMany({ where: { account: own } }); await db.accountLedger.deleteMany({ where: { account: own } });

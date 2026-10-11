@@ -13,6 +13,11 @@ Page({
     const phoneNumber = String(event.currentTarget.dataset.phone || '').trim();
     if (phoneNumber) wx.makePhoneCall({ phoneNumber });
   },
+  togglePreviewGroup(event) {
+    const supplierId = String(event.currentTarget.dataset.supplierId || '');
+    const expanded = this.data.expandedSupplierId === supplierId ? '' : supplierId;
+    this.setData({ expandedSupplierId: expanded, previewGroups: storeView.previewGroups(this.data.preview, this.data.products, expanded) });
+  },
   data: {
     activeView: 'order',
     orderStep: 'catalog',
@@ -26,6 +31,7 @@ Page({
     cartCount: 0,
     cartOpen: false,
     previewGroups: [],
+    expandedSupplierId: '',
     orderFilter: 'all',
     fundingFilter: 'all',
     filteredRequests: [],
@@ -410,9 +416,9 @@ Page({
       const detail = await api.request(`/purchase-requests/${id}`);
       if (this.data.selectedRequestId !== id) return;
       const names = new Map(this.data.products.map(product => [product.id, product.name]));
-      this.setData({ selectedRequest: { ...detail, stage: storeView.orderStage(detail), submittedDate: storeView.dateText(detail.submittedAt),
+      this.setData({ selectedRequest: { ...detail, stage: storeView.orderStage(detail), stageTone: storeView.orderStageTone(detail), submittedDate: storeView.dateText(detail.submittedAt),
         items: detail.items.map(item => ({ ...item, productName: item.productName || names.get(item.productId) || '商品' })),
-        supplierOrders: (detail.supplierOrders || []).map(order => ({ ...order, shipments: (order.shipments || []).map(shipment => ({ ...shipment,
+        supplierOrders: (detail.supplierOrders || []).map(order => ({ ...order, fulfillmentTone: order.rejectionHandled ? 'done' : storeView.statusTone(order.fulfillmentStatus), shipments: (order.shipments || []).map(shipment => ({ ...shipment,
           shippedDate: storeView.dateText(shipment.shippedAt), receivedDate: storeView.dateText(shipment.receivedAt) })) })) } });
     } catch (error) {
       if (this.data.selectedRequestId === id) this.setData({ error: error.message });
@@ -440,7 +446,7 @@ Page({
     try {
       const requests = await api.request('/purchase-requests');
       this.setData({ requests: Array.isArray(requests) ? requests.map(order => ({ ...order, submittedDate: storeView.dateText(order.submittedAt),
-        stage: storeView.orderStage(order), progressText: order.supplierCount ? `${order.supplierCount}家供应商 · ${order.completedSupplierCount || 0}家已完成` : '等待采购分配' })) : [] });
+        stage: storeView.orderStage(order), stageTone: storeView.orderStageTone(order), progressText: order.supplierCount ? `${order.supplierCount}家供应商 · ${order.completedSupplierCount || 0}家已完成` : '等待采购分配' })) : [] });
       this.refreshOrders();
     } catch (error) {
       this.setData({ error: error.message });
@@ -460,12 +466,17 @@ Page({
           id: item.payload.shipmentId,
           shipmentNo: item.payload.shipmentNo || item.payload.shipmentId,
           supplierOrderId: item.payload.supplierOrderId,
+          returned: item.payload.type === 'DISCREPANCY_RESOLVED',
           title: item.title,
           label: `${item.payload.shipmentNo || '发货单'} · ${item.title}`,
           createdAt: item.createdAt, createdDate: storeView.dateText(item.createdAt)
         }))
         .filter((item, index, items) => items.findIndex(value => value.id === item.id) === index).slice(0, 20);
-      this.setData({ shipmentTodos });
+      const current = await Promise.all(shipmentTodos.map(async item => {
+        const shipment = await api.request(`/shipments/${item.id}`);
+        return !shipment.currentReceiptRevision || (item.returned && shipment.items.some(line => !line.receiptLocked)) ? item : null;
+      }));
+      this.setData({ shipmentTodos: current.filter(Boolean) });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -528,7 +539,7 @@ Page({
         method: 'POST',
         data: this.orderInput()
       });
-      this.setData({ preview, previewGroups: storeView.previewGroups(preview, this.data.products), orderStep: 'confirm', cartOpen: false });
+      this.setData({ preview, previewGroups: storeView.previewGroups(preview, this.data.products, this.data.expandedSupplierId), orderStep: 'confirm', cartOpen: false });
     } catch (error) {
       this.setData({ error: orderError(error) });
     } finally {
@@ -544,7 +555,7 @@ Page({
       if (!this.data.pendingOrder) {
         const latest = await api.request('/purchase-requests/preview', { method: 'POST', data: this.orderInput() });
         if (storeView.previewSignature(latest) !== storeView.previewSignature(this.data.preview)) {
-          this.setData({ preview: latest, previewGroups: storeView.previewGroups(latest, this.data.products), error: '报价或资金状态已变化，请重新核对后提交' });
+          this.setData({ preview: latest, previewGroups: storeView.previewGroups(latest, this.data.products, this.data.expandedSupplierId), error: '报价或资金状态已变化，请重新核对后提交' });
           return;
         }
         if (latest.funding.credit && Number(latest.funding.credit.shortfall) > 0) throw new Error('挂账额度不足，请联系财务调整额度后重试');

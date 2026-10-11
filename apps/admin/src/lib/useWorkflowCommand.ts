@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createCommandId } from './commandId';
 import { ApiError, hasRole, request, type User } from './api';
 
 type Command = { key: string; path: string; method: 'POST' | 'PATCH'; body: Record<string, unknown>; label: string };
@@ -6,7 +7,7 @@ const keyFor = (userId: string) => `procurex-admin-purchase-command-v1:${userId}
 export const adminCommandPath = (path: string) => /^\/commands\/[0-9a-f-]{36}\/(reviews|close-rolled-back-price|close-uncommitted-price)$/.test(path);
 const financePath = (path: string) => /^\/stores\/[0-9a-f-]{36}\/(recharges|clearings|credit-limit)$/.test(path) || path === '/payment-records' || /^\/payment-records\/[0-9a-f-]{36}\/(confirm|reject|cancel)$/.test(path) || path === '/difference-disposals' || /^\/difference-disposals\/[0-9a-f-]{36}\/confirm$/.test(path);
 const allowed = (path: string) => financePath(path) || path === '/purchase-requests' || /^\/purchase-requests\/[0-9a-f-]{36}\/(confirm|reject|items|assign|reallocate)$/.test(path) || /^\/supplier-orders\/[0-9a-f-]{36}\/(reject|reconcile-funding|shipments|freight-confirmations)$/.test(path) || /^\/freight-confirmations\/[0-9a-f-]{36}\/(confirm|reject)$/.test(path) || /^\/shipments\/[0-9a-f-]{36}\/receipts$/.test(path) || /^\/discrepancies\/[0-9a-f-]{36}\/resolve$/.test(path);
-export const canRecoverWorkflow = (user: User, path?: string) => hasRole(user, 'ADMIN') || (hasRole(user, 'HQ_FINANCE') && Boolean(path && financePath(path))) || (hasRole(user, 'PURCHASER') && Boolean(path && (path.startsWith('/purchase-requests') || path.endsWith('/reconcile-funding') || path.startsWith('/freight-confirmations/'))));
+export const canRecoverWorkflow = (user: User, path?: string) => hasRole(user, 'ADMIN') || (hasRole(user, 'HQ_FINANCE') && Boolean(path && financePath(path))) || (hasRole(user, 'PURCHASE_FOLLOWER') && Boolean(path && /^\/purchase-requests\/[0-9a-f-]{36}\/(confirm|reject)$/.test(path))) || (hasRole(user, 'PURCHASER') && Boolean(path && (path.startsWith('/purchase-requests') || path.endsWith('/reconcile-funding') || path.startsWith('/freight-confirmations/'))));
 export function useWorkflowCommand(userId: string) {
   const [pending, setPending] = useState<Command | null>(null); const [busy, setBusy] = useState(false);
   const [error, setError] = useState(''); const [ready, setReady] = useState(false); const [storageError, setStorageError] = useState('');
@@ -44,7 +45,7 @@ export function useWorkflowCommand(userId: string) {
     try {
       if (localStorage.getItem(keyFor(userId))) { setStorageError('检测到其他页面的待确认提交，请刷新恢复原提交。'); return false; }
     } catch { setStorageError('无法读取提交记录，暂不能提交操作。'); return false; }
-    return run({ ...input, key: crypto.randomUUID() });
+    return run({ ...input, key: createCommandId() });
   }
   return { pending, busy, error: error || storageError, blocked: !ready || busy || Boolean(pending) || Boolean(storageError),
     clearError: () => setError(''), submit,

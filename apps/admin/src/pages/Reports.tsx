@@ -21,14 +21,17 @@ function validateRange(filters: Filters, kind: Kind) {
   if (kind === 'product-quantities' && filters.from && filters.to) { const end = new Date(`${filters.from}T00:00:00Z`); end.setUTCMonth(end.getUTCMonth() + 3); if (filters.to > end.toISOString().slice(0, 10)) throw new Error('商品数量查询区间不能超过三个月。'); }
 }
 export default function Reports({ user }: { user: User }) {
+  const multiStore = user.scope?.type === 'MULTI_STORE' && Boolean(user.scope.storeIds?.length) && hasRole(user, 'REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER');
   const scoped = ['STORE', 'STORE_FINANCE'].includes(user.scope?.type || '') || (!hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER') && hasRole(user, 'STORE', 'STORE_FINANCE'));
   const supplier = user.scope?.type === 'SUPPLIER' || (!scoped && !hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER') && hasRole(user, 'SUPPLIER'));
   if (supplier && (!hasRole(user, 'SUPPLIER') || !user.scope?.supplierId)) return <Result status="warning" title="尚未绑定供应商，无法查看报表" />;
   if (scoped && !user.scope?.storeId) return <Result status="warning" title="尚未绑定门店，无法查看报表" />;
-  if (!scoped && !supplier && !hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER')) return <Result status="403" title="无权访问此页面" />;
-  return <Workspace key={`${user.id}:${supplier ? user.scope?.supplierId : scoped ? user.scope?.storeId : 'central'}`} user={user} scoped={scoped || supplier} supplier={supplier} />;
+  if (!scoped && !supplier && !multiStore && !hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER')) return <Result status="403" title="无权访问此页面" />;
+  return <Workspace key={`${user.id}:${multiStore ? user.scope?.storeIds?.join(',') : supplier ? user.scope?.supplierId : scoped ? user.scope?.storeId : 'central'}`} user={user} scoped={scoped || supplier} supplier={supplier} />;
 }
 function Workspace({ user, scoped, supplier }: { user: User; scoped: boolean; supplier: boolean }) {
+  const multiStore = user.scope?.type === 'MULTI_STORE';
+  const restricted = scoped || multiStore;
   const [kind, setKind] = useState<Kind>('order-amounts'); const [form] = Form.useForm<Filters>(); const [snapshot, setSnapshot] = useState<Snapshot>();
   const [dirty, setDirty] = useState(false); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [exporting, setExporting] = useState(false);
   const [lookups, setLookups] = useState<{ stores: Lookup[]; suppliers: Lookup[]; products: Lookup[] }>({ stores: [], suppliers: [], products: [] });
@@ -39,10 +42,14 @@ function Workspace({ user, scoped, supplier }: { user: User; scoped: boolean; su
   useEffect(() => { alive.current = true; return () => { alive.current = false; sequence.current++; controller.current?.abort(); }; }, []);
   useEffect(() => {
     if (scoped) return; const cancel = new AbortController();
+    if (multiStore) {
+      request<Lookup[]>('/stores', { signal: cancel.signal }).then(stores => { if (!cancel.signal.aborted) setLookups({ stores, suppliers: [], products: [] }); }).catch(failure => { if (!cancel.signal.aborted) setError((failure as Error).message); });
+      return () => cancel.abort();
+    }
     Promise.all([request<Lookup[]>('/stores', { signal: cancel.signal }), request<Lookup[]>('/suppliers', { signal: cancel.signal }), request<Lookup[]>('/products', { signal: cancel.signal })])
       .then(([stores, suppliers, products]) => { if (!cancel.signal.aborted) setLookups({ stores, suppliers, products }); }).catch(failure => { if (!cancel.signal.aborted) setError((failure as Error).message); });
     return () => cancel.abort();
-  }, [scoped]);
+  }, [scoped, multiStore]);
   const polling = jobs.rows.some(row => ['QUEUED', 'PROCESSING'].includes(row.status));
   useEffect(() => { if (!polling) return; const timer = setInterval(jobs.reload, 3000); return () => clearInterval(timer); }, [polling, jobs.reload]);
   async function query() {
@@ -50,12 +57,14 @@ function Workspace({ user, scoped, supplier }: { user: User; scoped: boolean; su
     try { const values = await form.validateFields(); const filters: Filters = Object.fromEntries(Object.entries(values).filter(([, value]) => Boolean(value)));
       if (supplier) { delete filters.storeId; delete filters.productId; filters.supplierId = user.scope!.supplierId!; }
       else if (scoped) { delete filters.supplierId; delete filters.productId; filters.storeId = user.scope!.storeId!; }
+      else if (multiStore) { delete filters.supplierId; delete filters.productId; }
       if (kind === 'order-amounts') delete filters.productId;
       validateRange(filters, kind); const params = new URLSearchParams(filters as Record<string, string>);
       const data = await request<Report>(`/reports/${kind}?${params}`, { signal: abort.signal });
       if (!alive.current || n !== sequence.current) return;
       if (supplier && ((data.orders || []).some(row => row.supplierId !== user.scope?.supplierId) || kind === 'order-amounts' && data.amountBasis !== 'SUPPLY')) throw new Error('报表不在当前供应商范围或不是供货金额口径');
       if (scoped && !supplier && (data.orders || []).some(row => row.storeId !== user.scope?.storeId)) throw new Error('报表明细不在当前门店范围');
+      if (multiStore && (data.orders || []).some(row => !user.scope?.storeIds?.includes(row.storeId || ''))) throw new Error('报表明细不在授权门店范围');
       setSnapshot({ kind, filters, data }); setDirty(false); setPage(1);
     } catch (failure) { if (alive.current && n === sequence.current && !abort.signal.aborted && !('errorFields' in (failure as object))) setError((failure as Error).message); }
     finally { if (alive.current && n === sequence.current) setLoading(false); }
@@ -72,7 +81,7 @@ function Workspace({ user, scoped, supplier }: { user: User; scoped: boolean; su
   async function jobAction(job: Job, retry: boolean) {
     if (exportLock.current || exporting || retry && unknown) return; exportLock.current = true; setExporting(true); setError('');
     try {
-      const fresh = await request<Job>(`/exports/${job.jobId}`); if (fresh.jobId !== job.jobId || fresh.reportType === 'profit' && scoped || fresh.expiresAt && Date.parse(fresh.expiresAt) <= Date.now() || fresh.status !== (retry ? 'FAILED' : 'READY')) throw new Error('导出状态已变化或已过期，请刷新任务列表。');
+      const fresh = await request<Job>(`/exports/${job.jobId}`); if (fresh.jobId !== job.jobId || fresh.reportType === 'profit' && restricted || fresh.expiresAt && Date.parse(fresh.expiresAt) <= Date.now() || fresh.status !== (retry ? 'FAILED' : 'READY')) throw new Error('导出状态已变化或已过期，请刷新任务列表。');
       if (retry) { localStorage.setItem(unknownKey, JSON.stringify({ retryJobId: job.jobId })); setUnknown(true); await request(`/exports/${job.jobId}/retry`, { method: 'POST' }); localStorage.removeItem(unknownKey); if (alive.current) setUnknown(false); }
       else {
         const session = getSession(); if (!session) throw new Error('登录已失效');
@@ -94,10 +103,11 @@ function Workspace({ user, scoped, supplier }: { user: User; scoped: boolean; su
     <div className="page-heading"><h1>业务报表</h1><Button icon={<Download size={16} />} disabled={!snapshot || dirty || loading || unknown || exporting} loading={exporting} onClick={exportReport}>导出 CSV</Button></div>
     {(error || jobs.error) && <Alert type="error" showIcon title={error || jobs.error} />}
     {unknown && <Alert type="warning" showIcon title="导出提交结果待核对，请先刷新任务列表，避免重复生成。" action={<Button disabled={exporting || jobs.loading || Boolean(jobs.error)} onClick={() => { try { localStorage.removeItem(unknownKey); setUnknown(false); } catch { setError('无法清理导出记录，请核查浏览器存储。'); } }}>已核对导出记录</Button>} />}
-    <Tabs activeKey={kind} onChange={value => { sequence.current++; controller.current?.abort(); setKind(value as Kind); setSnapshot(undefined); setLoading(false); setError(''); setPage(1); setOrderDetail(false); }} items={(['order-amounts', 'product-quantities', ...(!scoped ? ['profit'] : [])] as Kind[]).map(key => ({ key, label: titles[key] }))} />
+    <Tabs activeKey={kind} onChange={value => { sequence.current++; controller.current?.abort(); setKind(value as Kind); setSnapshot(undefined); setLoading(false); setError(''); setPage(1); setOrderDetail(false); }} items={(['order-amounts', 'product-quantities', ...(!restricted ? ['profit'] : [])] as Kind[]).map(key => ({ key, label: titles[key] }))} />
     <Form form={form} initialValues={defaults} layout="vertical" className="report-filters compact-form" onValuesChange={() => setDirty(true)} onFinish={query} disabled={loading}>
       <Form.Item label="开始日期" name="from"><Input type="date" /></Form.Item><Form.Item label="结束日期" name="to"><Input type="date" /></Form.Item>
-      {!scoped && <><Form.Item label="门店" name="storeId"><Select aria-label="门店筛选" allowClear showSearch optionFilterProp="label" options={lookups.stores.map(row => ({ value: row.id, label: row.name }))} /></Form.Item><Form.Item label="供应商" name="supplierId"><Select aria-label="供应商筛选" allowClear showSearch optionFilterProp="label" options={lookups.suppliers.map(row => ({ value: row.id, label: row.name }))} /></Form.Item>{kind !== 'order-amounts' && <Form.Item label="商品" name="productId"><Select aria-label="商品筛选" allowClear showSearch optionFilterProp="label" options={lookups.products.map(row => ({ value: row.id, label: row.name }))} /></Form.Item>}</>}
+      {!scoped && <Form.Item label="门店" name="storeId"><Select aria-label="门店筛选" allowClear showSearch optionFilterProp="label" options={lookups.stores.map(row => ({ value: row.id, label: row.name }))} /></Form.Item>}
+      {!restricted && <><Form.Item label="供应商" name="supplierId"><Select aria-label="供应商筛选" allowClear showSearch optionFilterProp="label" options={lookups.suppliers.map(row => ({ value: row.id, label: row.name }))} /></Form.Item>{kind !== 'order-amounts' && <Form.Item label="商品" name="productId"><Select aria-label="商品筛选" allowClear showSearch optionFilterProp="label" options={lookups.products.map(row => ({ value: row.id, label: row.name }))} /></Form.Item>}</>}
       <div className="actions"><Button type="primary" htmlType="submit" icon={<Search size={16} />} loading={loading}>查询</Button><Tooltip title="重置筛选"><Button aria-label="重置报表筛选" icon={<RotateCcw size={16} />} onClick={() => { form.resetFields(); setDirty(true); setSnapshot(undefined); }} /></Tooltip></div>
     </Form>
     {snapshot && <><Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[{ key: 'basis', label: '统计日期', children: shown?.dateBasis === 'firstShippedAt' ? '首次发货日期' : '订单完成日期' }, { key: 'asof', label: '数据时间', children: date(shown!.asOf) }, ...(supplier && snapshot.kind === 'order-amounts' ? [{ key: 'amount-basis', label: '金额口径', children: '供货金额' }] : []), ...(!scoped && shown?.totals ? Object.entries(shown.totals).map(([key, value]) => ({ key, label: ({ salesGoodsAmount: '销售商品额', supplyGoodsAmount: '供货商品额', profit: '经营差额', freightAmount: '运费（单列）' } as Record<string, string>)[key], children: value })) : [])]} />
@@ -105,7 +115,7 @@ function Workspace({ user, scoped, supplier }: { user: User; scoped: boolean; su
     </>}
     <Table<Row> size="small" rowKey={row => `${row.month || row.supplierOrderId || ''}:${row.productId || ''}`} columns={columns} dataSource={rows} loading={loading} scroll={{ x: snapshot?.kind === 'profit' ? 1000 : 650 }} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条`, onChange: (p, size) => { setPage(size === pageSize ? p : 1); setPageSize(size); } }} />
     <section className="price-band"><div className="page-heading"><h2>导出记录</h2><Tooltip title="刷新导出记录"><Button aria-label="刷新导出记录" icon={<RotateCcw size={16} />} loading={jobs.loading} onClick={jobs.reload} /></Tooltip></div>
-      <Table<Job> size="small" rowKey="jobId" dataSource={jobs.rows.filter(row => !scoped || row.reportType !== 'profit')} loading={jobs.loading} scroll={{ x: 700 }} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条` }} columns={[
+      <Table<Job> size="small" rowKey="jobId" dataSource={jobs.rows.filter(row => !restricted || row.reportType !== 'profit')} loading={jobs.loading} scroll={{ x: 700 }} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条` }} columns={[
         { title: '报表', dataIndex: 'reportType', render: (value: Kind) => titles[value] || value }, { title: '创建时间', dataIndex: 'createdAt', render: date }, { title: '有效期至', dataIndex: 'expiresAt', render: date },
         { title: '状态', render: (_, row) => <><Tag color={row.status === 'READY' ? 'green' : row.status === 'FAILED' ? 'red' : 'default'}>{Date.parse(row.expiresAt) <= Date.now() ? '已过期' : statuses[row.status] || row.status}</Tag>{row.error && <small>{row.error}</small>}</> },
         { title: '操作', width: 65, fixed: 'right', render: (_, row) => Date.parse(row.expiresAt) > Date.now() && ['READY', 'FAILED'].includes(row.status) && <Tooltip title={row.status === 'READY' ? '下载 CSV' : '重新生成'}><Button type="text" aria-label={`${row.status === 'READY' ? '下载' : '重试'}导出${row.jobId}`} disabled={exporting || row.status === 'FAILED' && unknown} icon={row.status === 'READY' ? <Download size={16} /> : <RotateCcw size={16} />} onClick={() => jobAction(row, row.status === 'FAILED')} /></Tooltip> },

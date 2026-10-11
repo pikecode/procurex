@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { assignedStoreIds, assertAssignedStore, storeFilter, type BusinessScope } from '../auth/store-scope.js';
 import { Decimal } from 'decimal.js';
 import { settlementPeriod, type SettlementCycle } from '../../../../packages/domain/src/settlement-period.js';
 import { PaymentAllocationState, SettlementMode, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
@@ -7,6 +8,7 @@ import { DatabaseService } from '../database/database.service.js';
 import { summarizeAllocations } from '../payment-records/payment-records.service.js';
 
 export type ListDirectStatementsInput = {
+  storeIds?: string[];
   storeId?: string;
   supplierId?: string;
   cycle?: SettlementCycle;
@@ -60,9 +62,10 @@ export class DirectStatementsService {
     return (await this.loadGroups(input)).map(toSummaryView);
   }
 
-  async get(id: string, scope?: { type?: string; storeId?: string; supplierId?: string }): Promise<DirectStatementDetailView> {
+  async get(id: string, scope?: BusinessScope): Promise<DirectStatementDetailView> {
     const key = decodeStatementId(id);
-    const group = (await this.loadGroups({ ...key, storeId: scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? scope.storeId : key.storeId, supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId })).find((item) => item.id === id);
+    assertAssignedStore(scope, key.storeId);
+    const group = (await this.loadGroups({ ...key, storeIds: assignedStoreIds(scope), storeId: scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? scope.storeId : key.storeId, supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : key.supplierId })).find((item) => item.id === id);
     if (!group) {
       throw new NotFoundException({ code: 'DIRECT_STATEMENT_NOT_FOUND', message: 'Direct statement was not found' });
     }
@@ -72,7 +75,7 @@ export class DirectStatementsService {
   private async loadGroups(input: ListDirectStatementsInput): Promise<StatementGroup[]> {
     const orders = await this.database.client.supplierOrder.findMany({
       where: {
-        storeId: input.storeId,
+        storeId: storeFilter(input.storeId, input.storeIds),
         supplierId: input.supplierId,
         status: SupplierOrderStatus.COMPLETED,
         firstShippedAt: { not: null },
@@ -102,7 +105,12 @@ export class DirectStatementsService {
       group.lines.push(toLineView(order, snapshotsById.get(encodeSettlementItemId(order.id))));
       groups.set(key, group);
     }
-    const adjustmentDocuments = await this.database.client.adjustmentDocument?.findMany({ where: { storeId: input.storeId, supplierId: input.supplierId, side: 'STORE' } }) ?? [];
+    const adjustmentOrders = await this.database.client.supplierOrder.findMany({ where: {
+      storeId: storeFilter(input.storeId, input.storeIds), supplierId: input.supplierId, settlementMode: 'SUPPLIER_TERM',
+    }, select: { id: true } });
+    const adjustmentDocuments = await this.database.client.adjustmentDocument?.findMany({ where: {
+      storeId: storeFilter(input.storeId, input.storeIds), supplierId: input.supplierId, side: 'STORE', supplierOrderId: { in: adjustmentOrders.map(order => order.id) },
+    } }) ?? [];
     for (const document of adjustmentDocuments) {
       const period = parsePeriodKey(document.settlementPeriodKey);
       if (!period || (input.cycle && input.cycle !== period.cycle)) continue;

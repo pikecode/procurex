@@ -120,6 +120,9 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(createdBody.data.code, storeCode);
     assert.equal(createdBody.data.status, StoreStatus.ACTIVE);
     const scopedStoreUser = await prisma.user.findUniqueOrThrow({ where: { username: storeUsername } });
+    const actor = await prisma.user.findUniqueOrThrow({ where: { username: adminUsername } });
+    const rechargeProof = await prisma.fileObject.create({ data: { filename: 'recharge.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: `${storeCode}/recharge`, uploadTokenHash: 'isolated', purpose: 'RECHARGE', status: 'READY', ownerId: actor.id } });
+    const clearingProof = await prisma.fileObject.create({ data: { filename: 'clearing.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: `${storeCode}/clearing`, uploadTokenHash: 'isolated', purpose: 'CLEARING', status: 'READY', ownerId: actor.id } });
     await prisma.userScope.create({ data: { userId: scopedStoreUser.id, scopeType: 'STORE', storeId: createdBody.data.id } });
     const createRecharge = async () => {
       const response = await fetch(`${baseUrl}/stores/${createdBody.data.id}/recharges`, {
@@ -135,6 +138,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
           businessDate: '2026-09-24',
           collectionAccountId: collection.id,
           remark: 'Initial recharge',
+          evidenceFileIds: [rechargeProof.id],
         }),
       });
       assert.equal(response.status, 201);
@@ -168,7 +172,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(rechargeAuditLogs.length, 1);
     assert.equal(rechargeAuditLogs[0]?.entityId, recharge.data.id);
 
-    const failedRechargeBody = { amount: '0.00', businessDate: '2026-09-24', collectionAccountId: 'COLLECT-001' };
+    const failedRechargeBody = { amount: '0.00', businessDate: '2026-09-24', collectionAccountId: collection.id, evidenceFileIds: [rechargeProof.id] };
     for (let attempt = 0; attempt < 2; attempt++) {
       const rejected = await fetch(`${baseUrl}/stores/${createdBody.data.id}/recharges`, {
         method: 'POST', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json', 'idempotency-key': 'invalid-recharge-replay' },
@@ -404,6 +408,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
         body: JSON.stringify({
           businessDate: '2026-09-24',
           remark: 'Clear store credit',
+          evidenceFileIds: [clearingProof.id],
           items: [
             {
               fundingAllocationId: fundingAllocation.id,
@@ -548,6 +553,7 @@ test('stores endpoint creates, lists and disables stores with admin role', async
     assert.equal(disabledBody.data.status, StoreStatus.DISABLED);
   } finally {
     await app.close();
+    await prisma.fileObject.deleteMany({ where: { owner: { username: adminUsername } } });
     await prisma.commandRecord.deleteMany({ where: { actor: { username: adminUsername } } });
     await prisma.accountLedger.deleteMany({ where: { account: { store: { code: storeCode } } } });
     await prisma.clearingItem.deleteMany({ where: { clearing: { store: { code: storeCode } } } });

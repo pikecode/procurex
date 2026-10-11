@@ -1,0 +1,4 @@
+{
+  "navigationBarTitleText": "门店账户",
+  "usingComponents": { "evidence-files": "../../components/evidence/index" }
+}

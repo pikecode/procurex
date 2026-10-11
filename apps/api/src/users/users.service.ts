@@ -1,7 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { hashPassword, verifyPassword } from '../../../../packages/domain/src/password.js';
 import { UserScopeType, UserStatus } from '../../../../packages/backend/generated/prisma/enums.js';
-import type { User } from '../../../../packages/backend/generated/prisma/client.js';
+import type { Prisma, User } from '../../../../packages/backend/generated/prisma/client.js';
+import { ASSIGNED_STORE_ROLES } from '../auth/store-scope.js';
 import { DatabaseService } from '../database/database.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { auditedMasterDataTransaction, type MasterDataAuditContext } from '../audit/master-data-audit.js';
@@ -14,7 +15,7 @@ export type UserView = {
   status: UserStatus;
   version: number;
   roles: string[];
-  scope: { type: UserScopeType; storeId: string | null; supplierId: string | null } | null;
+  scope: { type: UserScopeType; storeId: string | null; supplierId: string | null; storeIds?: string[] } | null;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
@@ -24,7 +25,7 @@ export type UpdateUserInput = {
   expectedVersion: number;
   status?: UserStatus;
   displayName?: string;
-  scope?: { type: UserScopeType; storeId?: string; supplierId?: string };
+  scope?: UserScopeInput;
   role?: string;
 };
 
@@ -32,16 +33,17 @@ export type UpdateUserInput = {
 export class UsersService {
   constructor(private readonly database: DatabaseService, private readonly audit: AuditService = new AuditService(database)) {}
 
-  async createUser(input: { username: string; password: string; displayName: string; role: string; scope: { type: UserScopeType; storeId?: string; supplierId?: string } }, context: MasterDataAuditContext): Promise<UserView> {
+  async createUser(input: { username: string; password: string; displayName: string; role: string; scope: UserScopeInput }, context: MasterDataAuditContext): Promise<UserView> {
     const passwordHash = await hashPassword(input.password);
     try {
       const created = await auditedMasterDataTransaction(this.database, this.audit, context, 'user.create', 'User', async tx => {
         const role = await tx.role.findUnique({ where: { code: input.role } });
         if (!role) throw new BadRequestException({ code: 'INVALID_ROLE', message: '角色不存在' });
-        if (input.scope.type === UserScopeType.STORE && !await tx.store.findFirst({ where: { id: input.scope.storeId, status: 'ACTIVE' } })) throw new BadRequestException({ code: 'INVALID_STORE', message: '请选择启用的门店' });
-        if (input.scope.type === UserScopeType.SUPPLIER && !await tx.supplier.findFirst({ where: { id: input.scope.supplierId, status: 'ACTIVE', isArchived: false } })) throw new BadRequestException({ code: 'INVALID_SUPPLIER', message: '请选择启用的供应商' });
+        await validateUserScope(tx, [input.role], input.scope);
         return tx.user.create({ data: { username: input.username, displayName: input.displayName, passwordHash,
-          roles: { create: { roleId: role.id } }, scopes: { create: scopeData(input.scope) } }, include: { roles: { include: { role: true } }, scopes: true } });
+          roles: { create: { roleId: role.id } }, scopes: { create: { ...scopeData(input.scope),
+            ...(input.scope.type === UserScopeType.MULTI_STORE ? { stores: { create: normalizedStoreIds(input.scope).map(storeId => ({ storeId })) } } : {}) } } },
+          include: { roles: { include: { role: true } }, scopes: { include: { stores: true } } } });
       });
       return toUserView(created);
     } catch (error) {
@@ -53,7 +55,7 @@ export class UsersService {
   async listUsers(): Promise<UserView[]> {
     const users = await this.database.client.user.findMany({
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      include: { roles: { include: { role: true } }, scopes: true, sessions: { take: 1, orderBy: { createdAt: 'desc' }, select: { createdAt: true } } },
+      include: { roles: { include: { role: true } }, scopes: { include: { stores: true } }, sessions: { take: 1, orderBy: { createdAt: 'desc' }, select: { createdAt: true } } },
     });
 
     return users.map(toUserView);
@@ -62,7 +64,7 @@ export class UsersService {
   async updateUser(id: string, input: UpdateUserInput, context?: MasterDataAuditContext): Promise<UserView> {
     const existing = await this.database.client.user.findUnique({
       where: { id },
-      include: { roles: { include: { role: true } }, scopes: true },
+      include: { roles: { include: { role: true } }, scopes: { include: { stores: true } } },
     });
 
     if (!existing) {
@@ -84,7 +86,7 @@ export class UsersService {
     const updated = await this.database.client.$transaction(async tx => {
       // Serialize administrator changes so concurrent demotions cannot remove every administrator.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(810081)`;
-      const current = await tx.user.findUniqueOrThrow({ where: { id }, include: { roles: { include: { role: true } }, scopes: true } });
+      const current = await tx.user.findUniqueOrThrow({ where: { id }, include: { roles: { include: { role: true } }, scopes: { include: { stores: true } } } });
       const before = accountAuditSnapshot(current);
       const currentRoles = current.roles.map(entry => entry.role.code);
       const nextRoles = input.role ? [input.role] : currentRoles;
@@ -97,20 +99,20 @@ export class UsersService {
         if (!others) throw new BadRequestException({ code: 'LAST_ADMIN', message: '必须保留至少一个启用的管理员' });
       }
       const currentScope = current.scopes[0];
-      const scope = input.scope ?? (currentScope ? { type: currentScope.scopeType, storeId: currentScope.storeId ?? undefined, supplierId: currentScope.supplierId ?? undefined } : undefined);
+      const scope = input.scope ?? (currentScope ? { type: currentScope.scopeType, storeId: currentScope.storeId ?? undefined, supplierId: currentScope.supplierId ?? undefined,
+        ...(currentScope.scopeType === UserScopeType.MULTI_STORE ? { storeIds: currentScope.stores.map(entry => entry.storeId) } : {}) } : undefined);
       if (input.scope || input.role) {
         if (!scope) throw new BadRequestException({ code: 'INVALID_SCOPE', message: '请选择所属门店或供应商' });
-        for (const role of nextRoles) {
-          const required = role === 'SUPPLIER' ? UserScopeType.SUPPLIER : ['STORE', 'STORE_FINANCE'].includes(role) ? UserScopeType.STORE : UserScopeType.COMPANY;
-          if (scope.type !== required) throw new BadRequestException({ code: 'INVALID_SCOPE', message: '角色与所属范围不匹配' });
-        }
-        if (scope.type === UserScopeType.STORE && !await tx.store.findFirst({ where: { id: scope.storeId, status: 'ACTIVE' } })) throw new BadRequestException({ code: 'INVALID_STORE', message: '请选择启用的门店' });
-        if (scope.type === UserScopeType.SUPPLIER && !await tx.supplier.findFirst({ where: { id: scope.supplierId, status: 'ACTIVE', isArchived: false } })) throw new BadRequestException({ code: 'INVALID_SUPPLIER', message: '请选择启用的供应商' });
+        await validateUserScope(tx, nextRoles, scope);
       }
       const changed = await tx.user.updateMany({ where: { id, updatedAt: { gte: new Date(version), lt: new Date(version + 1) } },
         data: { status: input.status, displayName: input.displayName, updatedAt: new Date(Math.max(Date.now(), version + 1)) } });
       if (!changed.count) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'User version has changed' });
-      if (input.scope) await tx.userScope.upsert({ where: { userId: id }, create: { userId: id, ...scopeData(input.scope) }, update: scopeData(input.scope) });
+      if (input.scope) {
+        const nextScope = await tx.userScope.upsert({ where: { userId: id }, create: { userId: id, ...scopeData(input.scope) }, update: scopeData(input.scope) });
+        await tx.userScopeStore.deleteMany({ where: { scopeId: nextScope.id } });
+        if (input.scope.type === UserScopeType.MULTI_STORE) await tx.userScopeStore.createMany({ data: normalizedStoreIds(input.scope).map(storeId => ({ scopeId: nextScope.id, storeId })) });
+      }
       if (input.role) {
         const role = await tx.role.findUnique({ where: { code: input.role } });
         if (!role) throw new BadRequestException({ code: 'INVALID_ROLE', message: '角色不存在' });
@@ -118,7 +120,7 @@ export class UsersService {
         await tx.userRole.create({ data: { userId: id, roleId: role.id } });
       }
       if (nextStatus !== UserStatus.ACTIVE || input.role || input.scope) await tx.userSession.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
-      const result = await tx.user.findUniqueOrThrow({ where: { id }, include: { roles: { include: { role: true } }, scopes: true } });
+      const result = await tx.user.findUniqueOrThrow({ where: { id }, include: { roles: { include: { role: true } }, scopes: { include: { stores: true } } } });
       if (context) await this.audit.record({ ...context, action: 'user.update', entityType: 'User', entityId: id,
         before, after: accountAuditSnapshot(result) }, tx);
       return result;
@@ -158,7 +160,7 @@ export class UsersService {
   }
 }
 
-function toUserView(user: User & { roles: Array<{ role: { code: string } }>; scopes: Array<{ scopeType: UserScopeType; storeId: string | null; supplierId: string | null }>; sessions?: Array<{ createdAt: Date }> }): UserView {
+function toUserView(user: User & { roles: Array<{ role: { code: string } }>; scopes: Array<{ scopeType: UserScopeType; storeId: string | null; supplierId: string | null; stores?: Array<{ storeId: string }> }>; sessions?: Array<{ createdAt: Date }> }): UserView {
   return {
     id: user.id,
     username: user.username,
@@ -167,14 +169,38 @@ function toUserView(user: User & { roles: Array<{ role: { code: string } }>; sco
     status: user.status,
     version: userVersion(user),
     roles: user.roles.map((entry) => entry.role.code).sort(),
-    scope: user.scopes[0] ? { type: user.scopes[0].scopeType, storeId: user.scopes[0].storeId, supplierId: user.scopes[0].supplierId } : null,
+    scope: user.scopes[0] ? { type: user.scopes[0].scopeType, storeId: user.scopes[0].storeId, supplierId: user.scopes[0].supplierId,
+      ...(user.scopes[0].scopeType === UserScopeType.MULTI_STORE ? { storeIds: (user.scopes[0].stores ?? []).map(entry => entry.storeId).sort() } : {}) } : null,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
     lastLoginAt: user.sessions?.[0]?.createdAt.toISOString() ?? null,
   };
 }
 
-function scopeData(scope: { type: UserScopeType; storeId?: string; supplierId?: string }) {
+export type UserScopeInput = { type: UserScopeType; storeId?: string; supplierId?: string; storeIds?: string[] };
+
+function normalizedStoreIds(scope: UserScopeInput): string[] {
+  return [...new Set((scope.storeIds ?? []).map(id => id.toLowerCase()))].sort();
+}
+
+async function validateUserScope(tx: Prisma.TransactionClient, roles: string[], scope: UserScopeInput) {
+  for (const role of roles) {
+    const required = role === 'SUPPLIER' ? UserScopeType.SUPPLIER : ['STORE', 'STORE_FINANCE'].includes(role) ? UserScopeType.STORE
+      : (ASSIGNED_STORE_ROLES as readonly string[]).includes(role) ? UserScopeType.MULTI_STORE : UserScopeType.COMPANY;
+    if (scope.type !== required) throw new BadRequestException({ code: 'INVALID_SCOPE', message: '角色与所属范围不匹配' });
+  }
+  if ((scope.type !== UserScopeType.STORE && scope.storeId != null) || (scope.type !== UserScopeType.SUPPLIER && scope.supplierId != null)
+    || (scope.type !== UserScopeType.MULTI_STORE && scope.storeIds != null)) throw new BadRequestException({ code: 'INVALID_SCOPE', message: '角色与所属范围不匹配' });
+  if (scope.type === UserScopeType.STORE && (!scope.storeId || !await tx.store.findFirst({ where: { id: scope.storeId, status: 'ACTIVE' } }))) throw new BadRequestException({ code: 'INVALID_STORE', message: '请选择启用的门店' });
+  if (scope.type === UserScopeType.SUPPLIER && (!scope.supplierId || !await tx.supplier.findFirst({ where: { id: scope.supplierId, status: 'ACTIVE', isArchived: false } }))) throw new BadRequestException({ code: 'INVALID_SUPPLIER', message: '请选择启用的供应商' });
+  if (scope.type === UserScopeType.MULTI_STORE) {
+    const ids = normalizedStoreIds(scope);
+    if (!ids.length || ids.length > 500 || ids.length !== scope.storeIds?.length) throw new BadRequestException({ code: 'INVALID_STORE_SCOPE', message: '请选择1至500个不重复的门店' });
+    if (await tx.store.count({ where: { id: { in: ids }, status: 'ACTIVE' } }) !== ids.length) throw new BadRequestException({ code: 'INVALID_STORE', message: '请选择启用且存在的门店' });
+  }
+}
+
+function scopeData(scope: UserScopeInput) {
   return { scopeType: scope.type, storeId: scope.type === UserScopeType.STORE ? scope.storeId : null, supplierId: scope.type === UserScopeType.SUPPLIER ? scope.supplierId : null };
 }
 

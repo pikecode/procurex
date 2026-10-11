@@ -40,6 +40,8 @@ Page({
         wx.switchTab({ url: '/pages/purchaser/index' });
       } else if (roles.includes('HQ_FINANCE')) {
         wx.switchTab({ url: '/pages/finance/index' });
+      } else if (user.scope?.type === 'MULTI_STORE' && user.scope.storeIds?.length && roles.some(role => ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER'].includes(role))) {
+        wx.switchTab({ url: '/pages/region/index' });
       } else {
         this.setData({ error: '当前账号没有小程序角色入口' });
       }

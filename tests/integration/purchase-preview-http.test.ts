@@ -116,6 +116,7 @@ test('purchase request preview prices catalog items and reports stored-value sho
       data: {
         sku,
         name: 'Preview Product',
+        suppliers: { create: { supplierId: supplier.id, supplyEnabled: true } },
         categoryId: category.id,
         baseUnitId: unit.id,
       },
@@ -183,6 +184,7 @@ test('purchase request preview prices catalog items and reports stored-value sho
         supplierId: supplier.id,
         quantity: '10',
         salesUnitPrice: '12',
+        purchaseUnitName: null,
         salesLineAmount: '120.00',
         priceVersionId: priceVersion.id,
         supplyPriceVersionId: priceVersion.id,
@@ -205,7 +207,7 @@ test('purchase request preview prices catalog items and reports stored-value sho
     await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
     await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
     await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
-    await prisma.product.deleteMany({ where: { sku } });
+    await prisma.supplierProduct.deleteMany({ where: { product: { sku } } }); await prisma.product.deleteMany({ where: { sku } });
     await prisma.supplier.deleteMany({ where: { code: supplierCode } });
     await prisma.userScope.deleteMany({ where: { user: { username: storeUsername } } });
     await prisma.store.deleteMany({ where: { code: storeCode } });
@@ -269,6 +271,7 @@ test('purchase request create persists request once per idempotency key', async 
       data: {
         sku,
         name: 'Create Product',
+        suppliers: { create: { supplierId: supplier.id, supplyEnabled: true } },
         categoryId: category.id,
         baseUnitId: unit.id,
       },
@@ -472,7 +475,7 @@ test('purchase request create persists request once per idempotency key', async 
     await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
     await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
     await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
-    await prisma.product.deleteMany({ where: { sku } });
+    await prisma.supplierProduct.deleteMany({ where: { product: { sku } } }); await prisma.product.deleteMany({ where: { sku } });
     await prisma.supplier.deleteMany({ where: { code: supplierCode } });
     await prisma.store.deleteMany({ where: { code: storeCode } });
     await prisma.category.deleteMany({ where: { code: categoryCode } });
@@ -540,6 +543,7 @@ test('purchase request item patch reprices supplier assignments', async () => {
       data: {
         sku,
         name: 'Patch Product',
+        suppliers: { create: [{ supplierId: supplierA.id, supplyEnabled: true }, { supplierId: supplierB.id, supplyEnabled: true }] },
         categoryId: category.id,
         baseUnitId: unit.id,
       },
@@ -752,7 +756,7 @@ test('purchase request item patch reprices supplier assignments', async () => {
     await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
     await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
     await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
-    await prisma.product.deleteMany({ where: { sku } });
+    await prisma.supplierProduct.deleteMany({ where: { product: { sku } } }); await prisma.product.deleteMany({ where: { sku } });
     await prisma.supplier.deleteMany({ where: { code: { in: [supplierCodeA, supplierCodeB] } } });
     await prisma.store.deleteMany({ where: { code: storeCode } });
     await prisma.category.deleteMany({ where: { code: categoryCode } });
@@ -848,6 +852,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         data: {
           sku: skuA,
           name: 'Confirm Product A',
+          suppliers: { create: [{ supplierId: supplierA.id, supplyEnabled: true }, { supplierId: supplierB.id, supplyEnabled: true }] },
           categoryId: category.id,
           baseUnitId: unit.id,
         },
@@ -856,6 +861,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
         data: {
           sku: skuB,
           name: 'Confirm Product B',
+          suppliers: { create: { supplierId: supplierB.id, supplyEnabled: true } },
           categoryId: category.id,
           baseUnitId: unit.id,
         },
@@ -1773,7 +1779,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
           items: [
             {
               shipmentItemId: gapShipmentProductA!.id,
-              receivedQuantity: '1.000000',
+              receivedQuantity: '0.500000',
             },
           ],
         }),
@@ -1784,11 +1790,11 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     const gapReceipt = await createGapReceipt();
     const gapReceiptReplay = await createGapReceipt();
     assert.deepEqual(gapReceiptReplay.data, gapReceipt.data);
-    const completedOrder = await prisma.supplierOrder.findUniqueOrThrow({
+    const orderWithOpenGap = await prisma.supplierOrder.findUniqueOrThrow({
       where: { id: supplierBOrderAfterReallocate.id },
     });
-    assert.equal(completedOrder.status, 'COMPLETED');
-    assert.equal(completedOrder.fulfillmentStatus, 'COMPLETED');
+    assert.equal(orderWithOpenGap.status, 'PARTIAL_SHIPPED');
+    assert.equal(orderWithOpenGap.fulfillmentStatus, 'PARTIAL_SHIPPED');
     const replaceGapReceipt = async () => {
       const response = await fetch(`${baseUrl}/shipments/${gapShipment.data.id}/receipts`, {
         method: 'POST',
@@ -1799,7 +1805,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
           'x-trace-id': 'trace-replace-gap-receipt',
         },
         body: JSON.stringify({
-          expectedOrderVersion: completedOrder.version,
+          expectedOrderVersion: orderWithOpenGap.version,
           expectedReceiptRevision: 1,
           items: [
             {
@@ -2272,7 +2278,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.ok(storeStatement);
     assert.equal(storeStatement.type, 'STORE');
     assert.equal(storeStatement.storeId, store.id);
-    assert.equal(storeStatement.cycle, 'MONTHLY');
+    assert.equal(storeStatement.cycle, 'IMMEDIATE');
     assert.equal(storeStatement.settlementStatus, 'OPEN');
     assert.equal(storeStatement.goodsAmount, '98.00');
     assert.equal(storeStatement.freightAmount, '18.50');
@@ -2541,7 +2547,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     const supplierStatement = supplierStatements.data.find((statement) => statement.supplierId === supplierB.id);
     assert.ok(supplierStatement);
     assert.equal(supplierStatement.type, 'SUPPLIER_TOTAL');
-    assert.equal(supplierStatement.cycle, 'MONTHLY');
+    assert.equal(supplierStatement.cycle, 'IMMEDIATE');
     assert.equal(supplierStatement.settlementStatus, 'OPEN');
     assert.equal(supplierStatement.goodsAmount, '72.00');
     assert.equal(supplierStatement.freightAmount, '18.50');
@@ -2865,7 +2871,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(supplierStoreStatement.parentStatementId, supplierStatement.id);
     assert.equal(supplierStoreStatement.type, 'SUPPLIER_STORE');
     assert.equal(supplierStoreStatement.storeId, store.id);
-    assert.equal(supplierStoreStatement.cycle, 'MONTHLY');
+    assert.equal(supplierStoreStatement.cycle, 'IMMEDIATE');
     assert.equal(supplierStoreStatement.settlementStatus, 'OPEN');
     assert.equal(supplierStoreStatement.goodsAmount, '72.00');
     assert.equal(supplierStoreStatement.freightAmount, '18.50');
@@ -2939,7 +2945,8 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     assert.equal(storeFreightTotal, supplierStatement.freightAmount);
     assert.equal(storeTotal, supplierStatement.totalAmount);
 
-    // A later short receipt on an unlocked full row adjusts both frozen sides exactly once.
+    // Completed receipts cannot reopen. A separate imported historical shortage
+    // preserves frozen-ledger adjustment coverage without permitting that workflow.
     const beforeLateShortage = await prisma.supplierOrder.findUniqueOrThrow({ where: { id: completedOrderAfterReturn.id } });
     const currentGapReceipt = await prisma.receipt.findFirstOrThrow({ where: { shipmentId: gapShipment.data.id, isCurrent: true } });
     const accountBeforeLateShortage = await prisma.storeAccount.findUniqueOrThrow({ where: { storeId: store.id } });
@@ -2949,8 +2956,18 @@ test('purchase request confirm splits supplier orders once per idempotency key',
       body: JSON.stringify({ expectedOrderVersion: beforeLateShortage.version, expectedReceiptRevision: currentGapReceipt.revision,
         items: [{ shipmentItemId: gapShipmentProductA!.id, receivedQuantity: '0' }] }),
     });
-    assert.equal(lateReceiptResponse.status, 201);
-    const lateReceipt = (await lateReceiptResponse.json()).data;
+    assert.equal(lateReceiptResponse.status, 409);
+    assert.equal((await lateReceiptResponse.json()).code, 'RECEIPT_REVISION_NOT_REPLACEABLE');
+    assert.equal((await prisma.storeAccount.findUniqueOrThrow({ where: { storeId: store.id } })).balance.toFixed(2), accountBeforeLateShortage.balance.toFixed(2));
+    const lateReceipt = await prisma.$transaction(async tx => {
+      await tx.receipt.update({ where: { id: currentGapReceipt.id }, data: { isCurrent: false } });
+      return tx.receipt.create({ data: {
+        receiptNo: `${currentGapReceipt.receiptNo}-historical-shortage`, shipmentId: gapShipment.data.id,
+        revision: currentGapReceipt.revision + 1,
+        items: { create: { shipmentItemId: gapShipmentProductA!.id, receivedQuantity: '0',
+          discrepancy: { create: { orderItemId: productAOrderItem.id, missingQuantity: '1' } } } },
+      } });
+    });
     const lateDiscrepancy = await prisma.discrepancy.findFirstOrThrow({ where: { receiptItem: { receiptId: lateReceipt.id }, status: 'OPEN' } });
     const acceptLate = (key: string) => fetch(`${baseUrl}/discrepancies/${lateDiscrepancy.id}/resolve`, {
       method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'idempotency-key': key },
@@ -3072,6 +3089,7 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
     await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
     await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
+    await prisma.supplierProduct.deleteMany({ where: { product: { sku: { in: [skuA, skuB] } } } });
     await prisma.product.deleteMany({ where: { sku: { in: [skuA, skuB] } } });
     await prisma.supplier.deleteMany({ where: { code: { in: [supplierCodeA, supplierCodeB] } } });
     await prisma.store.deleteMany({ where: { code: storeCode } });
@@ -3131,6 +3149,7 @@ test('purchase request reject cancels request once per idempotency key', async (
       data: {
         sku,
         name: 'Reject Product',
+        suppliers: { create: { supplierId: supplier.id, supplyEnabled: true } },
         categoryId: category.id,
         baseUnitId: unit.id,
       },
@@ -3276,6 +3295,7 @@ test('purchase request reject cancels request once per idempotency key', async (
     } });
     const mixedProduct = await prisma.product.create({ data: {
       sku: `${sku}MIX`, name: 'Mixed Credit Product', categoryId: category.id, baseUnitId: unit.id,
+      suppliers: { create: { supplierId: mixedSupplier.id, supplyEnabled: true } },
     } });
     await prisma.templateItem.create({ data: {
       templateId: template.id, productId: mixedProduct.id, suppliers: { create: { supplierId: mixedSupplier.id, priority: 1 } },
@@ -3388,6 +3408,7 @@ test('purchase request reject cancels request once per idempotency key', async (
     await prisma.templateItemSupplier.deleteMany({ where: { templateItem: { template: { code: templateCode } } } });
     await prisma.templateItem.deleteMany({ where: { template: { code: templateCode } } });
     await prisma.orderTemplate.deleteMany({ where: { code: templateCode } });
+    await prisma.supplierProduct.deleteMany({ where: { product: { sku: { in: [sku, `${sku}MIX`] } } } });
     await prisma.product.deleteMany({ where: { sku: { in: [sku, `${sku}MIX`] } } });
     await prisma.supplier.deleteMany({ where: { code: { in: [supplierCode, `${supplierCode}MIX`] } } });
     await prisma.store.deleteMany({ where: { code: storeCode } });

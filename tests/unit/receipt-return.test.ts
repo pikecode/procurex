@@ -15,6 +15,9 @@ test('returned receipt blocks completion and cannot reduce the accepted fulfillm
 test('receipt revisions unlock returned/open items but keep accepted and replenishment rows fixed', () => {
   assert.equal(isReceiptItemLocked([{ discrepancy: { status: 'RESOLVED', returnRecord: { id: 'return' } } }]), false);
   assert.equal(isReceiptItemLocked([{ discrepancy: { status: 'OPEN' } }]), false);
+  assert.equal(isReceiptItemLocked([]), false);
+  assert.equal(isReceiptItemLocked([{ discrepancy: null }]), true);
+  assert.equal(isReceiptItemLocked([{ discrepancy: { status: 'SUPERSEDED', returnRecord: {} } }, { discrepancy: null }]), true);
   assert.equal(isReceiptItemLocked([{ discrepancy: { status: 'RESOLVED' } }]), true);
   assert.equal(isReceiptItemLocked([{ discrepancy: { status: 'REPLENISH_PENDING' } }]), true);
   assert.equal(isReceiptItemLocked([{ discrepancy: { status: 'SUPERSEDED', returnRecord: {} } }]), false);

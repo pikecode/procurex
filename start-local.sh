@@ -29,6 +29,9 @@ fi
 
 if curl -fsS --max-time 3 http://127.0.0.1:3114/api/v1/health/ready >/dev/null; then
   printf '复用已运行的 API。\n'
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:3114/api/v1/auth/test-identities)" = 404 ]; then
+    printf '当前 API 尚未加载测试身份接口，请关闭旧 API 启动窗口后重新运行本脚本。\n'
+  fi
 else
   if lsof -nP -iTCP:3114 -sTCP:LISTEN >/dev/null 2>&1; then
     printf '3114 端口被其他服务占用，未启动 API。\n'; exit 1
@@ -36,7 +39,7 @@ else
   npm run db:generate
   npm run db:migrate
   npm run build
-  FILE_STORAGE=local PORT=3114 node --env-file-if-exists=.env dist/apps/api/main.js &
+  FILE_STORAGE=local PORT=3114 TEST_WORKBENCH_ENABLED=true TEST_WORKBENCH_USERNAMES=test_chef_stored,test_finance_stored,test_supplier_stored,test_purchase,test_hq_finance node --env-file-if-exists=.env dist/apps/api/main.js &
   children+=("$!")
   ready=0
   for ((i=0; i<60; i++)); do

@@ -1,3 +1,4 @@
+<test-context />
 <view class="products-page">
   <view class="products-heading"><text>商品资料</text><button class="add-product" wx:if="{{!editing}}" bindtap="newProduct" aria-label="新增商品">+</button></view>
   <view class="error-banner" wx:if="{{error}}">{{error}}<button class="secondary" wx:if="{{conflict}}" bindtap="reloadSelected">重新读取商品</button></view>

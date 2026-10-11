@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import { assignedStoreIds, storeFilter, type BusinessScope } from '../auth/store-scope.js';
 import { lockCatalog } from '../catalog/catalog-registries.service.js';
 import { readTransactionUnits, readUnitDisplayNames, requireTransactionUnitsUnchanged, transactionUnitView } from '../catalog/transaction-units.js';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
@@ -93,6 +94,7 @@ export type SupplierOrderSummaryView = {
 };
 
 export type ListPurchaseRequestsInput = {
+  storeIds?: string[];
   storeId?: string;
   status?: PurchaseRequestStatus;
 };
@@ -158,7 +160,7 @@ export class PurchaseRequestsService {
   async list(input: ListPurchaseRequestsInput): Promise<PurchaseRequestSummaryView[]> {
     const requests = await this.database.client.purchaseRequest.findMany({
       where: {
-        storeId: input.storeId,
+        storeId: storeFilter(input.storeId, input.storeIds),
         status: input.status,
       },
       orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
@@ -168,9 +170,9 @@ export class PurchaseRequestsService {
     return requests.map(request => ({ ...toPurchaseRequestSummaryView(request), ...requestProgress(request) }));
   }
 
-  async get(id: string, scope?: { type: string; storeId?: string }, transaction?: Prisma.TransactionClient): Promise<PurchaseRequestDetailView> {
+  async get(id: string, scope?: BusinessScope, transaction?: Prisma.TransactionClient): Promise<PurchaseRequestDetailView> {
     const request = await (transaction ?? (this.database.client as Prisma.TransactionClient)).purchaseRequest.findUnique({
-      where: { id, storeId: isStoreScope(scope?.type) ? scope?.storeId : undefined },
+      where: { id, storeId: scope?.type === 'MULTI_STORE' ? storeFilter(undefined, assignedStoreIds(scope)) : isStoreScope(scope?.type) ? scope?.storeId : undefined },
       include: {
         items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true } } } },
         supplierOrders: { orderBy: { createdAt: 'asc' }, include: { items: { select: { productId: true } }, supplier: { select: { name: true, deliveryContactPhone: true } }, shipments: { orderBy: { sequence: 'asc' }, include: { receipts: { where: { isCurrent: true }, select: { submittedAt: true, revision: true } } } } } },

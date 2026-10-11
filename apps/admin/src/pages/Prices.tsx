@@ -1,4 +1,5 @@
 import { money } from '../lib/money';
+import { createCommandId } from '../lib/commandId';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alert, App, Button, Descriptions, Form, Input, InputNumber, Popconfirm, Select, Table, Tooltip } from 'antd';
@@ -102,7 +103,7 @@ export default function Prices({ user }: { user: User }) {
     if (lock.current || pending || !impact || !fingerprint || storageError) return;
     const values = await form.validateFields().catch(() => null); if (!values) return;
     const body = draft(values); if (JSON.stringify(body) !== fingerprint) { invalidate(); return; }
-    await execute({ key: crypto.randomUUID(), path: '/price-changes', body, createdAt: new Date().toISOString() });
+    await execute({ key: createCommandId(), path: '/price-changes', body, createdAt: new Date().toISOString() });
   };
   const restrictedProducts = templateId ? products.rows.filter(row => template?.items.some(item => item.productId === row.id && item.isEnabled)) : products.rows;
   const restrictedSuppliers = suppliers.rows.filter(row => !row.isArchived && (!templateId || template?.items.find(item => item.productId === productId)?.suppliers.some(link => link.supplierId === row.id)));
@@ -146,7 +147,7 @@ export default function Prices({ user }: { user: User }) {
     ]} /></section>}
     <section className="price-band"><h2>订单重算任务</h2><div className="job-toolbar"><Input aria-label="重算任务ID" placeholder="任务ID" value={jobInput} onChange={event => setJobInput(event.target.value.trim())} />
       <Button icon={<RotateCcw size={16} />} onClick={() => showJob(jobInput)}>查询任务</Button>
-      {job?.status === 'PENDING' && <Popconfirm title="确认执行订单重算？" onConfirm={() => execute({ key: crypto.randomUUID(), path: `/jobs/${job.id}/process`, body: {}, createdAt: new Date().toISOString() })} disabled={busy || Boolean(pending) || Boolean(storageError)}>
+      {job?.status === 'PENDING' && <Popconfirm title="确认执行订单重算？" onConfirm={() => execute({ key: createCommandId(), path: `/jobs/${job.id}/process`, body: {}, createdAt: new Date().toISOString() })} disabled={busy || Boolean(pending) || Boolean(storageError)}>
         <Button icon={<Play size={16} />} disabled={busy || Boolean(pending) || Boolean(storageError)}>执行订单重算</Button>
       </Popconfirm>}
     </div>

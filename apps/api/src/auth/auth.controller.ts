@@ -3,6 +3,8 @@ import { AuthGuard, bearerToken, type AuthenticatedRequest } from './auth.guard.
 import { AuthService, type AuthenticatedSession, type LoginResult } from './auth.service.js';
 import { CurrentAuth } from './current-auth.decorator.js';
 import { throwIfInvalid } from '../common/request-contract.js';
+import { RolesGuard } from './roles.guard.js';
+import { RequireRoles } from './roles.decorator.js';
 import type { ValidationIssue } from '../../../../packages/domain/src/validation.js';
 
 type LoginBody = {
@@ -58,6 +60,21 @@ export class AuthController {
         expiresAt: auth.session.expiresAt.toISOString(),
       },
     };
+  }
+
+  @Get('auth/test-identities')
+  @UseGuards(AuthGuard, RolesGuard)
+  @RequireRoles('ADMIN')
+  testIdentities(@CurrentAuth() auth: AuthenticatedSession) {
+    return this.authService.testIdentities(auth);
+  }
+
+  @Post('auth/test-identity')
+  @UseGuards(AuthGuard, RolesGuard)
+  @RequireRoles('ADMIN')
+  async testIdentity(@CurrentAuth() auth: AuthenticatedSession, @Body() body: { userId?: unknown }) {
+    throwIfInvalid(typeof body.userId === 'string' ? [] : [{ field: 'userId', code: 'INVALID_USER_ID', message: '请选择测试账号' }]);
+    return { user: await this.authService.testIdentity(auth, body.userId as string) };
   }
 }
 

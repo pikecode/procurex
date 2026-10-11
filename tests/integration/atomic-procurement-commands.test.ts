@@ -66,6 +66,7 @@ async function withFixture(mode: Mode, run: (f: Awaited<ReturnType<typeof fixtur
     await db.category.deleteMany({ where: { code } });
     await db.unit.deleteMany({ where: { code } });
     await db.user.deleteMany({ where: { username: code } });
+    await db.collectionAccount.deleteMany({ where: { name: code } });
     await db.$disconnect();
   }
 }
@@ -218,7 +219,8 @@ async function remedyFixture(f: Awaited<ReturnType<typeof fixture>>, operation: 
     await f.db.userRole.create({ data: { userId: f.user.id, roleId: role.id } });
     if (paidCredit) {
       const allocation = await f.db.fundingAllocation.findFirstOrThrow({ where: { requestId: setup.order.requestId } });
-      await stores.createClearing(f.store.id, { businessDate: new Date(), items: [{ fundingAllocationId: allocation.id,
+      const proof = await f.db.fileObject.create({ data: { filename: 'clearing.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: `${f.user.id}/clearing`, uploadTokenHash: 'isolated', purpose: 'CLEARING', status: 'READY', ownerId: f.user.id } });
+      await stores.createClearing(f.store.id, { actorUserId: f.user.id, evidenceFileIds: [proof.id], businessDate: new Date(), items: [{ fundingAllocationId: allocation.id,
         expectedVersion: allocation.version, expectedAmount: '120.00' }] });
     }
   }
@@ -228,7 +230,9 @@ async function remedyFixture(f: Awaited<ReturnType<typeof fixture>>, operation: 
     await f.pricing.processRun(change.runId!);
     if (f.mode === 'STORED_VALUE') {
       assert.equal((await f.db.purchaseRequest.findUniqueOrThrow({ where: { id: setup.order.requestId } })).shortfallAmount.toString(), '100');
-      await stores.createRecharge(f.store.id, { amount: '150', businessDate: new Date(), collectionAccountId: f.user.id, remark: 'Isolated shortfall recovery' });
+      const collection = await f.db.collectionAccount.create({ data: { name: f.user.username, bankName: 'Test bank', accountName: 'Test account', accountNo: f.user.id } });
+      const proof = await f.db.fileObject.create({ data: { filename: 'recharge.png', mimeType: 'image/png', sizeBytes: 20n, objectKey: `${f.user.id}/recharge`, uploadTokenHash: 'isolated', purpose: 'RECHARGE', status: 'READY', ownerId: f.user.id } });
+      await stores.createRecharge(f.store.id, { actorUserId: f.user.id, evidenceFileIds: [proof.id], amount: '150', businessDate: new Date(), collectionAccountId: collection.id, remark: 'Isolated shortfall recovery' });
     }
   }
   const order = await f.db.supplierOrder.findUniqueOrThrow({ where: { id: setup.order.id } });

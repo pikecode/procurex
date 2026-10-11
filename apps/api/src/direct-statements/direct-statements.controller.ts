@@ -1,4 +1,5 @@
 import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
+import { AllowAssignedStores, assignedStoreIds, ASSIGNED_STORE_ROLES, isCompanyUser, storeFilter } from '../auth/store-scope.js';
 import { Controller, ForbiddenException, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { validateUuid, type ValidationIssue } from '../../../../packages/domain/src/validation.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
@@ -15,16 +16,23 @@ export class DirectStatementsController {
   constructor(private readonly service: DirectStatementsService) {}
 
   @Get()
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
   list(@Query() query: ListQuery, @Req() request: AuthenticatedRequest): Promise<DirectStatementSummaryView[]> { return this.service.list(applyScope(parseQuery(query), request)); }
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
   get(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<DirectStatementDetailView> { applyScope({}, request); return this.service.get(id, request.auth?.user.scope); }
 }
 
 function applyScope(input: ListDirectStatementsInput, request: AuthenticatedRequest): ListDirectStatementsInput {
   const scope = request.auth?.user.scope;
+  if (scope?.type === 'MULTI_STORE' && !isCompanyUser(request.auth!.user)) {
+    const storeIds = assignedStoreIds(scope)!;
+    storeFilter(input.storeId, storeIds);
+    return { ...input, storeIds };
+  }
   if (scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE') {
     if (!scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
     if (input.storeId && input.storeId !== scope.storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Statement is outside the current store scope' });

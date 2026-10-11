@@ -17,6 +17,7 @@ import { ResponseEnvelopeInterceptor } from '../../apps/api/src/common/response-
 import { hashPassword } from '../../packages/domain/src/password.js';
 
 const roles = ['ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER'];
+const assignedRoles = ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER'];
 const purchaser = ['ADMIN', 'PURCHASER'];
 const finance = ['ADMIN', 'HQ_FINANCE'];
 const business = ['STORE', 'STORE_FINANCE', 'SUPPLIER'];
@@ -39,12 +40,13 @@ add(purchaser, [
   'POST /price-changes', 'POST /prices/quote', 'POST /prices/impact-preview', 'POST /jobs/:id/process',
   'PATCH /purchase-requests/:id/items', 'POST /purchase-requests/:id/items-preview',
   'POST /purchase-requests/:id/reassign-preview', 'POST /purchase-requests/:id/assign',
-  'POST /purchase-requests/:id/reallocate', 'POST /purchase-requests/:id/confirm', 'POST /purchase-requests/:id/reject',
+  'POST /purchase-requests/:id/reallocate',
   'POST /supplier-orders/:id/reconcile-funding',
   'POST /freight-confirmations/:id/confirm', 'POST /freight-confirmations/:id/reject',
 ]);
+add([...purchaser, 'PURCHASE_FOLLOWER'], ['POST /purchase-requests/:id/confirm', 'POST /purchase-requests/:id/reject']);
 add(['ADMIN', 'PURCHASER', 'SUPPLIER'], ['PATCH /suppliers/:id/managed-products/:productId']);
-add(['ADMIN'], ['POST /stores', 'PATCH /stores/:id', 'POST /stores/group-memberships', 'POST /users', 'PATCH /users/:id', 'POST /users/:id/password', 'POST /users/:id/revoke-sessions',
+add(['ADMIN'], ['POST /auth/test-identity', 'POST /stores', 'PATCH /stores/:id', 'POST /stores/group-memberships', 'POST /users', 'PATCH /users/:id', 'POST /users/:id/password', 'POST /users/:id/revoke-sessions',
   'POST /store-groups', 'PATCH /store-groups/:id', 'DELETE /store-groups/:id',
   'POST /commands/:id/reviews', 'POST /commands/:id/close-rolled-back-price', 'POST /commands/:id/close-uncommitted-price']);
 add(finance, ['POST /collection-accounts', 'PATCH /collection-accounts/:id', 'POST /stores/:id/recharges', 'PATCH /stores/:id/credit-limit',
@@ -53,13 +55,13 @@ add(['ADMIN', 'PURCHASER', 'STORE'], ['POST /purchase-requests', 'POST /purchase
 add(['ADMIN', 'SUPPLIER'], ['POST /supplier-orders/:id/shipment-preview', 'POST /supplier-orders/:id/shipments',
   'POST /supplier-orders/:id/freight-confirmations', 'POST /supplier-orders/:id/reject', 'POST /discrepancies/:id/resolve']);
 add(['ADMIN', 'STORE'], ['POST /shipments/:id/receipts']);
-add([...finance, 'STORE', 'STORE_FINANCE'], ['POST /payment-records', 'POST /payment-records/preview', 'POST /payment-records/:id/cancel']);
+add([...finance, 'STORE'], ['POST /payment-records', 'POST /payment-records/preview', 'POST /payment-records/:id/cancel']);
 add([...finance, 'SUPPLIER'], ['POST /payment-records/:id/confirm', 'POST /payment-records/:id/reject']);
 add([...finance, ...business], ['POST /difference-disposals/:id/confirm']);
 add(roles.filter(role => role !== 'SUPPLIER'), ['POST /files/upload-sessions', 'POST /files/:id/content', 'POST /files/:id/complete']);
-add(roles, ['POST /exports', 'POST /exports/:id/retry']);
+add([...roles, 'REGION_MANAGER', 'PURCHASE_FOLLOWER', 'REGION_FINANCE'], ['POST /exports', 'POST /exports/:id/retry']);
 
-for (const roleCode of roles) test(`write permission HTTP ${roleCode}: complete route inventory and denied writes have no side effects`, async t => {
+for (const roleCode of [...roles, ...assignedRoles]) test(`write permission HTTP ${roleCode}: complete route inventory and denied writes have no side effects`, async t => {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? 'postgresql://procurex:procurex_local_only@127.0.0.1:55438/procurex?schema=public' }) });
   const prefix = `WPM${Date.now()}${roleCode}`;
   const app = await NestFactory.create(AppModule, { logger: false });
@@ -83,7 +85,7 @@ for (const roleCode of roles) test(`write permission HTTP ${roleCode}: complete 
         assert.ok(allowed?.length, `${path} requires an explicit role contract`);
         const guards = [...(Reflect.getMetadata(GUARDS_METADATA, controller) ?? []), ...(Reflect.getMetadata(GUARDS_METADATA, handler) ?? [])];
         assert.ok(guards.includes(AuthGuard) && guards.includes(RolesGuard), `${path} requires authentication and role guards`);
-        if (allowed.some(role => business.includes(role))) assert.ok(guards.includes(BusinessScopeGuard), `${path} requires a business scope guard`);
+        if (allowed.some(role => [...business, ...assignedRoles].includes(role))) assert.ok(guards.includes(BusinessScopeGuard), `${path} requires a business scope guard`);
         inventory.set(`${RequestMethod[method]} ${path}`, allowed);
       }
     }
@@ -114,8 +116,13 @@ for (const roleCode of roles) test(`write permission HTTP ${roleCode}: complete 
       const response = await send(route, false); assert.equal(response.status, 401, `${route.method} ${route.path}`);
       denied++;
     }
-    for (const state of business.includes(roleCode) ? ['missing', 'wrong', 'valid'] : ['valid']) {
+    const assigned = assignedRoles.includes(roleCode);
+    for (const state of assigned ? ['missing', 'wrong', 'empty', 'valid'] : business.includes(roleCode) ? ['missing', 'wrong', 'valid'] : ['valid']) {
       if (state === 'wrong') await db.userScope.create({ data: { userId: actor.id, scopeType: 'COMPANY' } });
+      if (state === 'empty' && assigned) await db.userScope.update({ where: { userId: actor.id }, data: { scopeType: 'MULTI_STORE' } });
+      if (state === 'valid' && assigned) await db.userScope.update({ where: { userId: actor.id }, data: {
+        scopeType: 'MULTI_STORE', stores: { create: { storeId: store.id } },
+      } });
       if (state === 'valid' && business.includes(roleCode)) await db.userScope.update({ where: { userId: actor.id }, data: {
         scopeType: roleCode === 'SUPPLIER' ? 'SUPPLIER' : 'STORE', storeId: roleCode === 'SUPPLIER' ? null : store.id, supplierId: roleCode === 'SUPPLIER' ? supplier.id : null,
       } });

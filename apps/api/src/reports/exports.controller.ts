@@ -1,4 +1,5 @@
 import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
+import { AllowAssignedStores, assignedStoreIds, ASSIGNED_STORE_ROLES, storeFilter } from '../auth/store-scope.js';
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
@@ -10,7 +11,8 @@ import { validateUuid } from '../../../../packages/domain/src/validation.js';
 
 @Controller('exports')
 @UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
-@RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+@AllowAssignedStores()
+@RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER', 'STORE', 'STORE_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
 export class ExportsController {
   constructor(private readonly reports: ReportsService) {}
 
@@ -74,6 +76,11 @@ function id(value: unknown): string | undefined { if (value === undefined) retur
 function applyScope(filters: ReportFilters, request: AuthenticatedRequest): ReportFilters {
   const roles = request.auth!.user.roles;
   if (roles.some(role => ['ADMIN', 'HQ_FINANCE', 'PURCHASER'].includes(role))) return filters;
+  if (request.auth!.user.scope?.type === 'MULTI_STORE') {
+    const storeIds = assignedStoreIds(request.auth!.user.scope)!;
+    storeFilter(filters.storeId, storeIds);
+    return { ...filters, storeIds };
+  }
   if (roles.some((r) => ['STORE', 'STORE_FINANCE'].includes(r))) { const storeId = request.auth!.user.scope?.storeId; if (!storeId || (filters.storeId && filters.storeId !== storeId)) throw new ForbiddenException(); return { ...filters, storeId }; }
   if (roles.includes('SUPPLIER')) { const supplierId = request.auth!.user.scope?.supplierId; if (!supplierId || (filters.supplierId && filters.supplierId !== supplierId)) throw new ForbiddenException(); return { ...filters, supplierId, amountBasis: 'SUPPLY' }; }
   return filters;

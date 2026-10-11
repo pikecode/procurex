@@ -5,6 +5,7 @@ import { CurrentAuth } from '../auth/current-auth.decorator.js';
 import type { AuthenticatedSession } from '../auth/auth.service.js';
 import { RequireRoles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
+import { AllowAssignedStores, ASSIGNED_STORE_ROLES } from '../auth/store-scope.js';
 import { FilesService } from './files.service.js';
 
 @Controller('files')
@@ -38,7 +39,8 @@ export class FilesController {
   complete(@CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string) { return this.files.complete(auth.user.id, id); }
 
   @Get(':id/download')
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
   async download(@CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string, @Res() response: { setHeader(name: string, value: string): void; end(bytes: Buffer): void }) {
     const result = await this.files.download(auth.user.id, id, auth.user.scope, auth.user.roles);
     response.setHeader('content-type', result.file.mimeType);

@@ -111,8 +111,8 @@ for (const roleCode of roles) test(`role privacy HTTP ${roleCode}: scope states,
       ['/suppliers', central], [`/suppliers/${own.supplier.id}`, [...central, 'SUPPLIER']], [`/suppliers/${own.supplier.id}/catalog`, [...central, 'SUPPLIER']],
       [`/suppliers/${own.supplier.id}/managed-products`, ['ADMIN', 'PURCHASER', 'SUPPLIER']],
       ['/purchase-requests', ['ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE']], [`/stores/${own.store.id}/catalog`, [...central, 'STORE', 'STORE_FINANCE']],
-      ['/supplier-orders', suppliers], ['/freight-confirmations', ['ADMIN', 'PURCHASER', 'SUPPLIER']], [`/shipments/${own.shipment.id}`, stores],
-      ['/store-statements', bills], ['/supplier-statements', supplierBills], ['/supplier-store-statements', supplierBills], ['/direct-statements', directBills],
+      ['/supplier-orders', suppliers], ['/freight-confirmations', ['ADMIN', 'PURCHASER', 'SUPPLIER']], [`/shipments/${own.shipment.id}`, [...stores, 'PURCHASER']],
+      ['/store-statements', [...bills, 'PURCHASER']], ['/supplier-statements', supplierBills], ['/supplier-store-statements', [...supplierBills, 'PURCHASER']], ['/direct-statements', [...directBills, 'PURCHASER']],
       [`/recharges/${own.recharge.id}`, bills], [`/clearings/${own.clearing.id}`, bills],
       ['/reports/order-amounts', [...roles]], ['/reports/product-quantities?from=2026-09-01&to=2026-09-30', [...roles]], ['/reports/profit', central], ['/exports', [...roles]],
       ['/audit-logs', ['ADMIN', 'HQ_FINANCE']], ['/commands/stale', ['ADMIN']],
@@ -168,7 +168,7 @@ for (const roleCode of roles) test(`role privacy HTTP ${roleCode}: scope states,
         { action: 'payment-record.confirm', path: `/payment-records/${payment.id}/confirm`, resourceId: payment.id, body: { expectedVersion: 1 } },
         { action: 'payment-record.reject', path: `/payment-records/${payment.id}/reject`, resourceId: payment.id, body: { expectedVersion: 1, reason: 'original proof' } },
       );
-      else {
+      else if (roleCode === 'STORE') {
         cases.push({ action: 'payment-record.create', path: '/payment-records', resourceId: payment.id, root: true, body: { direction: 'STORE_TO_COMPANY',
           businessDate: '2026-09-11', evidenceFileIds: [paymentFiles[0]], items: [{ settlementItemId: 'saved-original-item', expectedVersion: 1, expectedAmount: '120' }] } },
         { action: 'payment-record.cancel', path: `/payment-records/${payment.id}/cancel`, resourceId: payment.id, body: { expectedVersion: 1, reason: 'original cancel' } });

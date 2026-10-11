@@ -1,5 +1,13 @@
 const tokenKey = 'procurexToken';
 const userKey = 'procurexUser';
+let activeRequests = 0;
+
+function authHeaders(testControl = false) {
+  const token = wx.getStorageSync(tokenKey);
+  const identity = currentUser()?.testIdentity;
+  return { ...(token ? { authorization: `Bearer ${token}` } : {}),
+    ...(!testControl && identity ? { 'x-test-user-id': identity.userId } : {}) };
+}
 
 function apiBase() {
   const app = getApp();
@@ -7,8 +15,8 @@ function apiBase() {
 }
 
 function request(path, options = {}) {
-  const token = wx.getStorageSync(tokenKey);
   const url = `${apiBase()}${path}`;
+  activeRequests++;
   return new Promise((resolve, reject) => {
     wx.request({
       url,
@@ -17,7 +25,7 @@ function request(path, options = {}) {
       timeout: options.timeout || 10000,
       header: {
         ...(options.data ? { 'content-type': 'application/json' } : {}),
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...authHeaders(options.testControl),
         ...(options.header || {})
       },
       success(response) {
@@ -46,7 +54,7 @@ function request(path, options = {}) {
         reject(failure);
       }
     });
-  });
+  }).finally(() => { activeRequests--; });
 }
 
 function normalizeBase(value) {
@@ -64,6 +72,33 @@ async function login(username, password) {
     data: { username, password, client: 'MINIPROGRAM' }
   });
   wx.setStorageSync(tokenKey, result.accessToken);
+  wx.setStorageSync(userKey, result.user);
+  return result.user;
+}
+
+function assertTestSwitchSafe() {
+  if (activeRequests || roleFlights.size) throw new Error('请等待当前操作完成后再切换身份');
+  if (typeof getCurrentPages === 'function' && getCurrentPages().some(page => {
+    if (page.route === 'pages/test-workbench/index') return false;
+    const data = page.data || {};
+    return ['submitting', 'receiving', 'receiptUploading', 'uploading', 'confirming', 'shipping', 'rejecting', 'resolving', 'paying', 'freightRequesting', 'freightReviewing', 'reallocating', 'reviewing', 'recovering', 'saving'].some(key => Boolean(data[key]));
+  })) throw new Error('请完成或取消当前操作后再切换身份');
+  const user = currentUser();
+  if (!user?.testWorkbenchEnabled) throw new Error('当前账号未开放测试身份');
+  for (const name of ['purchaser', 'supplier', 'finance']) {
+    if (roleCommandState(name).pending) throw new Error('请先确认原提交结果，再切换身份');
+  }
+  if (user.scope?.storeId) {
+    for (const kind of ['order', 'receipt']) {
+      if (wx.getStorageSync(`procurex-${kind}-${user.id}-${user.scope.storeId}`)) throw new Error('请先完成待确认的订货或收货，再切换身份');
+    }
+  }
+}
+
+async function switchTestIdentity(userId) {
+  assertTestSwitchSafe();
+  const result = userId ? await request('/auth/test-identity', { method: 'POST', data: { userId }, testControl: true })
+    : await request('/me', { testControl: true });
   wx.setStorageSync(userKey, result.user);
   return result.user;
 }
@@ -88,7 +123,7 @@ async function sendRoleCommand(workspace, command) {
   roleFlights.add(storage);
   try {
     let result;
-    try { result = await request(command.path, { method: 'POST', data: command.body, header: { 'idempotency-key': command.key } }); }
+    try { result = await request(command.path, { method: command.method || 'POST', data: command.body, header: { 'idempotency-key': command.key } }); }
     catch (error) {
       // Authentication loss does not resolve an earlier uncertain submission.
       if (!error.uncertain && ![401, 403].includes(error.status) && error.code !== 'IDEMPOTENCY_KEY_REUSED') finish('FAILED', error.message, undefined, error.code);
@@ -110,8 +145,10 @@ function roleCommand(workspace, path, options) {
   const subject = path.startsWith('/purchase-requests/') ? '采购' : path.startsWith('/payment-records/') ? '收款'
     : path.startsWith('/freight-confirmations/') ? '运费' : path.startsWith('/supplier-orders/') ? '供货' : '';
   const operation = ({ confirm: '确认', reject: '驳回', reallocate: '改派', shipments: '发货', resolve: '差异处理', 'freight-confirmations': '申请运费' })[action] || '业务提交';
-  const title = path === '/price-changes' ? '价格发布' : /^\/jobs\/[^/]+\/process$/.test(path) ? '价格重算' : `${subject}${operation}`;
-  const command = { path, body: JSON.parse(JSON.stringify(options.data || {})), key: `${options.header['idempotency-key']}-${Math.random().toString(36).slice(2, 10)}`, title, createdAt: new Date().toISOString() };
+  const accountTitle = /^\/stores\/[^/]+\/(recharges|clearings|credit-limit)$/.test(path)
+    ? ({ recharges: '门店充值', clearings: '门店销账', 'credit-limit': '挂账额度调整' })[action] : '';
+  const title = accountTitle || (path === '/price-changes' ? '价格发布' : /^\/jobs\/[^/]+\/process$/.test(path) ? '价格重算' : `${subject}${operation}`);
+  const command = { path, method: options.method || 'POST', body: JSON.parse(JSON.stringify(options.data || {})), key: `${options.header['idempotency-key']}-${Math.random().toString(36).slice(2, 10)}`, title, createdAt: new Date().toISOString() };
   wx.setStorageSync(roleStorage(workspace), { ...state, pending: command });
   return sendRoleCommand(workspace, command);
 }
@@ -121,20 +158,33 @@ function retryRoleCommand(workspace) {
   return sendRoleCommand(workspace, state.pending);
 }
 
-function openWorkspace(name) {
-  const user = currentUser();
-  if (!user) {
-    wx.redirectTo({ url: '/pages/login/index' });
-    return null;
-  }
+function workspaceNames(user) {
+  if (!user) return [];
   const roles = user.roles || [];
   const workspaces = [];
   if (roles.includes('STORE') || roles.includes('STORE_FINANCE')) workspaces.push('store');
   if (roles.includes('SUPPLIER')) workspaces.push('supplier');
   if (roles.includes('PURCHASER') || roles.includes('ADMIN')) workspaces.push('purchaser');
-  if (roles.includes('HQ_FINANCE')) workspaces.push('finance');
-  if (workspaces.length <= 1) wx.hideTabBar();
-  else wx.showTabBar();
+  if (roles.includes('HQ_FINANCE') || roles.includes('ADMIN')) workspaces.push('finance');
+  if (user.scope?.type === 'MULTI_STORE' && user.scope.storeIds?.length && roles.some(role => ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER'].includes(role))) workspaces.push('region');
+  return workspaces;
+}
+
+function refreshWorkspaceNavigation() {
+  if (typeof getCurrentPages !== 'function') return;
+  const pages = getCurrentPages();
+  const bar = pages[pages.length - 1]?.getTabBar?.();
+  if (bar?.refresh) bar.refresh();
+}
+
+function openWorkspace(name) {
+  const user = currentUser();
+  refreshWorkspaceNavigation();
+  if (!user) {
+    wx.redirectTo({ url: '/pages/login/index' });
+    return null;
+  }
+  const workspaces = workspaceNames(user);
   if (!workspaces.includes(name)) {
     if (workspaces.length) wx.switchTab({ url: `/pages/${workspaces[0]}/index` });
     else wx.redirectTo({ url: '/pages/login/index' });
@@ -146,13 +196,14 @@ function openWorkspace(name) {
 function logout() {
   wx.removeStorageSync(tokenKey);
   wx.removeStorageSync(userKey);
+  refreshWorkspaceNavigation();
 }
 
 function downloadEvidence(file) {
   return new Promise((resolve, reject) => {
     wx.downloadFile({
       url: `${apiBase()}/files/${file.id}/download`,
-      header: { authorization: `Bearer ${wx.getStorageSync(tokenKey)}` },
+      header: authHeaders(),
       timeout: 10000,
       success(response) {
         if (response.statusCode !== 200 || !response.tempFilePath) {
@@ -203,7 +254,7 @@ async function uploadEvidence(path, purpose) {
 
 function imagePath(file) {
   return new Promise((resolve, reject) => wx.downloadFile({ url: `${apiBase()}/files/${file.id}/download`,
-    header: { authorization: `Bearer ${wx.getStorageSync(tokenKey)}` }, timeout: 10000,
+    header: authHeaders(), timeout: 10000,
     success: result => result.statusCode === 200 && result.tempFilePath ? resolve(result.tempFilePath) : reject(new Error('图片加载失败')),
     fail: () => reject(new Error('图片加载失败，请检查网络')) }));
 }
@@ -214,10 +265,13 @@ module.exports = {
   checkHealth,
   login,
   currentUser,
+  switchTestIdentity,
+  authHeaders,
   roleCommand,
   roleCommandState,
   retryRoleCommand,
   openWorkspace,
+  workspaceNames,
   previewEvidence,
   downloadEvidence,
   chooseEvidence,

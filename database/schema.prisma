@@ -17,6 +17,7 @@ enum UserScopeType {
   COMPANY
   STORE
   SUPPLIER
+  MULTI_STORE
 }
 
 enum ExportJobStatus {
@@ -222,9 +223,20 @@ model UserScope {
   user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   store      Store?        @relation(fields: [storeId], references: [id])
   supplier   Supplier?     @relation(fields: [supplierId], references: [id])
+  stores     UserScopeStore[]
 
   @@index([storeId])
   @@index([supplierId])
+}
+
+model UserScopeStore {
+  scopeId String @db.Uuid
+  storeId String @db.Uuid
+  scope   UserScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  store   Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@id([scopeId, storeId])
+  @@index([storeId])
 }
 
 model ExportJob {
@@ -393,6 +405,7 @@ model Store {
   rechargeDocuments RechargeDocument[]
   clearingDocuments ClearingDocument[]
   userScopes        UserScope[]
+  assignedUserScopes UserScopeStore[]
   overpayments      Overpayment[]
   @@index([groupName])
 }

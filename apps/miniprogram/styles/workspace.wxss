@@ -41,8 +41,12 @@
 .task-entry > view > text, .row-title > text { overflow-wrap: anywhere; min-width: 0; }
 .page .empty-state { padding: 48rpx 28rpx; text-align: center; color: #718078; font-size: 26rpx; }
 .page.has-action-bar { padding-bottom: calc(260rpx + env(safe-area-inset-bottom)); }
+.page.has-test-workbench-root { padding-bottom: calc(236rpx + env(safe-area-inset-bottom)); }
+.page.has-test-workbench-root.has-action-bar { padding-bottom: calc(364rpx + env(safe-area-inset-bottom)); }
+.has-test-workbench-root .business-nav { bottom: calc(104rpx + env(safe-area-inset-bottom)); padding-bottom: 0; }
 .page .action-bar { position: fixed; left: 0; right: 0; bottom: calc(94rpx + env(safe-area-inset-bottom)); z-index: 21; margin: 0; padding: 18rpx 28rpx; background: #fff; border-top: 1rpx solid #dfe5e1; display: flex; align-items: center; gap: 16rpx; box-sizing: border-box; }
 .page .action-bar > button { flex: 1; min-width: 0; margin: 0; font-size: 26rpx; }
+.page.has-test-workbench-root .action-bar { bottom: calc(200rpx + env(safe-area-inset-bottom)); }
 .page .action-bar .action-secondary { flex: 0 0 140rpx; }
 .page .tag { flex-shrink: 0; max-width: 45%; white-space: normal; overflow-wrap: anywhere; font-size: 23rpx; }
 .page .field { margin-top: 22rpx; }
