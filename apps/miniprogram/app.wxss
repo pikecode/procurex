@@ -259,6 +259,7 @@ button[disabled] { opacity: .45; }
 .primary { background: var(--brand); color: #fff; }
 .secondary { background: var(--brand-soft); color: var(--brand-ink); }
 .ghost {
+  flex-shrink: 0;
   width: auto;
   min-width: 132rpx;
   height: 64rpx;
