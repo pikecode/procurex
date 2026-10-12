@@ -130,8 +130,16 @@ Page({
 
   changeView(event) {
     if (this.data.submitting || this.data.receiving || this.data.receiptUploading) return;
-    if (!this.data.canWrite && ['order', 'receive'].includes(event.currentTarget.dataset.view)) return;
-    this.setData({ activeView: event.currentTarget.dataset.view, error: '' });
+    const view = event.currentTarget.dataset.view;
+    if (!this.data.canWrite && ['order', 'receive'].includes(view)) return;
+    // 与采购/供应商一致：切换工作区视图时先退出下钻详情，
+    // 否则「订单 → 详情 → 我的 → 订单」会把用户弹回刚才那张详情。
+    if (view !== this.data.activeView) {
+      this.statementSequence = (this.statementSequence || 0) + 1;
+      this.setData({ selectedRequest: null, selectedRequestId: '', selectedShipment: null, shipmentId: '',
+        receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false, selectedStatement: null, statementLoading: false });
+    }
+    this.setData({ activeView: view, error: '' });
   },
 
   async loadStatements() {

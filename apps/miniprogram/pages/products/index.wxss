@@ -1,31 +1,93 @@
-page { background: #f4f6f5; color: #24312a; }
-.products-page { padding-bottom: calc(100px + env(safe-area-inset-bottom)); font-size: 14px; }
-.products-heading, .editor-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; background: #fff; border-bottom: 1px solid #e4eae6; }
-.products-heading > text { font-size: 20px; font-weight: 600; }
-.add-product, .back-product, .add-image, .remove-image { width: 38px; height: 38px; padding: 0; margin: 0; font-size: 25px; line-height: 36px; color: #167e5a; background: #edf5f0; border-radius: 4px; flex-shrink: 0; }
-.editor-toolbar { justify-content: flex-start; }
-.products-search { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #fff; }
-.products-search input { flex: 1; min-width: 0; height: 38px; border: 0; background: #f2f5f3; padding: 0 8px; }
-.product-list-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 16px; background: #fff; border-top: 1px solid #edf0ee; }
+/* 商品主数据（该目录不在小程序打包范围内，样式与全局体系保持一致，单位统一用 rpx） */
+
+.products-page { padding-bottom: calc(120rpx + env(safe-area-inset-bottom)); font-size: 26rpx; }
+
+.products-heading, .editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 26rpx 28rpx;
+  background: var(--surface);
+  border-bottom: 1rpx solid var(--line);
+}
+.products-heading > text { color: var(--ink-1); font-size: 34rpx; font-weight: 700; }
+.editor-toolbar { justify-content: flex-start; color: var(--ink-1); font-size: 30rpx; font-weight: 700; }
+
+.add-product, .back-product, .add-image, .remove-image {
+  flex-shrink: 0;
+  width: 68rpx;
+  height: 68rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 14rpx;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 32rpx;
+  line-height: 68rpx;
+}
+
+.products-search {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin: 20rpx 24rpx 0;
+  padding: 0 20rpx;
+  border-radius: 12rpx;
+  background: var(--surface);
+}
+.products-search icon { flex-shrink: 0; }
+.products-search input { min-width: 0; flex: 1; height: 80rpx; padding: 0; border: 0; background: transparent; font-size: 26rpx; }
+
+.product-list-row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  justify-content: space-between;
+  margin: 0 24rpx;
+  padding: 26rpx 28rpx;
+  border-radius: 20rpx;
+  background: var(--surface);
+}
 .product-list-row > view { min-width: 0; flex: 1; }
-.product-title { display: block; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
-.product-state { flex-shrink: 0; color: #6e8076; font-size: 12px; }
-.products-empty { padding: 40px 16px; text-align: center; color: #75867c; }
-.product-fields, .product-image-section { padding: 0 16px; background: #fff; margin-top: 8px; }
-.product-field { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 8px 0; border-bottom: 1px solid #edf0ee; box-sizing: border-box; }
-.product-field > text { width: 76px; flex-shrink: 0; color: #586b5f; }
-.product-field input { flex: 1; min-width: 0; width: 0; height: 36px; padding: 0 8px; font-size: 14px; border: 1px solid #e1e7e3; }
-.product-field picker { flex: 1; min-width: 0; padding: 8px 0; overflow-wrap: anywhere; }
-.product-field input + picker { flex: 0 0 48px; }
-.brand-select { color: #167e5a; font-size: 12px; }
-.product-image-section { padding-top: 16px; padding-bottom: 16px; }
-.product-image-tools { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
-.product-image-tools image { width: 96px; height: 96px; border: 1px solid #e3e9e5; }
-.product-save-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 10; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #e3e9e5; }
-.product-save-bar button { margin: 0; width: 100%; }
-.crop-editor { padding: 20px 16px; background: #fff; }
-.crop-frame { width: 240px; height: 240px; margin: 20px auto; overflow: hidden; background: #eaf0ed; }
-.crop-actions { display: flex; gap: 12px; }
-.crop-actions button { flex: 1; min-width: 0; }
-.crop-canvas { position: fixed; left: -10000px; top: 0; }
+.product-title { display: block; color: var(--ink-1); font-size: 28rpx; font-weight: 600; overflow-wrap: anywhere; }
+.product-state { flex-shrink: 0; color: var(--ink-3); font-size: 23rpx; }
+.products-empty { padding: 64rpx 32rpx; color: var(--ink-3); font-size: 26rpx; text-align: center; }
+
+.product-fields, .product-image-section { margin: 20rpx 24rpx 0; padding: 8rpx 28rpx; border-radius: 20rpx; background: var(--surface); }
+.product-image-section { padding: 28rpx; }
+.product-field {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  min-height: 96rpx;
+  padding: 10rpx 0;
+  border-bottom: 1rpx solid var(--line-soft);
+}
+.product-field > text { width: 160rpx; flex-shrink: 0; color: var(--ink-3); font-size: 25rpx; }
+.product-field input { min-width: 0; flex: 1; width: auto; height: 72rpx; border-radius: 12rpx; background: var(--sunken); }
+.product-field picker { min-width: 0; flex: 1; padding: 10rpx 0; color: var(--ink-1); overflow-wrap: anywhere; }
+.product-field input + picker { flex: 0 0 100rpx; }
+.brand-select { color: var(--brand); font-size: 23rpx; }
+
+.product-image-tools { display: flex; align-items: center; gap: 20rpx; margin-top: 16rpx; }
+.product-image-tools image { width: 180rpx; height: 180rpx; border-radius: 14rpx; background: var(--sunken); }
+
+.product-save-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: var(--z-action);
+  padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid var(--line);
+  background: var(--surface);
+}
+.product-save-bar button { width: 100%; margin: 0; }
+
+.crop-editor { margin: 20rpx 24rpx 0; padding: 28rpx; border-radius: 20rpx; background: var(--surface); }
+.crop-frame { width: 480rpx; height: 480rpx; margin: 24rpx auto; overflow: hidden; border-radius: 16rpx; background: var(--sunken); }
+.crop-actions { display: flex; gap: 20rpx; }
+.crop-actions button { flex: 1; min-width: 0; margin: 0; }
+.crop-canvas { position: fixed; top: 0; left: -10000px; }
 .muted { overflow-wrap: anywhere; }

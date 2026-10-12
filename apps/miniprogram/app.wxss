@@ -5,28 +5,45 @@
    =========================================================================== */
 
 page {
+  /* 品牌绿。--brand 是动作色，--brand-deep 是页头整块底色（与原生导航栏同色，
+     两者拼成一条完整的品牌色带）。全部色值已验算 WCAG 对比度。 */
   --brand: #167e5a;
-  --brand-soft: #eaf4ef;
-  --brand-ink: #0f5f43;
+  --brand-deep: #0f5a40;
+  --brand-soft: #e8f2ed;
+  --brand-ink: #0b5540;
 
-  --ink-1: #17211c;
-  --ink-2: #4a5a51;
-  --ink-3: #6f7c75;
-  --ink-4: #98a29c;
+  /* 中性色刻意不带绿相：之前的中性灰是绿调的，导致白卡片和灰底都是绿的，
+     卡片浮不起来。四级全部满足 WCAG AA（白/凹陷底/页面底三种背景）。
 
-  --canvas: #f2f5f3;
+     注意：ink-3 与 ink-4 的明度差极小（5.66 vs 5.38），人眼几乎无法区分。
+     这是刻意的取舍——四级灰要全部过 AA，色阶必然被压窄。
+     实际的层级差异由字号和字重承担，不靠明度。 */
+  --ink-1: #15191c;
+  --ink-2: #4b5450;
+  --ink-3: #5d6a64;
+  --ink-4: #626d68;
+  --ink-faint: #b0bab5;
+
+  --canvas: #eaeceb;
   --surface: #ffffff;
-  --sunken: #f1f4f2;
+  --sunken: #eaecee;
 
-  --line: #e6ebe8;
-  --line-soft: #eef2ef;
+  --line: #e3e7e9;
+  --line-soft: #eef0f1;
 
-  --warn: #a76613;
-  --warn-soft: #fdf3e3;
-  --danger: #b3402f;
-  --danger-soft: #fdeeeb;
+  --warn: #8a5a10;
+  --warn-soft: #fcf3e4;
+  --danger: #b03a2f;
+  --danger-soft: #fceceb;
   --info: #2f5f8c;
-  --info-soft: #eef4fb;
+  --info-soft: #eef3f9;
+
+  /* 层级阶梯：粘性控件条 < 角色导航 < 底部操作条 < 抽屉 < 工作区切换 */
+  --z-sticky: 20;
+  --z-nav: 30;
+  --z-action: 31;
+  --z-sheet: 40;
+  --z-tabbar: 100;
 
   background: var(--canvas);
   color: var(--ink-1);
@@ -283,7 +300,7 @@ button[disabled] { opacity: .45; }
   height: 120rpx;
   margin-bottom: 20rpx;
   border-radius: 16rpx;
-  background: #e6ece8;
+  background: #e2e7e6;
 }
 .workspace-loading { padding: 24rpx 28rpx; color: var(--ink-3); font-size: 24rpx; background: var(--surface); }
 
@@ -320,14 +337,33 @@ button[disabled] { opacity: .45; }
 
 /* ---------- 页内标签组 ---------- */
 
-.view-tabs {
-  display: flex;
+/* ---------- 粘性控件条 ----------
+
+   列表头部的 tab / 搜索 / 筛选条统一用这一套：吸顶、满幅、不透明。
+   满幅是关键——保留左右留白会让列表内容从两侧缝隙里透出来。
+
+   --bleed 是负外边距的抵消量，必须等于它所依附容器的左右内边距：
+   .page 本身没有左右内边距，所以直接挂在 .page 下的条 --bleed 为 0，
+   由各自规则给 padding;只有嵌在 .card 里的才需要抵消卡片内边距。 */
+
+.sticky-bar {
+  --bleed: 0;
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: var(--z-sticky);
+  margin-right: calc(-1 * var(--bleed));
+  margin-left: calc(-1 * var(--bleed));
+  padding-right: var(--bleed);
+  padding-left: var(--bleed);
   background: var(--surface);
   border-bottom: 1rpx solid var(--line);
 }
+.card .sticky-bar { --bleed: 28rpx; }
+/* 挂在 .page 下、且自身没有左右留白的条，统一给 24rpx */
+.sticky-bar { padding-right: 24rpx; padding-left: 24rpx; }
+.card .sticky-bar, .order-list-controls { padding-right: var(--bleed); padding-left: var(--bleed); }
+
+.view-tabs { display: flex; }
 .view-tab {
   flex: 1;
   padding: 24rpx 8rpx;
@@ -337,6 +373,14 @@ button[disabled] { opacity: .45; }
   border-bottom: 4rpx solid transparent;
 }
 .is-active { color: var(--brand); font-weight: 700; border-bottom-color: var(--brand); }
+
+/* 固定在吸顶条下方的次级筛选行（不吸顶，随列表一起滚走） */
+.filter-bar {
+  display: flex;
+  gap: 32rpx;
+  overflow-x: auto;
+  white-space: nowrap;
+}
 
 /* ---------- 底部固定操作条 ---------- */
 

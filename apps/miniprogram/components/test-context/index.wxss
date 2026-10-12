@@ -1,5 +1,26 @@
-.test-context { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; margin: 16rpx 24rpx; padding: 20rpx 24rpx; background: #ffffff; border-bottom: 1rpx solid #e3e9e6; color: #263c32; font-size: 26rpx; }
-.test-context > view { flex: 1; min-width: 0; }
-.badge { display: block; font-weight: 600; }
-.identity { display: block; overflow-wrap: anywhere; margin-top: 8rpx; color: #758279; font-size: 24rpx; }
-.test-context button { flex-shrink: 0; margin: 0; padding: 0 16rpx; line-height: 60rpx; font-size: 24rpx; background: #f0f6f2; color: #167e5a; border-radius: 6rpx; }
+.test-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 16rpx 24rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 26rpx;
+}
+.test-context > view { min-width: 0; flex: 1; }
+.badge { display: block; font-weight: 700; }
+.identity { display: block; margin-top: 8rpx; color: var(--ink-2); font-size: 24rpx; overflow-wrap: anywhere; }
+.test-context button {
+  flex-shrink: 0;
+  margin: 0;
+  height: 64rpx;
+  padding: 0 20rpx;
+  line-height: 64rpx;
+  font-size: 24rpx;
+  background: var(--surface);
+  color: var(--brand);
+  border-radius: 10rpx;
+}

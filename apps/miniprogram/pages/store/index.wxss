@@ -1,191 +1,639 @@
+/* ===========================================================================
+   门店工作台
+   与其他角色共用 app.wxss 的令牌与原语；这里只定义门店独有的
+   商品目录、订货单、收货核对与账户视图。
+   =========================================================================== */
+
 @import "../../styles/workspace.wxss";
-page { background: #f4f6f5; color: #202b25; }
+
 .notice-error > button { margin: 14rpx 0 0; font-size: 24rpx; }
-.account-grid > view { min-width: 0; overflow-wrap: anywhere; }
-.ledger-line .line-name { flex: 1; min-width: 0; }
-.receipt-counts { flex-wrap: wrap; gap: 16rpx; }
-.receipt-input-group { flex-shrink: 0; }
-/* Two fixed bars stack here: .store-nav (96rpx) plus .order-bar above it; keep the tally safe-area inclusive. */
-.store-page { min-height: 100vh; padding-bottom: calc(268rpx + env(safe-area-inset-bottom)); box-sizing: border-box; font-size: 27rpx; }
-.store-heading { padding: 28rpx 28rpx 22rpx; background: #fff; border-bottom: 1rpx solid #e5eae7; }
-.heading-main, .entry-top, .entry-progress, .entry-bottom, .amount-row, .product-bottom, .receipt-counts, .section-caption { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; }
-.store-name { font-size: 32rpx; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
-.heading-date { color: #718078; font-size: 22rpx; flex-shrink: 0; }
-.heading-caption { display: block; margin-top: 8rpx; font-size: 24rpx; color: #718078; }
-.catalog-tools { padding: 22rpx 28rpx 0; background: #fff; }
-.search-field { display: flex; align-items: center; gap: 16rpx; background: #f1f4f2; padding: 0 20rpx; border-radius: 8rpx; }
-.search-input { width: 100%; border: 0; background: transparent; padding: 0; height: 74rpx; font-size: 25rpx; }
+
+/* Two fixed bars stack here: .store-nav (96rpx) plus .order-bar above it. */
+.store-page {
+  min-height: 100vh;
+  padding-bottom: calc(276rpx + env(safe-area-inset-bottom));
+  font-size: 26rpx;
+}
+
+/* ---------- 页头 ---------- */
+
+/* 门店页页头同样接住原生导航栏，形成一整条品牌色带。 */
+.store-heading {
+  padding: 30rpx 28rpx 28rpx;
+  background: var(--brand-deep);
+}
+.heading-main,
+.entry-top,
+.entry-progress,
+.entry-bottom,
+.amount-row,
+.product-bottom,
+.receipt-counts,
+.section-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+.store-name {
+  min-width: 0;
+  color: #fff;
+  font-size: 34rpx;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.heading-date { flex-shrink: 0; color: rgba(255, 255, 255, .78); font-size: 23rpx; }
+.heading-caption { display: block; margin-top: 12rpx; color: rgba(255, 255, 255, .78); font-size: 24rpx; }
+
+/* ---------- 区块与说明 ---------- */
+
+.section-band {
+  margin-top: 20rpx;
+  padding: 28rpx;
+  background: var(--surface);
+}
+.section-title {
+  display: block;
+  color: var(--ink-1);
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.section-caption { padding: 28rpx; color: var(--ink-3); font-size: 23rpx; }
+.secondary-text { display: block; margin-top: 8rpx; color: var(--ink-3); font-size: 23rpx; line-height: 1.5; overflow-wrap: anywhere; }
+.delivery-info > text { display: block; margin-top: 12rpx; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* ---------- 固定底部条 ---------- */
+
+.store-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-nav);
+  display: flex;
+  /* 同 .business-nav：border-box 下安全区要叠加在高度之外。 */
+  height: calc(96rpx + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--surface);
+  border-top: 1rpx solid var(--line);
+}
+.nav-item {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  color: var(--ink-3);
+  font-size: 26rpx;
+  border-top: 4rpx solid transparent;
+}
+.nav-selected { color: var(--brand); font-weight: 700; border-top-color: var(--brand); background: var(--brand-soft); }
+
+.order-bar {
+  position: fixed;
+  bottom: calc(96rpx + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  z-index: var(--z-nav);
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 20rpx 28rpx;
+  background: var(--surface);
+  border-top: 1rpx solid var(--line);
+}
+.cart-summary { min-width: 0; flex: 1; }
+.cart-count { display: block; color: var(--ink-3); font-size: 23rpx; }
+.cart-estimate {
+  display: block;
+  margin-top: 4rpx;
+  color: var(--ink-1);
+  font-size: 32rpx;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.order-bar button, .sheet-total button { flex: 0 0 272rpx; width: 272rpx; margin: 0; height: 80rpx; line-height: 80rpx; font-size: 26rpx; }
+
+/* ---------- 商品目录 ---------- */
+
+.catalog-tools { padding: 18rpx 28rpx 0; background: var(--surface); }
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 0 20rpx;
+  border-radius: 12rpx;
+  background: var(--sunken);
+}
+.search-input { width: 100%; height: 76rpx; padding: 0; border: 0; background: transparent; font-size: 26rpx; }
+
 .category-strip { white-space: nowrap; width: 100%; }
 .category-track { display: inline-flex; gap: 32rpx; }
-.category-option { padding: 28rpx 12rpx; font-size: 24rpx; color: #718078; border-left: 5rpx solid transparent; text-align: center; line-height: 1.5; overflow-wrap: anywhere; }
-.category-sidebar .category-option { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; padding: 20rpx 10rpx; word-break: break-word; }
-.category-selected { color: #167e5a; border-color: #167e5a; font-weight: 700; background: #fff; }
-.subcategory-strip { padding: 12rpx 0; border-top: 1rpx solid #e3e9e6; }
+.category-option {
+  padding: 28rpx 12rpx;
+  border-left: 5rpx solid transparent;
+  color: var(--ink-3);
+  font-size: 24rpx;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.category-sidebar .category-option {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  padding: 22rpx 12rpx;
+  word-break: break-word;
+}
+.category-selected { color: var(--brand); border-color: var(--brand); background: var(--surface); font-weight: 700; }
+.subcategory-strip { padding: 12rpx 0; border-top: 1rpx solid var(--line); }
 .subcategory-strip .category-track { gap: 16rpx; }
-.subcategory-option { padding: 10rpx 20rpx; font-size: 24rpx; border-radius: 6rpx; color: #718078; background: #f2f5f3; }
-.subcategory-selected { background: #e2f1e8; color: #167e5a; font-weight: 600; }
-.catalog-page { height: 100vh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: calc(97rpx + env(safe-area-inset-bottom)); }
-.catalog-page.has-checkout { padding-bottom: calc(218rpx + env(safe-area-inset-bottom)); }
-.catalog-page .store-heading, .catalog-tools { flex-shrink: 0; }
-.catalog-page .catalog-tools { padding: 18rpx 24rpx; border-bottom: 1rpx solid #e5eae7; }
+.subcategory-option { padding: 10rpx 20rpx; border-radius: 10rpx; color: var(--ink-3); background: var(--sunken); font-size: 24rpx; }
+.subcategory-selected { background: var(--brand-soft); color: var(--brand-ink); font-weight: 600; }
+
+.catalog-page {
+  height: 100vh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: calc(97rpx + env(safe-area-inset-bottom));
+}
+.catalog-page.has-checkout { padding-bottom: calc(226rpx + env(safe-area-inset-bottom)); }
+.catalog-page .store-heading, .catalog-page .catalog-tools { flex-shrink: 0; }
+.catalog-page .catalog-tools { padding: 18rpx 24rpx; border-bottom: 1rpx solid var(--line); }
 .catalog-browser { flex: 1; min-height: 0; display: flex; overflow: hidden; }
-.category-sidebar { width: 154rpx; flex: 0 0 154rpx; height: 100%; background: #f1f4f2; }
-.catalog-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
-.catalog-content .subcategory-strip { flex-shrink: 0; padding: 16rpx 0; border-top: 0; border-bottom: 1rpx solid #edf0ee; }
+.category-sidebar { flex: 0 0 154rpx; width: 154rpx; height: 100%; background: var(--sunken); }
+.catalog-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
+.catalog-content .subcategory-strip { flex-shrink: 0; padding: 16rpx 0; border-top: 0; border-bottom: 1rpx solid var(--line-soft); }
 .catalog-content .category-track { padding: 0 18rpx; }
 .catalog-content .subcategory-option { padding: 10rpx 16rpx; font-size: 23rpx; }
 .catalog-content .section-caption { padding: 16rpx 18rpx; flex-shrink: 0; font-size: 22rpx; }
 .catalog-products { flex: 1; height: 0; min-height: 0; }
 .catalog-content .product-list { padding: 0 18rpx; }
 .catalog-content .product-row { gap: 16rpx; padding: 24rpx 0; }
-.catalog-content .product-media { width: 94rpx; height: 94rpx; flex-basis: 94rpx; }
+.catalog-content .product-media { flex-basis: 94rpx; width: 94rpx; height: 94rpx; }
 .catalog-content .missing-image { gap: 6rpx; font-size: 18rpx; }
-.catalog-content .product-name { font-size: 26rpx; }
+.catalog-content .product-name { font-size: 27rpx; }
 .catalog-content .product-bottom { align-items: center; gap: 12rpx; margin-top: 14rpx; }
-.catalog-content .product-price { font-size: 28rpx; }
+.catalog-content .product-price { font-size: 29rpx; }
 .catalog-content .quantity-stepper { flex-shrink: 0; margin-left: auto; }
 .catalog-content .product-price-group { flex: 1; min-width: 0; }
-.product-convert-hint { color: #8a9690; }
-.section-caption { padding: 22rpx 28rpx; color: #758078; font-size: 23rpx; }
-.product-list { background: #fff; padding: 0 28rpx; }
-.product-row { display: flex; gap: 22rpx; padding: 28rpx 0; border-bottom: 1rpx solid #e9eeeb; }
-.product-media { position: relative; flex: 0 0 126rpx; width: 126rpx; height: 126rpx; background: #f1f4f2; border-radius: 8rpx; overflow: hidden; }
-/* Per-row quantity badge: the running total stays readable while scrolling past the fixed bottom bar. */
-.cart-badge { position: absolute; top: 6rpx; right: 6rpx; z-index: 2; min-width: 36rpx; height: 36rpx; padding: 0 8rpx; border-radius: 18rpx; background: #167e5a; color: #fff; font-size: 22rpx; line-height: 36rpx; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* ---------- 商品行 ---------- */
+
+.product-list { padding: 0 28rpx; background: var(--surface); }
+.product-row { display: flex; gap: 22rpx; padding: 28rpx 0; border-bottom: 1rpx solid var(--line); }
+.product-media {
+  position: relative;
+  flex: 0 0 126rpx;
+  width: 126rpx;
+  height: 126rpx;
+  overflow: hidden;
+  border-radius: 12rpx;
+  background: var(--sunken);
+}
 .product-media image { width: 100%; height: 100%; }
-/* Leave the top-right corner free so the cart badge never sits on the placeholder text. */
-.missing-image { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6rpx; padding-bottom: 12rpx; color: #8e9892; font-size: 18rpx; }
+.missing-image {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6rpx;
+  padding-bottom: 12rpx;
+  color: var(--ink-4);
+  font-size: 18rpx;
+}
+.cart-badge {
+  position: absolute;
+  top: 6rpx;
+  right: 6rpx;
+  z-index: 2;
+  min-width: 36rpx;
+  height: 36rpx;
+  padding: 0 8rpx;
+  border-radius: 18rpx;
+  background: var(--brand);
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 36rpx;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .product-main { flex: 1; min-width: 0; }
-.product-name { display: block; font-size: 28rpx; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
-.product-meta { display: block; font-size: 21rpx; line-height: 1.5; color: #718078; margin-top: 7rpx; }
-.product-bottom { margin-top: 20rpx; flex-wrap: wrap; gap: 14rpx; }
+.product-name { display: block; color: var(--ink-1); font-size: 28rpx; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.product-meta { display: block; margin-top: 8rpx; color: var(--ink-3); font-size: 22rpx; line-height: 1.5; }
+.product-bottom { margin-top: 18rpx; flex-wrap: wrap; gap: 14rpx; }
 .product-price-group { display: flex; align-items: baseline; gap: 14rpx; flex-wrap: wrap; min-width: 0; }
-.product-price { font-size: 30rpx; font-weight: 700; color: #24332c; overflow-wrap: anywhere; }
-/* Minimum order and multiple are hard submission constraints, so they read at body size in a hint tone. */
-.product-rules { font-size: 24rpx; color: #8b601e; font-variant-numeric: tabular-nums; }
-.quantity-stepper { flex-shrink: 0; display: flex; align-items: center; height: 58rpx; border: 1rpx solid #dce5df; border-radius: 8rpx; overflow: hidden; }
-.step-button { width: 56rpx; height: 58rpx; line-height: 58rpx; font-size: 32rpx; margin: 0; padding: 0; border-radius: 0; background: #f2f6f3; color: #167e5a; }
-button::after { border: 0; }
-.step-add { background: #167e5a; color: #fff; }
-.quantity-input { width: 80rpx; height: 58rpx; padding: 0 4rpx; text-align: center; border: 0; border-radius: 0; font-size: 25rpx; }
-.unavailable { color: #8a6b4c; font-size: 23rpx; }
-.store-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 10; display: flex; height: 96rpx; padding-bottom: env(safe-area-inset-bottom); background: #fff; border-top: 1rpx solid #dfe7e2; }
-.nav-item { flex: 1; min-width: 0; height: 96rpx; display: flex; align-items: center; justify-content: center; font-size: 25rpx; color: #718078; border-top: 4rpx solid transparent; box-sizing: border-box; }
-.nav-selected { color: #167e5a; font-weight: 700; border-top-color: #167e5a; background: #f4faf6; }
-.order-bar { position: fixed; bottom: calc(96rpx + env(safe-area-inset-bottom)); left: 0; right: 0; z-index: 9; display: flex; align-items: center; gap: 20rpx; padding: 20rpx 28rpx; background: #fff; border-top: 1rpx solid #e2e9e5; }
-.cart-summary { flex: 1; min-width: 0; }
-.cart-count { display: block; color: #718078; font-size: 22rpx; }
-.cart-estimate { display: block; font-size: 29rpx; font-weight: 700; margin-top: 4rpx; overflow-wrap: anywhere; }
-.order-bar button, .sheet-total button { flex: 0 0 272rpx; width: 272rpx; margin: 0; height: 80rpx; line-height: 80rpx; font-size: 26rpx; }
-.notice { margin: 20rpx 28rpx; padding: 20rpx; font-size: 24rpx; line-height: 1.6; border-left: 5rpx solid; overflow-wrap: anywhere; }
-.notice-error { background: #fff0ef; color: #a33935; border-color: #c95f59; }
-.notice-info { background: #edf4fc; color: #375d83; border-color: #7599bd; }
-.notice-warn { background: #fff6e8; color: #8b601e; border-color: #d3a953; }
-.notice button { margin-top: 14rpx; width: 100%; }
-.section-band { background: #fff; padding: 28rpx; margin-top: 18rpx; border-bottom: 1rpx solid #e4ebe6; }
-.section-title { display: block; font-size: 28rpx; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
-.delivery-info > text { display: block; margin-top: 10rpx; line-height: 1.5; overflow-wrap: anywhere; }
-.secondary-text { display: block; color: #718078; font-size: 23rpx; line-height: 1.5; margin-top: 6rpx; overflow-wrap: anywhere; }
-.detail-toolbar { display: flex; align-items: center; gap: 18rpx; padding: 18rpx 28rpx 0; font-size: 28rpx; font-weight: 600; }
-.back-button { width: 64rpx; height: 64rpx; line-height: 58rpx; margin: 0; padding: 0; background: #fff; font-size: 42rpx; color: #35473b; }
-.confirm-line, .ledger-line { display: flex; align-items: center; justify-content: space-between; gap: 24rpx; padding: 25rpx 0; border-bottom: 1rpx solid #e9eeeb; }
-.line-name { min-width: 0; flex: 1; overflow-wrap: anywhere; line-height: 1.4; }
-.money { flex-shrink: 0; font-weight: 600; font-size: 27rpx; text-align: right; }
-.amount-row { padding: 15rpx 0; font-size: 25rpx; }
-.amount-row text:last-child { text-align: right; overflow-wrap: anywhere; }
-.total-row { font-size: 29rpx; font-weight: 700; border-bottom: 1rpx solid #e9eeeb; padding-bottom: 22rpx; margin-bottom: 10rpx; }
-.shortfall-row { color: #ae6424; }
-.order-filters { padding: 0 28rpx; background: #fff; }
-.receipt-todo-banner { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; margin: 18rpx 28rpx; padding: 20rpx 22rpx; background: #eef7f2; border: 1rpx solid #cfe5d7; border-radius: 8rpx; }
+.product-price {
+  color: var(--ink-1);
+  font-size: 32rpx;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.product-price-unit { color: var(--ink-3); font-size: 22rpx; font-weight: 400; }
+.product-rules { color: var(--warn); font-size: 23rpx; font-variant-numeric: tabular-nums; }
+.product-convert-hint { color: var(--ink-4); }
+.unavailable { color: var(--warn); font-size: 23rpx; }
+.product-unit-select {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8rpx 16rpx;
+  padding: 10rpx 0;
+  color: var(--brand);
+  font-size: 24rpx;
+}
+
+/* ---------- 数量步进器 ---------- */
+
+.quantity-stepper {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  height: 60rpx;
+  overflow: hidden;
+  border: 1rpx solid var(--line);
+  border-radius: 12rpx;
+}
+.step-button {
+  width: 60rpx;
+  height: 60rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: var(--sunken);
+  color: var(--brand);
+  font-size: 32rpx;
+  line-height: 60rpx;
+}
+.step-add { background: var(--brand); color: #fff; }
+.quantity-input {
+  width: 84rpx;
+  height: 60rpx;
+  padding: 0 4rpx;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  text-align: center;
+  font-size: 26rpx;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 订货单 ---------- */
+
+/* 详情工具条：左侧回退、右侧标题，与其他角色的 .task-detail-toolbar 同构 */
+.detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-top: 20rpx;
+  padding: 20rpx 28rpx;
+  border-bottom: 1rpx solid var(--line);
+  background: var(--surface);
+  color: var(--ink-1);
+  font-size: 30rpx;
+  font-weight: 700;
+}
+.detail-toolbar .back-link { padding: 0; margin: 0; font-weight: 600; }
+
+.confirm-line, .ledger-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid var(--line-soft);
+}
+.confirm-line:last-child { border-bottom: 0; }
+.line-name { min-width: 0; flex: 1; color: var(--ink-1); line-height: 1.4; overflow-wrap: anywhere; }
+.money { flex-shrink: 0; color: var(--ink-1); font-size: 28rpx; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.ledger-amount { flex-shrink: 0; text-align: right; color: var(--ink-1); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.amount-row { padding: 16rpx 0; color: var(--ink-2); font-size: 26rpx; }
+.amount-row > text:first-child { min-width: 0; }
+.amount-row > text:last-child { flex-shrink: 0; color: var(--ink-1); text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.total-row { padding-bottom: 24rpx; margin-bottom: 8rpx; border-bottom: 1rpx solid var(--line); font-size: 28rpx; font-weight: 700; }
+.total-row > text:last-child { font-size: 32rpx; }
+.shortfall-row > text:first-child, .shortfall-row > text:last-child { color: var(--warn); font-weight: 700; }
+
+/* ---------- 订货单列表 ---------- */
+
+.order-filters { padding: 0; background: var(--surface); }
+.receipt-todo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin: 20rpx 28rpx 0;
+  padding: 22rpx 24rpx;
+  border-radius: 16rpx;
+  background: var(--brand-soft);
+}
+.chevron { flex-shrink: 0; color: var(--ink-faint); font-size: 34rpx; }
 .receipt-todo-banner > view { display: flex; flex-direction: column; gap: 6rpx; min-width: 0; }
-.receipt-todo-title { color: #176b4c; font-size: 26rpx; font-weight: 700; }
-.receipt-todo-count { color: #64746b; font-size: 22rpx; }
-.receipt-todo-action { flex-shrink: 0; color: #176b4c; font-size: 24rpx; font-weight: 600; }
-.filter-track { display: flex; justify-content: space-between; gap: 12rpx; }
-.filter-option { padding: 26rpx 0 20rpx; font-size: 24rpx; color: #718078; border-bottom: 4rpx solid transparent; white-space: nowrap; }
-.filter-selected { color: #167e5a; border-color: #167e5a; font-weight: 700; }
-.funding-toggle { display: flex; align-items: center; justify-content: space-between; padding: 14rpx 0; font-size: 23rpx; color: #718078; }
+.receipt-todo-title { color: var(--brand-ink); font-size: 27rpx; font-weight: 700; }
+.receipt-todo-count { color: var(--ink-3); font-size: 23rpx; }
+.receipt-todo-action { flex-shrink: 0; color: var(--brand); font-size: 24rpx; font-weight: 600; }
+.filter-track { display: flex; gap: 32rpx; overflow-x: auto; white-space: nowrap; }
+.filter-option {
+  flex-shrink: 0;
+  padding: 26rpx 0 20rpx;
+  color: var(--ink-3);
+  font-size: 25rpx;
+  border-bottom: 4rpx solid transparent;
+}
+.filter-selected { color: var(--brand); border-color: var(--brand); font-weight: 700; }
+.funding-toggle { display: flex; align-items: center; justify-content: space-between; padding: 16rpx 0; color: var(--ink-3); font-size: 23rpx; }
 .funding-toggle switch { transform: scale(.75); transform-origin: right center; }
-.refresh-action { color: #167e5a; font-size: 24rpx; padding: 10rpx 0 10rpx 16rpx; }
-.order-entry { background: #fff; padding: 26rpx 28rpx; margin-bottom: 16rpx; border-bottom: 1rpx solid #e4ebe6; }
-.document-number { min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
-.entry-top { align-items: flex-start; font-size: 25rpx; }
+.refresh-action { color: var(--brand); font-size: 24rpx; padding: 10rpx 0 10rpx 16rpx; }
+
+/* 门店页本身是满幅区块，工具条自身不需要负外边距抵消版心。 */
+.order-list-controls { padding: 16rpx 28rpx 8rpx; }
+.order-list-controls .section-band { margin: 0; padding-top: 4rpx; padding-bottom: 12rpx; }
+.order-list-controls input { background: var(--sunken); border: 0; }
+
+.order-entry {
+  padding: 26rpx 28rpx;
+  background: var(--surface);
+  border-bottom: 1rpx solid var(--line);
+  transition: background-color .15s ease;
+}
+.order-entry:active { background: var(--sunken); }
+.order-entry .entry-top { align-items: flex-start; color: var(--ink-1); font-size: 26rpx; }
+.entry-top > text:first-child { min-width: 0; flex: 1; }
+.entry-progress { margin-top: 16rpx; color: var(--ink-2); font-size: 25rpx; }
+.entry-progress .money { font-size: 30rpx; }
+.entry-bottom {
+  margin-top: 18rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid var(--line-soft);
+  color: var(--ink-3);
+  font-size: 23rpx;
+}
+.entry-bottom > text:last-child { flex-shrink: 0; color: var(--brand); font-weight: 600; }
+
+/* 状态药丸：与全局 .status 同一实现 */
+.status-label {
+  flex-shrink: 0;
+  max-width: 46%;
+  padding: 5rpx 14rpx;
+  border-radius: 10rpx;
+  background: var(--sunken);
+  color: var(--ink-3);
+  font-size: 22rpx;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.status-progress { background: var(--warn-soft); color: var(--warn); }
+.status-warn { background: var(--warn-soft); color: var(--warn); }
+.status-done { background: var(--brand-soft); color: var(--brand-ink); }
+.status-fail { background: var(--danger-soft); color: var(--danger); }
+.status-muted { background: var(--sunken); color: var(--ink-4); }
+
+/* ---------- 供应商分单 ---------- */
+
 .group-toggle { display: flex; align-items: center; gap: 12rpx; flex: 1; min-width: 0; }
 .group-toggle .section-title { flex: 0 1 auto; }
-.group-summary { flex-shrink: 0; color: #718078; font-size: 23rpx; font-variant-numeric: tabular-nums; }
+.group-summary { flex-shrink: 0; color: var(--ink-3); font-size: 23rpx; font-variant-numeric: tabular-nums; }
+.request-supplier-group { padding: 24rpx 28rpx; }
 .request-supplier-group .section-title { flex: 1; min-width: 0; }
 .supplier-group-heading { padding: 4rpx 0; }
 .supplier-group-name { display: flex; align-items: center; gap: 12rpx; }
 .supplier-group-name .status-label { margin-left: auto; }
-.supplier-group-summary { display: flex; justify-content: space-between; gap: 16rpx; padding: 10rpx 0 0 28rpx; font-size: 23rpx; color: #718078; }
-.supplier-fold-label { color: #167e5a; flex-shrink: 0; }
-.supplier-order-number { display: block; margin-top: 18rpx; }
-.supplier-contact-info { padding: 18rpx 0; margin-top: 16rpx; border-top: 1rpx solid #e9eeeb; border-bottom: 1rpx solid #e9eeeb; color: #718078; font-size: 24rpx; line-height: 1.6; }
+.supplier-group-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 12rpx 0 0 30rpx;
+  color: var(--ink-3);
+  font-size: 23rpx;
+}
+.supplier-fold-label { flex-shrink: 0; color: var(--brand); font-weight: 600; }
+.supplier-order-number { margin-top: 18rpx; }
+.supplier-contact-info {
+  margin-top: 18rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 14rpx;
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: 24rpx;
+  line-height: 1.6;
+}
 .supplier-contact-info > text { display: block; overflow-wrap: anywhere; }
 .supplier-phone-row { display: flex; align-items: center; gap: 16rpx; }
-.supplier-phone { width: auto; min-width: 0; margin: 0; padding: 6rpx 0; background: transparent; color: #167e5a; font-size: 24rpx; line-height: 1.6; overflow-wrap: anywhere; text-align: left; }
+.supplier-phone {
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 6rpx 0;
+  background: transparent;
+  color: var(--brand);
+  font-size: 24rpx;
+  line-height: 1.6;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
 .request-supplier-group .confirm-line:last-child { border-bottom: 0; padding-bottom: 0; }
-.group-chevron { flex-shrink: 0; color: #8a9690; font-size: 30rpx; transition: transform .18s ease; }
+.group-chevron { flex-shrink: 0; color: var(--ink-faint); font-size: 30rpx; transition: transform .18s ease; }
 .group-chevron.is-open { transform: rotate(90deg); }
-.status-label { flex-shrink: 0; font-size: 22rpx; color: #167e5a; background: #eef7f0; padding: 5rpx 10rpx; border-radius: 6rpx; }
-.status-progress { color: #8b601e; background: #fff6e8; }
-.status-done { color: #167e5a; background: #eef7f0; }
-.status-fail { color: #a33935; background: #fff0ef; }
-.status-muted { color: #7c8781; background: #f1f4f2; }
-.entry-progress { margin-top: 24rpx; font-size: 24rpx; }
-.entry-bottom { padding-top: 20rpx; margin-top: 20rpx; border-top: 1rpx solid #e9eeeb; font-size: 22rpx; color: #718078; }
-.fulfillment-group { margin-top: 24rpx; padding-top: 24rpx; border-top: 1rpx solid #e9eeeb; }
+.document-number { min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
+
+/* ---------- 履约与收货 ---------- */
+
+.fulfillment-group { margin-top: 24rpx; padding-top: 24rpx; border-top: 1rpx solid var(--line); }
 .shipment-event { display: flex; gap: 20rpx; margin-top: 24rpx; }
-.timeline-dot { width: 12rpx; height: 12rpx; margin-top: 14rpx; border-radius: 50%; background: #719181; flex-shrink: 0; }
-.timeline-content { flex: 1; min-width: 0; padding-bottom: 16rpx; font-size: 24rpx; }
-.batch-receipt { width: 236rpx; height: 64rpx; line-height: 64rpx; font-size: 23rpx; margin: 16rpx 0 0; }
-.receipt-line { padding: 26rpx 0; border-bottom: 1rpx solid #e9eeeb; }
-.receipt-counts { margin-top: 20rpx; }
-.receipt-input-group { display: flex; align-items: center; gap: 18rpx; font-size: 24rpx; }
-.receipt-quantity { width: 146rpx; height: 72rpx; padding: 0 12rpx; text-align: center; font-size: 28rpx; }
-.locked-label { display: block; color: #8b957e; font-size: 22rpx; margin-top: 12rpx; }
-.receipt-bar > text { flex: 1; font-size: 24rpx; }
-.receipt-submit-summary { flex: 1; min-width: 0; font-size: 24rpx; }
-.receipt-submit-hint { display: block; margin-top: 6rpx; color: #66746c; font-size: 22rpx; }
-.receipt-field-error, .receipt-shortage { display: block; margin-top: 12rpx; font-size: 24rpx; color: #b63a32; }
-.result-banner { margin: 20rpx 28rpx; display: flex; gap: 18rpx; padding: 20rpx; background: #eaf6ee; font-size: 27rpx; }
-.result-banner > view { flex: 1; min-width: 0; }
-.account-balance { display: block; font-size: 44rpx; font-weight: 700; margin: 24rpx 0; overflow-wrap: anywhere; }
-.account-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24rpx; border-top: 1rpx solid #e9eeeb; padding-top: 20rpx; }
-.account-grid > view > text { display: block; line-height: 1.6; overflow-wrap: anywhere; }
-.ledger-amount { flex-shrink: 0; text-align: right; }
-.empty-state { padding: 80rpx 28rpx; display: flex; flex-direction: column; align-items: center; gap: 24rpx; color: #718078; font-size: 26rpx; text-align: center; }
-.empty-state button { width: 260rpx; }
-.catalog-skeleton { padding: 40rpx 28rpx; color: #718078; font-size: 24rpx; }
-.skeleton-line { height: 100rpx; background: #e6ece8; margin-bottom: 24rpx; border-radius: 8rpx; }
-.sheet-mask { position: fixed; inset: 0; z-index: 20; background: rgba(20, 30, 24, .35); display: flex; align-items: flex-end; }
-.cart-sheet { width: 100%; box-sizing: border-box; background: #fff; padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom)); border-radius: 16rpx 16rpx 0 0; }
-.cart-scroll { height: 44vh; }
-.close-button, .remove-item { width: 60rpx; height: 60rpx; line-height: 60rpx; margin: 0; padding: 0; font-size: 34rpx; color: #718078; background: transparent; flex-shrink: 0; }
-.sheet-total { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding-top: 24rpx; font-weight: 600; }
-@media (max-width: 350px) { .product-media { flex-basis: 100rpx; width: 100rpx; height: 112rpx; } .order-bar button, .sheet-total button { flex-basis: 248rpx; width: 248rpx; } .quantity-stepper { margin-left: auto; } }
-.receipt-evidence-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
-.receipt-evidence-tile, .evidence-add { position: relative; height: 96px; min-width: 0; border-radius: 4px; overflow: hidden; }
+.timeline-dot {
+  flex-shrink: 0;
+  width: 12rpx;
+  height: 12rpx;
+  margin-top: 14rpx;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+.timeline-content { min-width: 0; flex: 1; padding-bottom: 18rpx; color: var(--ink-1); font-size: 25rpx; }
+.batch-receipt { width: 236rpx; height: 64rpx; margin: 18rpx 0 0; font-size: 23rpx; }
+
+.receipt-line { padding: 26rpx 0; border-bottom: 1rpx solid var(--line); }
+.receipt-counts { margin-top: 18rpx; }
+.receipt-input-group { display: flex; flex-shrink: 0; align-items: center; gap: 18rpx; color: var(--ink-2); font-size: 24rpx; }
+.receipt-quantity {
+  width: 150rpx;
+  height: 76rpx;
+  padding: 0 12rpx;
+  border: 1rpx solid var(--line);
+  border-radius: 12rpx;
+  background: var(--sunken);
+  text-align: center;
+  font-size: 28rpx;
+  font-variant-numeric: tabular-nums;
+}
+.locked-label { display: block; margin-top: 12rpx; color: var(--ink-4); font-size: 22rpx; }
+.receipt-bar > text { flex: 1; color: var(--ink-1); font-size: 25rpx; }
+.receipt-submit-summary { min-width: 0; flex: 1; color: var(--ink-1); font-size: 25rpx; }
+.receipt-submit-hint { display: block; margin-top: 6rpx; color: var(--ink-3); font-size: 22rpx; }
+.receipt-field-error, .receipt-shortage { display: block; margin-top: 12rpx; color: var(--danger); font-size: 24rpx; }
+.receipt-shortage { color: var(--warn); }
+
+.result-banner {
+  display: flex;
+  gap: 18rpx;
+  margin: 20rpx 28rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 16rpx;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  font-size: 27rpx;
+}
+.result-banner > view { min-width: 0; flex: 1; }
+.result-banner .secondary-text { color: var(--ink-2); }
+
+.discrepancy-store-entry { padding: 24rpx 28rpx; }
+.discrepancy-store-entry .button-row { grid-template-columns: 1fr 1fr; }
+
+/* ---------- 凭证 ---------- */
+
+.receipt-evidence-section { margin-top: 20rpx; padding: 28rpx; background: var(--surface); }
+.receipt-evidence-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14rpx; margin-top: 16rpx; }
+.receipt-evidence-tile, .evidence-add { position: relative; height: 100px; min-width: 0; overflow: hidden; border-radius: 12rpx; }
 .receipt-evidence-tile image { width: 100%; height: 100%; }
-.evidence-state { position: absolute; bottom: 0; left: 0; right: 0; padding: 3px; font-size: 11px; color: #fff; background: rgba(0,0,0,.6); text-align: center; }
-.evidence-remove { position: absolute; top: 2px; right: 2px; width: 28px; height: 28px; padding: 0; line-height: 26px; font-size: 20px; }
-.evidence-retry { position: absolute; top: 32px; left: 8px; right: 8px; padding: 0; font-size: 12px; line-height: 28px; }
-.evidence-add { width: 100%; margin: 0; line-height: 94px; font-size: 30px; color: #167e5a; background: #eef6f2; border: 1px dashed #8db4a4; }
-.receipt-evidence-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #edf0ee; }
-.evidence-filename { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.evidence-state {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 3px;
+  background: rgba(0, 0, 0, .55);
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+}
+.evidence-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 15px;
+  background: rgba(20, 30, 24, .55);
+  color: #fff;
+  font-size: 20px;
+  line-height: 28px;
+}
+.evidence-retry { position: absolute; top: 34px; right: 8px; left: 8px; height: 30px; padding: 0; border-radius: 8rpx; background: var(--surface); color: var(--danger); font-size: 12px; line-height: 30px; }
+.evidence-add {
+  width: 100%;
+  margin: 0;
+  background: var(--brand-soft);
+  border: 1rpx dashed var(--brand);
+  color: var(--brand);
+  font-size: 30px;
+  line-height: 98px;
+}
+.receipt-evidence-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1rpx solid var(--line-soft); }
+.evidence-filename { min-width: 0; flex: 1; font-size: 13px; overflow-wrap: anywhere; }
 .evidence-open { width: 60px; flex-shrink: 0; margin: 0; }
-.evidence-upload-error { display: block; margin-top: 8px; color: #a43d3d; font-size: 12px; overflow-wrap: anywhere; }
-.product-unit-select { display: flex; flex-wrap: wrap; gap: 8rpx 16rpx; align-items: center; padding: 10rpx 0; color: #137b59; font-size: 24rpx; }
-.product-price-unit { font-size: 22rpx; font-weight: 400; color: #68746e; }
-.delivery-contact { width: auto; margin: 6px 0; padding: 0 10px; font-size: 12px; line-height: 30px; }
-/* Search scope hint: names the categories the current results span. */
-.search-scope-hint { flex-shrink: 0; padding: 0 18rpx 12rpx; color: #8a9690; font-size: 22rpx; line-height: 1.5; }
-.empty-action { margin-top: 20rpx; padding: 0 28rpx; height: 64rpx; line-height: 62rpx; border: 1rpx solid #dbe8e1; background: #fff; color: #167e5a; font-size: 24rpx; }
-/* Mine view follows the same identity / menu / secondary / logout shape as the other roles. */
-.mine-identity { margin-top: 18rpx; }
-.mine-secondary { margin-top: 18rpx; padding: 0 28rpx; }
+.evidence-upload-error { display: block; margin-top: 8px; color: var(--danger); font-size: 12px; overflow-wrap: anywhere; }
+
+/* ---------- 账户与账单 ---------- */
+
+.account-balance {
+  display: block;
+  margin: 24rpx 0;
+  color: var(--ink-1);
+  font-size: 52rpx;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .4rpx;
+  overflow-wrap: anywhere;
+}
+.account-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid var(--line);
+}
+.account-grid > view {
+  min-width: 0;
+  padding: 20rpx;
+  border-radius: 14rpx;
+  background: var(--sunken);
+}
+.account-grid > view > text { display: block; line-height: 1.5; overflow-wrap: anywhere; }
+.account-grid .secondary-text { margin-top: 0; }
+.account-grid text + text { margin-top: 6rpx; color: var(--ink-1); font-size: 27rpx; font-weight: 600; }
+
+/* ---------- 空态 / 加载 ---------- */
+
+.catalog-skeleton { padding: 32rpx 28rpx; color: var(--ink-3); font-size: 24rpx; background: var(--surface); }
+
+/* ---------- 我的 ---------- */
+
+.mine-identity { margin: 20rpx 24rpx 0; padding: 28rpx; border-radius: 20rpx; background: var(--surface); }
+.mine-identity .muted { display: block; margin-top: 8rpx; }
+.mine-secondary { margin-top: 20rpx; padding: 0 24rpx; }
 .mine-secondary button { width: 100%; margin: 0; }
-.order-list-controls { position: sticky; top: 0; z-index: 15; background: #fff; border-bottom: 1rpx solid #e2e6e4; }
-.order-list-controls .section-band { margin: 0; padding-top: 16rpx; padding-bottom: 12rpx; }
-.order-list-controls .filter-track { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; }
-.order-list-controls .filter-option { flex-shrink: 0; }
+
+@media (max-width: 350px) {
+  .product-media { flex-basis: 100rpx; width: 100rpx; height: 112rpx; }
+  .order-bar button, .sheet-total button { flex-basis: 248rpx; width: 248rpx; }
+  .quantity-stepper { margin-left: auto; }
+}
+
+/* ---------- 购物车抽屉 ---------- */
+
+.sheet-mask {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: flex;
+  align-items: flex-end;
+  background: rgba(20, 30, 24, .35);
+}
+.cart-sheet {
+  width: 100%;
+  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  border-radius: 20rpx 20rpx 0 0;
+  background: var(--surface);
+}
+.cart-scroll { height: 44vh; }
+.close-button, .remove-item {
+  flex-shrink: 0;
+  width: 60rpx;
+  height: 60rpx;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 34rpx;
+  line-height: 60rpx;
+}
+.sheet-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding-top: 24rpx;
+  color: var(--ink-1);
+  font-size: 32rpx;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* 搜索命中的分类提示：说明结果跨越了哪些分类。 */
+.search-scope-hint { flex-shrink: 0; padding: 0 18rpx 12rpx; color: var(--ink-4); font-size: 22rpx; line-height: 1.5; }
