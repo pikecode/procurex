@@ -171,14 +171,22 @@
 .catalog-page .store-heading, .catalog-page .catalog-tools { flex-shrink: 0; }
 .catalog-page .catalog-tools { padding: 18rpx 24rpx; border-bottom: 1rpx solid var(--line); }
 .catalog-browser { flex: 1; min-height: 0; display: flex; overflow: hidden; }
-.category-sidebar { flex: 0 0 154rpx; width: 154rpx; height: 100%; background: var(--sunken); }
+/* 分类栏与右侧白色内容区同色会糊成一片，用右边线划清层级 */
+.category-sidebar {
+  flex: 0 0 154rpx;
+  width: 154rpx;
+  height: 100%;
+  background: var(--sunken);
+  border-right: 1rpx solid var(--line);
+}
 .catalog-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
 .catalog-content .subcategory-strip { flex-shrink: 0; padding: 16rpx 0; border-top: 0; border-bottom: 1rpx solid var(--line-soft); }
 .catalog-content .category-track { padding: 0 18rpx; }
 .catalog-content .subcategory-option { padding: 10rpx 16rpx; font-size: 23rpx; }
 .catalog-content .section-caption { padding: 16rpx 18rpx; flex-shrink: 0; font-size: 22rpx; }
 .catalog-products { flex: 1; height: 0; min-height: 0; }
-.catalog-content .product-list { padding: 0 18rpx; }
+/* 列表末尾留白：最后一行不要紧贴结算栏的边界 */
+.catalog-content .product-list { padding: 0 18rpx 32rpx; }
 .catalog-content .product-row { gap: 16rpx; padding: 24rpx 0; }
 .catalog-content .product-media { flex-basis: 94rpx; width: 94rpx; height: 94rpx; }
 .catalog-content .missing-image { gap: 6rpx; font-size: 18rpx; }
@@ -243,7 +251,10 @@
   overflow-wrap: anywhere;
 }
 .product-price-unit { color: var(--ink-3); font-size: 22rpx; font-weight: 400; }
+/* 起订/倍数是硬性下单约束，用警示色提醒。
+   但起订 1、倍数 1 意味着「无约束」，再用橙色就是假警报——降为中性色。 */
 .product-rules { color: var(--warn); font-size: 23rpx; font-variant-numeric: tabular-nums; }
+.product-rules.is-neutral { color: var(--ink-4); }
 .product-convert-hint { color: var(--ink-4); }
 .unavailable { color: var(--warn); font-size: 23rpx; }
 .product-unit-select {
@@ -267,6 +278,8 @@
   border: 1rpx solid var(--line);
   border-radius: 12rpx;
 }
+/* 步进器禁用态：全局 button[disabled] 的 opacity 会把「减号」淡到看不见，
+   这里改成显式的浅灰前景，读作禁用而不是渲染坏了。 */
 .step-button {
   width: 60rpx;
   height: 60rpx;
@@ -278,6 +291,8 @@
   font-size: 32rpx;
   line-height: 60rpx;
 }
+.step-button[disabled] { opacity: 1; color: var(--ink-faint); background: var(--sunken); }
+.step-add[disabled] { opacity: .45; }
 .step-add { background: var(--brand); color: #fff; }
 .quantity-input {
   width: 84rpx;
