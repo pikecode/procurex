@@ -1,6 +1,6 @@
 import { StorePricePrivacyInterceptor } from '../common/store-price-privacy.interceptor.js';
 import { UseInterceptors } from '@nestjs/common';
-import { Body, ConflictException, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, ConflictException, Controller, ForbiddenException, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
@@ -39,10 +39,10 @@ export class ShipmentsController {
 
   @Get(':id')
   @AllowAssignedStores()
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER', 'STORE', 'STORE_FINANCE', 'REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER')
   async get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<ShipmentDetailView> {
     throwIfInvalid(validateUuid('id', id));
-    return this.shipmentsService.get(id, storeScope(request));
+    return this.shipmentsService.get(id, shipmentScope(request));
   }
 
   @Post(':id/receipts')
@@ -100,6 +100,15 @@ export class ShipmentsController {
 function storeScope(request: AuthenticatedRequest): { type: string; storeId?: string; storeIds?: string[] } | undefined {
   const scope = request.auth?.user.scope;
   return scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' || scope?.type === 'MULTI_STORE' ? scope : undefined;
+}
+
+function shipmentScope(request: AuthenticatedRequest) {
+  const scope = request.auth?.user.scope;
+  if (scope?.type === 'SUPPLIER') {
+    if (!scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
+    return scope;
+  }
+  return storeScope(request);
 }
 
 function auditScope(auth: AuthenticatedSession) {

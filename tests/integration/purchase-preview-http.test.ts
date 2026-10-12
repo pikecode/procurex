@@ -3088,6 +3088,8 @@ test('purchase request confirm splits supplier orders once per idempotency key',
     await prisma.discrepancy.deleteMany({ where: { orderItem: { supplierOrder: { request: { store: { code: storeCode } } } } } });
     await prisma.receiptItem.deleteMany({ where: { receipt: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } } });
     await prisma.receipt.deleteMany({ where: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } });
+    await prisma.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } } });
+    await prisma.shipmentRevision.deleteMany({ where: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } });
     await prisma.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } });
     await prisma.shipment.deleteMany({ where: { supplierOrder: { request: { store: { code: storeCode } } } } });
     await prisma.orderItem.deleteMany({ where: { supplierOrder: { request: { store: { code: storeCode } } } } });
@@ -3406,6 +3408,8 @@ test('purchase request reject cancels request once per idempotency key', async (
     await app.close();
     await cleanupFunding(prisma, storeCode);
     await prisma.commandRecord.deleteMany({ where: { actor: { username: purchaserUsername } } });
+    await prisma.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } } });
+    await prisma.shipmentRevision.deleteMany({ where: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } });
     await prisma.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: { request: { store: { code: storeCode } } } } } });
     await prisma.shipment.deleteMany({ where: { supplierOrder: { request: { store: { code: storeCode } } } } });
     await prisma.freightConfirmation.deleteMany({ where: { supplierOrder: { request: { store: { code: storeCode } } } } });

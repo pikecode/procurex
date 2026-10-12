@@ -63,7 +63,7 @@ function requestGroups(items, orders) {
       const order = orders.find(order => order.supplierId === item.supplierId) || {};
       group = { supplierId: item.supplierId, supplierName: item.supplierName || order.supplierName || '配送供应商',
         contactName: item.supplierContactName || '', contactPhone: item.supplierContactPhone || '',
-        deliveryContactPhone: item.deliveryContactPhone || order.deliveryContactPhone || '', address: item.supplierAddress || '', open: true, items: [] };
+        deliveryContactPhone: item.deliveryContactPhone || order.deliveryContactPhone || '', address: item.supplierAddress || '', open: groups.length === 0, items: [] };
       groups.push(group);
     }
     group.items.push(item);

@@ -14,14 +14,14 @@ export class FilesController {
   constructor(private readonly files: FilesService) {}
 
   @Post('upload-sessions')
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
   create(@CurrentAuth() auth: AuthenticatedSession, @Req() request: AuthenticatedRequest) {
     const body = (request as AuthenticatedRequest & { body?: { purpose?: string; filename?: string; mimeType?: string; sizeBytes?: number } }).body;
     return this.files.create(auth.user.id, { purpose: body?.purpose ?? '', filename: body?.filename ?? '', mimeType: body?.mimeType ?? '', sizeBytes: body?.sizeBytes ?? 0 }, auth.user.roles);
   }
 
   @Post(':id/content')
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
   async upload(@CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string, @Headers('x-upload-token') token: string, @Req() request: AuthenticatedRequest) {
     const chunks: Buffer[] = [];
     let length = 0;
@@ -35,7 +35,7 @@ export class FilesController {
   }
 
   @Post(':id/complete')
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'SUPPLIER')
   complete(@CurrentAuth() auth: AuthenticatedSession, @Param('id') id: string) { return this.files.complete(auth.user.id, id); }
 
   @Get(':id/download')

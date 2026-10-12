@@ -4,11 +4,12 @@ import { Decimal } from 'decimal.js';
 import { readUnitDisplayNames, transactionUnitView } from '../catalog/transaction-units.js';
 import { evaluateStoredValueFunding } from '../../../../packages/domain/src/funding.js';
 import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
-import { effectiveOrderItemQuantity, remainingNormalShipmentQuantity } from './fulfillment-status.js';
+import { effectiveOrderItemQuantity, remainingNormalShipmentQuantity, resolveSupplierOrderFulfillmentStatus } from './fulfillment-status.js';
 import { applyEffectiveOrderPrices, lockPricePublication } from '../pricing/price-checkpoint.js';
 import { createReductionDocuments, createFrozenFreightDocuments } from './reduction-adjustments.js';
 import {
   FreightConfirmationStatus,
+  DiscrepancyStatus,
   DeliveryMode,
   FulfillmentStatus,
   PaymentStatus,
@@ -68,6 +69,7 @@ export type SupplierOrderDetailView = SupplierOrderSummaryView & {
   destination?: { name: string; address: string | null; contactName: string | null; contactPhone: string | null };
   items: SupplierOrderItemView[];
   freightConfirmations?: FreightConfirmationView[];
+  shipments: Array<ShipmentView & { revision: number; currentReceiptRevision: number }>;
 };
 
 export type SupplierOrderItemView = ReturnType<typeof transactionUnitView> & {
@@ -164,7 +166,18 @@ export type ShipmentView = {
   trackingNo: string | null;
   freight: string;
   freightConfirmationId: string | null;
+  revision?: number;
+  currentReceiptRevision?: number;
+  canRevise?: boolean;
   items: ShipmentItemView[];
+};
+
+export type ShipmentRevisionInput = {
+  expectedOrderVersion: number;
+  expectedRevision: number;
+  note?: string;
+  evidenceFileIds?: string[];
+  items: Array<{ shipmentItemId: string; quantity: string }>;
 };
 
 export type ShipmentItemView = {
@@ -235,6 +248,11 @@ export class SupplierOrdersService {
         store: { select: { name: true, address: true, contactName: true, contactPhone: true, receiptAddress: true, receiptContactName: true, receiptContactPhone: true } },
         items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true, imageFile: { select: { id: true } } } }, shipmentItems: { select: { permanentlyReduced: true, gapAllocations: { select: { quantity: true } } } }, replenishmentGaps: { orderBy: { createdAt: 'asc' } } } },
         freightConfirmations: { orderBy: { createdAt: 'desc' } },
+        shipments: { orderBy: { sequence: 'asc' }, include: {
+          items: { include: { orderItem: true, gapAllocations: true } },
+          receipts: { where: { isCurrent: true }, include: { items: { include: { discrepancy: { include: { returnRecord: { select: { id: true } } } } } } } },
+          revisions: { orderBy: { revision: 'desc' }, take: 1, select: { revision: true } },
+        } },
       },
     });
     if (!order) {
@@ -256,6 +274,14 @@ export class SupplierOrdersService {
         remainingToShipQuantity: remainingNormalShipmentQuantity(item).toString(),
         replenishmentGaps: item.replenishmentGaps.map(gap => ({ id: gap.id, quantity: gap.quantity.toString(), remainingQuantity: gap.remainingQuantity.toString(), status: gap.status })) })),
       freightConfirmations: order.freightConfirmations.map(toFreightConfirmationView),
+      shipments: order.shipments.map(shipment => {
+        const currentReceipt = shipment.receipts[0];
+        const canRevise = !currentReceipt || (currentReceipt.items.length > 0 && currentReceipt.items.every(item =>
+          item.discrepancy?.status === DiscrepancyStatus.OPEN ||
+          (item.discrepancy?.status === DiscrepancyStatus.RESOLVED && Boolean(item.discrepancy.returnRecord))));
+        return { ...toShipmentView(shipment), revision: shipment.revisions[0]?.revision ?? 0,
+          currentReceiptRevision: currentReceipt?.revision ?? 0, canRevise };
+      }),
     };
   }
 
@@ -430,7 +456,7 @@ export class SupplierOrdersService {
     };
   }
 
-  async createShipment(id: string, expectedVersion: number, input: ShipmentPreviewInput, scope?: { type: string; supplierId?: string }, transaction?: Prisma.TransactionClient): Promise<ShipmentView> {
+  async createShipment(id: string, expectedVersion: number, input: ShipmentPreviewInput, scope?: { type: string; supplierId?: string }, transaction?: Prisma.TransactionClient, actorUserId?: string): Promise<ShipmentView> {
     const preview = await this.shipmentPreview(id, expectedVersion, input, scope);
     const order = await this.database.client.supplierOrder.findUniqueOrThrow({
       where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
@@ -524,6 +550,14 @@ export class SupplierOrdersService {
         });
       }
 
+      const initialRevision = await tx.shipmentRevision.create({ data: {
+        shipmentId: created.id, revision: 1, expectedOrderVersion: expectedVersion, actorUserId: actorUserId ?? null,
+      } });
+      const createdShipmentItems = await tx.shipmentItem.findMany({ where: { shipmentId: created.id } });
+      if (createdShipmentItems.length) await tx.shipmentRevisionItem.createMany({ data: createdShipmentItems.map(item => ({
+        shipmentRevisionId: initialRevision.id, shipmentItemId: item.id, quantity: item.quantity,
+      })) });
+
       if (hasReduction) {
         const reducedItems = await tx.orderItem.findMany({ where: { supplierOrderId: order.id }, include: {
           shipmentItems: true, discrepancies: { include: { returnRecord: true } },
@@ -605,6 +639,89 @@ export class SupplierOrdersService {
     };
     const shipment = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
     return toShipmentView(shipment);
+  }
+
+  async reviseShipment(id: string, shipmentId: string, input: ShipmentRevisionInput, scope?: { type: string; supplierId?: string }, transaction?: Prisma.TransactionClient, actorUserId?: string) {
+    const shipment = await this.database.client.shipment.findFirst({
+      where: { id: shipmentId, supplierOrderId: id, supplierOrder: { supplierId: scope?.type === 'SUPPLIER' ? scope.supplierId : undefined } },
+      include: {
+        supplierOrder: { include: { items: { include: { shipmentItems: { include: { gapAllocations: true } } } } } },
+        items: { include: { gapAllocations: true, receiptItems: { include: { discrepancy: { include: { returnRecord: true } } } } } },
+        revisions: { orderBy: { revision: 'desc' }, take: 1 },
+        receipts: { where: { isCurrent: true }, include: { items: true }, orderBy: { revision: 'desc' }, take: 1 },
+      },
+    });
+    if (!shipment) throw new NotFoundException({ code: 'SHIPMENT_NOT_FOUND', message: 'Shipment was not found' });
+    if (shipment.supplierOrder.version !== input.expectedOrderVersion) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Supplier order version has changed' });
+    const currentRevision = shipment.revisions[0]?.revision ?? 0;
+    if (input.expectedRevision !== currentRevision) throw new ConflictException({ code: 'SHIPMENT_REVISION_CONFLICT', message: 'Shipment has a newer revision', details: { currentRevision } });
+    if (shipment.items.some(item => new Decimal(item.permanentlyReduced).gt(0))) throw new ConflictException({ code: 'SHIPMENT_REVISION_NOT_ALLOWED', message: 'Previously finalized quantity reductions cannot be revised' });
+    const itemById = new Map(shipment.items.map(item => [item.id, item]));
+    if (input.items.length !== shipment.items.length || new Set(input.items.map(item => item.shipmentItemId)).size !== shipment.items.length) {
+      throw new ConflictException({ code: 'INVALID_SHIPMENT_REVISION_ITEMS', message: 'Revision must include each shipment item exactly once' });
+    }
+    const orderItemById = new Map(shipment.supplierOrder.items.map(item => [item.id, item]));
+    const revisedItems = input.items.map(line => {
+      const shipmentItem = itemById.get(line.shipmentItemId);
+      if (!shipmentItem) throw new ConflictException({ code: 'SHIPMENT_ITEM_NOT_FOUND', message: 'Shipment item does not belong to this shipment' });
+      const orderItem = orderItemById.get(shipmentItem.orderItemId)!;
+      const quantity = new Decimal(line.quantity);
+      if (quantity.lt(0) || quantity.gt(orderItem.quantity)) throw new ConflictException({ code: 'INVALID_SHIPMENT_QUANTITY', message: 'Shipment quantity cannot exceed the original ordered quantity', details: { shipmentItemId: shipmentItem.id, orderedQuantity: orderItem.quantity.toString() } });
+      assertShipmentRevisionCapacity(orderItem, shipmentItem.id, quantity);
+      const isLocked = shipmentItem.receiptItems.some(receiptItem => {
+        const discrepancy = receiptItem.discrepancy;
+        return !discrepancy || (discrepancy.status !== DiscrepancyStatus.OPEN && !(discrepancy.status === DiscrepancyStatus.RESOLVED && discrepancy.returnRecord));
+      });
+      if (isLocked) throw new ConflictException({ code: 'SHIPMENT_ALREADY_RECEIVED', message: 'A shipment with finally confirmed receipt cannot be revised' });
+      return { shipmentItem, orderItem, quantity };
+    });
+    const needsEvidence = revisedItems.some(item => item.quantity.lt(item.orderItem.quantity));
+    if (needsEvidence && (!input.note?.trim() || !input.evidenceFileIds?.length)) throw new ConflictException({ code: 'SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED', message: '少于门店下单数量时必须上传凭证并填写备注' });
+    if (input.note && input.note.trim().length > 500) throw new ConflictException({ code: 'INVALID_SHIPMENT_NOTE', message: '备注最多500字' });
+    if (input.evidenceFileIds && (input.evidenceFileIds.length > 6 || new Set(input.evidenceFileIds).size !== input.evidenceFileIds.length)) throw new ConflictException({ code: 'SHIPMENT_EVIDENCE_INVALID', message: '最多上传6张不同凭证' });
+
+    const execute = async (tx: Prisma.TransactionClient) => {
+      await lockPricePublication(tx);
+      await lockFundingRequest(tx, shipment.supplierOrder.storeId, shipment.supplierOrder.requestId);
+      await tx.$queryRaw`SELECT id FROM "SupplierOrder" WHERE id = ${id}::uuid FOR UPDATE`;
+      const currentOrder = await tx.supplierOrder.findUniqueOrThrow({ where: { id } });
+      const latest = await tx.shipmentRevision.findFirst({ where: { shipmentId }, orderBy: { revision: 'desc' } });
+      if (currentOrder.version !== input.expectedOrderVersion || (latest?.revision ?? 0) !== input.expectedRevision) throw new ConflictException({ code: 'VERSION_CONFLICT', message: '发货或收货信息已更新，请刷新后重试' });
+      const created = await tx.shipmentRevision.create({ data: { shipmentId, revision: currentRevision + 1, expectedOrderVersion: input.expectedOrderVersion, note: input.note?.trim() || null, actorUserId: actorUserId ?? null } });
+      if (input.evidenceFileIds?.length) {
+        const attached = await tx.fileObject.updateMany({
+          where: { id: { in: input.evidenceFileIds }, ownerId: actorUserId, purpose: 'SHIPMENT_ADJUSTMENT', status: 'READY', shipmentRevisionId: null, receiptId: null, paymentId: null },
+          data: { shipmentRevisionId: created.id },
+        });
+        if (attached.count !== input.evidenceFileIds.length) throw new ConflictException({ code: 'SHIPMENT_EVIDENCE_INVALID', message: '发货凭证无效、未完成上传、已使用或不属于当前账号' });
+      }
+      if (needsEvidence && (!actorUserId || !input.evidenceFileIds?.length)) throw new ConflictException({ code: 'SHIPMENT_EVIDENCE_INVALID', message: '缺少发货差异凭证' });
+      await tx.shipmentRevisionItem.createMany({ data: revisedItems.map(item => ({ shipmentRevisionId: created.id, shipmentItemId: item.shipmentItem.id, quantity: item.quantity.toDecimalPlaces(6).toString() })) });
+      for (const item of revisedItems) {
+        const delta = item.quantity.minus(item.shipmentItem.quantity);
+        await tx.shipmentItem.update({ where: { id: item.shipmentItem.id }, data: {
+          quantity: item.quantity.toDecimalPlaces(6).toString(),
+          salesLineAmount: lineAmount(item.quantity, item.shipmentItem.salesPriceSnapshot),
+          supplyLineAmount: lineAmount(item.quantity, item.shipmentItem.supplyPriceSnapshot),
+        } });
+        await tx.orderItem.update({ where: { id: item.orderItem.id }, data: { shippedQuantity: { increment: delta.toDecimalPlaces(6).toString() } } });
+      }
+      const receipt = shipment.receipts[0];
+      if (receipt) {
+        await tx.receipt.update({ where: { id: receipt.id }, data: { isCurrent: false } });
+        for (const receiptItem of receipt.items) {
+          await tx.orderItem.update({ where: { id: itemById.get(receiptItem.shipmentItemId)!.orderItemId }, data: { receivedQuantity: { decrement: receiptItem.receivedQuantity } } });
+        }
+        await tx.discrepancy.updateMany({ where: { receiptItem: { receiptId: receipt.id }, status: DiscrepancyStatus.OPEN }, data: { status: DiscrepancyStatus.SUPERSEDED } });
+      }
+      const orderItems = await tx.orderItem.findMany({ where: { supplierOrderId: id }, include: { shipmentItems: true, discrepancies: { include: { replenishmentGap: true, returnRecord: true } } } });
+      const status = resolveSupplierOrderFulfillmentStatus(orderItems);
+      await tx.supplierOrder.update({ where: { id }, data: { version: { increment: 1 }, fulfillmentStatus: status, status: status === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : SupplierOrderStatus.PARTIAL_SHIPPED, completedAt: status === FulfillmentStatus.COMPLETED ? new Date() : null } });
+      const recipients = await tx.user.findMany({ where: { status: UserStatus.ACTIVE, scopes: { some: { scopeType: UserScopeType.STORE, storeId: shipment.supplierOrder.storeId } }, roles: { some: { role: { code: { in: ['STORE', 'STORE_FINANCE'] } } } } }, select: { id: true } });
+      if (recipients.length) await tx.notification.createMany({ data: recipients.map(recipient => ({ recipientId: recipient.id, eventKey: `SHIPMENT_REVISED:${created.id}`, channel: 'IN_APP', title: '供应商更新发货数量', body: `供应商订单 ${shipment.supplierOrder.supplierOrderNo} 的发货数量已更新，请重新核对。`, payload: { type: 'SHIPMENT_REVISED', route: '/main-flow-demo.html', supplierOrderId: id, shipmentId, revision: created.revision } })), skipDuplicates: true });
+      return { shipmentId, revision: created.revision, supplierOrderVersion: currentOrder.version + 1, items: revisedItems.map(item => ({ shipmentItemId: item.shipmentItem.id, quantity: item.quantity.toDecimalPlaces(6).toString() })), evidenceFileIds: input.evidenceFileIds ?? [], note: created.note };
+    };
+    return transaction ? execute(transaction) : this.database.client.$transaction(execute);
   }
 
   async reject(id: string, expectedVersion: number, reason: string, scope?: { type: string; supplierId?: string }, transaction?: Prisma.TransactionClient): Promise<RejectSupplierOrderResult> {
@@ -812,6 +929,24 @@ export class SupplierOrdersService {
   }
 }
 
+export function assertShipmentRevisionCapacity(
+  orderItem: { id: string; quantity: Decimal.Value; shipmentItems: Array<{ id: string; quantity: Decimal.Value; permanentlyReduced: Decimal.Value; gapAllocations: Array<{ quantity: Decimal.Value }> }> },
+  shipmentItemId: string,
+  revisedQuantity: Decimal,
+) {
+  const current = orderItem.shipmentItems.find(item => item.id === shipmentItemId);
+  if (!current) throw new ConflictException({ code: 'SHIPMENT_ITEM_NOT_FOUND', message: 'Shipment item does not belong to this order item' });
+  const currentGapQuantity = current.gapAllocations.reduce((sum, allocation) => sum.plus(allocation.quantity), new Decimal(0));
+  if (revisedQuantity.lt(currentGapQuantity)) throw new ConflictException({ code: 'INVALID_SHIPMENT_QUANTITY', message: 'Shipment quantity cannot be less than its authorized replenishment allocation' });
+  const otherCommittedQuantity = orderItem.shipmentItems.filter(item => item.id !== shipmentItemId).reduce((sum, item) => {
+    const gapQuantity = item.gapAllocations.reduce((allocated, gap) => allocated.plus(gap.quantity), new Decimal(0));
+    return sum.plus(new Decimal(item.quantity).minus(gapQuantity)).plus(item.permanentlyReduced);
+  }, new Decimal(0));
+  if (otherCommittedQuantity.plus(revisedQuantity.minus(currentGapQuantity)).gt(orderItem.quantity)) {
+    throw new ConflictException({ code: 'INVALID_SHIPMENT_QUANTITY', message: 'All regular shipment batches together cannot exceed the original ordered quantity', details: { orderItemId: orderItem.id, orderedQuantity: String(orderItem.quantity) } });
+  }
+}
+
 function toReconcileSupplierOrderFundingResult(
   order: SupplierOrder,
   request: { id: string; status: PurchaseRequestStatus; paymentStatus: PaymentStatus; salesGoodsAmount: Decimal; paidAmount: Decimal; shortfallAmount: Decimal; version: number },
@@ -870,7 +1005,7 @@ function toRejectSupplierOrderResult(order: SupplierOrder): RejectSupplierOrderR
   };
 }
 
-function toSupplierOrderDetailView(order: SupplierOrder & { items: OrderItem[] }): Omit<SupplierOrderDetailView, 'defaultDeliveryMode'> {
+function toSupplierOrderDetailView(order: SupplierOrder & { items: OrderItem[] }): Omit<SupplierOrderDetailView, 'defaultDeliveryMode' | 'shipments'> {
   return {
     ...toSupplierOrderSummaryView(order),
     items: order.items.map(toSupplierOrderItemView),

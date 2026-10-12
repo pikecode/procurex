@@ -66,21 +66,25 @@ export type DiscrepancyReturnView = {
 export class DiscrepanciesService {
   constructor(private readonly database: DatabaseService) {}
 
-  async list(scope?: { type: string; supplierId?: string }) {
+  async list(scope?: { type: string; supplierId?: string; storeId?: string }) {
     const rows = await this.database.client.discrepancy.findMany({
-      where: { status: { in: [DiscrepancyStatus.OPEN, DiscrepancyStatus.REPLENISH_PENDING] },
-        ...(scope?.type === 'SUPPLIER' ? { orderItem: { supplierOrder: { supplierId: scope.supplierId } } } : {}) },
+      where: { OR: [
+        { status: DiscrepancyStatus.OPEN },
+        { status: DiscrepancyStatus.REPLENISH_PENDING, replenishmentGap: { remainingQuantity: { gt: 0 } } },
+      ],
+        ...(scope?.type === 'SUPPLIER' ? { orderItem: { supplierOrder: { supplierId: scope.supplierId } } } : {}),
+        ...(scope?.type === 'STORE' ? { orderItem: { supplierOrder: { storeId: scope.storeId } } } : {}) },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { id: true, status: true, missingQuantity: true, orderItem: { select: { product: { select: { name: true } }, supplierOrder: { select: { supplierOrderNo: true } } } } },
+      select: { id: true, status: true, version: true, missingQuantity: true, orderItem: { select: { product: { select: { name: true } }, supplierOrder: { select: { supplierOrderNo: true } } } } },
     });
-    return rows.map(row => ({ id: row.id, status: row.status, missingQuantity: row.missingQuantity.toString(), productName: row.orderItem.product.name, supplierOrderNo: row.orderItem.supplierOrder.supplierOrderNo }));
+    return rows.map(row => ({ id: row.id, status: row.status, version: row.version, missingQuantity: row.missingQuantity.toString(), productName: row.orderItem.product.name, supplierOrderNo: row.orderItem.supplierOrder.supplierOrderNo }));
   }
 
-  async get(id: string, scope?: { type: string; supplierId?: string }): Promise<DiscrepancyView> {
+  async get(id: string, scope?: { type: string; supplierId?: string; storeId?: string }): Promise<DiscrepancyView> {
     const discrepancy = await this.database.client.discrepancy.findUnique({
       where: {
         id,
-        orderItem: scope?.type === 'SUPPLIER' ? { supplierOrder: { supplierId: scope?.supplierId } } : undefined,
+        orderItem: scope?.type === 'SUPPLIER' ? { supplierOrder: { supplierId: scope?.supplierId } } : scope?.type === 'STORE' ? { supplierOrder: { storeId: scope.storeId } } : undefined,
       },
       include: {
         replenishmentGap: true, returnRecord: true,
@@ -102,11 +106,11 @@ export class DiscrepanciesService {
       shippedQuantity: discrepancy.receiptItem.shipmentItem.quantity.toString(), receivedQuantity: discrepancy.receiptItem.receivedQuantity.toString() };
   }
 
-  async resolve(id: string, input: ResolveDiscrepancyInput, scope?: { type: string; supplierId?: string }, transaction?: Prisma.TransactionClient): Promise<DiscrepancyView> {
+  async resolve(id: string, input: ResolveDiscrepancyInput, scope?: { type: string; supplierId?: string; storeId?: string }, transaction?: Prisma.TransactionClient): Promise<DiscrepancyView> {
     const discrepancy = await this.database.client.discrepancy.findUnique({
       where: {
         id,
-        orderItem: scope?.type === 'SUPPLIER' ? { supplierOrder: { supplierId: scope?.supplierId } } : undefined,
+        orderItem: scope?.type === 'SUPPLIER' ? { supplierOrder: { supplierId: scope?.supplierId } } : scope?.type === 'STORE' ? { supplierOrder: { storeId: scope.storeId } } : undefined,
       },
       include: { replenishmentGap: true, returnRecord: true, receiptItem: { include: { shipmentItem: { include: { shipment: true } } } } },
     });
@@ -115,6 +119,13 @@ export class DiscrepanciesService {
         code: 'DISCREPANCY_NOT_FOUND',
         message: 'Discrepancy was not found',
       });
+    }
+
+    if (scope?.type === 'SUPPLIER' && input.action !== DiscrepancyActionType.RETURN) {
+      throw new ConflictException({ code: 'DISCREPANCY_ACTION_FORBIDDEN', message: '供应商只能退回收货差异供门店重新核对' });
+    }
+    if (scope?.type === 'STORE' && !['REPLENISH', 'ACCEPT'].includes(input.action)) {
+      throw new ConflictException({ code: 'DISCREPANCY_ACTION_FORBIDDEN', message: '门店只能选择授权补发或按实收结算' });
     }
 
     if (discrepancy.version !== input.expectedVersion) {
@@ -223,11 +234,14 @@ export class DiscrepanciesService {
       const fundingRequest = await tx.purchaseRequest.findUniqueOrThrow({ where: { id: orderItem.supplierOrder.requestId } });
       if (fundingRequest.storedValueOnReceipt) await synchronizeRequestFunding(tx, fundingRequest.id, { requireFull: true, sourceId: discrepancy.id, deferCreditShortfall: true });
 
+      const notifySupplier = scope?.type === 'STORE';
       const recipients = await tx.user.findMany({
         where: {
           status: UserStatus.ACTIVE,
-          scopes: { some: { scopeType: UserScopeType.STORE, storeId: orderItem.supplierOrder.storeId } },
-          roles: { some: { role: { code: { in: ['STORE', 'STORE_FINANCE'] } } } },
+          scopes: { some: notifySupplier
+            ? { scopeType: UserScopeType.SUPPLIER, supplierId: orderItem.supplierOrder.supplierId }
+            : { scopeType: UserScopeType.STORE, storeId: orderItem.supplierOrder.storeId } },
+          roles: { some: { role: { code: notifySupplier ? 'SUPPLIER' : { in: ['STORE', 'STORE_FINANCE'] } } } },
         },
         select: { id: true },
       });

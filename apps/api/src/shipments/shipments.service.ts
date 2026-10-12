@@ -84,7 +84,7 @@ export class ShipmentsService {
     const shipment = await this.database.client.shipment.findUnique({
       where: {
         id,
-        supplierOrder: storeIds ? { storeId: { in: storeIds } } : scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? { storeId: scope?.storeId } : undefined,
+        supplierOrder: storeIds ? { storeId: { in: storeIds } } : scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE' ? { storeId: scope?.storeId } : scope?.type === 'SUPPLIER' ? { supplierId: scope.supplierId } : undefined,
       },
       include: {
         supplierOrder: true,
@@ -272,14 +272,11 @@ export class ShipmentsService {
         });
       }
 
-      const orderItems = await tx.orderItem.findMany({
+      const refreshedOrderItems = await tx.orderItem.findMany({
         where: { supplierOrderId: shipment.supplierOrderId },
-        include: {
-          shipmentItems: true,
-          discrepancies: { include: { replenishmentGap: true, returnRecord: true } },
-        },
+        include: { shipmentItems: true, discrepancies: { include: { replenishmentGap: true, returnRecord: true } } },
       });
-      const nextFulfillmentStatus = resolveSupplierOrderFulfillmentStatus(orderItems);
+      const nextFulfillmentStatus = resolveSupplierOrderFulfillmentStatus(refreshedOrderItems);
       if (nextFulfillmentStatus === FulfillmentStatus.COMPLETED && lockedOrder.firstShippedAt) {
         const repriced = await applyEffectiveOrderPrices(tx, lockedOrder.id, lockedOrder.firstShippedAt, { deferCreditShortfall: true });
         if (repriced.changed && !repriced.fundingHandled) await synchronizeRequestFunding(tx, lockedOrder.requestId, { sourceId: created.id, deferCreditShortfall: true });

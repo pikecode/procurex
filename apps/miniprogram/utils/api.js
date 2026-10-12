@@ -76,6 +76,23 @@ async function login(username, password) {
   return result.user;
 }
 
+async function restoreSession() {
+  const token = wx.getStorageSync(tokenKey);
+  if (!token) return null;
+  try {
+    const result = await request('/me');
+    wx.setStorageSync(userKey, result.user);
+    return result.user;
+  } catch (error) {
+    if (error.status === 401) {
+      wx.removeStorageSync(tokenKey);
+      wx.removeStorageSync(userKey);
+      return null;
+    }
+    throw error;
+  }
+}
+
 function assertTestSwitchSafe() {
   if (activeRequests || roleFlights.size) throw new Error('请等待当前操作完成后再切换身份');
   if (typeof getCurrentPages === 'function' && getCurrentPages().some(page => {
@@ -244,7 +261,8 @@ async function uploadEvidence(path, purpose) {
     : signature[0] === 137 && signature[1] === 80 && signature[2] === 78 && signature[3] === 71 ? 'image/png' : '';
   const maxBytes = (purpose === 'PRODUCT' ? 2 : 10) * 1024 * 1024;
   if (!mimeType || !bytes.byteLength || bytes.byteLength > maxBytes) throw new Error(purpose === 'PRODUCT' ? '商品图片需为2MB以内的JPEG或PNG' : '请选择10MB以内的JPEG或PNG图片');
-  const filename = `${purpose === 'PRODUCT' ? 'product' : 'receipt'}-${Date.now()}.${mimeType === 'image/png' ? 'png' : 'jpg'}`;
+  const prefix = purpose === 'PRODUCT' ? 'product' : purpose === 'SHIPMENT_ADJUSTMENT' ? 'shipment-adjustment' : 'receipt';
+  const filename = `${prefix}-${Date.now()}.${mimeType === 'image/png' ? 'png' : 'jpg'}`;
   const session = await request('/files/upload-sessions', { method: 'POST', data: { purpose, filename, mimeType, sizeBytes: bytes.byteLength } });
   await request(`/files/${session.id}/content`, { method: 'POST', data: bytes,
     header: { 'content-type': 'application/octet-stream', 'x-upload-token': session.uploadToken }, timeout: 30000 });
@@ -265,6 +283,7 @@ module.exports = {
   request,
   checkHealth,
   login,
+  restoreSession,
   currentUser,
   switchTestIdentity,
   authHeaders,

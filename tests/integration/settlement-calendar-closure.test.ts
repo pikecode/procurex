@@ -143,6 +143,9 @@ for (const mode of ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM'] a
         await db.priceChangeRun.deleteMany({ where: { versions: { some: { priceVersion: { scope: { supplier: { code } } } } } } });
         await db.fundingAllocation.deleteMany({ where: own }); await db.accountLedger.deleteMany({ where: { account: own } });
         await db.receipt.deleteMany({ where: { shipment: { supplierOrder: own } } });
+        await db.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrder: own } } } });
+        await db.shipmentRevision.deleteMany({ where: { shipment: { supplierOrder: own } } });
+        await db.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: own } } });
         await db.shipment.deleteMany({ where: { supplierOrder: own } }); await db.freightConfirmation.deleteMany({ where: { supplierOrder: own } });
         await db.supplierOrder.deleteMany({ where: own }); await db.purchaseRequest.deleteMany({ where: own });
         await db.priceScope.deleteMany({ where: { supplier: { code } } }); await db.orderTemplate.deleteMany({ where: { code } });

@@ -20,6 +20,7 @@ import {
   type RejectSupplierOrderResult,
   type ShipmentPreviewInput,
   type ShipmentPreviewView,
+  type ShipmentRevisionInput,
   type ShipmentView,
   SupplierOrdersService,
   type ListSupplierOrdersInput,
@@ -56,6 +57,14 @@ type ShipmentPreviewBody = {
   freight?: unknown;
   freightConfirmationId?: unknown;
   trackingNo?: unknown;
+};
+
+type ShipmentRevisionBody = {
+  expectedOrderVersion?: unknown;
+  expectedRevision?: unknown;
+  note?: unknown;
+  evidenceFileIds?: unknown;
+  items?: unknown;
 };
 
 type CreateFreightConfirmationBody = {
@@ -131,7 +140,7 @@ export class SupplierOrdersController {
     }
 
     return this.commandsService.performAtomic(command, async tx => {
-      const result = await this.supplierOrdersService.createShipment(input.id, input.expectedVersion, input.preview, supplierScope(request), tx);
+      const result = await this.supplierOrdersService.createShipment(input.id, input.expectedVersion, input.preview, supplierScope(request), tx, auth.user.id);
       await this.commandsService.succeed({
         commandId: command.command.id,
         resourceType: 'Shipment',
@@ -155,6 +164,36 @@ export class SupplierOrdersController {
           freight: result.freight,
         },
       }, tx);
+      return result;
+    });
+  }
+
+  @Post(':id/shipments/:shipmentId/revisions')
+  @RequireRoles('ADMIN', 'SUPPLIER')
+  async reviseShipment(
+    @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string,
+    @Param('shipmentId') shipmentId: string,
+    @Body() body: ShipmentRevisionBody,
+  ) {
+    const input = parseShipmentRevisionBody(id, shipmentId, body);
+    const traceId = getOrCreateTraceId(request);
+    const command = await this.commandsService.begin({
+      actorUserId: auth.user.actorUserId ?? auth.user.id,
+      action: 'supplier-order.shipment.revise',
+      idempotencyKey: requireIdempotencyKey(request.headers),
+      requestBody: { id, shipmentId, ...body } as never,
+      traceId,
+    });
+    if (command.state === 'replay') {
+      if (supplierScope(request)) await this.supplierOrdersService.get(id, supplierScope(request));
+      return command.command.responseBody;
+    }
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.supplierOrdersService.reviseShipment(id, shipmentId, input, supplierScope(request), tx, auth.user.id);
+      await this.commandsService.succeed({ commandId: command.command.id, resourceType: 'ShipmentRevision', resourceId: shipmentId, responseBody: result as never }, tx);
+      await this.audit.record({ actorUserId: auth.user.actorUserId ?? auth.user.id, activeScope: auditScope(auth), action: 'supplier-order.shipment.revise', entityType: 'Shipment', entityId: shipmentId, traceId, reason: input.note, after: result as never }, tx);
       return result;
     });
   }
@@ -458,6 +497,40 @@ function parseShipmentPreviewBody(
       trackingNo,
     },
   };
+}
+
+function parseShipmentRevisionBody(id: string, shipmentId: string, body: ShipmentRevisionBody): ShipmentRevisionInput {
+  const issues: ValidationIssue[] = [
+    ...validateUuid('id', id),
+    ...validateUuid('shipmentId', shipmentId),
+    ...validateExpectedVersion('expectedOrderVersion', body.expectedOrderVersion),
+  ];
+  if (!Number.isInteger(body.expectedRevision) || Number(body.expectedRevision) < 1) issues.push({ field: 'expectedRevision', code: 'INVALID_REVISION', message: 'expectedRevision must be a positive integer' });
+  const note = body.note === undefined ? undefined : optionalTrimmedString('note', body.note, issues);
+  if (note && note.length > 500) issues.push({ field: 'note', code: 'INVALID_NOTE', message: 'note must be 500 characters or fewer' });
+  const items: ShipmentRevisionInput['items'] = [];
+  if (!Array.isArray(body.items) || body.items.length === 0) issues.push({ field: 'items', code: 'INVALID_ITEMS', message: 'items must be a non-empty array' });
+  else {
+    const seen = new Set<string>();
+    for (const [index, item] of body.items.entries()) {
+      if (!isRecord(item)) { issues.push({ field: `items.${index}`, code: 'INVALID_ITEM', message: 'item must be an object' }); continue; }
+      issues.push(...validateUuid(`items.${index}.shipmentItemId`, item.shipmentItemId), ...validateDecimalString(`items.${index}.quantity`, item.quantity, 6));
+      if (typeof item.shipmentItemId === 'string' && seen.has(item.shipmentItemId)) issues.push({ field: `items.${index}.shipmentItemId`, code: 'DUPLICATE_ITEM_ID', message: 'shipment item ids must not repeat' });
+      if (typeof item.shipmentItemId === 'string') seen.add(item.shipmentItemId);
+      if (typeof item.shipmentItemId === 'string' && typeof item.quantity === 'string') items.push({ shipmentItemId: item.shipmentItemId, quantity: item.quantity });
+    }
+  }
+  let evidenceFileIds: string[] | undefined;
+  if (body.evidenceFileIds !== undefined) {
+    if (!Array.isArray(body.evidenceFileIds) || body.evidenceFileIds.length < 1 || body.evidenceFileIds.length > 6) issues.push({ field: 'evidenceFileIds', code: 'INVALID_EVIDENCE', message: 'Provide one to six shipment evidence images' });
+    else {
+      evidenceFileIds = body.evidenceFileIds.filter((value): value is string => typeof value === 'string');
+      if (evidenceFileIds.length !== body.evidenceFileIds.length || new Set(evidenceFileIds).size !== evidenceFileIds.length) issues.push({ field: 'evidenceFileIds', code: 'INVALID_EVIDENCE', message: 'Evidence ids must be unique UUIDs' });
+      evidenceFileIds.forEach((value, index) => issues.push(...validateUuid(`evidenceFileIds.${index}`, value)));
+    }
+  }
+  throwIfInvalid(issues);
+  return { expectedOrderVersion: body.expectedOrderVersion as number, expectedRevision: body.expectedRevision as number, note, evidenceFileIds, items };
 }
 
 function parseGapAllocations(

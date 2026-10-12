@@ -2,6 +2,18 @@ const api = require('../../utils/api');
 const quantity = require('../../utils/quantity');
 const view = require('../../utils/store-view');
 
+function shipmentQuantityError(value, max, unitName) {
+  if (String(value).trim() === '') return '';
+  try {
+    quantity.validate(value, { allowZero: true, max });
+    return '';
+  } catch (error) {
+    return error.message.includes('超过')
+      ? `本次最多可发 ${max}${unitName ? ` ${unitName}` : ''}`
+      : error.message;
+  }
+}
+
 Page({
   data: {
     activeView: 'tasks',
@@ -46,6 +58,13 @@ Page({
     supplierOrderId: '',
     selectedOrder: null,
     shipmentItems: [],
+    revisionShipment: null,
+    revisionItems: [],
+    revisionNote: '',
+    revisionEvidence: [],
+    revisionNeedsEvidence: false,
+    revisionUploading: false,
+    revising: false,
     orderLoading: false,
     trackingNo: '',
     deliveryIndex: 0,
@@ -124,7 +143,7 @@ Page({
   },
 
   changeView(event) {
-    if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting || this.data.evidenceLoading) return;
+    if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting || this.data.evidenceLoading || this.data.revising || this.data.revisionUploading) return;
     if (event.currentTarget.dataset.view !== this.data.activeView) {
       this.setData({ statementReturnId: '', statementParentId: '', statementKind: 'total' });
       this.backToList();
@@ -149,7 +168,7 @@ Page({
   },
 
   backToList() {
-    if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting || this.data.evidenceLoading) return;
+    if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting || this.data.evidenceLoading || this.data.revising || this.data.revisionUploading) return;
     const returnId = this.data.statementReturnId;
     const returnKind = this.data.statementReturnKind;
     const returnParentId = this.data.statementReturnParentId;
@@ -283,6 +302,7 @@ Page({
   filterStatus(event) {
     this.setData({ statusFilter: event.currentTarget.dataset.filter });
     this.refreshList();
+    if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
 
   // Empty groups point somewhere useful instead of dead-ending the page.
@@ -313,6 +333,63 @@ Page({
     if (mode === 'ship' && !this.data.selectedOrder?.canShip) return;
     if (mode === 'reject' && !this.data.selectedOrder?.canReject) return;
     if (['detail', 'ship', 'reject'].includes(mode)) this.setData({ orderMode: mode, error: '', result: null });
+  },
+
+  beginShipmentRevision(event) {
+    if (this.data.shipping || this.data.revising || this.data.revisionUploading) return;
+    const shipment = (this.data.selectedOrder?.shipments || []).find(item => item.id === event.currentTarget.dataset.id);
+    if (!shipment?.canRevise) return;
+    const orderItems = new Map(this.data.selectedOrder.items.map(item => [item.id, item]));
+    const revisionItems = shipment.items.map(item => ({ ...item, productName: orderItems.get(item.orderItemId)?.productName || '商品', orderedQuantity: orderItems.get(item.orderItemId)?.quantity || '0', revisedQuantity: item.quantity }));
+    this.setData({ orderMode: 'revise', revisionShipment: shipment, revisionItems, revisionNote: '', revisionEvidence: [], revisionNeedsEvidence: revisionItems.some(item => Number(item.revisedQuantity) < Number(item.orderedQuantity)), error: '' });
+  },
+
+  onRevisionQuantity(event) {
+    if (this.data.revising || this.data.revisionUploading) return;
+    const revisionItems = this.data.revisionItems.map(item => item.id === event.currentTarget.dataset.id ? { ...item, revisedQuantity: event.detail.value } : item);
+    this.setData({ revisionItems, revisionNeedsEvidence: revisionItems.some(item => Number(item.revisedQuantity || 0) < Number(item.orderedQuantity)) });
+  },
+
+  async chooseRevisionEvidence() {
+    if (this.data.revising || this.data.revisionUploading || this.data.revisionEvidence.length >= 6) return;
+    this.setData({ revisionUploading: true, error: '' });
+    try {
+      const files = await api.chooseEvidence(6 - this.data.revisionEvidence.length);
+      const evidence = [...this.data.revisionEvidence];
+      for (const file of files) {
+        const uploaded = await api.uploadEvidence(file.path, 'SHIPMENT_ADJUSTMENT');
+        evidence.push({ ...uploaded, path: file.path });
+        this.setData({ revisionEvidence: evidence });
+      }
+    } catch (error) { this.setData({ error: error.message }); }
+    finally { this.setData({ revisionUploading: false }); }
+  },
+
+  removeRevisionEvidence(event) {
+    if (this.data.revising || this.data.revisionUploading) return;
+    this.setData({ revisionEvidence: this.data.revisionEvidence.filter((_, index) => index !== Number(event.currentTarget.dataset.index)) });
+  },
+
+  async reviseShipment() {
+    if (this.data.revising || this.data.revisionUploading || !this.data.revisionShipment || !this.data.selectedOrder) return;
+    this.setData({ revising: true, error: '', result: null });
+    try {
+      const shipment = this.data.revisionShipment;
+      const items = this.data.revisionItems.map(item => ({ shipmentItemId: item.id, quantity: quantity.validate(item.revisedQuantity, { allowZero: true, max: item.orderedQuantity }) }));
+      const needsEvidence = items.some(line => Number(line.quantity) < Number(this.data.revisionItems.find(item => item.id === line.shipmentItemId).orderedQuantity));
+      if (needsEvidence && !this.data.revisionNote.trim()) throw new Error('少于门店订购数量时请填写差异说明');
+      if (needsEvidence && !this.data.revisionEvidence.length) throw new Error('请上传发货差异凭证');
+      if (items.every(line => Number(line.quantity) === Number(this.data.revisionItems.find(item => item.id === line.shipmentItemId).quantity))) throw new Error('发货数量未变更');
+      const orderId = this.data.supplierOrderId;
+      const result = await this.submitCommand(`/supplier-orders/${orderId}/shipments/${shipment.id}/revisions`, {
+        method: 'POST', data: { expectedOrderVersion: this.data.selectedOrder.version, expectedRevision: shipment.revision, items,
+          ...(this.data.revisionNote.trim() ? { note: this.data.revisionNote.trim() } : {}), ...(this.data.revisionEvidence.length ? { evidenceFileIds: this.data.revisionEvidence.map(file => file.id) } : {}) },
+        header: { 'idempotency-key': `mini-supplier-shipment-revision-${Date.now()}` }
+      });
+      this.setData({ orderMode: 'detail', revisionShipment: null, revisionItems: [], revisionNote: '', revisionEvidence: [], result: { title: shipment.shipmentNo, status: 'UPDATED', detail: `发货数量已修订到第 ${result.revision} 版` } });
+      await this.loadOrder(orderId);
+    } catch (error) { this.setData({ error: error.message }); }
+    finally { this.setData({ revising: false }); }
   },
 
   onInput(event) {
@@ -358,16 +435,19 @@ Page({
       if (this.data.supplierOrderId !== id || this.data.user.id !== actorId) return;
       this.setData({ deliveryIndex: selectedOrder.defaultDeliveryMode === 'LOGISTICS' ? 1 : 0, selectedOrder: { ...selectedOrder,
         canRequestFreight: selectedOrder.requiresFreightSnapshot !== false,
+        shipments: (selectedOrder.shipments || []).map(shipment => ({ ...shipment, shippedDate: view.dateText(shipment.shippedAt), items: shipment.items.map(line => ({ ...line, productName: selectedOrder.items.find(item => item.id === line.orderItemId)?.productName || '商品' })) })),
         canShip: ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED'].includes(selectedOrder.status) || (selectedOrder.status === 'SHIPPED' && selectedOrder.items.some(item => (item.replenishmentGaps || []).some(gap => ['PENDING', 'PARTIAL_FILLED'].includes(gap.status) && Number(gap.remainingQuantity) > 0))),
         canReject: ['PUSHED', 'ACCEPTED'].includes(selectedOrder.status) && !selectedOrder.firstShippedAt && selectedOrder.fulfillmentStatus === 'PENDING'
       }, freightChoices: [{ id: '', amount: '0.00', label: '无运费' }].concat((selectedOrder.freightConfirmations || [])
         .filter(item => selectedOrder.requiresFreightSnapshot !== false && item.status === 'CONFIRMED' && !item.usedAt).map(item => ({ ...item, label: `¥${item.amount} · ${item.reason}` }))),
       shipmentItems: selectedOrder.items.map(item => ({
-        ...item, remainingQuantity: quantity.sum([quantity.remaining(item.quantity, item.shippedQuantity), ...(item.replenishmentGaps || []).filter(gap => Number(gap.remainingQuantity) > 0 && ['PENDING', 'PARTIAL_FILLED'].includes(gap.status)).map(gap => gap.remainingQuantity)]),
+        ...item, imageUrl: '', imageFailed: false, imageLoading: Boolean(item.imageFile?.id || item.imageFileId), remainingQuantity: quantity.sum([quantity.remaining(item.quantity, item.shippedQuantity), ...(item.replenishmentGaps || []).filter(gap => Number(gap.remainingQuantity) > 0 && ['PENDING', 'PARTIAL_FILLED'].includes(gap.status)).map(gap => gap.remainingQuantity)]),
         shipQuantity: quantity.remaining(item.quantity, item.shippedQuantity),
+        shipQuantityError: '',
         gaps: (item.replenishmentGaps || []).filter(gap => gap.status !== 'COMPLETED' && Number(gap.remainingQuantity) > 0)
           .map(gap => ({ ...gap, allocationQuantity: '0' }))
       })) });
+      this.loadOrderImages(id);
     } catch (error) {
       if (this.data.supplierOrderId === id) this.setData({ error: error.message });
     } finally {
@@ -375,10 +455,37 @@ Page({
     }
   },
 
+  async loadOrderImages(orderId) {
+    const items = this.data.shipmentItems.filter(item => item.imageFile?.id || item.imageFileId);
+    await Promise.all(items.map(async item => {
+      let imageUrl = '', imageFailed = false;
+      try { imageUrl = await api.imagePath(item.imageFile || { id: item.imageFileId }); } catch { imageFailed = true; }
+      if (this.data.supplierOrderId !== orderId) return;
+      this.updateOrderItemImage(item.id, { imageUrl, imageFailed, imageLoading: false });
+    }));
+  },
+
+  updateOrderItemImage(itemId, imageState) {
+    const update = item => item.id === itemId ? { ...item, ...imageState } : item;
+    this.setData({ shipmentItems: this.data.shipmentItems.map(update),
+      selectedOrder: this.data.selectedOrder ? { ...this.data.selectedOrder, items: (this.data.selectedOrder.items || []).map(update) } : null });
+  },
+
+  async retryProductImage(event) {
+    const itemId = event.detail?.productId;
+    const item = this.data.shipmentItems.find(row => row.id === itemId);
+    if (!item || !(item.imageFile?.id || item.imageFileId)) return;
+    const orderId = this.data.supplierOrderId;
+    this.updateOrderItemImage(itemId, { imageLoading: true, imageFailed: false });
+    let imageUrl = '', imageFailed = false;
+    try { imageUrl = await api.imagePath(item.imageFile || { id: item.imageFileId }); } catch { imageFailed = true; }
+    if (this.data.supplierOrderId === orderId) this.updateOrderItemImage(itemId, { imageUrl, imageFailed, imageLoading: false });
+  },
+
   onShipQuantity(event) {
     if (this.data.shipping || this.data.rejecting) return;
     this.setData({ shipmentItems: this.data.shipmentItems.map(item => item.id === event.currentTarget.dataset.id
-      ? { ...item, shipQuantity: event.detail.value } : item) });
+      ? { ...item, shipQuantity: event.detail.value, shipQuantityError: shipmentQuantityError(event.detail.value, item.remainingQuantity, item.unitName) } : item) });
   },
 
   selectDelivery(event) {
@@ -432,7 +539,7 @@ Page({
     try {
       const detail = await api.request(`/discrepancies/${this.data.discrepancyId}`);
       if (this.data.discrepancyId !== id) return;
-      this.setData({ selectedDiscrepancy: detail, discrepancies: this.data.discrepancies.map(item => item.id === id ? { ...item, status: detail.status } : item) });
+      this.setData({ selectedDiscrepancy: { ...detail, canReplenish: Number(detail.replenishmentGap?.remainingQuantity) > 0 && ['PENDING', 'PARTIAL_FILLED'].includes(detail.replenishmentGap.status) }, discrepancies: this.data.discrepancies.map(item => item.id === id ? { ...item, status: detail.status } : item) });
     } catch (error) {
       if (this.data.discrepancyId === id) this.setData({ error: error.message });
     } finally {
@@ -447,7 +554,7 @@ Page({
     await this.loadOrder(discrepancy.supplierOrderId);
     if (!this.data.selectedOrder || this.data.selectedOrder.id !== discrepancy.supplierOrderId) return;
     this.setData({ activeView: 'orders', orderMode: 'ship', shipmentItems: this.data.shipmentItems.map(item => ({ ...item,
-      shipQuantity: item.id === gap.orderItemId ? gap.remainingQuantity : '0',
+      shipQuantity: item.id === (gap.orderItemId || discrepancy.orderItemId) ? gap.remainingQuantity : '0',
       gaps: item.gaps.map(value => ({ ...value, allocationQuantity: value.id === gap.id ? gap.remainingQuantity : '0' }))
     })) });
   },
@@ -511,10 +618,14 @@ Page({
     try {
       const orders = await api.request('/supplier-orders');
       if (this.data.user.id !== actorId) return;
-      const rows = Array.isArray(orders) ? orders.map(order => ({ ...order,
-        createdText: view.dateText(order.createdAt),
-        productSummary: order.productSummary || (order.items || []).map(item => `${item.productName || '商品'} ${view.decimalText(item.quantity)}${item.unitName || ''}`).join('、')
-      })) : [];
+      const rows = Array.isArray(orders) ? orders.map(order => {
+        const names = (order.items || []).map(item => item.productName || '商品');
+        const fallbackNames = String(order.productSummary || '').split('、').filter(Boolean);
+        const products = names.length ? names : fallbackNames;
+        return { ...order, createdText: view.dateText(order.createdAt), itemCount: products.length || order.itemCount || 0,
+          productPreview: products.slice(0, 2).join('、'), productMoreCount: Math.max(0, products.length - 2),
+          productSummary: order.productSummary || (order.items || []).map(item => `${item.productName || '商品'} ${view.decimalText(item.quantity)}${item.unitName || ''}`).join('、') };
+      }) : [];
       this.setData({ orders: rows, shippingTasks: rows.filter(item => ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED'].includes(item.status) && item.fulfillmentStatus !== 'COMPLETED') });
       this.refreshList();
     } catch (error) {
@@ -528,6 +639,8 @@ Page({
     const actorId = this.data.user.id;
     if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
+      const pending = await api.request('/discrepancies');
+      if (this.data.user.id !== actorId) return;
       const data = await api.request('/notifications');
       if (this.data.user.id !== actorId) return;
       const notifications = data.notifications || [];
@@ -548,6 +661,11 @@ Page({
             createdAt: item.createdAt
           });
         }
+      }
+      for (const item of Array.isArray(pending) ? pending : []) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        discrepancies.push(item);
       }
       const details = [];
       for (let index = 0; index < discrepancies.length; index += 5) {
@@ -683,7 +801,7 @@ Page({
   async resolveDiscrepancy(event) {
     if (this.data.resolving || this.data.discrepancyLoading || !this.data.selectedDiscrepancy || this.data.selectedDiscrepancy.status !== 'OPEN') return;
     const action = event.currentTarget.dataset.action;
-    if (!['ACCEPT', 'REPLENISH', 'RETURN'].includes(action)) return;
+    if (action !== 'RETURN') return;
     if (action === 'RETURN' && !this.data.discrepancyReason.trim()) {
       this.setData({ error: '请填写退回核对原因' });
       return;
@@ -706,7 +824,7 @@ Page({
         result: {
           title: discrepancy.productName || '收货差异',
           status: resolved.status,
-          detail: `${action === 'ACCEPT' ? '已同意少收' : action === 'REPLENISH' ? '已安排补发' : '已退回门店核对'}，差异数量 ${resolved.missingQuantity}`
+          detail: `已退回门店核对，差异数量 ${resolved.missingQuantity}`
         }
       });
       await this.loadWork();

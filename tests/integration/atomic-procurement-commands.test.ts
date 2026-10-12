@@ -51,6 +51,9 @@ async function withFixture(mode: Mode, run: (f: Awaited<ReturnType<typeof fixtur
     await db.discrepancyReturn.deleteMany({ where: { orderItem: { supplierOrder: own } } });
     await db.discrepancy.deleteMany({ where: { orderItem: { supplierOrder: own } } });
     await db.receipt.deleteMany({ where: { shipment: { supplierOrder: own } } });
+    await db.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrder: own } } } });
+    await db.shipmentRevision.deleteMany({ where: { shipment: { supplierOrder: own } } });
+    await db.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: own } } });
     await db.shipment.deleteMany({ where: { supplierOrder: own } });
     await db.freightConfirmation.deleteMany({ where: { supplierOrder: own } });
     await db.supplierOrder.deleteMany({ where: own });

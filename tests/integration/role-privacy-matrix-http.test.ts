@@ -111,12 +111,12 @@ for (const roleCode of roles) test(`role privacy HTTP ${roleCode}: scope states,
       ['/suppliers', central], [`/suppliers/${own.supplier.id}`, [...central, 'SUPPLIER']], [`/suppliers/${own.supplier.id}/catalog`, [...central, 'SUPPLIER']],
       [`/suppliers/${own.supplier.id}/managed-products`, ['ADMIN', 'PURCHASER', 'SUPPLIER']],
       ['/purchase-requests', ['ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE']], [`/stores/${own.store.id}/catalog`, [...central, 'STORE', 'STORE_FINANCE']],
-      ['/supplier-orders', suppliers], ['/freight-confirmations', ['ADMIN', 'PURCHASER', 'SUPPLIER']], [`/shipments/${own.shipment.id}`, [...stores, 'PURCHASER']],
+      ['/supplier-orders', suppliers], ['/freight-confirmations', ['ADMIN', 'PURCHASER', 'SUPPLIER']], [`/shipments/${own.shipment.id}`, ['ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER', 'STORE', 'STORE_FINANCE', 'REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER']],
       ['/store-statements', [...bills, 'PURCHASER']], ['/supplier-statements', supplierBills], ['/supplier-store-statements', [...supplierBills, 'PURCHASER']], ['/direct-statements', [...directBills, 'PURCHASER']],
       [`/recharges/${own.recharge.id}`, bills], [`/clearings/${own.clearing.id}`, bills],
       ['/reports/order-amounts', [...roles]], ['/reports/product-quantities?from=2026-09-01&to=2026-09-30', [...roles]], ['/reports/profit', central], ['/exports', [...roles]],
       ['/audit-logs', ['ADMIN', 'HQ_FINANCE']], ['/commands/stale', ['ADMIN']],
-      ['/payment-records', directBills], ['/adjustments', directBills], ['/discrepancies', ['ADMIN', 'SUPPLIER']], ['/reconciliation-issues', ['ADMIN', 'HQ_FINANCE']],
+      ['/payment-records', directBills], ['/adjustments', directBills], ['/discrepancies', ['ADMIN', 'SUPPLIER', 'STORE', 'STORE_FINANCE']], ['/reconciliation-issues', ['ADMIN', 'HQ_FINANCE']],
       [`/stores/${own.store.id}/account`, bills], [`/stores/${own.store.id}/ledgers`, bills], [`/stores/${own.store.id}/credit-items`, bills],
       [`/stores/${own.store.id}/credit-movements`, bills],
       [`/stores/${own.store.id}/recharges/${own.recharge.id}`, bills], [`/stores/${own.store.id}/clearings/${own.clearing.id}`, bills],
@@ -285,6 +285,9 @@ for (const roleCode of roles) test(`role privacy HTTP ${roleCode}: scope states,
     await db.accountLedger.deleteMany({ where: { account: { storeId: { in: storeIds } } } });
     await db.discrepancy.deleteMany({ where: { orderItem: { supplierOrder: { storeId: { in: storeIds } } } } });
     await db.receipt.deleteMany({ where: { shipment: { supplierOrder: { storeId: { in: storeIds } } } } });
+    await db.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrder: { storeId: { in: storeIds } } } } } });
+    await db.shipmentRevision.deleteMany({ where: { shipment: { supplierOrder: { storeId: { in: storeIds } } } } });
+    await db.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: { storeId: { in: storeIds } } } } });
     await db.shipment.deleteMany({ where: { supplierOrder: { storeId: { in: storeIds } } } });
     await db.freightConfirmation.deleteMany({ where: { supplierOrder: { storeId: { in: storeIds } } } });
     await db.supplierOrder.deleteMany({ where: { storeId: { in: storeIds } } });

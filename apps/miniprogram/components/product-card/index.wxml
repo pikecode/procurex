@@ -1,0 +1,9 @@
+<view class="product-card {{variant}}">
+  <view class="product-media" bindtap="previewImage">
+    <image wx:if="{{product.imageUrl}}" src="{{product.imageUrl}}" mode="aspectFit" />
+    <view wx:else class="missing-image" data-id="{{product.id}}" bindtap="retryImage">
+      <text>{{product.imageFailed ? '图片加载失败，点此重试' : product.imageLoading ? '图片加载中' : '暂无图片'}}</text>
+    </view>
+  </view>
+  <view class="product-content"><slot /></view>
+</view>

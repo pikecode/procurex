@@ -143,6 +143,9 @@ test('direct supplier-term statement pays and confirms goods plus freight over H
       const orders = await prisma.supplierOrder.findMany({ where: { storeId }, select: { id: true } });
       await prisma.paymentRecord.deleteMany({ where: { allocations: { some: { supplierOrderId: { in: orders.map(({ id }) => id) } } } } });
       await prisma.adjustmentDocument.deleteMany({ where: { supplierOrderId: { in: orders.map(({ id }) => id) } } });
+      await prisma.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrderId: { in: orders.map(({ id }) => id) } } } } });
+      await prisma.shipmentRevision.deleteMany({ where: { shipment: { supplierOrderId: { in: orders.map(({ id }) => id) } } } });
+      await prisma.shipmentItem.deleteMany({ where: { shipment: { supplierOrderId: { in: orders.map(({ id }) => id) } } } });
       await prisma.shipment.deleteMany({ where: { supplierOrderId: { in: orders.map(({ id }) => id) } } });
       await prisma.supplierOrder.deleteMany({ where: { storeId } });
     }
@@ -212,6 +215,9 @@ test('company-term supplier payment stays blocked until store receivable is conf
     await prisma.commandRecord.deleteMany({ where: { actor: { username: { in: [storeUsername, financeUsername] } } } });
     if (orderId) await prisma.paymentRecord.deleteMany({ where: { allocations: { some: { supplierOrderId: orderId } } } });
     if (orderId) {
+      await prisma.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrderId: orderId } } } });
+      await prisma.shipmentRevision.deleteMany({ where: { shipment: { supplierOrderId: orderId } } });
+      await prisma.shipmentItem.deleteMany({ where: { shipment: { supplierOrderId: orderId } } });
       await prisma.shipment.deleteMany({ where: { supplierOrderId: orderId } });
       await prisma.supplierOrder.deleteMany({ where: { id: orderId } });
     }

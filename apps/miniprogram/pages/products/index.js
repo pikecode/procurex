@@ -2,9 +2,14 @@ const api = require('../../utils/api');
 const quantity = require('../../utils/quantity');
 const storageOptions = [{ code: '', name: '未设置' }, { code: 'AMBIENT', name: '常温' }, { code: 'CHILLED', name: '冷藏' }, { code: 'FROZEN', name: '冷冻' }, { code: 'WARM', name: '保温' }];
 const blank = () => ({ sku: '', defaultSalesPrice: '', name: '', categoryId: '', baseUnitId: '', minOrderQty: '1', orderMultiple: '1', specification: '', brand: '', storageCondition: '', imageFileId: null, isActive: true });
+// Products may only sit on leaf categories, so a category that is somebody's parent is not selectable.
+const leafCategories = categories => {
+  const parents = new Set(categories.filter(row => row.parentId).map(row => row.parentId));
+  return categories.filter(row => !parents.has(row.id));
+};
 
 Page({
-  data: { user: {}, products: [], visibleProducts: [], categories: [], units: [], brands: [], search: '', editing: false,
+  data: { user: {}, products: [], visibleProducts: [], categories: [], categoryOptions: [], units: [], brands: [], search: '', editing: false,
     draft: blank(), selectedId: '', categoryIndex: -1, unitIndex: -1, storageIndex: 0, storageOptions,
     imageUrl: '', imageFile: null, crop: null, loading: false, saving: false, uploading: false, error: '', conflict: false },
 
@@ -27,7 +32,7 @@ Page({
     try {
       const [products, categories, units, brands] = await Promise.all([api.request('/products'), api.request('/categories'), api.request('/units'), api.request('/brands')]);
       if (sequence !== this.sequence) return;
-      this.setData({ products, categories, units, brands: [...new Set([...brands.map(brand => brand.name), ...products.map(product => product.brand)].filter(Boolean))].sort() });
+      this.setData({ products, categories, categoryOptions: leafCategories(categories), units, brands: [...new Set([...brands.map(brand => brand.name), ...products.map(product => product.brand)].filter(Boolean))].sort() });
       this.filterProducts();
     } catch (error) { if (sequence === this.sequence) this.setData({ error: error.message }); }
     finally { if (sequence === this.sequence) this.setData({ loading: false }); }
@@ -46,7 +51,7 @@ Page({
   editProduct(product) {
     this.sequence = (this.sequence || 0) + 1;
     this.setData({ editing: true, selectedId: product.id || '', draft: { ...blank(), ...product }, error: '', conflict: false,
-      categoryIndex: this.data.categories.findIndex(item => item.id === product.categoryId), unitIndex: this.data.units.findIndex(item => item.id === product.baseUnitId),
+      categoryIndex: this.data.categoryOptions.findIndex(item => item.id === product.categoryId), unitIndex: this.data.units.findIndex(item => item.id === product.baseUnitId),
       storageIndex: Math.max(0, storageOptions.findIndex(item => item.code === product.storageCondition)), imageUrl: '', imageFile: product.imageFile || null, crop: null });
     if (product.imageFile) this.loadImage(product.imageFile);
   },
@@ -59,7 +64,7 @@ Page({
   chooseOption(event) {
     if (this.data.saving || this.data.uploading) return;
     const index = Number(event.detail.value), kind = event.currentTarget.dataset.kind;
-    const item = (kind === 'category' ? this.data.categories : kind === 'unit' ? this.data.units : storageOptions)[index];
+    const item = (kind === 'category' ? this.data.categoryOptions : kind === 'unit' ? this.data.units : storageOptions)[index];
     if (!item) return;
     this.setData({ [`${kind}Index`]: index, draft: { ...this.data.draft, [kind === 'category' ? 'categoryId' : kind === 'unit' ? 'baseUnitId' : 'storageCondition']: item.id || item.code } });
   },

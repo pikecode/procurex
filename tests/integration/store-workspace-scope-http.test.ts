@@ -66,6 +66,9 @@ test('formal Store APIs deny missing/mismatched scopes and foreign orders/catalo
     await app.close();
     await db.userScope.deleteMany({ where: { user: { username: { startsWith: prefix } } } });
     await db.user.deleteMany({ where: { username: { startsWith: prefix } } });
+    await db.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrder: { supplier: { code: prefix } } } } } });
+    await db.shipmentRevision.deleteMany({ where: { shipment: { supplierOrder: { supplier: { code: prefix } } } } });
+    await db.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: { supplier: { code: prefix } } } } });
     await db.shipment.deleteMany({ where: { supplierOrder: { supplier: { code: prefix } } } });
     await db.supplierOrder.deleteMany({ where: { supplier: { code: prefix } } });
     await db.purchaseRequest.deleteMany({ where: { requestNo: { startsWith: prefix } } });

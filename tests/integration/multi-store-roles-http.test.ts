@@ -101,6 +101,9 @@ test('database assigned roles restrict store reads and revoke sessions on scope 
     const orders = await prisma.supplierOrder.findMany({ where: { supplierOrderNo: { startsWith: prefix } }, select: { id: true } });
     const orderIds = orders.map(order => order.id);
     await prisma.adjustmentDocument.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
+    await prisma.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrderId: { in: orderIds } } } } });
+    await prisma.shipmentRevision.deleteMany({ where: { shipment: { supplierOrderId: { in: orderIds } } } });
+    await prisma.shipmentItem.deleteMany({ where: { shipment: { supplierOrderId: { in: orderIds } } } });
     await prisma.shipment.deleteMany({ where: { supplierOrderId: { in: orderIds } } });
     await prisma.supplierOrder.deleteMany({ where: { id: { in: orderIds } } });
     await prisma.purchaseRequest.deleteMany({ where: { requestNo: { startsWith: prefix } } });

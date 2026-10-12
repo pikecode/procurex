@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { Alert, App, Button, Form, Image, Input, InputNumber, Modal, Select, Switch, Tabs, Tooltip, TreeSelect } from 'antd';
-import { Pencil, ImageOff, Image as ImageIcon, LoaderCircle, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, App, Button, Empty, Form, Image, Input, InputNumber, Modal, Segmented, Select, Switch, Table, Tabs, Tag, Tooltip, TreeSelect } from 'antd';
+import { ChevronRight, Pencil, ImageOff, Image as ImageIcon, LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react';
 import './Products.css';
 import { ProductImageUpload } from '../components/ProductImageUpload';
 import { PurchaseUnitFields } from '../components/PurchaseUnitFields';
-import { ListPage } from '../components/ListPage';
 import { getSession, hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { positiveIntegerRule } from '../lib/catalogTypes';
@@ -41,7 +40,11 @@ export default function Products({ user }: { user: User }) {
   const imageId = Form.useWatch('imageFileId', form); const { message } = App.useApp();
   const referencesError = categories.error || units.error || brands.error || suppliers.error;
   const options = (rows: Named[]) => rows.map(row => ({ value: row.id, label: row.name }));
-  const categoryTree = categories.rows.filter(row => !row.parentId).map(row => ({ value: row.id, title: row.name, children: categories.rows.filter(child => child.parentId === row.id).map(child => ({ value: child.id, title: child.name })) }));
+  // Products may only sit on leaf categories, so grouping nodes are selectable as containers but not as targets.
+  const childCategoryIds = new Set(categories.rows.filter(row => row.parentId).map(row => row.parentId));
+  const categoryTree = categories.rows.filter(row => !row.parentId).map(row => ({ value: row.id, title: row.name,
+    disabled: childCategoryIds.has(row.id),
+    children: categories.rows.filter(child => child.parentId === row.id).map(child => ({ value: child.id, title: child.name })) }));
   const edit = (row: Product | null) => { form.resetFields(); form.setFieldsValue({ ...(row || { defaultSalesPrice: '0', minOrderQty: '1', orderMultiple: '1', isActive: true, storageCondition: 'AMBIENT', supplierIds: [] }), ...row?.purchaseUnitConversion, purchasePrices: Object.fromEntries((row?.supplierPurchasePrices || []).map(price => [price.supplierId, price.supplyPrice])) }); setEditing(row); setError(''); setActiveTab('basic'); setInvalidTabs([]); };
   const save = async () => {
     if (lock.current || uploading) return; const values = await form.validateFields().catch(failure => {
@@ -74,18 +77,124 @@ export default function Products({ user }: { user: User }) {
   const decimal = (label: string, scale: number, positive = false) => [{ required: true, message: `请填写${label}` }, { validator: async (_: unknown, value: unknown) => {
     if (typeof value !== 'string' || !new RegExp(`^\\d+(\\.\\d{1,${scale}})?$`).test(value) || (positive && Number(value) <= 0)) throw new Error(`${label}须为${positive ? '正数' : '非负数'}，最多${scale}位小数`);
   } }];
+const useNarrow = () => { const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches);
+  useEffect(() => { const query = window.matchMedia('(max-width: 600px)'); const update = () => setNarrow(query.matches);
+    query.addEventListener('change', update); return () => query.removeEventListener('change', update); }, []); return narrow; };
+
+  // 左侧分类导航 + 右侧商品列表
+  const [activeCategory, setActiveCategory] = useState<string>('');
+  const [collapsed, setCollapsed] = useState<string[]>([]);
+  const [categoryKeyword, setCategoryKeyword] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [status, setStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [page, setPage] = useState(1); const [size, setSize] = useState(10);
+  const narrow = useNarrow();
+
+  const sortedCategories = useMemo(() => [...categories.rows].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')), [categories.rows]);
+  const counts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of data.rows) map.set(row.categoryId, (map.get(row.categoryId) || 0) + 1);
+    return map;
+  }, [data.rows]);
+  const descendants = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const collect = (parentId: string): string[] => sortedCategories.filter(row => row.parentId === parentId).flatMap(row => [row.id, ...collect(row.id)]);
+    for (const row of sortedCategories) map.set(row.id, collect(row.id));
+    return map;
+  }, [sortedCategories]);
+  const countFor = (id: string) => (descendants.get(id) || []).reduce((total, childId) => total + (counts.get(childId) || 0), 0) + (counts.get(id) || 0);
+
+  const treeQuery = categoryKeyword.trim().toLocaleLowerCase();
+  const visibleRoots = useMemo(() => sortedCategories.filter(row => !row.parentId || !sortedCategories.some(parent => parent.id === row.parentId)).filter(root => {
+    if (!treeQuery) return true;
+    return root.name.toLocaleLowerCase().includes(treeQuery)
+      || sortedCategories.some(child => child.parentId === root.id && child.name.toLocaleLowerCase().includes(treeQuery));
+  }), [sortedCategories, treeQuery]);
+
+  const activeCategoryName = activeCategory ? categories.rows.find(row => row.id === activeCategory)?.name || '' : '';
+  const filtered = useMemo(() => {
+    const scope = activeCategory ? [activeCategory, ...(descendants.get(activeCategory) || [])] : null;
+    const query = keyword.trim().toLocaleLowerCase();
+    return data.rows.filter(row => (!scope || scope.includes(row.categoryId))
+      && (status === 'all' || row.isActive === (status === 'active'))
+      && (!query || `${row.name} ${row.sku || ''}`.toLocaleLowerCase().includes(query)));
+  }, [data.rows, activeCategory, descendants, keyword, status]);
+  const selectCategory = (id: string) => { setActiveCategory(id); setPage(1); };
+  const resetFilters = () => { setKeyword(''); setStatus('all'); setPage(1); };
+
   return <>
-    <ListPage title="商品管理" {...data} create={writable ? () => edit(null) : undefined} filters={[{ key: 'categoryId', label: '分类', options: options(categories.rows) }]} columns={[
-      { title: '图片', width: 75, render: (_, row) => <ProductImage id={row.imageFileId} /> },
-      { title: '商品名称', dataIndex: 'name', width: 210, render: (_, row) => <strong>{row.name}</strong> },
-      { title: '分类', width: 140, render: (_, row) => categories.rows.find(item => item.id === row.categoryId)?.name || '-' },
-      { title: '销售单位', width: 100, render: (_, row) => units.rows.find(item => item.id === row.baseUnitId)?.name || '-' },
-      { title: '销售价格', dataIndex: 'defaultSalesPrice', align: 'right', width: 120, render: money },
-      { title: '状态', width: 80, render: (_, row) => row.isActive ? '启用' : '停用' },
-      { title: '操作', width: 80, fixed: 'right', render: (_, row) => <div className="row-actions">
-        <Tooltip title={writable ? '编辑' : '查看'}><Button type="text" aria-label={`${writable ? '编辑' : '查看'}${row.name}`} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip>
-      </div> },
-    ]} />
+    <section className="product-browser">
+      <aside className="product-category-panel">
+        <div className="product-category-title">商品分类</div>
+        <Input className="product-category-search" size="small" allowClear aria-label="搜索分类" placeholder="搜索分类" prefix={<Search size={14} />}
+          value={categoryKeyword} onChange={event => setCategoryKeyword(event.target.value)} />
+        <nav className="product-category-list" aria-label="商品分类">
+          <button type="button" className={`product-category-item${activeCategory === '' ? ' is-active' : ''}`} aria-current={activeCategory === '' || undefined}
+            onClick={() => selectCategory('')}>
+            <span className="product-category-name">全部商品</span><span className="product-category-count">{data.rows.length}</span>
+          </button>
+          {visibleRoots.map(root => {
+            const children = sortedCategories.filter(row => row.parentId === root.id);
+            const shown = children.filter(child => !treeQuery || root.name.toLocaleLowerCase().includes(treeQuery) || child.name.toLocaleLowerCase().includes(treeQuery));
+            const isOpen = !collapsed.includes(root.id);
+            return <div className="product-category-group" key={root.id}>
+              <div className={`product-category-row${activeCategory === root.id ? ' is-active' : ''}`}>
+                {children.length > 0 && <button type="button" className="product-category-toggle" aria-label={`${isOpen ? '收起' : '展开'}${root.name}`} aria-expanded={isOpen}
+                  onClick={() => setCollapsed(current => isOpen ? [...current, root.id] : current.filter(id => id !== root.id))}>
+                  <ChevronRight size={14} className={isOpen ? 'is-open' : undefined} aria-hidden="true" />
+                </button>}
+                <button type="button" className="product-category-item" aria-current={activeCategory === root.id || undefined} onClick={() => selectCategory(root.id)}>
+                  <span className="product-category-name">{root.name}</span><span className="product-category-count">{countFor(root.id)}</span>
+                </button>
+              </div>
+              {children.length > 0 && isOpen && <div className="product-category-children">
+                {shown.map(child => <button type="button" key={child.id} className={`product-category-item is-child${activeCategory === child.id ? ' is-active' : ''}`}
+                  aria-current={activeCategory === child.id || undefined} onClick={() => selectCategory(child.id)}>
+                  <span className="product-category-name">{child.name}</span><span className="product-category-count">{counts.get(child.id) || 0}</span>
+                </button>)}
+              </div>}
+            </div>;
+          })}
+          {!visibleRoots.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的分类" />}
+        </nav>
+      </aside>
+      <div className="product-list-panel">
+        <div className="page-heading">
+          <h1>商品管理</h1>
+          <div className="actions">
+            <span className="product-scope">{activeCategoryName ? `分类：${activeCategoryName}` : `全部 ${data.rows.length} 个商品`}</span>
+            <Tooltip title="刷新列表"><Button aria-label="刷新列表" icon={<RefreshCw size={16} />} onClick={() => { data.reload(); categories.reload(); }} loading={data.loading} /></Tooltip>
+            {writable && <Button type="primary" icon={<Plus size={16} />} onClick={() => edit(null)}>新增</Button>}
+          </div>
+        </div>
+        <div className="filter-bar">
+          <Input className="search-input" allowClear aria-label="搜索商品管理" placeholder="商品名称、货号" prefix={<Search size={16} />} value={keyword}
+            onChange={event => { setKeyword(event.target.value); setPage(1); }} />
+          <Segmented aria-label="按状态筛选" value={status} onChange={value => { setStatus(value as typeof status); setPage(1); }}
+            options={[{ label: '全部', value: 'all' }, { label: '启用', value: 'active' }, { label: '停用', value: 'inactive' }]} />
+          <Tooltip title="重置筛选"><Button aria-label="重置筛选" icon={<RefreshCw size={16} />} onClick={resetFilters} /></Tooltip>
+        </div>
+        {data.error && <Alert type="error" showIcon title={data.error} action={<Button size="small" onClick={data.reload}>重试</Button>} />}
+        <Table<Product> rowKey="id" size="small" loading={data.loading} dataSource={filtered} scroll={narrow ? undefined : { x: 720 }}
+          locale={{ emptyText: <Empty description={keyword || status !== 'all' ? '没有符合条件的商品' : '该分类下还没有商品'} /> }}
+          pagination={{ current: Math.min(page, Math.max(1, Math.ceil(filtered.length / size))), pageSize: size, showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条`,
+            onChange: (current, pageSize) => { setPage(pageSize !== size ? 1 : current); setSize(pageSize); } }}
+          columns={[
+            { title: '图片', width: 72, render: (_, row) => <ProductImage id={row.imageFileId} /> },
+            { title: '商品名称', dataIndex: 'name', ellipsis: narrow, render: (_, row) => <span className="product-cell-name" title={row.name}>{row.name}</span> },
+            ...(narrow ? [{ title: '销售价格', dataIndex: 'defaultSalesPrice', align: 'right' as const, width: 96, render: money }] : [
+              { title: '分类', width: 130, render: (_: unknown, row: Product) => categories.rows.find(item => item.id === row.categoryId)?.name || '-' },
+              { title: '销售单位', width: 92, render: (_: unknown, row: Product) => units.rows.find(item => item.id === row.baseUnitId)?.name || '-' },
+              { title: '销售价格', dataIndex: 'defaultSalesPrice', align: 'right' as const, width: 110, render: money },
+              { title: '状态', width: 72, render: (_: unknown, row: Product) => <Tag color={row.isActive ? 'green' : 'default'}>{row.isActive ? '启用' : '停用'}</Tag> },
+            ]),
+            { title: '操作', width: 64, fixed: narrow ? undefined : 'right', render: (_, row) => <div className="row-actions">
+              <Tooltip title={writable ? '编辑' : '查看'}><Button type="text" aria-label={`${writable ? '编辑' : '查看'}${row.name}`} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip>
+            </div> },
+          ]} />
+      </div>
+    </section>
     <Modal className="product-editor" title={`${writable ? editing ? '编辑' : '新增' : '查看'}商品`} open={editing !== undefined} width={840} style={{ top: 24 }} onOk={() => save()} okText="保存" cancelText="取消" footer={!writable ? null : undefined}
       confirmLoading={saving} okButtonProps={{ disabled: uploading || Boolean(referencesError) || categories.loading || units.loading || brands.loading || suppliers.loading }} closable={!saving && !uploading} maskClosable={!saving && !uploading} keyboard={!saving && !uploading} onCancel={() => { if (!saving && !uploading) setEditing(undefined); }}>
       {(error || referencesError) && <Alert type="error" title={error || referencesError} showIcon />}

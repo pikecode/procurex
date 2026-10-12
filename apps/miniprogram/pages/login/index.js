@@ -13,6 +13,25 @@ Page({
     this.setData({
       username: wx.getStorageSync('procurexLastUsername') || ''
     });
+    this.restoreLogin();
+  },
+
+  async restoreLogin() {
+    if (!wx.getStorageSync('procurexToken')) return;
+    this.setData({ loading: true, loadingText: '恢复登录中...', error: '' });
+    try {
+      const user = await api.restoreSession();
+      const workspace = api.workspaceNames(user)[0];
+      if (workspace) {
+        wx.switchTab({ url: `/pages/${workspace}/index` });
+        return;
+      }
+      if (user) this.setData({ error: '当前账号没有小程序角色入口' });
+    } catch {
+      this.setData({ error: '登录态暂时无法验证，请检查网络后重试或重新登录' });
+    } finally {
+      this.setData({ loading: false, loadingText: '' });
+    }
   },
 
   onInput(event) {

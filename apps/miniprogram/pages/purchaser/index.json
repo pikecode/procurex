@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "采购",
   "usingComponents": {
-    "document-no": "../../components/document-no/index"
+    "document-no": "../../components/document-no/index",
+    "product-card": "../../components/product-card/index"
   }
 }

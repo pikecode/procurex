@@ -343,6 +343,9 @@ export class CatalogService {
       });
     }
 
+    if (binding.store.status === 'DISABLED') {
+      throw new ConflictException({ code: 'STORE_DISABLED', message: '该门店已停用，不能新增订货' });
+    }
     return this.catalogView(storeId, binding.store, binding.template, at, transaction);
   }
 
@@ -416,7 +419,10 @@ export class CatalogService {
   }
 
   private async requireProductReferences(tx: Prisma.TransactionClient, categoryId?: string, unitId?: string) {
-    if (categoryId && !await tx.category.findUnique({ where: { id: categoryId } })) throw new NotFoundException({ code: 'CATEGORY_NOT_FOUND', message: 'Category was not found' });
+    if (categoryId) {
+      if (!await tx.category.findUnique({ where: { id: categoryId } })) throw new NotFoundException({ code: 'CATEGORY_NOT_FOUND', message: 'Category was not found' });
+      if (await tx.category.count({ where: { parentId: categoryId } })) throw new ConflictException({ code: 'CATEGORY_MUST_BE_LEAF', message: 'Product category must be a leaf category without child categories' });
+    }
     if (unitId && !await tx.unit.findUnique({ where: { id: unitId } })) throw new NotFoundException({ code: 'UNIT_NOT_FOUND', message: 'Unit was not found' });
   }
 
@@ -447,6 +453,13 @@ export class CatalogService {
       throw new NotFoundException({
         code: 'CATEGORY_NOT_FOUND',
         message: 'Category was not found',
+      });
+    }
+    // Products may only hang off leaf categories; a category that still has child categories is a grouping node.
+    if (await this.database.client.category.count({ where: { parentId: id } })) {
+      throw new ConflictException({
+        code: 'CATEGORY_MUST_BE_LEAF',
+        message: 'Product category must be a leaf category without child categories',
       });
     }
   }

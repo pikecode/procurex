@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { SupplierOrdersService } from '../../apps/api/src/supplier-orders/supplier-orders.service.js';
+import { Decimal } from 'decimal.js';
+import { assertShipmentRevisionCapacity, SupplierOrdersService } from '../../apps/api/src/supplier-orders/supplier-orders.service.js';
 import { remainingNormalShipmentQuantity } from '../../apps/api/src/supplier-orders/fulfillment-status.js';
 
 test('historical replenishment shipments do not consume normal remaining quantities', () => {
@@ -41,4 +42,56 @@ test('fully shipped order allows only gap-allocated replacement quantities', asy
   await assert.rejects(service().shipmentPreview('order', 2, { ...input, items: [{ ...item, gapAllocations: [] }] }));
   await assert.rejects(service().shipmentPreview('order', 2, { ...input, items: [{ ...item, shipQuantity: '2' }] }));
   await assert.rejects(service().shipmentPreview('order', 2, { ...input, items: [{ ...item, gapAllocations: [{ gapId: 'gap', quantity: '0.5' }, { gapId: 'gap', quantity: '0.5' }] }] }));
+});
+
+test('shipment revision capacity aggregates normal batches while exempting authorized replenishment', () => {
+  const ordered = { id: 'item', quantity: '5', shipmentItems: [
+    { id: 'first', quantity: '3', permanentlyReduced: '0', gapAllocations: [] },
+    { id: 'second', quantity: '2', permanentlyReduced: '0', gapAllocations: [] },
+    { id: 'top-up', quantity: '1', permanentlyReduced: '0', gapAllocations: [{ quantity: '1' }] },
+  ] };
+  assertShipmentRevisionCapacity(ordered, 'second', new Decimal('2'));
+  assert.throws(() => assertShipmentRevisionCapacity(ordered, 'second', new Decimal('3')), /regular shipment batches/);
+  assert.throws(() => assertShipmentRevisionCapacity(ordered, 'top-up', new Decimal('0.5')), /authorized replenishment allocation/);
+});
+
+test('shipment revisions require shortage evidence and reject quantities above the order', async () => {
+  const orderItem = { id: 'order-item', quantity: new Decimal('5'), shipmentItems: [
+    { id: 'shipment-item', quantity: new Decimal('5'), permanentlyReduced: new Decimal('0'), gapAllocations: [] },
+  ] };
+  const shipment = {
+    id: 'shipment', supplierOrderId: 'order',
+    supplierOrder: { id: 'order', version: 3, storeId: 'store', requestId: 'request', items: [orderItem] },
+    items: [{ id: 'shipment-item', orderItemId: orderItem.id, quantity: new Decimal('5'), permanentlyReduced: new Decimal('0'), gapAllocations: [], receiptItems: [] }],
+    revisions: [{ revision: 1 }], receipts: [],
+  };
+  const service = new SupplierOrdersService({ client: { shipment: { findFirst: async () => shipment } } } as never);
+  const revised = [{ shipmentItemId: 'shipment-item', quantity: '4' }];
+  await assert.rejects(service.reviseShipment('order', 'shipment', {
+    expectedOrderVersion: 3, expectedRevision: 1, note: '少发', items: revised,
+  }, { type: 'SUPPLIER', supplierId: 'supplier' }), (error: unknown) =>
+    (error as { getResponse(): { code: string } }).getResponse().code === 'SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED');
+  await assert.rejects(service.reviseShipment('order', 'shipment', {
+    expectedOrderVersion: 3, expectedRevision: 1, items: [{ shipmentItemId: 'shipment-item', quantity: '6' }],
+  }, { type: 'SUPPLIER', supplierId: 'supplier' }), (error: unknown) =>
+    (error as { getResponse(): { code: string } }).getResponse().code === 'INVALID_SHIPMENT_QUANTITY');
+});
+
+test('shipment revisions stop once a receipt row has a final decision', async () => {
+  const orderItem = { id: 'order-item', quantity: new Decimal('5'), shipmentItems: [
+    { id: 'shipment-item', quantity: new Decimal('5'), permanentlyReduced: new Decimal('0'), gapAllocations: [] },
+  ] };
+  const shipment = {
+    id: 'shipment', supplierOrderId: 'order',
+    supplierOrder: { id: 'order', version: 3, storeId: 'store', requestId: 'request', items: [orderItem] },
+    items: [{ id: 'shipment-item', orderItemId: orderItem.id, quantity: new Decimal('5'), permanentlyReduced: new Decimal('0'), gapAllocations: [], receiptItems: [
+      { discrepancy: { status: 'RESOLVED', returnRecord: null } },
+    ] }],
+    revisions: [{ revision: 1 }], receipts: [],
+  };
+  const service = new SupplierOrdersService({ client: { shipment: { findFirst: async () => shipment } } } as never);
+  await assert.rejects(service.reviseShipment('order', 'shipment', {
+    expectedOrderVersion: 3, expectedRevision: 1, items: [{ shipmentItemId: 'shipment-item', quantity: '4' }],
+  }, { type: 'SUPPLIER', supplierId: 'supplier' }), (error: unknown) =>
+    (error as { getResponse(): { code: string } }).getResponse().code === 'SHIPMENT_ALREADY_RECEIVED');
 });

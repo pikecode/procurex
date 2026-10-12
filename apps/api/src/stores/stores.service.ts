@@ -5,6 +5,7 @@ import {
   FundingAllocationMethod,
   LedgerDirection,
   LedgerSourceType,
+  PurchaseRequestStatus,
   StoreStatus,
 } from '../../../../packages/backend/generated/prisma/enums.js';
 import type {
@@ -20,7 +21,7 @@ import { DatabaseService } from '../database/database.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { auditedMasterDataTransaction, type MasterDataAuditContext } from '../audit/master-data-audit.js';
 import type { StoreProfile } from '../common/master-data-profile.js';
-import { lockFundingRequest, refreshRequestPaymentSummary } from '../purchase-requests/request-funding.js';
+import { lockFundingRequest, refreshRequestPaymentSummary, synchronizeRequestFunding } from '../purchase-requests/request-funding.js';
 import { recordCreditMovement } from './credit-movements.js';
 import { lockStoreGroups, validateStoreGroup } from './store-groups.service.js';
 
@@ -385,7 +386,34 @@ export class StoresService {
         },
       });
 
-      return { recharge, account };
+      const pendingRequests = await tx.purchaseRequest.findMany({
+        where: {
+          storeId,
+          status: PurchaseRequestStatus.PENDING_FUNDS,
+          items: { some: { supplier: { defaultSettlementMode: 'STORED_VALUE' } } },
+        },
+        select: { id: true, supplierOrders: { select: { id: true } } },
+        orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
+      });
+
+      for (const request of pendingRequests) {
+        await lockFundingRequest(tx, storeId, request.id);
+        const funding = await synchronizeRequestFunding(tx, request.id, { sourceId: recharge.id });
+        await tx.purchaseRequest.update({
+          where: { id: request.id },
+          data: {
+            status: funding.canConfirm
+              ? request.supplierOrders.length ? PurchaseRequestStatus.CONFIRMED : PurchaseRequestStatus.PENDING_PROCUREMENT
+              : PurchaseRequestStatus.PENDING_FUNDS,
+            version: { increment: 1 },
+          },
+        });
+      }
+
+      const updatedAccount = pendingRequests.length
+        ? await tx.storeAccount.findUniqueOrThrow({ where: { storeId } })
+        : account;
+      return { recharge, account: updatedAccount };
     };
     const result = transaction ? await execute(transaction) : await this.database.client.$transaction(execute);
 

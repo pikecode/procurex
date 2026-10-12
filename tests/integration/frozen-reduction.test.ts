@@ -122,6 +122,8 @@ for (const mode of ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM'] a
       await db.accountLedger.deleteMany({ where: { account: { storeId: { in: storeIds } } } });
       await db.receiptItem.deleteMany({ where: { receipt: { shipment: { supplierOrderId: { in: ids } } } } });
       await db.receipt.deleteMany({ where: { shipment: { supplierOrderId: { in: ids } } } });
+      await db.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrderId: { in: ids } } } } });
+      await db.shipmentRevision.deleteMany({ where: { shipment: { supplierOrderId: { in: ids } } } });
       await db.shipmentItem.deleteMany({ where: { shipment: { supplierOrderId: { in: ids } } } });
       await db.shipment.deleteMany({ where: { supplierOrderId: { in: ids } } });
       await db.freightConfirmation.deleteMany({ where: { supplierOrderId: { in: ids } } });

@@ -54,9 +54,7 @@ assert.deepEqual(appJson.pages, [
   'pages/store/index',
   'pages/supplier/index',
   'pages/purchaser/index',
-  'pages/products/index',
   'pages/profile/index',
-  'pages/prices/index',
   'pages/finance/index',
   'pages/region/index',
   'pages/finance-accounts/index',
@@ -93,22 +91,16 @@ assertIncludes(packageJson.scripts['mini:flow-check'], 'check-miniprogram-flow.m
 assertIncludes(packageJson.scripts['mini:flow-check'], 'main-flow:seed-demo', 'mini-program flow check seed dependency');
 
 const files = await walk(miniRoot);
-const productTemplate = await read('apps/miniprogram/pages/products/index.wxml');
-for (const control of ['newProduct', 'saveProduct', 'chooseImage', 'confirmCrop', 'reloadSelected', 'onCropMove', 'onCropZoom']) {
-  assertIncludes(productTemplate, control, 'product editor');
+const purchaserMarkup = await read('apps/miniprogram/pages/purchaser/index.wxml');
+assert.ok(!purchaserMarkup.includes('openProducts') && !purchaserMarkup.includes('openPrices'), 'master data maintenance belongs to web administration');
+for (const folder of ['pages/products', 'pages/prices']) {
+  assert.ok(projectConfig.packOptions.ignore.some(item => item.type === 'folder' && item.value === folder), `${folder} must not be packaged`);
 }
-const productSource = await read('apps/miniprogram/pages/products/index.js');
-const pricesSource = await read('apps/miniprogram/pages/prices/index.js');
-const pricesMarkup = await read('apps/miniprogram/pages/prices/index.wxml');
-for (const fragment of ['/prices/impact-preview', '/price-changes', 'api.roleCommand', 'api.retryRoleCommand', 'impactSignature', 'templateId']) assertIncludes(pricesSource, fragment, 'native rapid pricing');
-for (const control of ['previewPrice', 'publishPrice', 'recoverPrice', 'processRun', 'chooseTemplate']) assertIncludes(pricesMarkup, control, 'native rapid pricing controls');
 const profileSource = await read('apps/miniprogram/pages/profile/index.js');
 assertIncludes(profileSource, 'user.scope', 'own profile scope');
 assertIncludes(profileSource, '/managed-products', 'own supplier catalog');
 assertIncludes(profileSource, 'supplyEnabled', 'supplier listing state');
 assert.ok(!profileSource.includes('/prices/'), 'supplier catalog cannot manage prices');
-assertIncludes(productSource, 'expectedVersion', 'product version protection');
-assertIncludes(productSource, "'PRODUCT'", 'product image purpose');
 assert.equal(files.filter((file) => file.endsWith('.html')).length, 0, 'mini-program surface must not use HTML pages');
 
 const loginJs = await read('apps/miniprogram/pages/login/index.js');
@@ -159,15 +151,15 @@ assertIncludes(storeJs, 'expectedReceiptRevision', 'store receipt revision guard
 assertIncludes(storeWxml, '商品目录', 'store catalog screen');
 assertIncludes(storeWxml, '账户余额', 'store account screen');
 assertIncludes(storeWxml, '核对订货单', 'store checkout button');
-assertIncludes(storeWxml, '提交下货单', 'store request submit button');
-assertIncludes(storeWxml, '订单进度', 'store order progress screen');
+assertIncludes(storeWxml, '提交订货单', 'store request submit button');
+assertIncludes(storeWxml, '订货单', 'store purchase request list');
 assertIncludes(storeWxml, '收货处理', 'store shipment notification screen');
 assertIncludes(storeWxml, 'class="order-entry shipment-todo"', 'store shipment notification list');
 assertIncludes(storeWxml, '确认收货', 'store full receipt action');
 assertIncludes(storeWxml, '提交收货差异', 'store short receipt action');
 assertIncludes(storeWxml, '本月统计', 'store statistics screen');
 assertIncludes(storeWxml, 'bindtap="stepProduct"', 'store product quantity stepper');
-assertIncludes(storeWxml, '履约进度', 'store fulfillment timeline');
+assertIncludes(storeWxml, 'class="fulfillment-group"', 'store fulfillment timeline');
 assertIncludes(storeWxml, 'preview.funding.stored.shortfall', 'store shortfall display');
 assertIncludes(storeWxml, 'canWrite', 'store read-only role guards');
 assertIncludes(storeJs, 'pendingOrder', 'store unknown-result submission protection');
@@ -189,9 +181,9 @@ assertIncludes(supplierJs, 'orderItemId', 'supplier shipment item binding');
 assertIncludes(supplierJs, 'expectedVersion', 'supplier version guard');
 assertIncludes(supplierWxml, '发货', 'supplier shipment screen');
 assertIncludes(supplierWxml, '拒单', 'supplier rejection screen');
-assertIncludes(supplierWxml, '同意少收', 'supplier discrepancy accept action');
-assertIncludes(supplierWxml, '安排补发', 'supplier discrepancy replenish action');
-assertIncludes(supplierWxml, '退回核对', 'supplier discrepancy return action');
+assertIncludes(supplierWxml, '退回门店核对', 'supplier discrepancy return action');
+assertIncludes(supplierWxml, '等待门店确认处理方式', 'supplier waits for the store disposition');
+assert.ok(!supplierWxml.includes('data-action="ACCEPT"') && !supplierWxml.includes('data-action="REPLENISH"'), 'supplier cannot decide the store shortage disposition');
 assertIncludes(supplierWxml, '供应商账单', 'supplier statement screen');
 assertIncludes(supplierJs, 'openStatementSource', 'supplier statement source navigation');
 assertIncludes(supplierJs, 'statementRequestSequence', 'same-statement stale response protection');
@@ -226,11 +218,11 @@ assertIncludes(purchaserWxml, '确认并生成订单', 'purchaser confirmation s
 assertIncludes(purchaserWxml, 'changeItemSupplier', 'purchaser per-item supplier assignment');
 assertIncludes(purchaserWxml, '重试', 'purchaser request detail failure recovery');
 assert.ok(!purchaserWxml.includes('刷新明细'), 'purchaser detail must not expose redundant refresh action');
-assertIncludes(purchaserWxml, '下货单详情', 'purchaser request detail screen');
+assertIncludes(purchaserWxml, '下货单确认', 'purchaser request detail screen');
 assertIncludes(purchaserWxml, '待补资金', 'purchaser shortfall signal');
 assertIncludes(purchaserWxml, '拒单通知', 'purchaser rejection notification screen');
 assertIncludes(purchaserWxml, '改派原因', 'purchaser reallocation reason screen');
-assertIncludes(purchaserWxml, '改派供应商', 'purchaser reallocation screen');
+assertIncludes(purchaserWxml, '确认改派', 'purchaser reallocation screen');
 assertIncludes(purchaserWxml, '统计概览', 'purchaser statistics screen');
 assertIncludes(purchaserWxml, 'reports.profit.totals.profit', 'purchaser profit statistics screen');
 

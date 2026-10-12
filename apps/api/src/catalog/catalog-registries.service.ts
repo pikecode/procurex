@@ -30,6 +30,8 @@ export async function validateCategoryParent(tx: Prisma.TransactionClient, paren
   if (!parent) throw new NotFoundException({ code: 'CATEGORY_NOT_FOUND', message: 'Parent category was not found' });
   if (parent.id === id || parent.parentId) throw new ConflictException({ code: 'CATEGORY_DEPTH_EXCEEDED', message: 'Only two category levels are supported' });
   if (id && await tx.category.count({ where: { parentId: id } })) throw new ConflictException({ code: 'CATEGORY_HAS_CHILDREN', message: 'A category with children cannot become a child category' });
+  // Adding a child turns the parent into a grouping node, which would strand the products already filed under it.
+  if (!id && await tx.product.count({ where: { categoryId: parentId } })) throw new ConflictException({ code: 'CATEGORY_ALREADY_HAS_PRODUCTS', message: 'Cannot add a child category to a category that already holds products' });
 }
 
 @Injectable()

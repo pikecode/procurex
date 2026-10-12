@@ -12,7 +12,7 @@
     <view class="product-fields">
       <view class="product-field"><text>货号</text><input value="{{draft.sku}}" data-field="sku" bindinput="onField" disabled="{{saving || uploading}}" maxlength="100" /></view>
       <view class="product-field"><text>商品名称</text><input value="{{draft.name}}" data-field="name" bindinput="onField" disabled="{{saving || uploading}}" maxlength="240" /></view>
-      <view class="product-field"><text>商品分类</text><picker range="{{categories}}" range-key="name" value="{{categoryIndex}}" data-kind="category" bindchange="chooseOption" disabled="{{saving || uploading}}"><view>{{categoryIndex < 0 ? '请选择' : categories[categoryIndex].name}} ›</view></picker></view>
+      <view class="product-field"><text>商品分类</text><picker range="{{categoryOptions}}" range-key="name" value="{{categoryIndex}}" data-kind="category" bindchange="chooseOption" disabled="{{saving || uploading}}"><view>{{categoryIndex < 0 ? '请选择末级分类' : categoryOptions[categoryIndex].name}} ›</view></picker></view>
       <view class="product-field"><text>销售单位</text><picker range="{{units}}" range-key="name" value="{{unitIndex}}" data-kind="unit" bindchange="chooseOption" disabled="{{saving || uploading}}"><view>{{unitIndex < 0 ? '请选择' : units[unitIndex].name}} ›</view></picker></view>
       <view class="product-field"><text>默认销售价</text><input type="digit" value="{{draft.defaultSalesPrice}}" data-field="defaultSalesPrice" bindinput="onField" disabled="{{saving || uploading}}" /></view>
       <view class="product-field"><text>规格</text><input value="{{draft.specification}}" data-field="specification" bindinput="onField" disabled="{{saving || uploading}}" maxlength="240" /></view>

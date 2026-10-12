@@ -5,9 +5,7 @@
     "pages/store/index",
     "pages/supplier/index",
     "pages/purchaser/index",
-    "pages/products/index",
     "pages/profile/index",
-    "pages/prices/index",
     "pages/finance/index",
     "pages/region/index",
     "pages/finance-accounts/index"

@@ -211,6 +211,7 @@ model User {
   exportJobs    ExportJob[]
   notifications Notification[]
   files         FileObject[]
+  shipmentRevisions ShipmentRevision[]
   auditLogs     AuditLog[]
 }
 
@@ -456,6 +457,8 @@ model Category {
   parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
   children  Category[] @relation("CategoryTree")
   products  Product[]
+
+  @@index([parentId])
 }
 
 model Unit {
@@ -494,6 +497,8 @@ model Product {
   templateItems TemplateItem[]
   requestItems  RequestItem[]
   orderItems    OrderItem[]
+
+  @@index([categoryId])
 }
 
 model Brand {
@@ -882,6 +887,7 @@ model Shipment {
   freightConfirmation   FreightConfirmation? @relation(fields: [freightConfirmationId], references: [id])
   items                 ShipmentItem[]
   receipts              Receipt[]
+  revisions             ShipmentRevision[]
 
   @@unique([supplierOrderId, sequence])
   @@index([supplierOrderId, shippedAt])
@@ -902,9 +908,40 @@ model ShipmentItem {
   orderItem           OrderItem               @relation(fields: [orderItemId], references: [id])
   receiptItems        ReceiptItem[]
   gapAllocations      ShipmentGapAllocation[]
+  revisions           ShipmentRevisionItem[]
 
   @@unique([shipmentId, orderItemId])
   @@index([orderItemId])
+}
+
+model ShipmentRevision {
+  id             String                  @id @default(uuid()) @db.Uuid
+  shipmentId     String                  @db.Uuid
+  revision       Int
+  expectedOrderVersion Int
+  note           String?                 @db.VarChar(500)
+  actorUserId    String?                 @db.Uuid
+  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
+  shipment       Shipment                @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  actor          User?                   @relation(fields: [actorUserId], references: [id])
+  items          ShipmentRevisionItem[]
+  evidenceFiles  FileObject[]
+
+  @@unique([shipmentId, revision])
+  @@index([shipmentId, createdAt])
+}
+
+model ShipmentRevisionItem {
+  id                 String           @id @default(uuid()) @db.Uuid
+  shipmentRevisionId String           @db.Uuid
+  shipmentItemId     String           @db.Uuid
+  quantity           Decimal          @db.Decimal(20, 6)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(6)
+  shipmentRevision   ShipmentRevision @relation(fields: [shipmentRevisionId], references: [id], onDelete: Cascade)
+  shipmentItem       ShipmentItem     @relation(fields: [shipmentItemId], references: [id])
+
+  @@unique([shipmentRevisionId, shipmentItemId])
+  @@index([shipmentItemId, createdAt])
 }
 
 model ShipmentGapAllocation {
@@ -1189,12 +1226,14 @@ model FileObject {
   receiptId       String?        @db.Uuid
   rechargeId      String?        @db.Uuid
   clearingId      String?        @db.Uuid
+  shipmentRevisionId String?     @db.Uuid
   createdAt       DateTime       @default(now()) @db.Timestamptz(6)
   owner           User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   payment         PaymentRecord? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
   receipt         Receipt?       @relation(fields: [receiptId], references: [id], onDelete: SetNull)
   recharge        RechargeDocument? @relation(fields: [rechargeId], references: [id], onDelete: SetNull)
   clearing        ClearingDocument? @relation(fields: [clearingId], references: [id], onDelete: SetNull)
+  shipmentRevision ShipmentRevision? @relation(fields: [shipmentRevisionId], references: [id], onDelete: SetNull)
   product         Product?       @relation("ProductImage")
 
   @@index([ownerId, status])
@@ -1202,6 +1241,7 @@ model FileObject {
   @@index([receiptId])
   @@index([rechargeId])
   @@index([clearingId])
+  @@index([shipmentRevisionId])
 }
 
 model Overpayment {

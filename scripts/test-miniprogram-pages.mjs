@@ -22,6 +22,105 @@ function page(role, request = async () => ({}), apiOverrides = {}, wxOverrides =
 }
 
 const tap = (id, extra = {}) => ({ currentTarget: { dataset: { id, ...extra } } });
+test('procurement rejection detail retains cause and opens only its affected order', async () => {
+  const purchaser = page('purchaser', async path => path.startsWith('/supplier-orders/') ? { items: [] } : { id: 'r', status: 'CONFIRMED', supplierOrders: [{ id: 'o' }], items: [] });
+  purchaser.data.rejectionTodos = [{ supplierOrderId: 'o', supplierName: '生鲜供应商', reason: '缺货' }];
+  await purchaser.selectRejection(tap('', { requestId: 'r', supplierOrderId: 'o' }));
+  assert.equal(purchaser.data.rejectionContext.reason, '缺货');
+  assert.equal(purchaser.data.expandedOrders.o, true);
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  assert.ok(markup.includes("item.id === rejectedOrderId"));
+  assert.ok(markup.includes('task-decision-section'));
+  assert.ok(markup.includes('确认改派'));
+});
+test('purchaser rejection detail has only its contextual return action', () => {
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  assert.ok(markup.includes("activeView === 'freight' || activeView === 'rejections' && !requestId"));
+  const purchaser = page('purchaser');
+  Object.assign(purchaser.data, { activeView: 'rejections', taskOrigin: true, taskType: 'rejections', requestId: 'r' });
+  purchaser.backToList();
+  assert.equal(purchaser.data.activeView, 'tasks');
+  assert.equal(purchaser.data.taskType, 'rejections');
+});
+test('confirmed procurement folds order products independently and original request is opt-in', () => {
+  const purchaser = page('purchaser');
+  purchaser.data.selectedRequest = { supplierOrders: [{ id: 'a' }, { id: 'b' }] };
+  assert.equal(purchaser.data.showOriginalRequest, false);
+  assert.deepEqual(plain(purchaser.data.expandedOrders), {});
+  purchaser.toggleSupplierOrder(tap('a'));
+  assert.equal(purchaser.data.expandedOrders.a, true);
+  assert.equal(purchaser.data.expandedOrders.b, undefined);
+  purchaser.toggleSupplierOrder(tap('unknown'));
+  assert.equal(purchaser.data.expandedOrders.unknown, undefined);
+  purchaser.toggleSupplierOrder(tap('a'));
+  assert.equal(purchaser.data.expandedOrders.a, false);
+  purchaser.toggleOriginalRequest();
+  assert.equal(purchaser.data.showOriginalRequest, true);
+  purchaser.toggleOriginalRequest();
+  assert.equal(purchaser.data.showOriginalRequest, false);
+  purchaser.data.selectedRequest = { supplierOrders: [] };
+  purchaser.toggleOriginalRequest();
+  assert.equal(purchaser.data.showOriginalRequest, false);
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  assert.ok(markup.includes('!selectedRequest.supplierOrders.length || showOriginalRequest'));
+  assert.ok(markup.includes('wx:if="{{expandedOrders[item.id]}}"'));
+});
+test('mini-program master data routes and purchaser maintenance commands are retired', () => {
+  const config = JSON.parse(readFileSync('apps/miniprogram/app.json', 'utf8'));
+  const project = JSON.parse(readFileSync('apps/miniprogram/project.config.json', 'utf8'));
+  for (const folder of ['pages/products', 'pages/prices']) {
+    assert.equal(config.pages.includes(`${folder}/index`), false);
+    assert.ok(project.packOptions.ignore.some(item => item.type === 'folder' && item.value === folder));
+  }
+  const purchaser = page('purchaser');
+  assert.equal(purchaser.openProducts, undefined);
+  assert.equal(purchaser.openPrices, undefined);
+});
+test('order status switches preserve search and return to list controls', () => {
+  for (const role of ['purchaser', 'supplier', 'store']) {
+    const scrolls = [];
+    const instance = page(role, undefined, {}, { pageScrollTo: options => scrolls.push(options) });
+    if (role === 'store') {
+      instance.data.orderSearch = 'PR-123';
+      instance.data.requests = [];
+      instance.filterOrders(tap('', { filter: 'completed' }));
+      assert.equal(instance.data.orderSearch, 'PR-123');
+    } else {
+      instance.data.search = '科技园';
+      instance.filterStatus(tap('', { filter: 'all' }));
+      assert.equal(instance.data.search, '科技园');
+    }
+    assert.equal(scrolls[0].scrollTop, 0);
+    assert.equal(scrolls[0].duration, 0);
+  }
+});
+test('purchaser task detail returns to its category', async () => {
+  const purchaser = page('purchaser');
+  purchaser.selectRequest = async () => purchaser.setData({ requestId: 'r' });
+  purchaser.changeTaskType(tap('', { type: 'freight' }));
+  purchaser.changeTaskType(tap('', { type: 'invalid' }));
+  assert.equal(purchaser.data.taskType, 'freight');
+  await purchaser.openTaskRequest(tap('r'));
+  purchaser.backToList();
+  assert.equal(purchaser.data.activeView, 'tasks');
+  assert.equal(purchaser.data.taskType, 'freight');
+  assert.equal(purchaser.data.requestId, '');
+  await purchaser.openTaskRequest(tap('r'));
+  purchaser.changeView(tap('', { view: 'mine' }));
+  assert.equal(purchaser.data.activeView, 'mine');
+  assert.equal(purchaser.data.taskOrigin, false);
+});
+test('purchaser freight opens selected review and preserves category', () => {
+  const purchaser = page('purchaser');
+  purchaser.data.taskType = 'freight';
+  purchaser.data.freightConfirmations = [{ id: 'f', status: 'PENDING' }];
+  purchaser.openTaskFreight(tap('f'));
+  assert.equal(purchaser.data.selectedFreight.id, 'f');
+  purchaser.backToList();
+  assert.equal(purchaser.data.activeView, 'tasks');
+  assert.equal(purchaser.data.taskType, 'freight');
+  assert.equal(purchaser.data.selectedFreight, null);
+});
 test('prices display two decimals and delivery contact calls the separate phone', () => {
   const module = { exports: {} };
   vm.runInNewContext(readFileSync('apps/miniprogram/utils/labels.wxs', 'utf8'), { module });
@@ -1259,9 +1358,12 @@ test('store confirmed request groups items by supplier', async () => {
     { id: 'i1', productId: 'p1', supplierId: 's1', supplierName: '粮油供应商', supplierContactName: '张经理', supplierContactPhone: '13800000001', deliveryContactPhone: '13800000002', supplierAddress: '上海市浦东新区', productName: '大米', salesLineAmount: '12.50' },
     { id: 'i2', productId: 'p1', supplierId: 's2', productName: '大米', salesLineAmount: '8.25' },
     { id: 'i3', productId: 'p2', supplierId: 's1', supplierName: '粮油供应商', productName: '面粉', salesLineAmount: '3.50' },
-  ], supplierOrders: [{ id: 'o2', supplierId: 's2', supplierName: '备用供应商', shipments: [] }] }));
+  ], supplierOrders: [
+    { id: 'o1', supplierId: 's1', supplierName: '粮油供应商', shipments: [] },
+    { id: 'o2', supplierId: 's2', supplierName: '备用供应商', shipments: [] },
+  ] }));
   await store.selectRequest(tap('r1'));
-  const groups = plain(store.data.selectedRequest.itemGroups);
+  const groups = plain(store.data.selectedRequest.supplierOrders);
   assert.equal(groups.length, 2);
   assert.equal(groups[0].supplierName, '粮油供应商');
   assert.equal(groups[0].itemCount, 2);
@@ -1274,21 +1376,21 @@ test('store confirmed request groups items by supplier', async () => {
   assert.equal(groups[0].deliveryContactPhone, '13800000002');
   assert.equal(groups[0].address, '上海市浦东新区');
   store.toggleRequestGroup(tap('', { supplierId: 's1' }));
-  assert.equal(store.data.selectedRequest.itemGroups[0].open, false);
-  assert.equal(store.data.selectedRequest.itemGroups[1].open, true);
+  assert.equal(store.data.selectedRequest.supplierOrders[0].open, false);
+  assert.equal(store.data.selectedRequest.supplierOrders[1].open, false);
   store.toggleRequestGroup(tap('', { supplierId: 's1' }));
-  assert.equal(store.data.selectedRequest.itemGroups[0].open, true);
+  assert.equal(store.data.selectedRequest.supplierOrders[0].open, true);
 });
 
 test('pending store requests do not expose tentative supplier groups', async () => {
   const store = page('store', async () => ({ status: 'PENDING_PROCUREMENT', items: [{ id: 'i', supplierId: 's', supplierName: '暂定供应商', productName: '大米' }], supplierOrders: [] }));
   await store.selectRequest(tap('request'));
-  assert.deepEqual(plain(store.data.selectedRequest.itemGroups), []);
+  assert.deepEqual(plain(store.data.selectedRequest.supplierOrders), []);
   assert.equal(store.data.selectedRequest.items.length, 1);
   const template = readFileSync('apps/miniprogram/pages/store/index.wxml', 'utf8');
   const confirmation = template.slice(template.indexOf('wx:if="{{activeView === \'order\' && orderStep === \'confirm\'}}"'), template.indexOf('wx:if="{{activeView === \'orders\''));
-  assert.ok(!confirmation.includes('group.supplierName'));
-  assert.ok(!confirmation.includes('group.deliveryContactPhone'));
+  assert.ok(!confirmation.includes('order.supplierName'));
+  assert.ok(!confirmation.includes('order.deliveryContactPhone'));
 });
 
 test('purchaser replaces one product supplier only after valid price preview and confirmation', async () => {
@@ -1452,8 +1554,11 @@ test('purchaser thumbnail failures leave an explicit placeholder', async () => {
   assert.equal(purchaser.data.selectedRequest.items[0].imageFailed, true);
   assert.equal(purchaser.data.selectedRequest.items[0].imageUrl, '');
   const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
-  assert.equal((markup.match(/bindtap="previewProductImage"/g) || []).length, 3);
-  assert.ok(markup.includes('暂无图片'));
+  assert.equal((markup.match(/<product-card product="\{\{(product|item)\}\}"/g) || []).length >= 3, true);
+  const component = readFileSync('apps/miniprogram/components/product-card/index.wxml', 'utf8');
+  assert.ok(component.includes("product.imageFailed ? '图片加载失败，点此重试'"));
+  assert.ok(component.includes('bindtap="previewImage"'));
+  assert.ok(component.includes('暂无图片'));
 });
 
 test('supplier adjustment cancellation and ineligible preview do not submit writes', async () => {
@@ -1811,6 +1916,18 @@ test('supplier partial shipment uses remaining quantities and omits zero rows', 
   await supplier.shipOrder(); assert.equal(payload, null); assert.match(supplier.data.error, /超过/);
 });
 
+test('supplier immediately explains shipment quantity above available amount', async () => {
+  let requests = 0;
+  const supplier = page('supplier', async () => { requests++; return {}; });
+  supplier.data.shipmentItems = [{ id: 'item', remainingQuantity: '3', unitName: '箱', shipQuantity: '3' }];
+  supplier.onShipQuantity(input('item', '4'));
+  assert.equal(supplier.data.shipmentItems[0].shipQuantityError, '本次最多可发 3 箱');
+  const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
+  assert.match(markup, /shipment-quantity-error/);
+  assert.match(markup, /disabled="\{\{shipping \|\| rejecting \|\| freightRequesting\}\}" loading="\{\{shipping\}\}" bindtap="shipOrder"/);
+  assert.equal(requests, 0);
+});
+
 test('supplier rejects with operator reason and blocks an empty reason', async () => {
   let payload;
   const supplier = page('supplier', async (path, options) => { payload = options.data; return { status: 'REJECTED' }; });
@@ -1969,15 +2086,61 @@ test('fully shipped supplier order exposes only the open gap as replenishment ca
   assert.equal(supplier.data.shipmentItems[0].shipQuantity, '0');
 });
 
-test('resolved discrepancy is read-only and replenish preserves displayed version', async () => {
+test('supplier finds authorized replenishment even without notification history', async () => {
+  const supplier = page('supplier', async path => {
+    if (path === '/discrepancies') return [{ id: 'gap-discrepancy', status: 'REPLENISH_PENDING' }];
+    if (path === '/notifications') return { notifications: [] };
+    if (path === '/discrepancies/gap-discrepancy') return { id: 'gap-discrepancy', status: 'REPLENISH_PENDING', replenishmentGap: { remainingQuantity: '2' } };
+    throw new Error(`Unexpected request ${path}`);
+  });
+  await supplier.loadDiscrepancies();
+  assert.equal(supplier.data.differenceTasks.length, 1);
+  assert.equal(supplier.data.differenceTasks[0].replenishmentGap.remainingQuantity, '2');
+});
+
+test('supplier replenishment action fills its order line using discrepancy item identity', async () => {
+  const supplier = page('supplier', async path => {
+    if (path === '/discrepancies/d') return { id: 'd', supplierOrderId: 'o', orderItemId: 'i', replenishmentGap: { id: 'g', remainingQuantity: '2', status: 'PENDING' } };
+    if (path === '/supplier-orders/o') return { id: 'o', status: 'SHIPPED', items: [{ id: 'i', quantity: '3', shippedQuantity: '3', replenishmentGaps: [{ id: 'g', remainingQuantity: '2', status: 'PENDING' }] }] };
+    throw new Error(`Unexpected request ${path}`);
+  });
+  await supplier.loadDiscrepancy('d');
+  assert.equal(supplier.data.selectedDiscrepancy.canReplenish, true);
+  await supplier.startReplenishment();
+  assert.equal(supplier.data.activeView, 'orders');
+  assert.equal(supplier.data.orderMode, 'ship');
+  assert.equal(supplier.data.selectedOrder.canShip, true);
+  assert.equal(supplier.data.shipmentItems[0].shipQuantity, '2');
+  assert.equal(supplier.data.shipmentItems[0].gaps[0].allocationQuantity, '2');
+});
+
+test('supplier cannot decide store shortage handling and return preserves displayed version', async () => {
   let payload;
   const supplier = page('supplier', async (path, options) => {
-    if (path.endsWith('/resolve')) { payload = options.data; return { id: 'd1', status: 'REPLENISH_PENDING', missingQuantity: '1', replenishmentGap: { id: 'g1', remainingQuantity: '1' } }; }
+    if (path.endsWith('/resolve')) { payload = options.data; return { id: 'd1', status: 'OPEN', missingQuantity: '1' }; }
     return { id: 'd1', status: 'OPEN', version: 8, missingQuantity: '1', productName: '商品' };
   });
   await supplier.loadDiscrepancy('d1'); await supplier.resolveDiscrepancy(tap('', { action: 'REPLENISH' }));
+  assert.equal(payload, undefined);
+  supplier.data.discrepancyReason = '请门店复核';
+  await supplier.resolveDiscrepancy(tap('', { action: 'RETURN' }));
   assert.equal(payload.expectedVersion, 8); assert.equal(supplier.data.selectedDiscrepancy.productName, '商品');
   payload = null; await supplier.resolveDiscrepancy(tap('', { action: 'ACCEPT' })); assert.equal(payload, null);
+});
+
+test('store can choose replenish or settle shortage using the current discrepancy version', async () => {
+  const calls = [];
+  const store = page('store', async (path, options) => {
+    calls.push({ path, options });
+    if (path === '/discrepancies') return [{ id: 'd1', version: 4, status: 'OPEN', productName: '大米', missingQuantity: '2' }];
+    return { id: 'd1', status: 'REPLENISH_PENDING' };
+  }, {}, { showModal: options => options.success({ confirm: true }) });
+  await store.loadDiscrepancies(false);
+  store.resolveReceiptDiscrepancy(tap('d1', { action: 'REPLENISH' }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const command = calls.find(call => call.path.endsWith('/resolve'));
+  assert.deepEqual(plain(command.options.data), { expectedVersion: 4, action: 'REPLENISH' });
+  assert.ok(command.options.header['idempotency-key']);
 });
 
 test('payment rejection requires actual reason and keeps displayed version', async () => {

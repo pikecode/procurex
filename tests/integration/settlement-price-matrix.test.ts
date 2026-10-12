@@ -90,6 +90,9 @@ for (const mode of ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM'] a
         await db.fundingAllocation.deleteMany({ where: { store: storeWhere } });
         await db.accountLedger.deleteMany({ where: { account: storeWhere } });
         await db.receipt.deleteMany({ where: { shipment: { supplierOrder: storeWhere } } });
+        await db.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrder: storeWhere } } } });
+        await db.shipmentRevision.deleteMany({ where: { shipment: { supplierOrder: storeWhere } } });
+        await db.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: storeWhere } } });
         await db.shipment.deleteMany({ where: { supplierOrder: storeWhere } });
         await db.freightConfirmation.deleteMany({ where: { supplierOrder: storeWhere } });
         await db.supplierOrder.deleteMany({ where: storeWhere }); await db.purchaseRequest.deleteMany({ where: storeWhere });

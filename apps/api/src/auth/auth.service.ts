@@ -77,7 +77,7 @@ export class AuthService {
         displayName: user.displayName,
         roles: user.roles.map((entry) => entry.role.code).sort(),
         scope: toScope(user.scopes[0]),
-        ...(this.workbenchEnabled() && user.roles.some(entry => entry.role.code === 'ADMIN') ? { testWorkbenchEnabled: true } : {}),
+        ...(this.workbenchEnabled(user.username) && user.roles.some(entry => entry.role.code === 'ADMIN') ? { testWorkbenchEnabled: true } : {}),
       },
     };
   }
@@ -105,7 +105,7 @@ export class AuthService {
         displayName: session.user.displayName,
         roles: session.user.roles.map((entry) => entry.role.code).sort(),
         scope: toScope(session.user.scopes[0]),
-        ...(this.workbenchEnabled() && session.user.roles.some(entry => entry.role.code === 'ADMIN') ? { testWorkbenchEnabled: true } : {}),
+        ...(this.workbenchEnabled(session.user.username) && session.user.roles.some(entry => entry.role.code === 'ADMIN') ? { testWorkbenchEnabled: true } : {}),
       },
     };
   }
@@ -122,19 +122,22 @@ export class AuthService {
     });
   }
 
-  private workbenchEnabled(): boolean {
-    return process.env.NODE_ENV !== 'production' && process.env.TEST_WORKBENCH_ENABLED === 'true';
+  private workbenchEnabled(username: string): boolean {
+    if (process.env.NODE_ENV !== 'production') return process.env.TEST_WORKBENCH_ENABLED === 'true';
+    return process.env.ACCEPTANCE_WORKBENCH_ENABLED === 'true' &&
+      configuredNames('ACCEPTANCE_WORKBENCH_ADMIN_USERNAMES').includes(username) &&
+      configuredNames('ACCEPTANCE_WORKBENCH_USERNAMES').length > 0;
   }
 
   private assertWorkbench(auth: AuthenticatedSession): void {
-    if (!this.workbenchEnabled() || !auth.user.roles.includes('ADMIN') || auth.user.testIdentity) {
+    if (!this.workbenchEnabled(auth.user.username) || !auth.user.roles.includes('ADMIN') || auth.user.testIdentity) {
       throw new ForbiddenException({ code: 'TEST_WORKBENCH_FORBIDDEN', message: '当前环境或账号不允许使用测试身份' });
     }
   }
 
   async testIdentities(auth: AuthenticatedSession) {
     this.assertWorkbench(auth);
-    const usernames = (process.env.TEST_WORKBENCH_USERNAMES || '').split(',').map(value => value.trim()).filter(Boolean);
+    const usernames = configuredNames(process.env.NODE_ENV === 'production' ? 'ACCEPTANCE_WORKBENCH_USERNAMES' : 'TEST_WORKBENCH_USERNAMES');
     const users = await this.database.client.user.findMany({ where: { username: { in: usernames }, status: UserStatus.ACTIVE },
       include: { roles: { include: { role: true } }, scopes: { include: { stores: true, store: true, supplier: true } } }, orderBy: { username: 'asc' } });
     return users.map(user => ({ id: user.id, username: user.username, displayName: user.displayName,
@@ -155,6 +158,10 @@ export class AuthService {
       testIdentity: { userId: target.id, username: target.username, displayName: target.displayName },
       scope: { ...(target.scope || { type: 'GLOBAL' }), testUserId: target.id, testUsername: target.username } };
   }
+}
+
+function configuredNames(key: string): string[] {
+  return (process.env[key] || '').split(',').map(value => value.trim()).filter(Boolean);
 }
 
 function toScope(scope?: { scopeType: string; storeId: string | null; supplierId: string | null; stores?: Array<{ storeId: string }> }) {

@@ -292,6 +292,8 @@ for (const mode of ['STORED_VALUE', 'CREDIT'] as const) {
       await db.discrepancy.deleteMany({ where: { orderItem: { supplierOrderId: { in: ids } } } });
       await db.receiptItem.deleteMany({ where: { receipt: { shipment: { supplierOrderId: { in: ids } } } } });
       await db.receipt.deleteMany({ where: { shipment: { supplierOrderId: { in: ids } } } });
+      await db.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrderId: { in: ids } } } } });
+      await db.shipmentRevision.deleteMany({ where: { shipment: { supplierOrderId: { in: ids } } } });
       await db.shipmentItem.deleteMany({ where: { shipment: { supplierOrderId: { in: ids } } } });
       await db.shipment.deleteMany({ where: { supplierOrderId: { in: ids } } });
       await db.orderItem.deleteMany({ where: { supplierOrderId: { in: ids } } });

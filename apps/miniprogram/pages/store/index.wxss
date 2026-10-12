@@ -96,6 +96,11 @@ button::after { border: 0; }
 .total-row { font-size: 29rpx; font-weight: 700; border-bottom: 1rpx solid #e9eeeb; padding-bottom: 22rpx; margin-bottom: 10rpx; }
 .shortfall-row { color: #ae6424; }
 .order-filters { padding: 0 28rpx; background: #fff; }
+.receipt-todo-banner { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; margin: 18rpx 28rpx; padding: 20rpx 22rpx; background: #eef7f2; border: 1rpx solid #cfe5d7; border-radius: 8rpx; }
+.receipt-todo-banner > view { display: flex; flex-direction: column; gap: 6rpx; min-width: 0; }
+.receipt-todo-title { color: #176b4c; font-size: 26rpx; font-weight: 700; }
+.receipt-todo-count { color: #64746b; font-size: 22rpx; }
+.receipt-todo-action { flex-shrink: 0; color: #176b4c; font-size: 24rpx; font-weight: 600; }
 .filter-track { display: flex; justify-content: space-between; gap: 12rpx; }
 .filter-option { padding: 26rpx 0 20rpx; font-size: 24rpx; color: #718078; border-bottom: 4rpx solid transparent; white-space: nowrap; }
 .filter-selected { color: #167e5a; border-color: #167e5a; font-weight: 700; }
@@ -111,8 +116,10 @@ button::after { border: 0; }
 .request-supplier-group .section-title { flex: 1; min-width: 0; }
 .supplier-group-heading { padding: 4rpx 0; }
 .supplier-group-name { display: flex; align-items: center; gap: 12rpx; }
+.supplier-group-name .status-label { margin-left: auto; }
 .supplier-group-summary { display: flex; justify-content: space-between; gap: 16rpx; padding: 10rpx 0 0 28rpx; font-size: 23rpx; color: #718078; }
 .supplier-fold-label { color: #167e5a; flex-shrink: 0; }
+.supplier-order-number { display: block; margin-top: 18rpx; }
 .supplier-contact-info { padding: 18rpx 0; margin-top: 16rpx; border-top: 1rpx solid #e9eeeb; border-bottom: 1rpx solid #e9eeeb; color: #718078; font-size: 24rpx; line-height: 1.6; }
 .supplier-contact-info > text { display: block; overflow-wrap: anywhere; }
 .supplier-phone-row { display: flex; align-items: center; gap: 16rpx; }
@@ -138,6 +145,9 @@ button::after { border: 0; }
 .receipt-quantity { width: 146rpx; height: 72rpx; padding: 0 12rpx; text-align: center; font-size: 28rpx; }
 .locked-label { display: block; color: #8b957e; font-size: 22rpx; margin-top: 12rpx; }
 .receipt-bar > text { flex: 1; font-size: 24rpx; }
+.receipt-submit-summary { flex: 1; min-width: 0; font-size: 24rpx; }
+.receipt-submit-hint { display: block; margin-top: 6rpx; color: #66746c; font-size: 22rpx; }
+.receipt-field-error, .receipt-shortage { display: block; margin-top: 12rpx; font-size: 24rpx; color: #b63a32; }
 .result-banner { margin: 20rpx 28rpx; display: flex; gap: 18rpx; padding: 20rpx; background: #eaf6ee; font-size: 27rpx; }
 .result-banner > view { flex: 1; min-width: 0; }
 .account-balance { display: block; font-size: 44rpx; font-weight: 700; margin: 24rpx 0; overflow-wrap: anywhere; }
@@ -175,3 +185,7 @@ button::after { border: 0; }
 .mine-identity { margin-top: 18rpx; }
 .mine-secondary { margin-top: 18rpx; padding: 0 28rpx; }
 .mine-secondary button { width: 100%; margin: 0; }
+.order-list-controls { position: sticky; top: 0; z-index: 15; background: #fff; border-bottom: 1rpx solid #e2e6e4; }
+.order-list-controls .section-band { margin: 0; padding-top: 16rpx; padding-bottom: 12rpx; }
+.order-list-controls .filter-track { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; }
+.order-list-controls .filter-option { flex-shrink: 0; }

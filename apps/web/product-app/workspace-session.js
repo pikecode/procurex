@@ -113,6 +113,8 @@ export function createWorkspaceClient({ base, storage, fetcher = fetch, onExpire
         STORE_GROUP_NAME_EXISTS: '分组名称已存在，请使用其他名称。', STORE_GROUP_NOT_FOUND: '分组已变更或删除，请刷新后重新选择。',
         STORE_GROUP_DISABLED: '该分组已停用，不能再分配门店。', STORE_GROUP_IN_USE: '该分组仍有门店，不能删除，请先调整门店归属。',
         CATEGORY_HAS_CHILDREN: '该分类还有子分类，不能删除或改为二级分类。', CATALOG_RECORD_IN_USE: '该资料已被商品或单位换算引用，不能删除。',
+        CATEGORY_MUST_BE_LEAF: '商品只能归属到没有子分类的末级分类。',
+        CATEGORY_ALREADY_HAS_PRODUCTS: '该分类下已有商品，不能新增子分类，请先调整商品归属。',
         UNIT_HISTORY_SNAPSHOT_REQUIRED: '该单位已用于历史交易或换算，不能修改交易单位。',
         UNIT_CONVERSION_INVALID: '单位或换算数量无效，请检查采购单位、比例和数量精度。',
         PRODUCT_SKU_EXISTS: '该货号已被其他商品使用。',

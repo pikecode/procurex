@@ -29,7 +29,10 @@
   },
   "simulatorPluginLibVersion": {},
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "folder", "value": "pages/products" },
+      { "type": "folder", "value": "pages/prices" }
+    ],
     "include": []
   },
   "editorSetting": {}

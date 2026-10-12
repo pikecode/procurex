@@ -20,6 +20,8 @@ function groupAssignments(items) {
 Page({
   data: {
     activeView: 'tasks',
+    taskType: 'requests',
+    taskOrigin: false,
     procurementTasks: [],
     pendingFreight: [],
     pendingCommand: null,
@@ -35,12 +37,15 @@ Page({
     selectedRequest: null,
     requestId: '',
     rejectedOrderId: '',
+    rejectionContext: {},
     targetSupplierId: '',
     suppliers: [],
     supplierIndex: -1,
     assignmentItems: [],
     assignmentGroups: [],
     showPriceDetails: false,
+    expandedOrders: {},
+    showOriginalRequest: false,
     reallocateReason: '供应商拒单后改派',
     reportRange: view.monthRange(),
     reports: {
@@ -65,7 +70,7 @@ Page({
     const user = api.openWorkspace('purchaser');
     if (!user) return;
     if (this.data.user.id !== user.id) {
-      this.setData({ visibleRequests: [], search: '', statusFilter: 'all', activeView: 'tasks' });
+      this.setData({ visibleRequests: [], search: '', statusFilter: 'all', activeView: 'tasks', taskType: 'requests', taskOrigin: false });
       this.setData({ requests: [], rejectionTodos: [], selectedRequest: null, requestId: '', rejectedOrderId: '', targetSupplierId: '',
         suppliers: [], supplierIndex: -1, assignmentItems: [], assignmentGroups: [], showPriceDetails: false, detailError: '', result: null, freightConfirmations: [], selectedFreight: null, procurementTasks: [], pendingFreight: [],
         reports: { orderAmount: null, productQuantity: null, profit: null } });
@@ -112,34 +117,46 @@ Page({
     this.setData({ activeView: event.currentTarget.dataset.view, error: '' });
   },
 
+  changeTaskType(event) {
+    const taskType = event.currentTarget.dataset.type;
+    if (['requests', 'rejections', 'freight'].includes(taskType)) this.setData({ taskType });
+  },
+
+  openTaskRejection(event) {
+    if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
+    this.setData({ activeView: 'rejections', taskOrigin: true, result: null });
+    return this.selectRejection(event);
+  },
+
   openTaskRequest(event) {
     if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
-    this.setData({ activeView: 'orders' });
+    this.setData({ activeView: 'orders', taskOrigin: true, result: null });
     return this.selectRequest(event);
   },
   openTaskFreight(event) {
     if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
-    this.setData({ activeView: 'freight' });
+    this.setData({ activeView: 'freight', taskOrigin: true, result: null });
     this.selectFreight(event);
-  },
-
-  openProducts() {
-    if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
-    wx.navigateTo({ url: '/pages/products/index' });
-  },
-
-  openPrices() {
-    if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
-    wx.navigateTo({ url: '/pages/prices/index' });
   },
 
   backToList() {
     if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
-    this.setData({ requestId: '', selectedRequest: null, assignmentItems: [], assignmentGroups: [], showPriceDetails: false, detailError: '', selectedFreight: null, rejectedOrderId: '', targetSupplierId: '', supplierIndex: -1 });
+    this.setData({ ...(this.data.taskOrigin ? { activeView: 'tasks' } : {}), taskOrigin: false, result: null, requestId: '', selectedRequest: null, assignmentItems: [], assignmentGroups: [], showPriceDetails: false, detailError: '', selectedFreight: null, rejectedOrderId: '', targetSupplierId: '', supplierIndex: -1 });
   },
 
   togglePriceDetails(event) {
     this.setData({ showPriceDetails: !!event.detail.value });
+  },
+
+  toggleSupplierOrder(event) {
+    const id = event.currentTarget.dataset.id;
+    if (!this.data.selectedRequest?.supplierOrders?.some(order => order.id === id)) return;
+    this.setData({ expandedOrders: { ...this.data.expandedOrders, [id]: !this.data.expandedOrders[id] } });
+  },
+
+  toggleOriginalRequest() {
+    if (!this.data.selectedRequest?.supplierOrders?.length) return;
+    this.setData({ showOriginalRequest: !this.data.showOriginalRequest });
   },
 
   onSearch(event) {
@@ -150,6 +167,7 @@ Page({
   filterStatus(event) {
     this.setData({ statusFilter: event.currentTarget.dataset.filter });
     this.refreshList();
+    if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
 
   nextOrders() { this.refreshList((this.data.orderLimit || 10) + 10); },
@@ -193,6 +211,7 @@ Page({
     this.setData({
       requestId: event.currentTarget.dataset.requestId,
       rejectedOrderId: event.currentTarget.dataset.supplierOrderId,
+      rejectionContext: this.data.rejectionTodos.find(row => row.supplierOrderId === event.currentTarget.dataset.supplierOrderId) || {},
       targetSupplierId: '', supplierIndex: -1, selectedRequest: null
     });
     await this.loadRequestDetail(this.data.requestId);
@@ -299,7 +318,9 @@ Page({
         }
       }));
       if (this.data.requestId !== id || sequence !== this.detailRequestSequence) return;
-      this.setData({ selectedRequest, assignmentItems: [], assignmentGroups: [] });
+      const sameRequest = this.data.selectedRequest?.id === selectedRequest.id;
+      this.setData({ selectedRequest, assignmentItems: [], assignmentGroups: [],
+        ...(!sameRequest ? { expandedOrders: this.data.rejectedOrderId ? { [this.data.rejectedOrderId]: true } : {}, showOriginalRequest: false } : {}) });
       if (['PENDING_PROCUREMENT', 'PENDING_FUNDS'].includes(selectedRequest.status) && !(selectedRequest.supplierOrders || []).length) {
         const catalog = await api.request(`/purchase-requests/${id}/edit-catalog`);
         if (this.data.requestId !== id || sequence !== this.detailRequestSequence) return;
@@ -319,18 +340,36 @@ Page({
 
   async loadProductImages(request, sequence) {
     const items = [...(request.items || []), ...(request.supplierOrders || []).flatMap(order => order.items || [])];
-    const files = [...new Map(items.filter(item => item.imageFile?.id).map(item => [item.imageFile.id, item.imageFile])).values()];
+    const files = [...new Map(items.map(item => item.imageFile || (item.imageFileId ? { id: item.imageFileId } : null)).filter(file => file?.id).map(file => [file.id, file])).values()];
+    for (const file of files) this.updateProductImage(file.id, { imageLoading: true, imageFailed: false });
     for (const file of files) {
       let imageUrl = '', imageFailed = false;
       try { imageUrl = await api.imagePath(file); } catch { imageFailed = true; }
       if (this.data.requestId !== request.id || this.detailRequestSequence !== sequence) return;
-      const update = item => item.imageFile?.id === file.id ? { ...item, imageUrl, imageFailed } : item;
-      const current = this.data.selectedRequest;
-      this.setData({ selectedRequest: { ...current, items: (current.items || []).map(update),
-        supplierOrders: (current.supplierOrders || []).map(order => ({ ...order, items: (order.items || []).map(update) })) },
-        assignmentItems: this.data.assignmentItems.map(update),
-        assignmentGroups: this.data.assignmentGroups.map(group => ({ ...group, items: group.items.map(update) })) });
+      this.updateProductImage(file.id, { imageUrl, imageFailed, imageLoading: false });
     }
+  },
+
+  updateProductImage(fileId, imageState) {
+    const update = item => (item.imageFile?.id || item.imageFileId) === fileId ? { ...item, ...imageState } : item;
+    const current = this.data.selectedRequest;
+    if (!current) return;
+    this.setData({ selectedRequest: { ...current, items: (current.items || []).map(update),
+      supplierOrders: (current.supplierOrders || []).map(order => ({ ...order, items: (order.items || []).map(update) })) },
+      assignmentItems: this.data.assignmentItems.map(update),
+      assignmentGroups: this.data.assignmentGroups.map(group => ({ ...group, items: group.items.map(update) })) });
+  },
+
+  async retryProductImage(event) {
+    const productId = event.detail?.productId;
+    const items = [...(this.data.selectedRequest?.items || []), ...(this.data.selectedRequest?.supplierOrders || []).flatMap(order => order.items || [])];
+    const item = items.find(row => row.id === productId);
+    const file = item?.imageFile || (item?.imageFileId ? { id: item.imageFileId } : null);
+    if (!file?.id || !this.data.requestId) return;
+    this.updateProductImage(file.id, { imageLoading: true, imageFailed: false });
+    let imageUrl = '', imageFailed = false;
+    try { imageUrl = await api.imagePath(file); } catch { imageFailed = true; }
+    this.updateProductImage(file.id, { imageUrl, imageFailed, imageLoading: false });
   },
 
   previewProductImage(event) {

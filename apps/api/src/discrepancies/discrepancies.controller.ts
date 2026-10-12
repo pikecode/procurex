@@ -29,20 +29,20 @@ export class DiscrepanciesController {
   ) {}
 
   @Get()
-  @RequireRoles('ADMIN', 'SUPPLIER')
+  @RequireRoles('ADMIN', 'SUPPLIER', 'STORE', 'STORE_FINANCE')
   list(@Req() request: AuthenticatedRequest) {
-    return this.discrepanciesService.list(supplierScope(request));
+    return this.discrepanciesService.list(discrepancyScope(request));
   }
 
   @Get(':id')
-  @RequireRoles('ADMIN', 'SUPPLIER')
+  @RequireRoles('ADMIN', 'SUPPLIER', 'STORE', 'STORE_FINANCE')
   get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<DiscrepancyView> {
     throwIfInvalid(validateUuid('id', id));
-    return this.discrepanciesService.get(id, supplierScope(request));
+    return this.discrepanciesService.get(id, discrepancyScope(request));
   }
 
   @Post(':id/resolve')
-  @RequireRoles('ADMIN', 'SUPPLIER')
+  @RequireRoles('ADMIN', 'SUPPLIER', 'STORE')
   async resolve(
     @Req() request: AuthenticatedRequest,
     @CurrentAuth() auth: AuthenticatedSession,
@@ -60,12 +60,12 @@ export class DiscrepanciesController {
     });
 
     if (command.state === 'replay') {
-      if (supplierScope(request)) await this.discrepanciesService.get(input.id, supplierScope(request));
+      if (discrepancyScope(request)) await this.discrepanciesService.get(input.id, discrepancyScope(request));
       return command.command.responseBody as DiscrepancyView;
     }
 
     return this.commandsService.performAtomic(command, async tx => {
-      const result = await this.discrepanciesService.resolve(input.id, input.resolve, supplierScope(request), tx);
+      const result = await this.discrepanciesService.resolve(input.id, input.resolve, discrepancyScope(request), tx);
       await this.commandsService.succeed({
         commandId: command.command.id,
         resourceType: 'Discrepancy',
@@ -94,10 +94,13 @@ export class DiscrepanciesController {
   }
 }
 
-function supplierScope(request: AuthenticatedRequest): { type: string; supplierId?: string } | undefined {
+function discrepancyScope(request: AuthenticatedRequest): { type: string; supplierId?: string; storeId?: string } | undefined {
   const scope = request.auth?.user.scope;
   if (scope?.type === 'SUPPLIER' && !scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
-  return scope?.type === 'SUPPLIER' ? scope : undefined;
+  if ((scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE') && !scope.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+  if (scope?.type === 'SUPPLIER') return scope;
+  if (scope?.type === 'STORE' || scope?.type === 'STORE_FINANCE') return { type: 'STORE', storeId: scope.storeId };
+  return undefined;
 }
 
 function auditScope(auth: AuthenticatedSession) {

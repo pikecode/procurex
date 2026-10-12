@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import { constants } from 'node:fs';
+import { copyFile, readFile, writeFile, rename, symlink, stat, readlink, chmod } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { parse } from 'dotenv';
+
+const release = process.argv[2];
+assert.match(release || '', /^[0-9]{8}-[a-zA-Z0-9-]+$/);
+const root = '/opt/procurex';
+const target = `${root}/releases/${release}`;
+assert.ok((await stat(target)).isDirectory());
+const previous = await readlink(`${root}/current`);
+const envPath = `${root}/shared/compose.env`;
+const source = await readFile(envPath, 'utf8');
+assert.ok(parse(source).RELEASE, 'Missing current release');
+assert.equal(source.split('\n').filter(line => /^RELEASE=/.test(line)).length, 1, 'Ambiguous release setting');
+await copyFile(envPath, `${envPath}.before-${release}`, constants.COPYFILE_EXCL);
+await chmod(`${envPath}.before-${release}`, 0o600);
+const temporary = `${envPath}.${randomUUID()}`;
+await writeFile(temporary, source.replace(/^RELEASE=.*$/m, `RELEASE=${release}`), { mode: 0o600, flag: 'wx' });
+await rename(temporary, envPath);
+const pointer = `${root}/current-${randomUUID()}`;
+await symlink(target, pointer);
+await rename(pointer, `${root}/current`);
+console.log(JSON.stringify({ release, previous, current: target }));

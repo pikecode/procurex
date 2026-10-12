@@ -23,8 +23,8 @@ Page({
   toggleRequestGroup(event) {
     if (!this.data.selectedRequest) return;
     const supplierId = event.currentTarget.dataset.supplierId;
-    const itemGroups = this.data.selectedRequest.itemGroups.map(group => group.supplierId === supplierId ? { ...group, open: !group.open } : group);
-    this.setData({ selectedRequest: { ...this.data.selectedRequest, itemGroups } });
+    const supplierOrders = this.data.selectedRequest.supplierOrders.map(order => order.supplierId === supplierId ? { ...order, open: !order.open } : order);
+    this.setData({ selectedRequest: { ...this.data.selectedRequest, supplierOrders } });
   },
   data: {
     activeView: 'order',
@@ -80,6 +80,8 @@ Page({
     shipmentId: '',
     shortReceivedQuantity: '0',
     shipmentTodos: [],
+    discrepancies: [],
+    resolvingDiscrepancy: false,
     reportRange: {
       from: '2026-09-01',
       to: '2026-09-30'
@@ -240,7 +242,7 @@ Page({
     if (product) this.updateCart(product, event.detail.value);
   },
 
-  filterOrders(event) { this.setData({ orderFilter: event.currentTarget.dataset.filter }); this.refreshOrders(); },
+  filterOrders(event) { this.setData({ orderFilter: event.currentTarget.dataset.filter }); this.refreshOrders(); if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 0 }); },
   filterFunding(event) { this.setData({ fundingFilter: event.detail.value ? 'unpaid' : 'all' }); this.refreshOrders(); },
   nextOrders() { this.refreshOrders((this.data.orderLimit || 10) + 10); },
   onOrderSearch(event) { this.setData({ orderSearch: event.detail.value }); this.refreshOrders(); },
@@ -354,8 +356,18 @@ Page({
 
   refreshReceiptSummary() {
     const shipment = this.data.selectedShipment;
-    this.setData({ receiptHasDifference: this.data.receiptItems.some(item => !item.receiptLocked && Number(item.receivedQuantity) !== Number(item.shippedQuantity)),
-      receiptCanSubmit: !!shipment && (!shipment.currentReceiptRevision || this.data.receiptItems.some(item => !item.receiptLocked && Number(item.receivedQuantity) !== Number(item.currentReceivedQuantity))) });
+    const receiptItems = this.data.receiptItems.map(item => {
+      let quantityError = '';
+      try { quantity.validate(item.receivedQuantity, { allowZero: true, max: item.shippedQuantity }); }
+      catch (error) { quantityError = error.message.includes('超过') ? `实收不能超过本批发货 ${item.shippedQuantity} ${item.unitName || ''}` : error.message; }
+      return { ...item, quantityError, missingQuantity: quantityError ? '0' : quantity.remaining(item.shippedQuantity, item.receivedQuantity) };
+    });
+    const invalid = receiptItems.some(item => !item.receiptLocked && item.quantityError);
+    this.setData({ receiptItems,
+      receiptDifferenceCount: receiptItems.filter(item => !item.receiptLocked && !item.quantityError && Number(item.missingQuantity) > 0).length,
+      receiptQuantityInvalid: invalid,
+      receiptHasDifference: receiptItems.some(item => !item.receiptLocked && Number(item.receivedQuantity) !== Number(item.shippedQuantity)),
+      receiptCanSubmit: !!shipment && !invalid && (!shipment.currentReceiptRevision || receiptItems.some(item => !item.receiptLocked && Number(item.receivedQuantity) !== Number(item.currentReceivedQuantity))) });
   },
 
   fillReceipt() {
@@ -449,10 +461,18 @@ Page({
       if (this.data.selectedRequestId !== id) return;
       const names = new Map(this.data.products.map(product => [product.id, product.name]));
       const items = detail.items.map(item => ({ ...item, productName: item.productName || names.get(item.productId) || '商品' }));
+      const supplierOrders = detail.supplierOrders || [];
+      const itemGroups = storeView.requestGroups(items, supplierOrders);
       this.setData({ selectedRequest: { ...detail, stage: storeView.orderStage(detail), stageTone: storeView.orderStageTone(detail), submittedDate: storeView.dateText(detail.submittedAt),
-        items, itemGroups: storeView.requestGroups(items, detail.supplierOrders || []),
-        supplierOrders: (detail.supplierOrders || []).map(order => ({ ...order, fulfillmentTone: order.rejectionHandled ? 'done' : storeView.statusTone(order.fulfillmentStatus), shipments: (order.shipments || []).map(shipment => ({ ...shipment,
-          shippedDate: storeView.dateText(shipment.shippedAt), receivedDate: storeView.dateText(shipment.receivedAt) })) })) } });
+        items, supplierOrders: supplierOrders.map(order => {
+          const group = itemGroups.find(itemGroup => itemGroup.supplierId === order.supplierId);
+          return { ...order, open: group ? group.open : true, items: group ? group.items : [], itemCount: group ? group.itemCount : 0,
+            groupAmount: group ? group.groupAmount : '0.00', contactName: group?.contactName || '', contactPhone: group?.contactPhone || '',
+            deliveryContactPhone: group?.deliveryContactPhone || order.deliveryContactPhone || '', address: group?.address || '',
+            fulfillmentTone: order.rejectionHandled ? 'done' : storeView.statusTone(order.fulfillmentStatus),
+            shipments: (order.shipments || []).map(shipment => ({ ...shipment,
+              shippedDate: storeView.dateText(shipment.shippedAt), receivedDate: storeView.dateText(shipment.receivedAt) })) };
+        }) } });
     } catch (error) {
       if (this.data.selectedRequestId === id) this.setData({ error: error.message });
     } finally {
@@ -463,7 +483,7 @@ Page({
   async loadWork() {
     this.setData({ loading: true, error: '' });
     try {
-      const tasks = [this.loadRequests(false), this.loadShipments(false), this.loadReports(false), this.loadStoreProfile()];
+      const tasks = [this.loadRequests(false), this.loadShipments(false), this.loadDiscrepancies(false), this.loadReports(false), this.loadStoreProfile()];
       if (this.data.storeId) {
         tasks.push(this.loadAccount(false), this.loadStatements());
         if (this.data.canWrite) tasks.push(this.loadCatalog());
@@ -479,7 +499,8 @@ Page({
     try {
       const requests = await api.request('/purchase-requests');
       this.setData({ requests: Array.isArray(requests) ? requests.map(order => ({ ...order, submittedDate: storeView.dateText(order.submittedAt),
-        stage: storeView.orderStage(order), stageTone: storeView.orderStageTone(order), progressText: order.supplierCount ? `${order.supplierCount}家供应商 · ${order.completedSupplierCount || 0}家已完成` : '等待采购分配' })) : [] });
+        stage: storeView.orderStage(order), stageTone: storeView.orderStageTone(order), progressText: order.status === 'PENDING_FUNDS' ? '等待补足资金 · 采购尚未确认' :
+          order.rejectedSupplierCount ? '供应商异常处理中 · 等待采购调整' : order.supplierCount ? `已拆分 ${order.supplierCount} 家供应商履约 · ${order.completedSupplierCount || 0} 家完成` : '等待采购确认' })) : [] });
       this.refreshOrders();
     } catch (error) {
       this.setData({ error: error.message });
@@ -515,6 +536,36 @@ Page({
     } finally {
       if (toggleLoading) this.setData({ loading: false });
     }
+  },
+
+  async loadDiscrepancies(toggleLoading = true) {
+    if (!this.data.canWrite) return;
+    if (toggleLoading) this.setData({ loading: true, error: '' });
+    try {
+      const rows = await api.request('/discrepancies');
+      this.setData({ discrepancies: Array.isArray(rows) ? rows : [] });
+    } catch (error) {
+      this.setData({ error: error.message });
+    } finally {
+      if (toggleLoading) this.setData({ loading: false });
+    }
+  },
+
+  async resolveReceiptDiscrepancy(event) {
+    if (this.data.resolvingDiscrepancy || !this.data.canWrite) return;
+    const row = this.data.discrepancies.find(item => item.id === event.currentTarget.dataset.id);
+    const action = event.currentTarget.dataset.action;
+    if (!row || row.status !== 'OPEN' || !['REPLENISH', 'ACCEPT'].includes(action)) return;
+    const labels = { REPLENISH: '要求供应商补发', ACCEPT: '按实收数量结算' };
+    wx.showModal({ title: labels[action], content: `${row.productName} 少收 ${row.missingQuantity}，确认${labels[action]}？`, success: async result => {
+      if (!result.confirm) return;
+      this.setData({ resolvingDiscrepancy: true, error: '' });
+      try {
+        await api.request(`/discrepancies/${row.id}/resolve`, { method: 'POST', data: { expectedVersion: row.version, action }, header: { 'idempotency-key': `mini-store-discrepancy-${action}-${Date.now()}` } });
+        await this.loadWork();
+      } catch (error) { this.setData({ error: error.message }); }
+      finally { this.setData({ resolvingDiscrepancy: false }); }
+    } });
   },
 
   async loadAccount(toggleLoading = true) {

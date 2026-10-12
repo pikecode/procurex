@@ -65,6 +65,8 @@ const messages: Record<string, string> = {
   STORE_GROUP_DISABLED: '该分组已停用，请重新选择。', STORE_GROUP_NOT_FOUND: '分组不存在，请刷新后重新选择。',
   COLLECTION_ACCOUNT_NAME_EXISTS: '收款账户名称已存在',
   CATEGORY_DEPTH_EXCEEDED: '分类最多支持两级，请选择一级分类。', CATEGORY_HAS_CHILDREN: '该分类还有子分类，请先处理子分类。',
+  CATEGORY_MUST_BE_LEAF: '商品只能归属到没有子分类的分类，请选择末级分类。',
+  CATEGORY_ALREADY_HAS_PRODUCTS: '该分类下已有商品，不能新增子分类，请先调整商品归属。',
   CATALOG_RECORD_IN_USE: '该资料已被商品或单位换算引用，不能删除。', BRAND_NAME_EXISTS: '品牌名称已存在。',
   UNIT_HISTORY_SNAPSHOT_REQUIRED: '历史订单仍引用此单位名称，暂不能更名。',
   PRODUCT_NOT_FOUND: '商品不存在，请刷新列表。', SUPPLIER_NOT_FOUND: '供应商不存在，请刷新列表。',

@@ -53,12 +53,14 @@ add(finance, ['POST /collection-accounts', 'PATCH /collection-accounts/:id', 'PO
   'POST /stores/:id/clearings/preview', 'POST /stores/:id/clearings', 'POST /difference-disposals']);
 add(['ADMIN', 'PURCHASER', 'STORE'], ['POST /purchase-requests', 'POST /purchase-requests/preview']);
 add(['ADMIN', 'SUPPLIER'], ['POST /supplier-orders/:id/shipment-preview', 'POST /supplier-orders/:id/shipments',
-  'POST /supplier-orders/:id/freight-confirmations', 'POST /supplier-orders/:id/reject', 'POST /discrepancies/:id/resolve']);
+  'POST /supplier-orders/:id/shipments/:shipmentId/revisions',
+  'POST /supplier-orders/:id/freight-confirmations', 'POST /supplier-orders/:id/reject']);
+add(['ADMIN', 'STORE', 'SUPPLIER'], ['POST /discrepancies/:id/resolve']);
 add(['ADMIN', 'STORE'], ['POST /shipments/:id/receipts']);
 add([...finance, 'STORE'], ['POST /payment-records', 'POST /payment-records/preview', 'POST /payment-records/:id/cancel']);
 add([...finance, 'SUPPLIER'], ['POST /payment-records/:id/confirm', 'POST /payment-records/:id/reject']);
 add([...finance, ...business], ['POST /difference-disposals/:id/confirm']);
-add(roles.filter(role => role !== 'SUPPLIER'), ['POST /files/upload-sessions', 'POST /files/:id/content', 'POST /files/:id/complete']);
+add(roles, ['POST /files/upload-sessions', 'POST /files/:id/content', 'POST /files/:id/complete']);
 add([...roles, 'REGION_MANAGER', 'PURCHASE_FOLLOWER', 'REGION_FINANCE'], ['POST /exports', 'POST /exports/:id/retry']);
 
 for (const roleCode of [...roles, ...assignedRoles]) test(`write permission HTTP ${roleCode}: complete route inventory and denied writes have no side effects`, async t => {

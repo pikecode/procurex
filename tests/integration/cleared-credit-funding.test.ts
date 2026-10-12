@@ -279,6 +279,9 @@ for (const [index, checkpoint] of (['PRICE_RUN', 'FINAL_RECEIPT', 'SHORTAGE', 'S
       await db.accountLedger.deleteMany({ where: { account: storeWhere } });
       await db.discrepancy.deleteMany({ where: { orderItem: { supplierOrder: storeWhere } } });
       await db.receipt.deleteMany({ where: { shipment: { supplierOrder: storeWhere } } });
+      await db.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrder: storeWhere } } } });
+      await db.shipmentRevision.deleteMany({ where: { shipment: { supplierOrder: storeWhere } } });
+      await db.shipmentItem.deleteMany({ where: { shipment: { supplierOrder: storeWhere } } });
       await db.shipment.deleteMany({ where: { supplierOrder: storeWhere } });
       await db.supplierOrder.deleteMany({ where: storeWhere });
       await db.purchaseRequest.deleteMany({ where: storeWhere });

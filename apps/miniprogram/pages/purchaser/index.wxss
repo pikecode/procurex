@@ -22,11 +22,8 @@
 .detail-heading { margin-bottom: 20rpx; }
 .supplier-order-summary { margin-top: 24rpx; padding-top: 24rpx; border-top: 1rpx solid #e2e6e4; }
 .generated-order-products { margin-top: 12rpx; }
-.assignment-product, .generated-order-product-block, .procurement-product-row { position: relative; padding-left: 112rpx; min-height: 92rpx; }
-.procurement-product-media { position: absolute; left: 0; top: 16rpx; width: 92rpx; height: 92rpx; background: #f1f4f2; border: 1rpx solid #e2e6e4; border-radius: 6rpx; display: flex; align-items: center; justify-content: center; }
-.procurement-product-media image { width: 100%; height: 100%; }
-.procurement-product-media text { font-size: 20rpx; color: #89958e; }
-.generated-order-product-block { padding: 8rpx 0 12rpx 112rpx; border-bottom: 1rpx solid #e2e6e4; }
+.assignment-product, .generated-order-product-block, .procurement-product-row { min-height: 92rpx; }
+.generated-order-product-block { padding: 8rpx 0 12rpx; border-bottom: 1rpx solid #e2e6e4; }
 .generated-order-product-block:last-child { border-bottom: 0; }
 .generated-order-product-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8rpx 20rpx; font-size: 24rpx; color: #69756e; }
 .generated-order-product { display: flex; justify-content: space-between; gap: 24rpx; padding: 8rpx 0; font-size: 26rpx; color: #35473c; }
@@ -40,7 +37,7 @@
 .assignment-group-heading > text:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .assignment-group-heading .muted { flex-shrink: 0; font-weight: 400; }
 .assignment-group-totals { display: flex; flex-wrap: wrap; gap: 8rpx 28rpx; padding: 0 16rpx 20rpx; background: #f1f4f2; font-size: 26rpx; color: #4e5d54; }
-.page .assignment-product { padding: 24rpx 0 24rpx 112rpx; }
+.page .assignment-product { padding: 24rpx 0; }
 .product-quantity { flex-shrink: 0; font-size: 26rpx; color: #69756e; }
 .assignment-change { flex-shrink: 0; }
 .assignment-change-label { padding: 4rpx 0 12rpx 12rpx; min-height: 44rpx; color: #137951; font-size: 26rpx; }
@@ -67,3 +64,43 @@
 .amount-value { color: #24392c; font-weight: 600; }
 .request-list-total { display: flex; justify-content: space-between; gap: 16rpx; margin-top: 12rpx; font-size: 25rpx; color: #69756e; }
 .request-list-total > text { color: #24392c; font-weight: 600; }
+.procurement-tabs { display: flex; background: #fff; padding: 20rpx 24rpx 0; border-bottom: 1rpx solid #dfe5e1; }
+.procurement-tab { flex: 1; min-width: 0; text-align: center; padding: 12rpx 4rpx 24rpx; border-bottom: 4rpx solid transparent; color: #65746c; font-size: 24rpx; }
+.procurement-tab.selected { color: #137951; border-bottom-color: #137951; background: #f2faf5; }
+.task-count { display: block; height: 48rpx; line-height: 48rpx; margin-bottom: 8rpx; font-size: 36rpx; font-weight: 600; }
+.procurement-list { margin-top: 16rpx; background: #fff; padding: 0 32rpx; }
+.procurement-list-title { padding: 26rpx 0 14rpx; font-size: 28rpx; font-weight: 600; }
+.procurement-task { padding: 24rpx 0; border-bottom: 1rpx solid #e5eae7; }
+.procurement-task:last-child { border-bottom: none; }
+.procurement-task-top, .procurement-task-bottom { display: flex; align-items: baseline; justify-content: space-between; gap: 20rpx; }
+.procurement-store { flex: 1; min-width: 0; font-size: 30rpx; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
+.procurement-amount { flex-shrink: 0; font-size: 28rpx; font-weight: 600; color: #233d31; }
+.procurement-task-meta { display: flex; flex-wrap: wrap; gap: 8rpx 16rpx; margin-top: 12rpx; font-size: 22rpx; color: #7a8780; }
+.procurement-task-bottom { margin-top: 20rpx; font-size: 24rpx; }
+.procurement-state { color: #697970; font-size: 23rpx; flex-shrink: 0; }
+.procurement-state.warning { color: #99651e; }
+.procurement-command { color: #137951; flex-shrink: 0; }
+.procurement-supplier { margin-top: 8rpx; color: #52655a; font-size: 26rpx; overflow-wrap: anywhere; }
+.procurement-reason { margin-top: 10rpx; color: #697970; font-size: 24rpx; line-height: 1.5; overflow-wrap: anywhere; }
+.page .order-list-controls { position: sticky; top: 0; z-index: 15; background: #fff; padding-top: 16rpx; border-bottom: 1rpx solid #e2e6e4; }
+.page .order-list-controls .status-filters { display: flex; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 28rpx; padding-bottom: 12rpx; }
+.page .order-list-controls .status-filters text { flex-shrink: 0; }
+.supplier-order-toggle { padding: 8rpx 0; }
+.supplier-order-overview { display: flex; justify-content: space-between; gap: 16rpx; margin-top: 16rpx; font-size: 24rpx; color: #52655a; }
+.supplier-order-fold { flex-shrink: 0; color: #137951; }
+.original-request-toggle { display: flex; justify-content: space-between; gap: 16rpx; padding: 24rpx 0 4rpx; color: #137951; font-size: 25rpx; border-top: 1rpx solid #e2e6e4; }
+.task-detail-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding-bottom: 20rpx; margin-bottom: 24rpx; border-bottom: 1rpx solid #e2e6e4; font-size: 25rpx; color: #697970; }
+.task-detail-toolbar .back-link { padding: 8rpx 0; margin: 0; }
+.task-detail-identity { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; }
+.task-detail-identity .request-store { flex: 1; min-width: 0; font-size: 32rpx; line-height: 1.45; }
+.task-detail-metric { display: flex; align-items: baseline; justify-content: space-between; gap: 20rpx; padding: 24rpx 0; font-size: 25rpx; color: #697970; }
+.task-detail-metric > text:last-child { font-size: 34rpx; font-weight: 600; color: #24392c; overflow-wrap: anywhere; text-align: right; }
+.task-detail-facts { padding: 12rpx 0; border-top: 1rpx solid #eef1ef; }
+.task-detail-facts > view { display: flex; justify-content: space-between; align-items: baseline; gap: 24rpx; padding: 10rpx 0; font-size: 24rpx; }
+.task-detail-facts > view > text:first-child { flex: 0 0 120rpx; color: #7a8780; }
+.task-detail-facts > view > text:last-child, .task-detail-facts document-no { min-width: 0; color: #42564a; text-align: right; overflow-wrap: anywhere; }
+.task-rejection-note { margin-top: 20rpx; padding: 16rpx 20rpx; border-left: 4rpx solid #b78335; background: #fff8eb; color: #775721; font-size: 25rpx; }
+.task-rejection-note text { display: block; margin: 6rpx 0; line-height: 1.5; overflow-wrap: anywhere; }
+.task-rejection-note text:first-child { font-weight: 600; }
+.task-decision-section { margin-top: 28rpx; padding-top: 24rpx; border-top: 1rpx solid #e2e6e4; }
+.task-decision-section textarea { width: 100%; min-height: 96rpx; box-sizing: border-box; padding: 16rpx 20rpx; background: #f4f6f5; font-size: 27rpx; line-height: 1.5; border-radius: 6rpx; }
