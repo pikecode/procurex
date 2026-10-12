@@ -170,6 +170,11 @@ Page({
     if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
 
+  clearOrderFilter() {
+    this.setData({ search: '', statusFilter: 'all' });
+    this.refreshList();
+  },
+
   nextOrders() { this.refreshList((this.data.orderLimit || 10) + 10); },
   refreshList(limit = 10) {
     const search = this.data.search.trim().toLowerCase();

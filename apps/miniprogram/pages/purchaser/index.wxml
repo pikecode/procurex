@@ -1,6 +1,6 @@
 <test-context wx:if="{{activeView === 'mine'}}" />
 <wxs src="../../utils/labels.wxs" module="labels" />
-<view class="page {{user.testWorkbenchEnabled && !user.testIdentity ? 'has-test-workbench-root' : ''}} {{requestId && selectedRequest && (activeView === 'rejections' || selectedRequest.status === 'PENDING_PROCUREMENT') || activeView === 'freight' && selectedFreight.status === 'PENDING' ? 'has-action-bar' : ''}}">
+<view class="page {{workspaceTabbarVisible ? 'has-workspace-tabbar' : ''}}{{user.testWorkbenchEnabled && !user.testIdentity ? 'has-test-workbench-root' : ''}} {{requestId && selectedRequest && (activeView === 'rejections' || selectedRequest.status === 'PENDING_PROCUREMENT') || activeView === 'freight' && selectedFreight.status === 'PENDING' ? 'has-action-bar' : ''}}">
   <view class="business-heading" wx:if="{{!requestId && !selectedFreight}}"><view><text class="business-title">采购管理</text><text class="muted">{{user.displayName}}</text></view><view class="heading-actions" wx:if="{{!requestId}}"><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{loading}}">刷新</button></view></view>
   <view class="workspace-loading" wx:if="{{loading}}">正在更新采购信息</view>
   <view wx:if="{{error && !detailError}}" class="error-banner"><text>{{error}}</text><button class="ghost" bindtap="loadWork" disabled="{{loading || confirming || reallocating || freightReviewing}}">刷新数据</button></view>
@@ -37,7 +37,7 @@
           <view class="procurement-task-bottom"><text class="procurement-state">运费待审核</text><text class="procurement-command">审核运费 ›</text></view>
         </view>
       </block>
-      <view class="empty-state" wx:if="{{!loading && !error && (taskType === 'requests' && !procurementTasks.length || taskType === 'rejections' && !rejectionTodos.length || taskType === 'freight' && !pendingFreight.length)}}">{{taskType === 'requests' ? '暂无待确认下货单' : taskType === 'rejections' ? '暂无待改派订单' : '暂无待审核运费'}}</view>
+      <view class="empty-state" wx:if="{{!loading && !error && (taskType === 'requests' && !procurementTasks.length || taskType === 'rejections' && !rejectionTodos.length || taskType === 'freight' && !pendingFreight.length)}}">{{taskType === 'requests' ? '暂无待确认下货单' : taskType === 'rejections' ? '暂无待改派订单' : '暂无待审核运费'}}<button class="empty-action" data-view="orders" bindtap="changeView">查看全部下货单 ›</button></view>
     </view>
   </block>
   <view class="card" wx:if="{{activeView === 'mine'}}"><view class="task-entry" data-view="reports" bindtap="changeView"><text>采购统计</text><text>›</text></view></view>
@@ -174,7 +174,7 @@
         <view class="request-list-total">订货金额 <text>¥{{labels.money(item.salesGoodsAmount)}}</text></view>
         <view class="amount amount-warn" wx:if="{{item.paymentStatus === 'SHORTFALL'}}">待补货款 ¥{{labels.money(item.shortfallAmount || '0.00')}}</view>
       </view>
-      <view wx:if="{{!visibleRequests.length && !loading && !error}}" class="row"><view class="muted">{{search || statusFilter !== 'all' ? '没有符合条件的下货单' : '暂无下货单'}}</view></view>
+      <view wx:if="{{!visibleRequests.length && !loading && !error}}" class="row"><view class="muted">{{search || statusFilter !== 'all' ? '没有符合条件的下货单' : '暂无下货单'}}</view><button class="empty-action" wx:if="{{search || statusFilter !== 'all'}}" bindtap="clearOrderFilter">清除筛选</button></view>
     </view>
   </view>
 

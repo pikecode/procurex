@@ -269,17 +269,37 @@
 
 /* ---------- 数量步进器 ---------- */
 
+/* overflow: hidden 会把子元素 ::before 扩展出的热区裁掉，所以这里不靠裁剪圆角，
+   改用圆角只加在两端的按钮和输入框上——视觉一致，热区得以向外溢出。 */
 .quantity-stepper {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   height: 60rpx;
-  overflow: hidden;
-  border: 1rpx solid var(--line);
   border-radius: 12rpx;
 }
+.quantity-stepper .step-button:first-child { border-radius: 12rpx 0 0 12rpx; border: 1rpx solid var(--line); border-right: 0; }
+.quantity-stepper .step-button:last-child { border-radius: 0 12rpx 12rpx 0; border: 1rpx solid var(--line); border-left: 0; }
+.quantity-stepper .quantity-input { border: 1rpx solid var(--line); }
 /* 步进器禁用态：全局 button[disabled] 的 opacity 会把「减号」淡到看不见，
    这里改成显式的浅灰前景，读作禁用而不是渲染坏了。 */
+/* ---------- 触控热区 ----------
+   微信设计指引最小可点区域 44×44pt (= 88rpx)。下列控件视觉尺寸更紧凑，
+   用 ::before 覆盖层把热区扩到 44pt，不改变视觉尺寸也不影响行内布局。
+   用 ::before 而不是 ::after——button 的 ::after 被小程序占用画默认边框。 */
+.step-button, .quantity-input, .close-button, .remove-item {
+  position: relative;
+}
+.step-button::before, .close-button::before, .remove-item::before {
+  content: '';
+  position: absolute;
+  top: -14rpx;
+  right: -14rpx;
+  bottom: -14rpx;
+  left: -14rpx;
+}
+.quantity-input::before { content: ''; position: absolute; top: -14rpx; right: -8rpx; bottom: -14rpx; left: -8rpx; }
+
 .step-button {
   width: 60rpx;
   height: 60rpx;
@@ -524,46 +544,48 @@
 
 .receipt-evidence-section { margin-top: 20rpx; padding: 28rpx; background: var(--surface); }
 .receipt-evidence-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14rpx; margin-top: 16rpx; }
-.receipt-evidence-tile, .evidence-add { position: relative; height: 100px; min-width: 0; overflow: hidden; border-radius: 12rpx; }
+.receipt-evidence-tile, .evidence-add { position: relative; height: 200rpx; min-width: 0; overflow: hidden; border-radius: 12rpx; }
 .receipt-evidence-tile image { width: 100%; height: 100%; }
 .evidence-state {
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
-  padding: 3px;
+  padding: 6rpx;
   background: rgba(0, 0, 0, .55);
   color: #fff;
-  font-size: 11px;
+  font-size: 22rpx;
   text-align: center;
 }
+/* 删除凭证是破坏性操作：视觉保持紧凑，热区扩到 44pt。 */
 .evidence-remove {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 30px;
-  height: 30px;
+  top: 4rpx;
+  right: 4rpx;
+  width: 60rpx;
+  height: 60rpx;
   padding: 0;
-  border-radius: 15px;
+  border-radius: 30rpx;
   background: rgba(20, 30, 24, .55);
   color: #fff;
-  font-size: 20px;
-  line-height: 28px;
+  font-size: 40rpx;
+  line-height: 56rpx;
 }
-.evidence-retry { position: absolute; top: 34px; right: 8px; left: 8px; height: 30px; padding: 0; border-radius: 8rpx; background: var(--surface); color: var(--danger); font-size: 12px; line-height: 30px; }
+.evidence-remove::before { content: ''; position: absolute; top: -14rpx; right: -14rpx; bottom: -14rpx; left: -14rpx; }
+.evidence-retry { position: absolute; top: 68rpx; right: 16rpx; left: 16rpx; height: 60rpx; padding: 0; border-radius: 8rpx; background: var(--surface); color: var(--danger); font-size: 24rpx; line-height: 60rpx; }
 .evidence-add {
   width: 100%;
   margin: 0;
   background: var(--brand-soft);
   border: 1rpx dashed var(--brand);
   color: var(--brand);
-  font-size: 30px;
-  line-height: 98px;
+  font-size: 60rpx;
+  line-height: 196rpx;
 }
-.receipt-evidence-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1rpx solid var(--line-soft); }
-.evidence-filename { min-width: 0; flex: 1; font-size: 13px; overflow-wrap: anywhere; }
-.evidence-open { width: 60px; flex-shrink: 0; margin: 0; }
-.evidence-upload-error { display: block; margin-top: 8px; color: var(--danger); font-size: 12px; overflow-wrap: anywhere; }
+.receipt-evidence-row { display: flex; align-items: center; gap: 20rpx; padding: 20rpx 0; border-bottom: 1rpx solid var(--line-soft); }
+.evidence-filename { min-width: 0; flex: 1; font-size: 26rpx; overflow-wrap: anywhere; }
+.evidence-open { width: 120rpx; flex-shrink: 0; margin: 0; }
+.evidence-upload-error { display: block; margin-top: 16rpx; color: var(--danger); font-size: 24rpx; overflow-wrap: anywhere; }
 
 /* ---------- 账户与账单 ---------- */
 

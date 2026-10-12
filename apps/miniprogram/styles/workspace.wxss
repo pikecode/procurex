@@ -489,3 +489,28 @@
   font-size: 25rpx;
 }
 .product-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+
+/* ---------- 工作区切换栏让位 ----------
+
+   切换栏（custom-tab-bar）和角色导航都锚在 bottom: 0，而切换栏层级更高。
+   多工作区用户（兼任两个以上角色）会看到切换栏把角色导航完全盖住，
+   「待办 / 订单 / 我的」就消失了。custom-tab-bar 把可见性回传给页面，
+   页面加上 .has-workspace-tabbar 后，这里把角色导航、底部操作条和结算栏
+   整体抬高一层，并给内容留出等量的滚动空间。
+
+   放在 workspace.wxss 而非 app.wxss：页面样式优先级高于全局样式，
+   这些规则必须能压过 .page.has-action-bar 和 .catalog-page.has-checkout。
+   置于文件末尾，同优先级时靠源码顺序取胜。 */
+
+.has-workspace-tabbar { --workspace-tabbar: calc(104rpx + env(safe-area-inset-bottom)); }
+.has-workspace-tabbar .business-nav,
+.has-workspace-tabbar .store-nav { bottom: var(--workspace-tabbar); }
+.has-workspace-tabbar .action-bar,
+.has-workspace-tabbar .order-bar { bottom: calc(var(--workspace-tabbar) + 96rpx + env(safe-area-inset-bottom)); }
+
+.page.has-workspace-tabbar,
+.store-page.has-workspace-tabbar { padding-bottom: calc(280rpx + env(safe-area-inset-bottom)); }
+.page.has-workspace-tabbar.has-action-bar { padding-bottom: calc(410rpx + env(safe-area-inset-bottom)); }
+/* 商品目录页高度固定，滚动区在页内，需要单独补足底部空间 */
+.store-page.has-workspace-tabbar.catalog-page { padding-bottom: calc(330rpx + env(safe-area-inset-bottom)); }
+.store-page.has-workspace-tabbar.catalog-page.has-checkout { padding-bottom: calc(430rpx + env(safe-area-inset-bottom)); }

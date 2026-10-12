@@ -254,6 +254,7 @@ Page({
   filterFunding(event) { this.setData({ fundingFilter: event.detail.value ? 'unpaid' : 'all' }); this.refreshOrders(); },
   nextOrders() { this.refreshOrders((this.data.orderLimit || 10) + 10); },
   onOrderSearch(event) { this.setData({ orderSearch: event.detail.value }); this.refreshOrders(); },
+  clearOrderFilter() { this.setData({ orderSearch: '', orderFilter: 'all', fundingFilter: 'all' }); this.refreshOrders(); },
   refreshOrders(limit = 10) {
     const search = String(this.data.orderSearch || '').trim().toLowerCase();
     const filtered = this.data.requests.filter(order => (this.data.orderFilter === 'all' || storeView.orderStage(order) === this.data.orderFilter) &&

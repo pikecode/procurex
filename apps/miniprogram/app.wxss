@@ -259,6 +259,7 @@ button[disabled] { opacity: .45; }
 .primary { background: var(--brand); color: #fff; }
 .secondary { background: var(--brand-soft); color: var(--brand-ink); }
 .ghost {
+  position: relative;
   flex-shrink: 0;
   width: auto;
   min-width: 132rpx;
@@ -269,6 +270,8 @@ button[disabled] { opacity: .45; }
   color: var(--brand);
   border: 1rpx solid var(--line);
 }
+/* 次要按钮高 64rpx (32pt)，热区补到 88rpx (44pt)。 */
+.ghost::before { content: ''; position: absolute; top: -12rpx; right: -8rpx; bottom: -12rpx; left: -8rpx; }
 .danger { background: var(--danger-soft); color: var(--danger); }
 
 /* ---------- 空态 / 加载 / 错误 ---------- */
