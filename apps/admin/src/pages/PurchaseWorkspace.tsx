@@ -127,10 +127,13 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
           { key: 'shortfall', label: '资金缺口', children: detail.shortfallAmount }, { key: 'reason', label: '取消原因', children: detail.rejectedReason || '-' },
         ]} />
         <div className="actions workflow-actions"><Button icon={<Printer size={16} />} disabled={Boolean(mode) || assigning || command.busy} onClick={() => setPrinting(true)}>打印订单</Button></div>
-        {canConfirm && editable && <div className="actions workflow-actions">{canWrite && <Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => open('edit')}>修改明细</Button>}
+        {canConfirm && editable && <>
+          {canWrite && <Alert className="workflow-inline-alert" type="info" showIcon title="确认前可调整商品和数量；保存后会重新核对金额，再生成供应商订单。" />}
+          <div className="actions workflow-actions">{canWrite && <Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => open('edit')}>调整商品/数量</Button>}
           {canWrite && <Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => { command.clearError(); setAssigning(true); }}>调整供应商</Button>}
           <Popconfirm title="确认下货单并按最终供应商生成订单？" onConfirm={async () => { if (await command.submit({ path: `/purchase-requests/${detail.id}/confirm`, method: 'POST', label: '确认采购', body: { expectedVersion: detail.version } })) { refresh(); message.success('采购已确认'); } }} disabled={command.blocked}><Button type="primary" icon={<Check size={16} />} disabled={command.blocked}>确认并生成订单</Button></Popconfirm>
-          <Button danger icon={<X size={16} />} disabled={command.blocked} onClick={() => open('reject')}>取消申请</Button></div>}
+          <Button danger icon={<X size={16} />} disabled={command.blocked} onClick={() => open('reject')}>取消申请</Button></div>
+        </>}
         <Table rowKey="id" size="small" columns={itemColumns} dataSource={detail.items} scroll={{ x: 850 }} pagination={{ defaultPageSize: 10, showSizeChanger: true }} />
         <section className="price-band"><h2>供应商订单</h2><Table<Order> rowKey="id" size="small" dataSource={detail.supplierOrders} pagination={{ defaultPageSize: 10 }} scroll={{ x: 680 }} columns={[
           { title: '订单编号', dataIndex: 'supplierOrderNo', render: (value, row) => <Link onClick={() => setParams({})} to={`/supplier-orders?order=${row.id}`}>{value}</Link> },
