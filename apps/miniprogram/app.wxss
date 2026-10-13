@@ -5,6 +5,10 @@
    =========================================================================== */
 
 page {
+  --space-page-x: 24rpx;
+  --space-content-x: 28rpx;
+  --space-section-y: 20rpx;
+  --space-control-gap: 16rpx;
   /* 品牌绿。--brand 是动作色，--brand-deep 是页头整块底色（与原生导航栏同色，
      两者拼成一条完整的品牌色带）。全部色值已验算 WCAG 对比度。 */
   --brand: #167e5a;
@@ -57,13 +61,13 @@ view, text, input, textarea, button, label { box-sizing: border-box; }
 
 .page {
   min-height: 100vh;
-  padding: 24rpx 24rpx calc(150rpx + env(safe-area-inset-bottom));
+  padding: var(--space-section-y) var(--space-page-x) calc(150rpx + env(safe-area-inset-bottom));
 }
 
 /* 浮起的白色区块。页面底色为 --canvas，卡片靠圆角 + 留白与背景分离。 */
 .card {
-  margin-top: 20rpx;
-  padding: 28rpx;
+  margin-top: var(--space-section-y);
+  padding: var(--space-content-x);
   border-radius: 20rpx;
   background: var(--surface);
 }
@@ -326,7 +330,7 @@ button[disabled] { opacity: .45; }
 
 /* 提示条：info / warn 两种语义 */
 .notice {
-  margin: 20rpx 24rpx;
+  margin: var(--space-section-y) var(--space-page-x);
   padding: 20rpx 22rpx;
   border-radius: 16rpx;
   border-left: 6rpx solid;
@@ -393,7 +397,7 @@ button[disabled] { opacity: .45; }
   right: 0;
   bottom: 0;
   left: 0;
-  padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom));
+  padding: 18rpx var(--space-content-x) calc(18rpx + env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, .96);
 }
 

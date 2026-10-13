@@ -99,8 +99,8 @@
 /* ---------- 卡片与列表 ---------- */
 
 .page .card {
-  margin: 20rpx 24rpx 0;
-  padding: 28rpx;
+  margin: var(--space-section-y) var(--space-page-x) 0;
+  padding: var(--space-content-x);
   border-radius: 20rpx;
   background: var(--surface);
 }
@@ -196,7 +196,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 20rpx;
-  margin: 32rpx 28rpx 4rpx;
+  margin: var(--space-section-y) var(--space-page-x) 4rpx;
   color: var(--ink-1);
   font-size: 30rpx;
   font-weight: 700;
@@ -235,7 +235,7 @@
 
 /* ---------- 我的 / 账号菜单 ---------- */
 
-.account-menu { margin: 20rpx 24rpx 0; padding: 0 28rpx; border-radius: 20rpx; background: var(--surface); }
+.account-menu { margin: var(--space-section-y) var(--space-page-x) 0; padding: 0 var(--space-content-x); border-radius: 20rpx; background: var(--surface); }
 .account-menu-item {
   display: flex;
   align-items: center;
@@ -267,14 +267,14 @@
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.account-logout { margin: 24rpx 24rpx 0; background: var(--surface); color: var(--danger); }
+.account-logout { margin: 24rpx var(--space-page-x) 0; background: var(--surface); color: var(--danger); }
 
-.command-history { margin: 20rpx 24rpx 0; padding: 28rpx; border-radius: 20rpx; background: var(--surface); }
+.command-history { margin: var(--space-section-y) var(--space-page-x) 0; padding: var(--space-content-x); border-radius: 20rpx; background: var(--surface); }
 .command-recovery {
   display: flex;
   align-items: center;
   gap: 16rpx;
-  margin: 20rpx 24rpx 0;
+  margin: var(--space-section-y) var(--space-page-x) 0;
   padding: 22rpx 24rpx;
   border-radius: 16rpx;
   background: var(--warn-soft);
@@ -313,7 +313,7 @@
 /* ---------- 底部固定操作条 ---------- */
 
 /* Fixed above the role nav so long forms never hide their own submit control. */
-.page .action-bar { position: fixed; left: 0; right: 0; bottom: calc(96rpx + env(safe-area-inset-bottom)); z-index: var(--z-action); display: flex; align-items: center; gap: 16rpx; margin: 0; padding: 18rpx 28rpx; background: rgba(255, 255, 255, .97); border-top: 1rpx solid var(--line); }
+.page .action-bar { position: fixed; left: 0; right: 0; bottom: calc(96rpx + env(safe-area-inset-bottom)); z-index: var(--z-action); display: flex; align-items: center; gap: var(--space-control-gap); margin: 0; padding: 18rpx var(--space-content-x); background: rgba(255, 255, 255, .97); border-top: 1rpx solid var(--line); }
 .page .action-bar > button { flex: 1; min-width: 0; margin: 0; font-size: 27rpx; }
 .page .action-bar .action-secondary { flex: 0 0 150rpx; }
 

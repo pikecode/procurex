@@ -1,7 +1,5 @@
 @import "../../styles/workspace.wxss";
 
-.page { padding-bottom: calc(150rpx + env(safe-area-inset-bottom)); }
-
 .business-heading > button { margin: 0; flex-shrink: 0; }
 
 .account-entry {
@@ -32,4 +30,4 @@
 .review-band .card-title { font-size: 28rpx; }
 .review-band input { margin-top: 12rpx; }
 
-.business-search { height: 80rpx; padding: 0 24rpx; border-radius: 12rpx; background: var(--sunken); }
+.business-search { height: 80rpx; padding: 0 var(--space-page-x); border-radius: 12rpx; background: var(--sunken); }

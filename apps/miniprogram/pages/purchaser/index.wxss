@@ -5,7 +5,7 @@
 .procurement-tabs {
   display: flex;
   gap: 12rpx;
-  padding: 12rpx 24rpx;
+  padding: 12rpx var(--space-page-x);
 }
 .procurement-tab {
   flex: 1;
@@ -33,7 +33,7 @@
 /* ---------- 待办列表 ---------- */
 
 /* 与分类栏保持相同外侧边距，任务卡片不贴屏幕边缘。 */
-.procurement-list { margin: 16rpx 24rpx 0; }
+.procurement-list { margin: var(--space-section-y) var(--space-page-x) 0; }
 .procurement-list-title {
   padding: 4rpx 0 8rpx;
   color: var(--ink-3);
@@ -41,7 +41,7 @@
 }
 .procurement-task {
   margin-top: 12rpx;
-  padding: 24rpx;
+  padding: var(--space-content-x);
   border-radius: 20rpx;
   background: var(--surface);
   transition: background-color .15s ease;

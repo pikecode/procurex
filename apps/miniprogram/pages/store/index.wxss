@@ -19,7 +19,7 @@
 
 /* 门店页页头同样接住原生导航栏，形成一整条品牌色带。 */
 .store-heading {
-  padding: 30rpx 28rpx 28rpx;
+  padding: 30rpx var(--space-content-x) 28rpx;
   background: var(--brand-deep);
 }
 .heading-main,
@@ -49,8 +49,8 @@
 /* ---------- 区块与说明 ---------- */
 
 .section-band {
-  margin-top: 20rpx;
-  padding: 28rpx;
+  margin-top: var(--space-section-y);
+  padding: var(--space-content-x);
   background: var(--surface);
 }
 .section-title {
@@ -104,7 +104,7 @@
   display: flex;
   align-items: center;
   gap: 20rpx;
-  padding: 20rpx 28rpx;
+  padding: 20rpx var(--space-content-x);
   background: var(--surface);
   border-top: 1rpx solid var(--line);
 }
@@ -123,7 +123,7 @@
 
 /* ---------- 商品目录 ---------- */
 
-.catalog-tools { padding: 18rpx 28rpx 0; background: var(--surface); }
+.catalog-tools { padding: 18rpx var(--space-content-x) 0; background: var(--surface); }
 .search-field {
   display: flex;
   align-items: center;
@@ -169,7 +169,7 @@
 }
 .catalog-page.has-checkout { padding-bottom: calc(226rpx + env(safe-area-inset-bottom)); }
 .catalog-page .store-heading, .catalog-page .catalog-tools { flex-shrink: 0; }
-.catalog-page .catalog-tools { padding: 18rpx 24rpx; border-bottom: 1rpx solid var(--line); }
+.catalog-page .catalog-tools { padding: 18rpx var(--space-page-x); border-bottom: 1rpx solid var(--line); }
 .catalog-browser { flex: 1; min-height: 0; display: flex; overflow: hidden; }
 /* 分类栏与右侧白色内容区同色会糊成一片，用右边线划清层级 */
 .category-sidebar {
@@ -198,7 +198,7 @@
 
 /* ---------- 商品行 ---------- */
 
-.product-list { padding: 0 28rpx; background: var(--surface); }
+.product-list { padding: 0 var(--space-content-x); background: var(--surface); }
 .product-row { display: flex; gap: 22rpx; padding: 28rpx 0; border-bottom: 1rpx solid var(--line); }
 .product-media {
   position: relative;
@@ -335,7 +335,7 @@
   justify-content: space-between;
   gap: 20rpx;
   margin-top: 20rpx;
-  padding: 20rpx 28rpx;
+  padding: 20rpx var(--space-content-x);
   border-bottom: 1rpx solid var(--line);
   background: var(--surface);
   color: var(--ink-1);
@@ -372,8 +372,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
-  margin: 20rpx 28rpx 0;
-  padding: 22rpx 24rpx;
+  margin: var(--space-section-y) var(--space-page-x) 0;
+  padding: 22rpx var(--space-content-x);
   border-radius: 16rpx;
   background: var(--brand-soft);
 }
@@ -396,12 +396,12 @@
 .refresh-action { color: var(--brand); font-size: 24rpx; padding: 10rpx 0 10rpx 16rpx; }
 
 /* 门店页本身是满幅区块，工具条自身不需要负外边距抵消版心。 */
-.order-list-controls { padding: 16rpx 28rpx 8rpx; }
+.order-list-controls { padding: 16rpx var(--space-content-x) 8rpx; }
 .order-list-controls .section-band { margin: 0; padding-top: 4rpx; padding-bottom: 12rpx; }
 .order-list-controls input { background: var(--sunken); border: 0; }
 
 .order-entry {
-  padding: 26rpx 28rpx;
+  padding: 26rpx var(--space-content-x);
   background: var(--surface);
   border-bottom: 1rpx solid var(--line);
   transition: background-color .15s ease;
@@ -445,7 +445,7 @@
 .group-toggle { display: flex; align-items: center; gap: 12rpx; flex: 1; min-width: 0; }
 .group-toggle .section-title { flex: 0 1 auto; }
 .group-summary { flex-shrink: 0; color: var(--ink-3); font-size: 23rpx; font-variant-numeric: tabular-nums; }
-.request-supplier-group { padding: 24rpx 28rpx; }
+.request-supplier-group { padding: 24rpx var(--space-content-x); }
 .request-supplier-group .section-title { flex: 1; min-width: 0; }
 .supplier-group-heading { padding: 4rpx 0; }
 .supplier-group-name { display: flex; align-items: center; gap: 12rpx; }
@@ -527,8 +527,8 @@
 .result-banner {
   display: flex;
   gap: 18rpx;
-  margin: 20rpx 28rpx;
-  padding: 22rpx 24rpx;
+  margin: var(--space-section-y) var(--space-page-x);
+  padding: 22rpx var(--space-content-x);
   border-radius: 16rpx;
   background: var(--brand-soft);
   color: var(--brand-ink);
@@ -537,7 +537,7 @@
 .result-banner > view { min-width: 0; flex: 1; }
 .result-banner .secondary-text { color: var(--ink-2); }
 
-.discrepancy-store-entry { padding: 24rpx 28rpx; }
+.discrepancy-store-entry { padding: 24rpx var(--space-content-x); }
 .discrepancy-store-entry .button-row { grid-template-columns: 1fr 1fr; }
 
 /* ---------- 凭证 ---------- */
@@ -618,13 +618,13 @@
 
 /* ---------- 空态 / 加载 ---------- */
 
-.catalog-skeleton { padding: 32rpx 28rpx; color: var(--ink-3); font-size: 24rpx; background: var(--surface); }
+.catalog-skeleton { padding: 32rpx var(--space-content-x); color: var(--ink-3); font-size: 24rpx; background: var(--surface); }
 
 /* ---------- 我的 ---------- */
 
-.mine-identity { margin: 20rpx 24rpx 0; padding: 28rpx; border-radius: 20rpx; background: var(--surface); }
+.mine-identity { margin: var(--space-section-y) var(--space-page-x) 0; padding: var(--space-content-x); border-radius: 20rpx; background: var(--surface); }
 .mine-identity .muted { display: block; margin-top: 8rpx; }
-.mine-secondary { margin-top: 20rpx; padding: 0 24rpx; }
+.mine-secondary { margin-top: var(--space-section-y); padding: 0 var(--space-page-x); }
 .mine-secondary button { width: 100%; margin: 0; }
 
 @media (max-width: 350px) {
@@ -645,7 +645,7 @@
 }
 .cart-sheet {
   width: 100%;
-  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  padding: var(--space-content-x) var(--space-content-x) calc(var(--space-content-x) + env(safe-area-inset-bottom));
   border-radius: 20rpx 20rpx 0 0;
   background: var(--surface);
 }

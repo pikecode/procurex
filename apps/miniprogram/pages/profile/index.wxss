@@ -4,7 +4,7 @@
 
 /* 资料页页头同样接住原生导航栏。 */
 .profile-heading {
-  padding: 30rpx 28rpx 28rpx;
+  padding: 30rpx var(--space-content-x) 28rpx;
   background: var(--brand-deep);
 }
 .profile-heading-main, .catalog-row-head, .catalog-caption {
@@ -34,11 +34,11 @@
   border-color: rgba(255, 255, 255, .45);
 }
 
-.profile-tabs { margin-top: 20rpx; padding: 8rpx 24rpx 4rpx; }
+.profile-tabs { margin-top: var(--space-section-y); padding: 8rpx var(--space-page-x) 4rpx; }
 
 .profile-fields {
-  margin: 20rpx 24rpx 0;
-  padding: 8rpx 28rpx;
+  margin: var(--space-section-y) var(--space-page-x) 0;
+  padding: 8rpx var(--space-content-x);
   border-radius: 20rpx;
   background: var(--surface);
 }
@@ -54,7 +54,7 @@
 .profile-label { color: var(--ink-3); font-size: 24rpx; }
 .profile-value { min-width: 0; color: var(--ink-1); font-size: 27rpx; overflow-wrap: anywhere; }
 
-.catalog-tools { padding: 20rpx 28rpx 0; background: var(--surface); }
+.catalog-tools { padding: var(--space-section-y) var(--space-content-x) 0; background: var(--surface); }
 .catalog-search {
   display: flex;
   align-items: center;
@@ -65,8 +65,8 @@
 }
 .catalog-search icon { flex-shrink: 0; }
 .catalog-search input { min-width: 0; flex: 1; height: 76rpx; padding: 0; border: 0; background: transparent; font-size: 26rpx; }
-.catalog-caption { padding: 24rpx 28rpx; color: var(--ink-3); font-size: 23rpx; }
-.catalog-list { padding: 0 28rpx; border-radius: 20rpx; background: var(--surface); }
+.catalog-caption { padding: 24rpx var(--space-content-x); color: var(--ink-3); font-size: 23rpx; }
+.catalog-list { padding: 0 var(--space-content-x); border-radius: 20rpx; background: var(--surface); }
 .catalog-row { padding: 26rpx 0; border-bottom: 1rpx solid var(--line-soft); }
 .catalog-row:last-child { border-bottom: 0; }
 .catalog-name { min-width: 0; flex: 1; color: var(--ink-1); font-size: 28rpx; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
@@ -74,5 +74,5 @@
 .catalog-row > text { display: block; margin-top: 10rpx; overflow-wrap: anywhere; }
 .catalog-row button { margin-top: 18rpx; }
 .supply-price { color: var(--brand); font-size: 27rpx; font-weight: 600; }
-.loading-state { padding: 56rpx 28rpx; color: var(--ink-3); font-size: 25rpx; text-align: center; }
-.profile-page .error-banner { margin: 20rpx 24rpx 0; }
+.loading-state { padding: 56rpx var(--space-content-x); color: var(--ink-3); font-size: 25rpx; text-align: center; }
+.profile-page .error-banner { margin: var(--space-section-y) var(--space-page-x) 0; }
