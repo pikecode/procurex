@@ -71,6 +71,7 @@ async function cleanup(prefix) {
   await db.accountLedger.deleteMany({ where: { account: own } });
   await db.fundingAllocation.deleteMany({ where: { store: own } });
   await db.receipt.deleteMany({ where: { shipment: { supplierOrder: own } } });
+  await db.shipmentRevisionItem.deleteMany({ where: { shipmentItem: { shipment: { supplierOrder: own } } } });
   await db.shipment.deleteMany({ where: { supplierOrder: own } }); await db.supplierOrder.deleteMany({ where: own });
   await db.purchaseRequest.deleteMany({ where: own });
   await db.storeTemplateBinding.deleteMany({ where: { template: { code: prefix } } });
@@ -271,7 +272,7 @@ try {
       if (mode === 'CREDIT') assert.equal((await account()).creditUsed.toFixed(2), '24.00');
       step('Store creates one pending request; stored value reserved, not debited');
       const confirmer = mode === 'CREDIT' ? 'PURCHASE_FOLLOWER' : mode === 'COMPANY_TERM' ? 'ADMIN' : 'PURCHASER';
-      await login(confirmer, `/purchase-requests?request=${request.id}`); await page.getByRole('button', { name: '确认采购', exact: true }).waitFor(); await shot('purchase'); await confirm('确认采购');
+      await login(confirmer, `/purchase-requests?request=${request.id}`); await page.getByRole('button', { name: '确认并生成订单', exact: true }).waitFor(); await shot('purchase'); await confirm('确认并生成订单');
       let order; for (let i = 0; i < 40; i++) { order = await db.supplierOrder.findFirst({ where: { requestId: request.id }, include: { items: true } }); if (order) break; await page.waitForTimeout(100); }
       assert.ok(order); assert.equal(order.settlementMode, mode); assert.equal(order.supplierId, supplier.id); assert.equal(await db.supplierOrder.count({ where: { requestId: request.id } }), 1); result.requestId = request.id; result.orderId = order.id; step('Purchaser confirms exact request into one supplier order');
       await login('SUPPLIER', '/supplier-orders'); await page.getByRole('row').filter({ hasText: order.supplierOrderNo }).getByRole('button', { name: '查看', exact: true }).click(); await page.getByRole('button', { name: '发货与补发', exact: true }).click();
