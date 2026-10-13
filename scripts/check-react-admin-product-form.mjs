@@ -33,12 +33,13 @@ try {
   await page.getByRole('button', { name: '新增', exact: true }).click(); const dialog = page.getByRole('dialog', { name: '新增商品', exact: true });
   const select = async (label, name) => { const input = dialog.getByLabel(label, { exact: true }); await input.click(); await input.fill(name); await page.locator('.ant-select-dropdown:visible').getByText(name, { exact: true }).click(); };
   await dialog.getByLabel('商品名称', { exact: true }).fill(`${prefix}商品`); await select('商品分类', category.name); await select('销售单位', units[0].name);
-  await dialog.getByRole('tab', { name: '供应与采购', exact: true }).click();
-  for (const supplier of suppliers) await select('关联供应商', supplier.name);
-  await dialog.getByRole('tab', { name: '供应与采购', exact: true }).click(); await page.keyboard.press('Escape'); assert.equal(await dialog.getByLabel('每采购单位对应销售单位数量').count(), 0);
+  assert.equal(await dialog.getByLabel('关联供应商', { exact: true }).count(), 0);
+  assert.equal(await dialog.getByLabel('商品价格（参考）', { exact: true }).count(), 1);
+  assert.equal(await dialog.getByRole('tab').count(), 0);
+  for (const heading of ['商品信息', '单位换算', '订货规则', '商品图片']) await dialog.getByText(heading, { exact: false }).first().waitFor();
+  await page.keyboard.press('Escape'); assert.equal(await dialog.getByLabel('每采购单位对应销售单位数量').count(), 0);
   await select('采购单位', units[1].name); await dialog.getByLabel('每采购单位对应销售单位数量').fill('10');
   const bytes = await sharp(randomBytes(1500 * 1000 * 3), { raw: { width: 1500, height: 1000, channels: 3 } }).png().toBuffer(); assert.ok(bytes.length > 2 * 1024 * 1024);
-  await dialog.getByRole('tab', { name: '基本信息', exact: true }).click();
   await dialog.locator('input[type=file]').setInputFiles({ name: 'large-product.png', mimeType: 'image/png', buffer: bytes });
   const crop = page.getByRole('dialog', { name: '裁切商品图片', exact: true }); await crop.getByRole('slider').fill('1.25').catch(async () => { await crop.getByRole('slider').focus(); await page.keyboard.press('ArrowRight'); });
   for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 1100 }); await page.waitForTimeout(400); await crop.getByRole('button', { name: '确认上传' }).scrollIntoViewIfNeeded(); const file = `crop-${width}.png`; await page.screenshot({ path: `${output}/${file}` }); report.screenshots.push(file); }
@@ -47,49 +48,21 @@ try {
   const encoded = await page.evaluate(async id => { const token = JSON.parse(sessionStorage.getItem('procurex-react-admin-session-v1')).accessToken; const response = await fetch(`/api/v1/files/${id}/download`, { headers: { Authorization: `Bearer ${token}` } }); if (!response.ok) throw new Error(`Download ${response.status}`); const bytes = new Uint8Array(await response.arrayBuffer()); let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte); return btoa(binary); }, uploadedFile.id);
   const uploadedBytes = Buffer.from(encoded, 'base64'); assert.ok(uploadedBytes.length < 2 * 1024 * 1024); const image = await sharp(uploadedBytes).metadata(); assert.equal(image.width, image.height); assert.equal(image.format, 'jpeg');
   const saved = page.waitForResponse(r => r.url().endsWith('/products') && r.request().method() === 'POST'); await dialog.getByRole('button', { name: '保存', exact: true }).click(); assert.equal((await saved).status(), 201); await dialog.waitFor({ state: 'hidden' });
-  let product = await db.product.findFirstOrThrow({ where: { name: `${prefix}商品` }, include: { conversion: true, suppliers: true } }); assert.equal(product.suppliers.length, 2); assert.equal(product.conversion.ratio.toString(), '10'); assert.ok(product.imageFileId);
+  let product = await db.product.findFirstOrThrow({ where: { name: `${prefix}商品` }, include: { conversion: true, suppliers: true } }); assert.equal(product.suppliers.length, 0); assert.equal(product.conversion.ratio.toString(), '10'); assert.ok(product.imageFileId);
+  await db.supplierProduct.createMany({ data: suppliers.map(supplier => ({ productId: product.id, supplierId: supplier.id, supplyEnabled: false })) });
+  const originalLinks = await db.supplierProduct.findMany({ where: { productId: product.id }, orderBy: { supplierId: 'asc' } });
   await page.reload(); await page.getByLabel('搜索商品管理').fill(product.name); await page.getByRole('button', { name: `编辑${product.name}`, exact: true }).click(); const editing = page.getByRole('dialog', { name: '编辑商品', exact: true });
-  await editing.getByRole('tab', { name: '供应与采购', exact: true }).click();
+  assert.equal(await editing.getByLabel('关联供应商', { exact: true }).count(), 0);
+  assert.equal(await editing.getByLabel('供应商0', { exact: true }).count(), 0);
+  assert.equal(Number(await editing.getByLabel('商品价格（参考）', { exact: true }).inputValue()), 0);
   assert.equal(Number(await editing.getByLabel('每采购单位对应销售单位数量').inputValue()), 10);
   for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 1100 }); await editing.getByLabel('每采购单位对应销售单位数量').scrollIntoViewIfNeeded(); await page.waitForTimeout(400); const file = `product-form-${width}.png`; await page.screenshot({ path: `${output}/${file}` }); report.screenshots.push(file); }
   await editing.getByLabel('采购单位', { exact: true }).locator('..').locator('..').hover(); await editing.locator('.ant-select-clear').last().click();
   assert.equal(await editing.getByLabel('每采购单位对应销售单位数量').count(), 0);
-  const updated = page.waitForResponse(r => r.url().endsWith(`/products/${product.id}`) && r.request().method() === 'PATCH'); await editing.getByRole('button', { name: '保存', exact: true }).click(); assert.equal((await updated).status(), 200); await editing.waitFor({ state: 'hidden' }); assert.equal(await db.productUnitConversion.count({ where: { productId: product.id } }), 0);
-  await page.getByRole('button', { name: `编辑${product.name}`, exact: true }).click();
-  const pricing = page.getByRole('dialog', { name: '编辑商品', exact: true });
-  await pricing.waitFor();
-  await pricing.getByRole('tab', { name: '供应与采购', exact: true }).click();
-  for (const [index, supplier] of suppliers.entries()) await pricing.getByLabel(supplier.name, { exact: true }).fill(index ? '8' : '6');
-  const priceSave = page.waitForResponse(r => r.url().endsWith(`/products/${product.id}`) && r.request().method() === 'PATCH');
-  await pricing.getByRole('button', { name: '保存', exact: true }).click();
-  assert.equal((await priceSave).status(), 200); await pricing.waitFor({ state: 'hidden' });
-  const scopes = await db.priceScope.findMany({ where: { productId: product.id, templateKey: '' }, include: { versions: true } });
-  assert.equal(scopes.length, 2);
-  for (const scope of scopes) { assert.equal(scope.versions.length, 1); assert.equal(scope.versions[0].supplyPrice.toString(), scope.supplierId === suppliers[0].id ? '6' : '8'); }
-  await page.getByRole('button', { name: `编辑${product.name}`, exact: true }).click();
-  await pricing.getByRole('tab', { name: '供应与采购', exact: true }).click();
-  assert.equal(Number(await pricing.getByLabel(suppliers[0].name, { exact: true }).inputValue()), 6);
-  const before = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-  await db.priceVersion.create({ data: { scopeId: scopes.find(row => row.supplierId === suppliers[0].id).id, salesPrice: '0', supplyPrice: '9', effectiveAt: new Date(), revision: 2 } });
-  await pricing.getByRole('tab', { name: '基本信息', exact: true }).click();
-  await pricing.getByLabel('商品名称', { exact: true }).fill(`${prefix}不应保存`);
-  const stale = page.waitForResponse(r => r.url().endsWith(`/products/${product.id}`) && r.request().method() === 'PATCH');
-  await pricing.getByRole('button', { name: '保存', exact: true }).click();
-  assert.equal((await stale).status(), 409);
-  assert.equal((await db.product.findUniqueOrThrow({ where: { id: product.id } })).name, before.name);
-  assert.equal(await db.priceVersion.count({ where: { scope: { productId: product.id } } }), 3);
-  await pricing.getByRole('button', { name: '取消', exact: true }).click();
-  await db.supplier.update({ where: { id: suppliers[0].id }, data: { defaultSettlementMode: 'SUPPLIER_TERM' } });
-  await page.reload(); await page.getByLabel('搜索商品管理').fill(product.name);
-  await page.getByRole('button', { name: `编辑${product.name}`, exact: true }).click();
-  await pricing.getByRole('tab', { name: '供应与采购', exact: true }).click();
-  await pricing.getByLabel(suppliers[0].name, { exact: true }).fill('12');
-  const direct = page.waitForResponse(r => r.url().endsWith(`/products/${product.id}`) && r.request().method() === 'PATCH');
-  await pricing.getByRole('button', { name: '保存', exact: true }).click();
-  assert.equal((await direct).status(), 200); await pricing.waitFor({ state: 'hidden' });
-  const directPrice = await db.priceVersion.findFirstOrThrow({ where: { scope: { productId: product.id, supplierId: suppliers[0].id } }, orderBy: { revision: 'desc' } });
-  assert.equal(directPrice.salesPrice.toString(), '12'); assert.equal(directPrice.supplyPrice.toString(), '12');
-  report.checks = ['商品及供应商关联/换算原子保存', '采购价按供应商内联填写并一次保存', '采购价刷新回显', '并发价格冲突回滚商品修改', '供应商直接账期销售供货价一致', '图片裁切压缩与桌面手机截图'];
+  const updated = page.waitForResponse(r => r.url().endsWith(`/products/${product.id}`) && r.request().method() === 'PATCH'); await editing.getByRole('button', { name: '保存', exact: true }).click(); const updateResponse = await updated; assert.equal(updateResponse.status(), 200); const updateBody = updateResponse.request().postDataJSON(); assert.equal(Object.hasOwn(updateBody, 'supplierIds'), false); assert.equal(Object.hasOwn(updateBody, 'supplierPurchasePrices'), false); await editing.waitFor({ state: 'hidden' }); assert.equal(await db.productUnitConversion.count({ where: { productId: product.id } }), 0);
+  const preservedLinks = await db.supplierProduct.findMany({ where: { productId: product.id }, orderBy: { supplierId: 'asc' } });
+  assert.deepEqual(preservedLinks.map(({ supplierId, supplyEnabled }) => ({ supplierId, supplyEnabled })), originalLinks.map(({ supplierId, supplyEnabled }) => ({ supplierId, supplyEnabled })));
+  report.checks = ['商品表单仅维护商品资料与单位换算', '供应商/供货价/上下架不出现在商品表单', '编辑商品保留已有下架供应商关联', '参考商品价格命名', '图片裁切压缩与桌面手机截图'];
   assert.deepEqual(report.errors, []); report.status = 'PASS';
 } catch (error) { report.status = 'FAIL'; report.errors.push(error.stack); process.exitCode = 1; }
 finally {

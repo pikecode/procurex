@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, App, Button, Empty, Form, Image, Input, InputNumber, Modal, Segmented, Select, Switch, Table, Tabs, Tag, Tooltip, TreeSelect } from 'antd';
-import { ChevronRight, Pencil, ImageOff, Image as ImageIcon, LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { Alert, App, Button, Empty, Form, Image, Input, InputNumber, Modal, Segmented, Select, Switch, Table, Tag, Tooltip, TreeSelect } from 'antd';
+import { ChevronRight, Pencil, ImageOff, Image as ImageIcon, LoaderCircle, Plus, RefreshCw, Search } from 'lucide-react';
 import './Products.css';
 import { ProductImageUpload } from '../components/ProductImageUpload';
 import { PurchaseUnitFields } from '../components/PurchaseUnitFields';
@@ -9,10 +9,9 @@ import { useRows } from '../lib/useRows';
 import { positiveIntegerRule } from '../lib/catalogTypes';
 import { money } from '../lib/money';
 
-interface Product { supplierPurchasePrices?: { supplierId: string; supplyPrice: string; expectedVersionId: string | null }[]; id: string; supplierIds?: string[]; name: string; sku: string | null; version: number; categoryId: string; baseUnitId: string; brandId: string | null; brand: string | null; defaultSalesPrice: string | null; minOrderQty: string; orderMultiple: string; isActive: boolean; imageFileId: string | null; purchaseUnitConversion: { purchaseUnitId: string; salesUnitsPerPurchaseUnit: string } | null }
+interface Product { id: string; name: string; sku: string | null; version: number; categoryId: string; baseUnitId: string; brandId: string | null; brand: string | null; defaultSalesPrice: string | null; minOrderQty: string; orderMultiple: string; isActive: boolean; imageFileId: string | null; purchaseUnitConversion: { purchaseUnitId: string; salesUnitsPerPurchaseUnit: string } | null }
 interface Named { id: string; name: string }
 interface Category extends Named { parentId: string | null }
-function fieldTab(name: string) { return ['supplierIds', 'purchasePrices', 'purchaseUnitId', 'salesUnitsPerPurchaseUnit'].includes(name) ? 'supply' : ['minOrderQty', 'orderMultiple'].includes(name) ? 'rules' : 'basic'; }
 function ProductImage({ id }: { id: string | null }) {
   const [url, setUrl] = useState(''); const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -29,31 +28,23 @@ function ProductImage({ id }: { id: string | null }) {
 }
 export default function Products({ user }: { user: User }) {
   const data = useRows<Product>('/products'); const categories = useRows<Category>('/categories'); const units = useRows<Named>('/units'); const brands = useRows<Named>('/brands');
-  const suppliers = useRows<Named & { status: string; isArchived: boolean }>('/suppliers');
   const writable = hasRole(user, 'ADMIN', 'PURCHASER'); const [editing, setEditing] = useState<Product | null | undefined>();
   const [saving, setSaving] = useState(false); const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(''); const lock = useRef(false); const [form] = Form.useForm();
-  const selectedSupplierIds: string[] = Form.useWatch('supplierIds', form) || [];
   const salesUnitId = Form.useWatch('baseUnitId', form);
-  const [activeTab, setActiveTab] = useState('basic');
-  const [invalidTabs, setInvalidTabs] = useState<string[]>([]);
   const imageId = Form.useWatch('imageFileId', form); const { message } = App.useApp();
-  const referencesError = categories.error || units.error || brands.error || suppliers.error;
+  const referencesError = categories.error || units.error || brands.error;
   const options = (rows: Named[]) => rows.map(row => ({ value: row.id, label: row.name }));
   // Products may only sit on leaf categories, so grouping nodes are selectable as containers but not as targets.
   const childCategoryIds = new Set(categories.rows.filter(row => row.parentId).map(row => row.parentId));
   const categoryTree = categories.rows.filter(row => !row.parentId).map(row => ({ value: row.id, title: row.name,
     disabled: childCategoryIds.has(row.id),
     children: categories.rows.filter(child => child.parentId === row.id).map(child => ({ value: child.id, title: child.name })) }));
-  const edit = (row: Product | null) => { form.resetFields(); form.setFieldsValue({ ...(row || { defaultSalesPrice: '0', minOrderQty: '1', orderMultiple: '1', isActive: true, storageCondition: 'AMBIENT', supplierIds: [] }), ...row?.purchaseUnitConversion, purchasePrices: Object.fromEntries((row?.supplierPurchasePrices || []).map(price => [price.supplierId, price.supplyPrice])) }); setEditing(row); setError(''); setActiveTab('basic'); setInvalidTabs([]); };
+  const edit = (row: Product | null) => { form.resetFields(); form.setFieldsValue({ ...(row || { defaultSalesPrice: '0', minOrderQty: '1', orderMultiple: '1', isActive: true, storageCondition: 'AMBIENT' }), ...row?.purchaseUnitConversion }); setEditing(row); setError(''); };
   const save = async () => {
     if (lock.current || uploading) return; const values = await form.validateFields().catch(failure => {
       const fields = failure.errorFields || [];
-      setInvalidTabs([...new Set<string>(fields.map((field: { name: (string | number)[] }) => fieldTab(String(field.name[0]))))]);
-      if (fields.length) {
-        setActiveTab(fieldTab(String(fields[0].name[0])));
-        setTimeout(() => form.scrollToField(fields[0].name, { block: 'center', focus: true }), 100);
-      }
+      if (fields.length) setTimeout(() => form.scrollToField(fields[0].name, { block: 'center', focus: true }), 100);
       return null;
     }); if (!values) return;
     lock.current = true; setSaving(true); setError('');
@@ -63,12 +54,7 @@ export default function Products({ user }: { user: User }) {
       // Do not erase legacy free-text brands when unrelated fields are edited.
       if (values.brandId || !editing?.brand) body.brandId = values.brandId || null; else delete body.brandId;
       body.purchaseUnitConversion = values.purchaseUnitId ? { purchaseUnitId: values.purchaseUnitId, salesUnitsPerPurchaseUnit: values.salesUnitsPerPurchaseUnit } : null;
-      body.supplierPurchasePrices = (values.supplierIds || []).flatMap((supplierId: string) => {
-        const price = values.purchasePrices?.[supplierId];
-        return price === undefined || price === null || price === '' ? [] : [{ supplierId, supplyPrice: String(price), expectedVersionId: editing?.supplierPurchasePrices?.find(row => row.supplierId === supplierId)?.expectedVersionId ?? null }];
-      });
-      delete body.purchasePrices;
-      delete body.purchaseEnabled; delete body.purchaseUnitId; delete body.salesUnitsPerPurchaseUnit; delete body.brand;
+      delete body.purchaseUnitId; delete body.salesUnitsPerPurchaseUnit; delete body.brand;
       if (!editing) delete body.isActive;
       await request<Product>(`/products${editing ? `/${editing.id}` : ''}`, { method: editing ? 'PATCH' : 'POST', body: { ...body, ...(editing ? { expectedVersion: editing.version } : {}) } });
       setEditing(undefined); data.reload(); message.success('商品已保存');
@@ -183,10 +169,10 @@ const useNarrow = () => { const [narrow, setNarrow] = useState(() => typeof wind
           columns={[
             { title: '图片', width: 72, render: (_, row) => <ProductImage id={row.imageFileId} /> },
             { title: '商品名称', dataIndex: 'name', ellipsis: narrow, render: (_, row) => <span className="product-cell-name" title={row.name}>{row.name}</span> },
-            ...(narrow ? [{ title: '销售价格', dataIndex: 'defaultSalesPrice', align: 'right' as const, width: 96, render: money }] : [
+            ...(narrow ? [{ title: '商品价格（参考）', dataIndex: 'defaultSalesPrice', align: 'right' as const, width: 118, render: money }] : [
               { title: '分类', width: 130, render: (_: unknown, row: Product) => categories.rows.find(item => item.id === row.categoryId)?.name || '-' },
               { title: '销售单位', width: 92, render: (_: unknown, row: Product) => units.rows.find(item => item.id === row.baseUnitId)?.name || '-' },
-              { title: '销售价格', dataIndex: 'defaultSalesPrice', align: 'right' as const, width: 110, render: money },
+              { title: '商品价格（参考）', dataIndex: 'defaultSalesPrice', align: 'right' as const, width: 140, render: money },
               { title: '状态', width: 72, render: (_: unknown, row: Product) => <Tag color={row.isActive ? 'green' : 'default'}>{row.isActive ? '启用' : '停用'}</Tag> },
             ]),
             { title: '操作', width: 64, fixed: narrow ? undefined : 'right', render: (_, row) => <div className="row-actions">
@@ -196,21 +182,39 @@ const useNarrow = () => { const [narrow, setNarrow] = useState(() => typeof wind
       </div>
     </section>
     <Modal className="product-editor" title={`${writable ? editing ? '编辑' : '新增' : '查看'}商品`} open={editing !== undefined} width={840} style={{ top: 24 }} onOk={() => save()} okText="保存" cancelText="取消" footer={!writable ? null : undefined}
-      confirmLoading={saving} okButtonProps={{ disabled: uploading || Boolean(referencesError) || categories.loading || units.loading || brands.loading || suppliers.loading }} closable={!saving && !uploading} maskClosable={!saving && !uploading} keyboard={!saving && !uploading} onCancel={() => { if (!saving && !uploading) setEditing(undefined); }}>
+      confirmLoading={saving} okButtonProps={{ disabled: uploading || Boolean(referencesError) || categories.loading || units.loading || brands.loading }} closable={!saving && !uploading} maskClosable={!saving && !uploading} keyboard={!saving && !uploading} onCancel={() => { if (!saving && !uploading) setEditing(undefined); }}>
       {(error || referencesError) && <Alert type="error" title={error || referencesError} showIcon />}
-      <Form form={form} layout="vertical" disabled={!writable || saving || uploading} className="compact-form" onFieldsChange={() => setInvalidTabs([...new Set(form.getFieldsError().filter(field => field.errors.length).map(field => fieldTab(String(field.name[0]))))])}>
-        <Tabs activeKey={activeTab} onChange={setActiveTab} destroyOnHidden={false} items={[
-          { key: 'basic', forceRender: true, label: <span>基本信息{invalidTabs.includes('basic') && <span className="product-tab-error" aria-label="基本信息有错误">!</span>}</span>, children: <div className="form-grid">
+      {writable && <Alert type="info" showIcon message="供应商关联、供货价与上下架请在“供应商管理 > 管理商品”中维护。" />}
+      <Form form={form} layout="vertical" disabled={!writable || saving || uploading} className="compact-form product-form">
+        <section className="product-form-section" aria-label="商品信息">
+          <div className="product-form-heading">商品信息</div>
+          <div className="form-grid">
         <Form.Item className="full-width" name="name" label="商品名称" rules={[{ required: true, whitespace: true, message: '请填写商品名称' }]}><Input maxLength={200} /></Form.Item>
         <Form.Item name="categoryId" label="商品分类" rules={[{ required: true, message: '请选择商品分类' }]}><TreeSelect showSearch treeNodeFilterProp="title" treeDefaultExpandAll treeData={categoryTree} /></Form.Item>
         <Form.Item name="baseUnitId" label="销售单位" rules={[{ required: true, message: '请选择销售单位' }]}><Select showSearch optionFilterProp="label" options={options(units.rows)} onChange={() => form.setFieldsValue({ purchaseUnitId: undefined, salesUnitsPerPurchaseUnit: undefined })} /></Form.Item>
-        <Form.Item name="defaultSalesPrice" label="销售价格" rules={decimal('销售价格', 2)}><InputNumber aria-label="销售价格" stringMode min="0" precision={2} suffix={salesUnitId ? `元/${units.rows.find(row => row.id === salesUnitId)?.name || '销售单位'}` : '元'} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="defaultSalesPrice" label="商品价格（参考）" rules={decimal('商品价格', 2)}><InputNumber aria-label="商品价格（参考）" stringMode min="0" precision={2} suffix={salesUnitId ? `元/${units.rows.find(row => row.id === salesUnitId)?.name || '销售单位'}` : '元'} style={{ width: '100%' }} /></Form.Item>
         <Form.Item name="storageCondition" label="储存条件"><Select options={[{ value: 'AMBIENT', label: '常温' }, { value: 'CHILLED', label: '冷藏' }, { value: 'FROZEN', label: '冷冻' }, { value: 'WARM', label: '保温' }]} /></Form.Item>
         <Form.Item name="brandId" label="品牌"><Select placeholder={editing?.brandId ? undefined : editing?.brand || undefined} allowClear showSearch optionFilterProp="label" options={options(brands.rows)} /></Form.Item>
         <Form.Item name="specification" label="规格"><Input maxLength={240} /></Form.Item>
         <Form.Item name="barcode" label="条码"><Input maxLength={100} /></Form.Item>
         <Form.Item name="sku" label="货号（选填）"><Input maxLength={100} /></Form.Item>
         {editing && <Form.Item name="isActive" label="启用" valuePropName="checked"><Switch /></Form.Item>}
+          </div>
+        </section>
+        <section className="product-form-section" aria-label="单位换算">
+          <div className="product-form-heading">单位换算 <span className="product-form-note">选填；采购单位与销售单位不同时设置换算关系</span></div>
+          <div className="form-grid"><PurchaseUnitFields units={units.rows} salesUnitId={salesUnitId} /></div>
+        </section>
+        <section className="product-form-section" aria-label="订货规则">
+          <div className="product-form-heading">订货规则 <span className="product-form-note">默认最小起订量和订购倍数均为 1 个销售单位</span></div>
+          <div className="form-grid">
+            <Form.Item name="minOrderQty" label="最小起订量" rules={[positiveIntegerRule('最小起订量')]}><InputNumber stringMode min="1" step="1" precision={0} style={{ width: '100%' }} /></Form.Item>
+            <Form.Item name="orderMultiple" label="订购倍数" rules={[positiveIntegerRule('订购倍数')]}><InputNumber stringMode min="1" step="1" precision={0} style={{ width: '100%' }} /></Form.Item>
+          </div>
+        </section>
+        <section className="product-form-section" aria-label="商品图片">
+          <div className="product-form-heading">商品图片 <span className="product-form-note">正方形展示；上传时可裁切，图片大于 2MB 自动压缩</span></div>
+          <div className="form-grid">
         <Form.Item name="imageFileId" hidden><Input /></Form.Item>
         <Form.Item className="full-width" label="商品图片"><div className="actions"><ProductImage id={imageId || null} />{writable && <>
           <ProductImageUpload disabled={saving || uploading} onBusy={setUploading} onUpload={async file => {
@@ -221,30 +225,8 @@ const useNarrow = () => { const [narrow, setNarrow] = useState(() => typeof wind
           }} />
           <Button disabled={saving || uploading || !imageId} onClick={() => form.setFieldValue('imageFileId', null)}>移除</Button>
         </>}</div></Form.Item>
-          </div> },
-          { key: 'supply', forceRender: true, label: <span>供应与采购{invalidTabs.includes('supply') && <span className="product-tab-error" aria-label="供应与采购有错误">!</span>}</span>, children: <>
-        <section className="product-supplier-section" aria-label="供应商与采购价">
-          <Form.Item name="supplierIds" label="关联供应商"><Select mode="multiple" placeholder="选择供应商" showSearch optionFilterProp="label" options={options(suppliers.rows.filter(row => !row.isArchived && (row.status === 'ACTIVE' || editing?.supplierIds?.includes(row.id))))} /></Form.Item>
-          <div className="product-supplier-heading"><span>供应商名称</span><span>仓库采购价（选填）</span><span /></div>
-          {selectedSupplierIds.length === 0 && <div className="product-supplier-empty">暂无关联供应商</div>}
-          {selectedSupplierIds.map(supplierId => {
-            const name = suppliers.rows.find(row => row.id === supplierId)?.name || '供应商';
-            const unit = units.rows.find(row => row.id === salesUnitId)?.name;
-            const existingPrice = editing?.supplierPurchasePrices?.find(row => row.supplierId === supplierId)?.supplyPrice;
-            return <div className="product-supplier-row" key={supplierId}>
-              <span className="product-supplier-name" title={name}>{name}</span>
-              <div className="product-supplier-price"><Form.Item name={['purchasePrices', supplierId]} rules={[{ validator: async (_, value) => { if (value === undefined || value === null || value === '') return; if (typeof value !== 'string' || !/^\d{1,14}(\.\d{1,2})?$/.test(value)) throw new Error('采购价须为非负数，最多2位小数'); } }]}><InputNumber aria-label={name} stringMode min="0" precision={2} placeholder={existingPrice !== undefined ? `当前 ${existingPrice}` : '未设置'} style={{ width: '100%' }} /></Form.Item><span className="product-price-unit">{unit ? `元/${unit}` : '元/销售单位'}</span></div>
-              <Tooltip title={`移除${name}`}><Button type="text" aria-label={`移除关联供应商${name}`} disabled={!writable || saving || uploading} icon={<X size={16} />} onClick={() => form.setFieldValue('supplierIds', selectedSupplierIds.filter(id => id !== supplierId))} /></Tooltip>
-            </div>;
-          })}
-          <div className="form-grid product-conversion-fields"><PurchaseUnitFields units={units.rows} /></div>
+          </div>
         </section>
-          </> },
-          { key: 'rules', forceRender: true, label: <span>订货规则{invalidTabs.includes('rules') && <span className="product-tab-error" aria-label="订货规则有错误">!</span>}</span>, children: <div className="form-grid">
-        <Form.Item name="minOrderQty" label="最小起订量" rules={[positiveIntegerRule('最小起订量')]}><InputNumber stringMode min="1" step="1" precision={0} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="orderMultiple" label="订购倍数" rules={[positiveIntegerRule('订购倍数')]}><InputNumber stringMode min="1" step="1" precision={0} style={{ width: '100%' }} /></Form.Item>
-          </div> },
-        ]} />
       </Form>
     </Modal>
 

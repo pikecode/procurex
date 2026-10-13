@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Alert, App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Switch, Table, Tabs, Tag, Tooltip, Tree } from 'antd';
+import { Alert, App, Button, Form, Grid, Input, InputNumber, Modal, Popconfirm, Select, Switch, Table, Tabs, Tag, Tooltip, Tree } from 'antd';
 import { EyeOff, Link2, PackageCheck, Pencil, Save, Trash2 } from 'lucide-react';
 import { ListPage } from '../components/ListPage';
 import { hasRole, request, type User } from '../lib/api';
@@ -19,6 +19,7 @@ const cycle = choices({ IMMEDIATE: '现结', WEEKLY: '周结', HALF_MONTHLY: '�
 const supplierTypes = choices({ HEADQUARTERS: '总部对接', DIRECT: '直送门店' });
 const fields = [['name', '供应商名称', 200], ['contactName', '业务联系人', 120], ['contactPhone', '业务联系号码', 32], ['deliveryContactPhone', '配送联系号码', 32], ['address', '地址', 300], ['bankName', '开户行', 200], ['bankAccountName', '开户名', 200], ['bankAccount', '银行账户', 80], ['taxpayerId', '纳税人识别号', 80], ['invoiceTitle', '发票抬头', 200]] as const;
 export default function Suppliers({ user }: { user: User }) {
+  const screens = Grid.useBreakpoint();
   const data = useRows<Supplier>('/suppliers'); const products = useRows<Product>('/products'); const writable = hasRole(user, 'ADMIN', 'PURCHASER');
   const categories = useRows<{ id: string; name: string; parentId: string | null }>('/categories'); const units = useRows<{ id: string; name: string }>('/units');
   const [removals, setRemovals] = useState<string[]>([]);
@@ -67,7 +68,7 @@ export default function Suppliers({ user }: { user: User }) {
       const result = await request<Links>(`/suppliers/${linking.id}/products`, { method: 'PUT', body: { expectedVersion: links.version, productIds: selected, prices: changedPrices } });
       const statuses = await request<{ items: ManagedProduct[] }>(`/suppliers/${linking.id}/managed-products`);
       setLinks(result); setSelected(result.productIds); setManaged(Object.fromEntries(statuses.items.map(item => [item.id, item]))); setPriceDrafts({}); setRemovals([]);
-      data.reload(); products.reload(); message.success('商品及供货价已保存');
+      data.reload(); products.reload(); message.success('商品配置及供应商价格已保存');
     }
     catch (failure) { setError((failure as Error).message); } finally { lock.current = false; setSaving(false); }
   };
@@ -83,16 +84,16 @@ export default function Suppliers({ user }: { user: User }) {
     finally { lock.current = false; setSaving(false); }
   };
   const productColumns = [
-    { title: '商品名称', dataIndex: 'name', width: 220 },
-    { title: '分类', width: 140, render: (_: unknown, row: Product) => categories.rows.find(item => item.id === row.categoryId)?.name || '-' },
-    { title: '规格', dataIndex: 'specification', width: 160 },
-    { title: '单位', width: 90, render: (_: unknown, row: Product) => units.rows.find(item => item.id === row.baseUnitId)?.name || '-' },
-    { title: '销售价格', width: 140, align: 'right' as const, render: (_: unknown, row: Product) => row.defaultSalesPrice == null ? '-' : `¥${Number(row.defaultSalesPrice).toFixed(2)}` },
-    ...(!adding ? [{ title: '供货价', width: 150, render: (_: unknown, row: Product) => {
+    { title: '商品名称', dataIndex: 'name', width: 190, fixed: screens.lg ? 'left' as const : undefined },
+    ...(!adding ? [{ title: <Tooltip title="当前供应商按销售单位供货的价格，修改后点击保存修改生效">供应商价格</Tooltip>, width: 150, fixed: screens.lg ? 'left' as const : undefined, render: (_: unknown, row: Product) => {
       const saved = links?.prices?.find(price => price.productId === row.id);
       const value = priceDrafts[row.id] ?? saved?.supplyPrice ?? row.defaultSalesPrice ?? undefined;
-      return writable ? <InputNumber aria-label={`${row.name}供货价`} stringMode min="0" max="9999999999.99" precision={2} step="0.01" prefix="¥" style={{ width: '100%' }} placeholder="未设置" value={value} disabled={saving || !links || !selected.includes(row.id)} onChange={next => setPriceDrafts(current => { const updated = { ...current }; if (next === null) delete updated[row.id]; else updated[row.id] = String(next); return updated; })} /> : value === undefined ? '-' : `¥${Number(value).toFixed(2)}`;
+      return writable ? <InputNumber aria-label={`${row.name}供应商价格`} stringMode min="0" max="9999999999.99" precision={2} step="0.01" prefix="¥" style={{ width: '100%' }} placeholder="未设置" value={value} disabled={saving || !links || !selected.includes(row.id)} onChange={next => setPriceDrafts(current => { const updated = { ...current }; if (next === null) delete updated[row.id]; else updated[row.id] = String(next); return updated; })} /> : value === undefined ? '-' : `¥${Number(value).toFixed(2)}`;
     } }] : []),
+    { title: '商品价格（参考）', width: 140, align: 'right' as const, render: (_: unknown, row: Product) => row.defaultSalesPrice == null ? '-' : `¥${Number(row.defaultSalesPrice).toFixed(2)}` },
+    { title: '销售单位', width: 80, render: (_: unknown, row: Product) => units.rows.find(item => item.id === row.baseUnitId)?.name || '-' },
+    { title: '分类', width: 120, render: (_: unknown, row: Product) => categories.rows.find(item => item.id === row.categoryId)?.name || '-' },
+    { title: '规格', dataIndex: 'specification', width: 110 },
     ...(!adding ? [{ title: '供货状态', width: 100, render: (_: unknown, row: Product) => !row.isActive ? <Tag>商品已停用</Tag> : managed[row.id]?.supplyEnabled ? <Tag color="success">已上架</Tag> : <Tag>已下架</Tag> }] : []),
   ];
   const changedPrices: ProductPrice[] = selected.flatMap(productId => {
