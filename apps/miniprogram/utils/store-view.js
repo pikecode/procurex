@@ -87,6 +87,42 @@ function monthRange() {
   return { from: first, to: nextMonth.toISOString().slice(0, 10) };
 }
 
+function reportPreset(preset, now = new Date().toISOString()) {
+  const today = dateText(now, false);
+  const date = new Date(today + 'T00:00:00Z');
+  if (preset === 'today') return { from: today, to: today };
+  if (preset === 'week') {
+    date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
+    return { from: date.toISOString().slice(0, 10), to: today };
+  }
+  if (preset === 'lastMonth') {
+    date.setUTCDate(0);
+    return { from: date.toISOString().slice(0, 8) + '01', to: date.toISOString().slice(0, 10) };
+  }
+  return { from: today.slice(0, 8) + '01', to: today };
+}
+
+function reportRangeError(range) {
+  const valid = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && !Number.isNaN(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;
+  if (!valid(range.from) || !valid(range.to)) return '请选择有效的开始和结束日期';
+  if (range.from > range.to) return '开始日期不能晚于结束日期';
+  const limit = new Date(range.from + 'T00:00:00Z');
+  limit.setUTCMonth(limit.getUTCMonth() + 3);
+  if (range.to > limit.toISOString().slice(0, 10)) return '查询区间不能超过三个月';
+  return '';
+}
+
+function reportSummary(orderAmount, productQuantity) {
+  const cents = value => {
+    const [whole, fraction = ''] = String(value || '0').split('.');
+    return Number(whole) * 100 + Number(fraction.padEnd(2, '0').slice(0, 2));
+  };
+  const months = orderAmount.months || [];
+  return { amount: (months.reduce((total, row) => total + cents(row.totalAmount), 0) / 100).toFixed(2),
+    count: months.reduce((total, row) => total + Number(row.orderCount || 0), 0),
+    productCount: (productQuantity.products || []).length };
+}
+
 function statementPeriod(statement) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(statement.periodStart || '') || !/^\d{4}-\d{2}-\d{2}$/.test(statement.periodEndExclusive || '')) return '';
   const end = new Date(statement.periodEndExclusive + 'T00:00:00Z');
@@ -95,4 +131,29 @@ function statementPeriod(statement) {
   return `${statement.periodStart} 至 ${end.toISOString().slice(0, 10)}`;
 }
 
-module.exports = { dateText, decimalText, orderStage, orderStageTone, statusTone, previewGroups, requestGroups, previewSignature, monthRange, statementPeriod };
+function checkoutFunding(preview) {
+  const cents = value => {
+    const text = String(value ?? '');
+    if (!/^-?\d+(\.\d{1,2})?$/.test(text)) return null;
+    const [whole, fraction = ''] = text.replace('-', '').split('.');
+    const result = (Number(whole) * 100 + Number(fraction.padEnd(2, '0'))) * (text.startsWith('-') ? -1 : 1);
+    return Number.isSafeInteger(result) ? result : null;
+  };
+  const stored = preview?.funding?.stored;
+  const credit = preview?.funding?.credit;
+  const required = cents(stored?.required);
+  const creditRequired = credit ? cents(credit.required) : 0;
+  const available = cents(stored?.available);
+  const creditAvailable = cents(credit?.available);
+  const total = cents(preview?.totals?.salesGoodsAmount);
+  const format = amount => (amount / 100).toFixed(2);
+  return {
+    usesStored: required !== null && required > 0,
+    usesCredit: creditRequired !== null && creditRequired > 0,
+    storedRemaining: required !== null && available !== null && available >= required ? format(available - required) : null,
+    creditRemaining: creditRequired !== null && creditAvailable !== null && creditAvailable >= creditRequired ? format(creditAvailable - creditRequired) : null,
+    termAmount: total !== null && required !== null && creditRequired !== null && total > required + creditRequired ? format(total - required - creditRequired) : null,
+  };
+}
+
+module.exports = { dateText, decimalText, orderStage, orderStageTone, statusTone, previewGroups, requestGroups, previewSignature, monthRange, statementPeriod, checkoutFunding, reportPreset, reportRangeError, reportSummary };

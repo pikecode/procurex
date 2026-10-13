@@ -443,4 +443,12 @@ R04 `POST /exports` 返回 202 和 jobId；`GET /exports` 返回本人最近未�
 - `POST /auth/test-identity`：仅 ADMIN，接收 `userId`，返回该账号的有效业务身份。
 - 业务请求附带 `x-test-user-id`，服务端实时校验目标账号；实际操作者仍为管理员，权限和数据范围使用目标账号。
 - 获取身份列表、切换及返回管理员时不附带该请求头。`GET /me` 不带测试头返回管理员身份。
-- 仅非生产环境显式开启；默认关闭。详见 [测试工作台](admin-test-workbench.md)。
+- 默认关闭；非生产环境使用开发开关，线上需独立管理员及目标账号白名单验收开关。详见 [测试工作台](admin-test-workbench.md) 和 [线上验收身份](online-acceptance-workbench.md)。
+
+## 采购统计补充（2026-10-13）
+
+采购小程序最终只调用 `GET /reports/order-amounts` 和 `GET /reports/product-quantities`，不请求毛利接口。订单金额明细新增 `supplierOrderNo`、`storeName`、`supplierName`，仍统计所有结算方式的已完成订单；后台毛利报表保留。
+
+订单金额接口可选 `includeItems=true` 返回按订单嵌套的商品明细，包含图片文件ID、商品名称、交易单位、实收数量、单价及实收商品金额；金额按实收数量和对应单价计算，逐行四舍五入到分。默认不返回嵌套商品。供应商范围使用供货单价/金额，不泄露门店销售单价；`includeItems` 非true/false返回400。日期、门店、供应商范围约束与原接口保持一致。
+
+`GET /reports/profit` 增加可选 `dateBasis=completedAt|firstShippedAt`，非法值返回400。省略时保持历史首次发货日期口径；采购小程序显式传入 `completedAt`，与金额及商品数量报表统一，按北京时间开始日00:00至结束日次日00:00（左闭右开）查询已完成订单。毛利继续排除供应商账期订单，不含运费。明细增加 `supplierOrderNo`、`storeName`、`supplierName`、`completedAt`，权限保持不变。无数据库结构变更。

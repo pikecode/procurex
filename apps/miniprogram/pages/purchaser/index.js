@@ -25,7 +25,6 @@ Page({
     procurementTasks: [],
     pendingFreight: [],
     pendingCommand: null,
-    commandHistory: [],
     recovering: false,
     search: '',
     statusFilter: 'all',
@@ -47,11 +46,24 @@ Page({
     expandedOrders: {},
     showOriginalRequest: false,
     reallocateReason: '供应商拒单后改派',
-    reportRange: view.monthRange(),
+    reportRange: view.reportPreset('month'),
+    reportDraft: view.reportPreset('month'),
+    reportPreset: 'month',
+    reportsLoading: false,
+    reportsError: '',
+    reportSummary: null,
+    visibleReportOrders: [],
+    reportSupplierGroups: [],
+    reportFilterDraft: { storeId: '', supplierId: '' },
+    reportFilters: { storeId: '', supplierId: '' },
+    reportStoreOptions: [{ id: '', name: '全部门店' }],
+    reportSupplierOptions: [{ id: '', name: '全部供应商' }],
+    reportStoreIndex: 0,
+    reportSupplierIndex: 0,
+    moreReportDetails: false,
     reports: {
       orderAmount: null,
       productQuantity: null,
-      profit: null
     },
     loading: false,
     detailing: false,
@@ -70,12 +82,15 @@ Page({
     const user = api.openWorkspace('purchaser');
     if (!user) return;
     if (this.data.user.id !== user.id) {
+      this.setData({ reportRange: view.reportPreset('month'), reportDraft: view.reportPreset('month'), reportPreset: 'month', reportSummary: null, reportsError: '',
+        reportFilterDraft: { storeId: '', supplierId: '' }, reportFilters: { storeId: '', supplierId: '' }, reportStoreIndex: 0, reportSupplierIndex: 0,
+        reportStoreOptions: [{ id: '', name: '全部门店' }], reportSupplierOptions: [{ id: '', name: '全部供应商' }] });
       this.setData({ visibleRequests: [], search: '', statusFilter: 'all', activeView: 'tasks', taskType: 'requests', taskOrigin: false });
       this.setData({ requests: [], rejectionTodos: [], selectedRequest: null, requestId: '', rejectedOrderId: '', targetSupplierId: '',
         suppliers: [], supplierIndex: -1, assignmentItems: [], assignmentGroups: [], showPriceDetails: false, detailError: '', result: null, freightConfirmations: [], selectedFreight: null, procurementTasks: [], pendingFreight: [],
-        reports: { orderAmount: null, productQuantity: null, profit: null } });
+        reports: { orderAmount: null, productQuantity: null } });
     }
-    this.setData({ user, roleText: '采购', reportRange: view.monthRange() });
+    this.setData({ user, roleText: '采购' });
     this.syncCommands();
     this.loadWork();
     if (this.data.requestId && !this.data.detailing && !this.data.confirming && !this.data.reallocating && !this.data.recovering) this.loadRequestDetail();
@@ -83,10 +98,9 @@ Page({
 
   syncCommands() {
     if (!api.roleCommandState) return;
-    if (api.currentUser && !api.currentUser()) { this.setData({ pendingCommand: null, commandHistory: [] }); return; }
+    if (api.currentUser && !api.currentUser()) { this.setData({ pendingCommand: null }); return; }
     const state = api.roleCommandState('purchaser');
-    this.setData({ pendingCommand: state.pending ? { ...state.pending, dateText: view.dateText(state.pending.createdAt) } : null,
-      commandHistory: state.history.map(item => ({ ...item, dateText: view.dateText(item.finishedAt) })) });
+    this.setData({ pendingCommand: state.pending ? { ...state.pending, dateText: view.dateText(state.pending.createdAt) } : null });
   },
   async submitCommand(path, options) {
     const actorId = api.currentUser ? (api.currentUser() || {}).id : undefined;
@@ -196,9 +210,11 @@ Page({
   },
 
   async loadSuppliers() {
+    const actorId = this.data.user.id;
     try {
       const suppliers = await api.request('/suppliers');
-      this.setData({ suppliers: suppliers.filter(item => item.status === 'ACTIVE') });
+      if (actorId !== this.data.user.id) return;
+      this.setData({ suppliers: suppliers.filter(item => item.status === 'ACTIVE'), reportSupplierOptions: [{ id: '', name: '全部供应商' }, ...suppliers.map(row => ({ id: row.id, name: row.name }))] });
     } catch (error) {
       this.setData({ error: error.message });
     }
@@ -239,7 +255,7 @@ Page({
       if (this.data.user.id !== actorId) return;
       const names = new Map((Array.isArray(stores) ? stores : []).map(item => [item.id, item.name]));
       const rows = Array.isArray(requests) ? requests.map(item => ({ ...item, storeName: item.storeName || names.get(item.storeId) || '', submittedText: view.dateText(item.submittedAt) })) : [];
-      this.setData({ requests: rows, procurementTasks: rows.filter(item => item.status === 'PENDING_PROCUREMENT') });
+      this.setData({ requests: rows, procurementTasks: rows.filter(item => item.status === 'PENDING_PROCUREMENT'), reportStoreOptions: [{ id: '', name: '全部门店' }, ...(Array.isArray(stores) ? stores : []).map(row => ({ id: row.id, name: row.name }))] });
       this.refreshList();
     } catch (error) {
       this.setData({ error: error.message });
@@ -382,20 +398,118 @@ Page({
     if (url) wx.previewImage({ current: url, urls: [url] });
   },
 
-  async loadReports(toggleLoading = true) {
-    if (toggleLoading) this.setData({ loading: true, error: '' });
+  chooseReportPreset(event) {
+    const preset = event.currentTarget.dataset.preset;
+    if (!['today', 'week', 'month', 'lastMonth'].includes(preset)) return;
+    const range = view.reportPreset(preset);
+    this.setData({ reportPreset: preset, reportDraft: range, reportRange: range, reportFilters: { ...this.data.reportFilterDraft } });
+    return this.loadReports();
+  },
+
+  changeReportDate(event) {
+    const field = event.currentTarget.dataset.field;
+    if (!['from', 'to'].includes(field)) return;
+    this.setData({ reportPreset: 'custom', reportDraft: { ...this.data.reportDraft, [field]: event.detail.value } });
+  },
+
+  applyReportRange() {
+    const error = view.reportRangeError(this.data.reportDraft);
+    if (error) { this.setData({ reportsError: error }); return; }
+    this.setData({ reportRange: { ...this.data.reportDraft }, reportFilters: { ...this.data.reportFilterDraft } });
+    return this.loadReports();
+  },
+
+  chooseReportFilter(event) {
+    const field = event.currentTarget.dataset.field;
+    if (!['storeId', 'supplierId'].includes(field)) return;
+    const index = Number(event.detail.value);
+    const options = field === 'storeId' ? this.data.reportStoreOptions : this.data.reportSupplierOptions;
+    if (!options[index]) return;
+    this.setData({ reportFilterDraft: { ...this.data.reportFilterDraft, [field]: options[index].id },
+      [field === 'storeId' ? 'reportStoreIndex' : 'reportSupplierIndex']: index });
+  },
+
+  refreshReportDetails(limit = 5) {
+    const orders = this.data.reports.orderAmount?.orders || [];
+    const groups = new Map();
+    for (const order of orders) {
+      const key = order.supplierId || order.supplierOrderId;
+      if (!groups.has(key)) groups.set(key, { supplierId: key, supplierName: order.supplierName || '供应商', orders: [] });
+      groups.get(key).orders.push(order);
+    }
+    const visibleGroups = [...groups.values()].slice(0, limit);
+    this.setData({ visibleReportOrders: visibleGroups.flatMap(group => group.orders), reportSupplierGroups: visibleGroups, reportSupplierLimit: limit, moreReportDetails: groups.size > limit });
+  },
+
+  nextReportDetails() { this.refreshReportDetails((this.data.reportSupplierLimit || 5) + 5); },
+
+  toggleReportOrder(event) {
+    const id = event.currentTarget.dataset.id;
+    const orders = this.data.reports.orderAmount?.orders;
+    const order = orders?.find(row => row.supplierOrderId === id);
+    if (!order) return;
+    order.open = !order.open;
+    this.setData({ reports: { ...this.data.reports, orderAmount: { ...this.data.reports.orderAmount, orders } } });
+    this.refreshReportDetails(this.data.reportSupplierLimit);
+    if (order.open) this.loadReportImages(id);
+  },
+
+  updateReportImage(fileId, state) {
+    const report = this.data.reports.orderAmount;
+    if (!report) return;
+    const orders = report.orders.map(order => ({ ...order, items: (order.items || []).map(item => item.imageFile?.id === fileId ? { ...item, ...state } : item) }));
+    this.setData({ reports: { ...this.data.reports, orderAmount: { ...report, orders } } });
+    this.refreshReportDetails(this.data.reportSupplierLimit);
+  },
+
+  async loadReportImages(orderId) {
+    const order = this.data.reports.orderAmount?.orders.find(row => row.supplierOrderId === orderId);
+    if (!order) return;
+    const sequence = this.reportSequence, actorId = this.data.user.id;
+    const files = [...new Map(order.items.filter(item => item.imageFile?.id && !item.imageUrl && !item.imageLoading && !item.imageFailed).map(item => [item.imageFile.id, item.imageFile])).values()];
+    for (const file of files) this.updateReportImage(file.id, { imageLoading: true });
+    for (const file of files) {
+      let imageUrl = '', imageFailed = false;
+      try { imageUrl = await api.imagePath(file); } catch { imageFailed = true; }
+      if (sequence !== this.reportSequence || actorId !== this.data.user.id) return;
+      this.updateReportImage(file.id, { imageUrl, imageFailed, imageLoading: false });
+    }
+  },
+
+  retryReportImage(event) {
+    const orders = this.data.reports.orderAmount?.orders || [];
+    const order = orders.find(row => row.items.some(item => item.id === event.detail?.productId));
+    const item = order?.items.find(row => row.id === event.detail?.productId);
+    if (!item?.imageFile?.id || item.imageLoading) return;
+    this.updateReportImage(item.imageFile.id, { imageFailed: false });
+    return this.loadReportImages(order.supplierOrderId);
+  },
+
+  async loadReports() {
+    const sequence = this.reportSequence = (this.reportSequence || 0) + 1;
+    const actor = this.data.user.id;
+    const selectedRange = { ...this.data.reportRange };
+    const invalid = view.reportRangeError(selectedRange);
+    if (invalid) { this.setData({ reportsError: invalid }); return; }
+    this.setData({ reportsLoading: true, reportsError: '', reportSummary: null, visibleReportOrders: [], reportSupplierGroups: [], moreReportDetails: false, reports: { orderAmount: null, productQuantity: null } });
     try {
-      const range = `from=${this.data.reportRange.from}&to=${this.data.reportRange.to}`;
-      const [orderAmount, productQuantity, profit] = await Promise.all([
-        api.request(`/reports/order-amounts?${range}`),
-        api.request(`/reports/product-quantities?${range}`),
-        api.request(`/reports/profit?${range}`)
+      const filters = this.data.reportFilters;
+      const range = `from=${selectedRange.from}&to=${selectedRange.to}${filters.storeId ? '&storeId=' + encodeURIComponent(filters.storeId) : ''}${filters.supplierId ? '&supplierId=' + encodeURIComponent(filters.supplierId) : ''}`;
+      const [orderAmount, productQuantity] = await Promise.all([
+        api.request(`/reports/order-amounts?${range}&includeItems=true`),
+        api.request(`/reports/product-quantities?${range}`)
       ]);
-      this.setData({ reports: { orderAmount, productQuantity, profit } });
+      if (sequence !== this.reportSequence || actor !== this.data.user.id) return;
+      if ((orderAmount.orders || []).some(row => !Array.isArray(row.items))) throw new Error('统计商品接口尚未更新，请更新 API 后重新查询');
+      const orders = (orderAmount.orders || []).map(row => ({ ...row, open: false, completedText: view.dateText(row.completedAt),
+        items: row.items.map(item => ({ ...item, quantityText: view.decimalText(item.receivedQuantity) })) }));
+      const products = (productQuantity.products || []).map(row => ({ ...row, quantityText: view.decimalText(row.quantity) }));
+      this.setData({ reports: { orderAmount: { ...orderAmount, orders }, productQuantity: { ...productQuantity, products } }, reportSummary: view.reportSummary(orderAmount, productQuantity) });
+      this.refreshReportDetails();
     } catch (error) {
-      this.setData({ error: error.message });
+      if (sequence === this.reportSequence && actor === this.data.user.id) this.setData({ reportsError: error.message });
     } finally {
-      if (toggleLoading) this.setData({ loading: false });
+      if (sequence === this.reportSequence && actor === this.data.user.id) this.setData({ reportsLoading: false });
     }
   },
 

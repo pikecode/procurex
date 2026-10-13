@@ -20,7 +20,6 @@ Page({
     shippingTasks: [],
     differenceTasks: [],
     pendingCommand: null,
-    commandHistory: [],
     recovering: false,
     search: '',
     statusFilter: 'all',
@@ -114,10 +113,9 @@ Page({
 
   syncCommands() {
     if (!api.roleCommandState) return;
-    if (api.currentUser && !api.currentUser()) { this.setData({ pendingCommand: null, commandHistory: [] }); return; }
+    if (api.currentUser && !api.currentUser()) { this.setData({ pendingCommand: null }); return; }
     const state = api.roleCommandState('supplier');
-    this.setData({ pendingCommand: state.pending ? { ...state.pending, dateText: view.dateText(state.pending.createdAt) } : null,
-      commandHistory: state.history.map(item => ({ ...item, dateText: view.dateText(item.finishedAt) })) });
+    this.setData({ pendingCommand: state.pending ? { ...state.pending, dateText: view.dateText(state.pending.createdAt) } : null });
   },
   async submitCommand(path, options) {
     const actorId = api.currentUser ? (api.currentUser() || {}).id : undefined;

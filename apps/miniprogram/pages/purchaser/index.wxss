@@ -4,7 +4,7 @@
 
 .procurement-tabs {
   display: flex;
-  gap: 16rpx;
+  gap: 12rpx;
   padding: 12rpx 24rpx;
 }
 .procurement-tab {
@@ -32,21 +32,22 @@
 
 /* ---------- 待办列表 ---------- */
 
-/* 吸顶条之下留出间距，列表第一张卡不会贴住工具条。 */
-.procurement-list { margin-top: 20rpx; }
+/* 与分类栏保持相同外侧边距，任务卡片不贴屏幕边缘。 */
+.procurement-list { margin: 16rpx 24rpx 0; }
 .procurement-list-title {
-  padding: 8rpx 4rpx 16rpx;
+  padding: 4rpx 0 8rpx;
   color: var(--ink-3);
   font-size: 23rpx;
 }
 .procurement-task {
-  margin-top: 16rpx;
-  padding: 24rpx 26rpx;
+  margin-top: 12rpx;
+  padding: 24rpx;
   border-radius: 20rpx;
   background: var(--surface);
   transition: background-color .15s ease;
 }
 .procurement-task:active { background: var(--sunken); }
+.procurement-list > .empty-state { padding: 48rpx 16rpx; }
 
 .procurement-task-top,
 .procurement-task-bottom {
@@ -97,3 +98,38 @@
 .freight-row { transition: background-color .15s ease; }
 .freight-row:active { background: var(--sunken); }
 .freight-row .detail-line { padding-top: 12rpx; }
+.report-presets { display: flex; margin-top: 20rpx; border-bottom: 1rpx solid var(--line); }
+.report-presets > view { flex: 1; text-align: center; padding: 18rpx 4rpx; color: var(--ink-3); font-size: 25rpx; border-bottom: 4rpx solid transparent; }
+.report-presets > .selected { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
+.report-date-range { display: flex; align-items: center; gap: 12rpx; margin-top: 20rpx; font-size: 25rpx; }
+.report-date-range picker { flex: 1; min-width: 0; }
+.report-date-range picker > view { padding: 16rpx; background: var(--sunken); border-radius: 8rpx; }
+.report-date-range text { display: block; white-space: nowrap; }
+.report-date-label { margin-bottom: 8rpx; color: var(--ink-3); font-size: 22rpx; }
+.report-query-row { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; margin: 16rpx 0; color: var(--ink-3); font-size: 22rpx; }
+.report-query-row button { margin: 0; flex-shrink: 0; }
+.report-scope { padding: 12rpx 0; color: var(--ink-3); font-size: 23rpx; line-height: 1.5; }
+.report-metric-note { display: block; color: var(--ink-3); font-size: 21rpx; margin-top: 8rpx; line-height: 1.5; }
+.procurement-report-metrics > .metric:first-child { grid-column: 1 / -1; }
+.report-entity-filters { display: flex; gap: 16rpx; margin-top: 16rpx; }
+.report-entity-filters picker { flex: 1; min-width: 0; }
+.report-entity-filters picker > view { padding: 16rpx; background: var(--sunken); border-radius: 8rpx; font-size: 25rpx; }
+.report-entity-filters picker text:last-child { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.report-order-list { margin-top: 24rpx; }
+.report-order { padding: 22rpx 0; border-bottom: 1rpx solid var(--line); }
+.report-order-heading { padding: 8rpx 0; }
+.report-order-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 16rpx; margin-top: 14rpx; font-size: 23rpx; color: var(--ink-3); }
+.report-order-foot > text:last-child { flex-shrink: 0; color: var(--brand); }
+.report-order-products { margin-top: 16rpx; border-top: 1rpx solid var(--line-soft); }
+.report-product { padding: 20rpx 0; border-bottom: 1rpx solid var(--line-soft); }
+.report-order-products .row-title { font-size: 26rpx; }
+.report-order-products .row-title > text:last-child { flex-shrink: 0; }
+.report-order-totals { color: var(--ink-2); }
+.report-supplier-group { margin-top: 24rpx; }
+.report-supplier-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16rpx; padding: 16rpx; background: var(--sunken); border-left: 4rpx solid var(--brand); font-size: 28rpx; font-weight: 600; }
+.report-supplier-heading > text:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.report-supplier-heading > text:last-child { flex-shrink: 0; font-size: 22rpx; color: var(--ink-3); font-weight: 400; }
+.report-supplier-group .report-order { margin-left: 16rpx; padding-left: 16rpx; border-left: 1rpx solid var(--line); }
+.report-supplier-group .report-order:last-child { border-bottom: none; }
+.report-order-heading .row-title document-no { min-width: 0; flex: 1; }
+.report-order-heading .row-title > text:last-child { flex-shrink: 0; }

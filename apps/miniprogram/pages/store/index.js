@@ -91,6 +91,7 @@ Page({
       productQuantity: null
     },
     preview: null,
+    checkoutFunding: {},
     created: null,
     receiptResult: null,
     previewing: false,
@@ -633,7 +634,7 @@ Page({
         method: 'POST',
         data: this.orderInput()
       });
-      this.setData({ preview, previewGroups: storeView.previewGroups(preview, this.data.products, this.data.expandedSupplierId), orderStep: 'confirm', cartOpen: false });
+      this.setData({ preview, checkoutFunding: storeView.checkoutFunding(preview), previewGroups: storeView.previewGroups(preview, this.data.products, this.data.expandedSupplierId), orderStep: 'confirm', cartOpen: false });
     } catch (error) {
       this.setData({ error: orderError(error) });
     } finally {
@@ -649,7 +650,7 @@ Page({
       if (!this.data.pendingOrder) {
         const latest = await api.request('/purchase-requests/preview', { method: 'POST', data: this.orderInput() });
         if (storeView.previewSignature(latest) !== storeView.previewSignature(this.data.preview)) {
-          this.setData({ preview: latest, previewGroups: storeView.previewGroups(latest, this.data.products, this.data.expandedSupplierId), error: '报价或资金状态已变化，请重新核对后提交' });
+          this.setData({ preview: latest, checkoutFunding: storeView.checkoutFunding(latest), previewGroups: storeView.previewGroups(latest, this.data.products, this.data.expandedSupplierId), error: '报价或资金状态已变化，请重新核对后提交' });
           return;
         }
         if (latest.funding.credit && Number(latest.funding.credit.shortfall) > 0) throw new Error('挂账额度不足，请联系财务调整额度后重试');

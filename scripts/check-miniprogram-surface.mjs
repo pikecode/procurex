@@ -198,7 +198,7 @@ for (const [name, markup, source] of [['supplier', supplierWxml, supplierJs], ['
   assertIncludes(markup, 'business-nav', `${name} business navigation`);
   assertIncludes(markup, 'backToList', `${name} detail return path`);
   assertIncludes(markup, 'onSearch', `${name} searchable orders`);
-  assertIncludes(source, 'view.monthRange()', `${name} current month reports`);
+  assertIncludes(source, name === 'purchaser' ? "view.reportPreset('month')" : 'view.monthRange()', `${name} current month reports`);
   assert.ok(!markup.includes('class="hero"'), `${name} operational screen must not use a hero`);
 }
 
@@ -213,7 +213,7 @@ assertIncludes(purchaserJs, 'reallocateReason', 'purchaser rejection reallocatio
 assertIncludes(purchaserJs, 'rejectionHandled', 'purchaser handled rejection guard');
 assertIncludes(purchaserJs, '/reports/order-amounts', 'purchaser order amount report');
 assertIncludes(purchaserJs, '/reports/product-quantities', 'purchaser product quantity report');
-assertIncludes(purchaserJs, '/reports/profit', 'purchaser profit report');
+assert.ok(!purchaserJs.includes('/reports/profit'), 'procurement mini-program must not request profit reports');
 assertIncludes(purchaserWxml, '确认并生成订单', 'purchaser confirmation screen');
 assertIncludes(purchaserWxml, 'changeItemSupplier', 'purchaser per-item supplier assignment');
 assertIncludes(purchaserWxml, '重试', 'purchaser request detail failure recovery');
@@ -224,7 +224,7 @@ assertIncludes(purchaserWxml, '拒单通知', 'purchaser rejection notification 
 assertIncludes(purchaserWxml, '改派原因', 'purchaser reallocation reason screen');
 assertIncludes(purchaserWxml, '确认改派', 'purchaser reallocation screen');
 assertIncludes(purchaserWxml, '统计概览', 'purchaser statistics screen');
-assertIncludes(purchaserWxml, 'reports.profit.totals.profit', 'purchaser profit statistics screen');
+assert.ok(!purchaserWxml.includes('毛利') && !purchaserWxml.includes('reports.profit'), 'procurement mini-program must not render profit analysis');
 
 const miniFlowCheck = await read('scripts/check-miniprogram-flow.mjs');
 for (const endpoint of [

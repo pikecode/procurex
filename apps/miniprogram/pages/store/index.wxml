@@ -48,7 +48,22 @@
     <view class="section-band delivery-info"><text class="section-title">{{store.name || '当前门店'}}</text><text>{{store.address || '收货地址尚未配置'}}</text><text class="secondary-text" wx:if="{{store.contactName || store.contactPhone}}">{{store.contactName}} {{store.contactPhone}}</text><text class="secondary-text">订货日期 {{orderDate}}</text></view>
     <view class="notice notice-warn" wx:if="{{pendingOrder}}">订货提交结果尚未确认，商品和金额已锁定。</view>
     <view class="section-band"><block wx:for="{{previewGroups}}" wx:key="supplierId" wx:for-item="group"><view class="confirm-line" wx:for="{{group.items}}" wx:key="productId" wx:for-item="line"><view class="line-name"><text>{{line.productName}}</text><text class="secondary-text">{{line.quantity}} {{line.unitName}} × ¥{{labels.money(line.salesUnitPrice)}}</text></view><text class="money">¥{{labels.money(line.salesLineAmount)}}</text></view></block></view>
-    <view class="section-band" wx:if="{{preview}}"><view class="amount-row total-row"><text>商品合计</text><text>¥{{labels.money(preview.totals.salesGoodsAmount)}}</text></view><view class="amount-row"><text>储值预冻结</text><text>¥{{labels.money(preview.funding.stored.required)}}</text></view><view class="amount-row"><text>可用余额</text><text>¥{{labels.money(preview.funding.stored.available)}}</text></view><view class="amount-row shortfall-row" wx:if="{{preview.funding.stored.shortfall !== '0.00'}}"><text>待补资金</text><text>¥{{labels.money(preview.funding.stored.shortfall)}}</text></view><block wx:if="{{preview.funding.credit}}"><view class="amount-row"><text>本次挂账</text><text>¥{{labels.money(preview.funding.credit.required)}}</text></view><view class="amount-row"><text>可用挂账额度</text><text>¥{{labels.money(preview.funding.credit.available)}}</text></view><view class="amount-row shortfall-row" wx:if="{{preview.funding.credit.shortfall !== '0.00'}}"><text>额度缺口</text><text>¥{{labels.money(preview.funding.credit.shortfall)}}</text></view></block></view>
+    <view class="section-band" wx:if="{{preview}}">
+      <view class="amount-row total-row"><text>订货金额</text><text>¥{{labels.money(preview.totals.salesGoodsAmount)}}</text></view>
+      <view class="checkout-funding-group" wx:if="{{checkoutFunding.usesStored}}">
+        <view class="amount-row"><text>本次储值预冻结</text><text>¥{{labels.money(preview.funding.stored.required)}}</text></view>
+        <view class="amount-row"><text>当前可用储值</text><text>¥{{labels.money(preview.funding.stored.available)}}</text></view>
+        <view class="amount-row checkout-remaining" wx:if="{{checkoutFunding.storedRemaining !== null}}"><text>预计冻结后可用储值</text><text>¥{{checkoutFunding.storedRemaining}}</text></view>
+        <view class="amount-row shortfall-row" wx:if="{{preview.funding.stored.shortfall !== '0.00'}}"><text>待补资金</text><text>¥{{labels.money(preview.funding.stored.shortfall)}}</text></view>
+      </view>
+      <view class="checkout-funding-group" wx:if="{{checkoutFunding.usesCredit}}">
+        <view class="amount-row"><text>本次挂账</text><text>¥{{labels.money(preview.funding.credit.required)}}</text></view>
+        <view class="amount-row"><text>当前可用挂账额度</text><text>¥{{labels.money(preview.funding.credit.available)}}</text></view>
+        <view class="amount-row checkout-remaining" wx:if="{{checkoutFunding.creditRemaining !== null}}"><text>预计提交后剩余额度</text><text>¥{{checkoutFunding.creditRemaining}}</text></view>
+        <view class="amount-row shortfall-row" wx:if="{{preview.funding.credit.shortfall !== '0.00'}}"><text>额度缺口</text><text>¥{{labels.money(preview.funding.credit.shortfall)}}</text></view>
+      </view>
+      <view class="checkout-funding-group" wx:if="{{checkoutFunding.termAmount}}"><view class="amount-row"><text>本次账期结算</text><text>¥{{checkoutFunding.termAmount}}</text></view></view>
+    </view>
     <view class="notice notice-warn" wx:if="{{preview && preview.funding.stored.shortfall !== '0.00'}}">储值不足，提交后等待补足资金，不会推送供应商。</view>
     <view class="notice notice-error" wx:if="{{preview && preview.funding.credit && preview.funding.credit.shortfall !== '0.00'}}">挂账额度不足，请联系财务调整后再提交。</view>
     <view class="order-bar" wx:if="{{canWrite}}"><view class="cart-summary"><text class="cart-count">{{pendingOrder ? '等待核对' : '订货金额'}}</text><text class="cart-estimate">{{preview ? '¥' + labels.money(preview.totals.salesGoodsAmount) : '待核对提交结果'}}</text></view><button class="primary submit-order" disabled="{{submitting || previewing || (!pendingOrder && (!preview || (preview.funding.credit && preview.funding.credit.shortfall !== '0.00')))}}" loading="{{submitting}}" bindtap="submitOrder">{{pendingOrder ? '核对提交结果' : '提交订货单'}}</button></view>
@@ -100,7 +115,6 @@
       <view class="account-menu-item"><view class="account-menu-label">收货信息<text class="account-menu-note">{{store.receiptContactName || store.contactName || '未配置联系人'}} · {{store.receiptAddress || store.address || '收货地址尚未配置'}}</text></view></view>
       <view class="account-menu-item" wx:if="{{canWrite}}" data-view="account" bindtap="changeView"><text>账户与账单</text><text>›</text></view>
       <view class="account-menu-item" bindtap="openProfile"><text>门店资料</text><text>›</text></view>
-      <view class="account-menu-item" data-view="orders" bindtap="changeView"><text>本机提交记录</text><text>›</text></view>
     </view>
     <view class="mine-secondary"><button class="secondary" bindtap="loadWork" loading="{{loading}}">刷新门店资料</button></view>
     <button class="account-logout" bindtap="logout">退出登录</button>

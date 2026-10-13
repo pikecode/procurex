@@ -14,7 +14,10 @@ export class ReportsController {
   @Get('order-amounts')
   @AllowAssignedStores()
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER', 'STORE', 'STORE_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
-  orderAmounts(@Query() query: Record<string, unknown>, @Req() request: AuthenticatedRequest) { return this.reports.orderAmounts(scopedFilters(parseFilters(query), request)); }
+  orderAmounts(@Query() query: Record<string, unknown>, @Req() request: AuthenticatedRequest) {
+    if (query.includeItems !== undefined && !['true', 'false'].includes(query.includeItems as string)) throw new BadRequestException({ code: 'INVALID_REPORT_DETAIL', message: 'includeItems must be true or false' });
+    return this.reports.orderAmounts({ ...scopedFilters(parseFilters(query), request), includeItems: query.includeItems === 'true' });
+  }
 
   @Get('product-quantities')
   @AllowAssignedStores()
@@ -29,7 +32,12 @@ export class ReportsController {
 
   @Get('profit')
   @RequireRoles('ADMIN', 'HQ_FINANCE', 'PURCHASER')
-  profit(@Query() query: Record<string, unknown>) { return this.reports.profit(parseFilters(query)); }
+  profit(@Query() query: Record<string, unknown>) {
+    if (query.dateBasis !== undefined && !['completedAt', 'firstShippedAt'].includes(query.dateBasis as string)) {
+      throw new BadRequestException({ code: 'INVALID_REPORT_DATE_BASIS', message: 'dateBasis must be completedAt or firstShippedAt' });
+    }
+    return this.reports.profit({ ...parseFilters(query), ...(query.dateBasis ? { profitDateBasis: query.dateBasis as 'completedAt' | 'firstShippedAt' } : {}) });
+  }
 
 }
 

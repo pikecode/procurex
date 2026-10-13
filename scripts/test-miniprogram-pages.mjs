@@ -22,6 +22,167 @@ function page(role, request = async () => ({}), apiOverrides = {}, wxOverrides =
 }
 
 const tap = (id, extra = {}) => ({ currentTarget: { dataset: { id, ...extra } } });
+test('procurement reports group separate orders under supplier identity across pagination', () => {
+  const purchaser = page('purchaser');
+  purchaser.data.reports.orderAmount = { orders: [
+    { supplierOrderId: 'o1', supplierId: 's1', supplierName: '供应商甲', items: [{ id: 'i1' }] },
+    { supplierOrderId: 'o2', supplierId: 's2', supplierName: '供应商乙', items: [] },
+    { supplierOrderId: 'o3', supplierId: 's1', supplierName: '供应商甲', items: [{ id: 'i3' }] },
+    { supplierOrderId: 'o4', supplierId: 's3', supplierName: '供应商丙', items: [] },
+  ] };
+  purchaser.refreshReportDetails(2);
+  assert.equal(purchaser.data.reportSupplierGroups.length, 2);
+  assert.equal(purchaser.data.moreReportDetails, true);
+  assert.equal(purchaser.data.reportSupplierGroups[0].orders.length, 2);
+  assert.equal(purchaser.data.visibleReportOrders.length, 3);
+  purchaser.toggleReportOrder(tap('o1'));
+  assert.equal(purchaser.data.reportSupplierGroups.length, 2);
+  purchaser.nextReportDetails();
+  assert.equal(purchaser.data.reportSupplierGroups.length, 3);
+  assert.equal(purchaser.data.moreReportDetails, false);
+  assert.equal(purchaser.data.reportSupplierGroups[0].orders.length, 2);
+  assert.equal(purchaser.data.reportSupplierGroups[0].orders[0].supplierOrderId, 'o1');
+  assert.equal(purchaser.data.reportSupplierGroups[0].orders[1].supplierOrderId, 'o3');
+  assert.equal(purchaser.data.reportSupplierGroups[0].orders[0].open, true);
+  assert.equal(purchaser.data.reportSupplierGroups[0].orders[1].open, undefined);
+  purchaser.updateReportImage('unused', { imageUrl: 'local-image' });
+  assert.equal(purchaser.data.reportSupplierGroups.length, 3);
+  assert.equal(purchaser.data.reportSupplierGroups[0].orders[0].open, true);
+});
+test('procurement report date presets follow Shanghai dates and support cross-month totals', () => {
+  const module = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/store-view.js', 'utf8'), { module });
+  const v = module.exports;
+  assert.deepEqual(plain(v.reportPreset('today', '2026-10-12T18:00:00Z')), { from: '2026-10-13', to: '2026-10-13' });
+  assert.deepEqual(plain(v.reportPreset('week', '2026-10-12T18:00:00Z')), { from: '2026-10-12', to: '2026-10-13' });
+  assert.deepEqual(plain(v.reportPreset('lastMonth', '2026-01-10T00:00:00Z')), { from: '2025-12-01', to: '2025-12-31' });
+  assert.ok(v.reportRangeError({ from: '2026-02-30', to: '2026-03-01' }));
+  assert.ok(v.reportRangeError({ from: '2026-10-13', to: '2026-10-12' }));
+  assert.ok(v.reportRangeError({ from: '2026-01-01', to: '2026-05-01' }));
+  assert.equal(v.reportRangeError({ from: '2026-09-01', to: '2026-10-13' }), '');
+  const summary = v.reportSummary({ months: [{ totalAmount: '10.10', orderCount: 1 }, { totalAmount: '20.20', orderCount: 2 }] }, { products: [{}, {}] });
+  assert.equal(summary.amount, '30.30'); assert.equal(summary.count, 3); assert.equal(summary.productCount, 2);
+});
+
+test('procurement statistics queries applied custom range and ignores superseded responses', async () => {
+  const pending = [];
+  const purchaser = page('purchaser', path => new Promise(resolve => pending.push({ path, resolve })));
+  purchaser.data.user = { id: 'buyer' };
+  purchaser.data.reportDraft = { from: '2026-09-01', to: '2026-10-13' };
+  const old = purchaser.applyReportRange();
+  assert.equal(pending.length, 2);
+  assert.ok(pending.every(item => !item.path.includes('/reports/profit')));
+  purchaser.data.reportDraft = { from: '2026-10-01', to: '2026-10-13' };
+  const latest = purchaser.applyReportRange();
+  const responses = [{ months: [{ totalAmount: '30.30', orderCount: 2 }] }, { products: [] }];
+  pending.slice(2).forEach((item, i) => item.resolve(responses[i]));
+  await latest;
+  pending.slice(0, 2).forEach((item, i) => item.resolve(i === 0 ? { months: [{ totalAmount: '999.00' }] } : responses[i]));
+  await old;
+  assert.equal(purchaser.data.reportSummary.amount, '30.30');
+  assert.equal(purchaser.data.reportRange.from, '2026-10-01');
+  assert.equal(purchaser.data.reportsLoading, false);
+  purchaser.data.reportDraft = { from: '2026-10-14', to: '2026-10-01' };
+  await purchaser.applyReportRange();
+  assert.equal(pending.length, 4);
+  assert.ok(purchaser.data.reportsError);
+});
+test('procurement statistics paginate five suppliers without standalone quantity tabs', () => {
+  const purchaser = page('purchaser');
+  purchaser.data.reports = { orderAmount: { orders: Array.from({ length: 12 }, (_, id) => ({ supplierOrderId: String(id) })) }, productQuantity: { products: [{ productId: 'p' }] } };
+  purchaser.refreshReportDetails();
+  assert.equal(purchaser.data.visibleReportOrders.length, 5);
+  assert.equal(purchaser.data.moreReportDetails, true);
+  purchaser.nextReportDetails();
+  assert.equal(purchaser.data.visibleReportOrders.length, 10);
+  assert.equal(purchaser.data.moreReportDetails, true);
+  purchaser.nextReportDetails();
+  assert.equal(purchaser.data.visibleReportOrders.length, 12);
+  assert.equal(purchaser.data.moreReportDetails, false);
+  assert.equal(purchaser.changeReportDetailView, undefined);
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  assert.ok(markup.includes('order.items'));
+  assert.ok(!markup.includes('changeReportDetailView'));
+});
+test('report filters apply to both queries and completed orders show real receipt lines', async () => {
+  const calls = [];
+  const purchaser = page('purchaser', async path => {
+    calls.push(path);
+    return path.includes('order-amounts') ? { months: [], orders: [{ supplierOrderId: 'o', completedAt: '2026-10-13T00:00:00Z', items: [{ id: 'i', productName: '大米', receivedQuantity: '3.000000', goodsAmount: '195.84', unitPrice: '65.28' }] }] } : { products: [] };
+  });
+  purchaser.data.reportStoreOptions = [{ id: '', name: '全部' }, { id: 'store', name: '门店' }];
+  purchaser.chooseReportFilter({ currentTarget: { dataset: { field: 'storeId' } }, detail: { value: '1' } });
+  assert.equal(purchaser.data.reportFilters.storeId, '');
+  await purchaser.applyReportRange();
+  assert.ok(calls.every(path => path.includes('storeId=store')));
+  assert.ok(calls[0].includes('includeItems=true'));
+  assert.equal(purchaser.data.visibleReportOrders[0].items[0].quantityText, '3');
+  purchaser.toggleReportOrder(tap('o'));
+  assert.equal(purchaser.data.visibleReportOrders[0].open, true);
+  purchaser.toggleReportOrder(tap('o'));
+  assert.equal(purchaser.data.visibleReportOrders[0].open, false);
+});
+test('report product image results cannot update a later query', async () => {
+  let resolveImage;
+  const purchaser = page('purchaser', undefined, { imagePath: () => new Promise(resolve => { resolveImage = resolve; }) });
+  purchaser.data.user = { id: 'buyer' };
+  purchaser.reportSequence = 1;
+  purchaser.data.reports.orderAmount = { orders: [{ supplierOrderId: 'o', items: [{ id: 'i', imageFile: { id: 'image' } }] }] };
+  const loading = purchaser.loadReportImages('o');
+  assert.equal(purchaser.data.visibleReportOrders[0].items[0].imageLoading, true);
+  purchaser.reportSequence = 2;
+  purchaser.data.reports.orderAmount = { orders: [{ supplierOrderId: 'new', items: [] }] };
+  resolveImage('/tmp/image.png'); await loading;
+  assert.equal(purchaser.data.reports.orderAmount.orders[0].supplierOrderId, 'new');
+  assert.equal(purchaser.data.reports.orderAmount.orders[0].items.length, 0);
+});
+test('report thumbnail failures remain explicit and can retry', async () => {
+  let fail = true;
+  const purchaser = page('purchaser', undefined, { imagePath: async () => { if (fail) throw new Error('failed'); return '/tmp/image.png'; } });
+  purchaser.data.user = { id: 'buyer' }; purchaser.reportSequence = 1;
+  purchaser.data.reports.orderAmount = { orders: [{ supplierOrderId: 'o', items: [{ id: 'i', imageFile: { id: 'image' } }] }] };
+  await purchaser.loadReportImages('o');
+  assert.equal(purchaser.data.visibleReportOrders[0].items[0].imageFailed, true);
+  fail = false;
+  await purchaser.retryReportImage({ detail: { productId: 'i' } });
+  assert.equal(purchaser.data.visibleReportOrders[0].items[0].imageUrl, '/tmp/image.png');
+});
+test('procurement statistics has a contextual return to mine without clearing reports', () => {
+  const purchaser = page('purchaser');
+  purchaser.data.activeView = 'reports';
+  const range = purchaser.data.reportRange;
+  const reports = purchaser.data.reports;
+  purchaser.changeView(tap('', { view: 'mine' }));
+  assert.equal(purchaser.data.activeView, 'mine');
+  assert.equal(purchaser.data.reportRange, range);
+  assert.equal(purchaser.data.reports, reports);
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  assert.match(markup, /class="card" wx:if="\{\{activeView === 'reports'\}\}">\s*<view class="back-link" data-view="mine" bindtap="changeView">‹ 返回我的<\/view>/);
+});
+test('checkout funding shows only used methods and subtracts exact cents', () => {
+  const module = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/store-view.js', 'utf8'), { module });
+  const summary = module.exports.checkoutFunding;
+  const preview = (total, stored, credit) => ({ totals: { salesGoodsAmount: total }, funding: { stored, ...(credit ? { credit } : {}) } });
+  const credit = summary(preview('290.50', { required: '0.00', available: '0.00' }, { required: '290.50', available: '4631.16' }));
+  assert.equal(credit.usesStored, false);
+  assert.equal(credit.usesCredit, true);
+  assert.equal(credit.creditRemaining, '4340.66');
+  assert.equal(credit.termAmount, null);
+  const mixed = summary(preview('100.00', { required: '30.00', available: '50.00' }, { required: '40.00', available: '70.00' }));
+  assert.equal(mixed.storedRemaining, '20.00');
+  assert.equal(mixed.creditRemaining, '30.00');
+  assert.equal(mixed.termAmount, '30.00');
+  const shortfall = summary(preview('50.00', { required: '30.00', available: '10.00' }, { required: '20.00', available: '5.00' }));
+  assert.equal(shortfall.storedRemaining, null);
+  assert.equal(shortfall.creditRemaining, null);
+  const term = summary(preview('50.00', { required: '0.00', available: '100.00' }));
+  assert.equal(term.usesStored, false);
+  assert.equal(term.usesCredit, false);
+  assert.equal(term.termAmount, '50.00');
+  assert.equal(summary(preview('0.30', { required: '0.10', available: '0.30' })).storedRemaining, '0.20');
+  assert.equal(summary(preview('1.00', { required: '1.00', available: 'invalid' })).storedRemaining, null);
+});
 test('procurement rejection detail retains cause and opens only its affected order', async () => {
   const purchaser = page('purchaser', async path => path.startsWith('/supplier-orders/') ? { items: [] } : { id: 'r', status: 'CONFIRMED', supplierOrders: [{ id: 'o' }], items: [] });
   purchaser.data.rejectionTodos = [{ supplierOrderId: 'o', supplierName: '生鲜供应商', reason: '缺货' }];
@@ -478,8 +639,6 @@ for (const role of ['supplier', 'purchaser']) {
     workspace.data.statusFilter = 'saved-filter';
     workspace.changeView(tap('', { view: 'mine' }));
     assert.equal(workspace.data.activeView, 'mine');
-    workspace.changeView(tap('', { view: 'history' }));
-    assert.equal(workspace.data.activeView, 'history');
     workspace.changeView(tap('', { view: 'orders' }));
     assert.equal(workspace.data.search, 'saved-search');
     assert.equal(workspace.data.statusFilter, 'saved-filter');
@@ -488,10 +647,19 @@ for (const role of ['supplier', 'purchaser']) {
     assert.equal(workspace.data.activeView, 'orders');
     const markup = readFileSync(`apps/miniprogram/pages/${role}/index.wxml`, 'utf8');
     assert.ok(markup.includes('data-view="mine"'));
-    assert.ok(markup.includes('本机提交记录'));
+    assert.ok(!markup.includes('本机提交记录'));
+    assert.ok(!markup.includes("activeView === 'history'"));
     assert.ok(markup.includes('account-logout'));
   });
 }
+
+test('all role workspaces omit device submission history entries', () => {
+  for (const role of ['store', 'supplier', 'purchaser', 'finance', 'region']) {
+    const markup = readFileSync(`apps/miniprogram/pages/${role}/index.wxml`, 'utf8');
+    assert.ok(!markup.includes('本机提交记录'));
+    assert.ok(!markup.includes('data-view="history"'));
+  }
+});
 
 test('native own profiles require a binding and never enumerate foreign entities', async () => {
   const calls = [];

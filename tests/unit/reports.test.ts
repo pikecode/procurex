@@ -34,6 +34,55 @@ test('reports use final received quantities, split freight, and exclude direct o
   assert.equal(queries[2]?.where.firstShippedAt.gte.toISOString(), '2026-08-31T16:00:00.000Z');
 });
 
+test('procurement profit explicitly filters by completed date without changing legacy defaults', async () => {
+  const queries: any[] = [];
+  const service = new ReportsService({ client: { supplierOrder: { findMany: async (query: any) => { queries.push(query); return []; } } } } as any);
+  const controller = new ReportsController(service);
+  const report = await controller.profit({ from: '2026-10-01', to: '2026-10-31', dateBasis: 'completedAt' });
+  assert.equal(report.dateBasis, 'completedAt');
+  assert.equal(queries[0].where.completedAt.gte.toISOString(), '2026-09-30T16:00:00.000Z');
+  assert.equal(queries[0].where.completedAt.lt.toISOString(), '2026-10-31T16:00:00.000Z');
+  assert.equal(queries[0].where.firstShippedAt, undefined);
+  assert.equal(queries[0].where.settlementMode.not, 'SUPPLIER_TERM');
+  assert.deepEqual(queries[0].include.store.select, { name: true });
+  assert.equal((await controller.profit({})).dateBasis, 'firstShippedAt');
+  assert.throws(() => controller.profit({ dateBasis: 'createdAt' }), BadRequestException);
+});
+
+test('completed order amount details expose readable context for every settlement mode', async () => {
+  let query: any;
+  const service = new ReportsService({ client: { supplierOrder: { findMany: async (input: any) => {
+    query = input;
+    return [{ id: 'o', supplierOrderNo: 'SO-001', storeId: 'store', supplierId: 'supplier', store: { name: '门店' }, supplier: { name: '供应商' },
+      completedAt: new Date('2026-10-13T00:00:00Z'), settlementMode: 'SUPPLIER_TERM', shipments: [{ freight: '2.00' }],
+      items: [{ receivedQuantity: '3', salesUnitPrice: '10', supplyUnitPrice: '8' }] }];
+  } } } } as any);
+  const report = await service.orderAmounts({ from: '2026-10-01', to: '2026-10-13' });
+  assert.equal(query.where.settlementMode, undefined);
+  assert.equal(report.orders[0]?.supplierOrderNo, 'SO-001');
+  assert.equal(report.orders[0]?.storeName, '门店');
+  assert.equal(report.orders[0]?.supplierName, '供应商');
+  assert.equal(report.orders[0]?.totalAmount, '32.00');
+});
+
+test('report order products use final receipt amounts and protect supplier sales pricing', async () => {
+  const service = new ReportsService({ client: { supplierOrder: { findMany: async () => [{ id: 'o', completedAt: new Date('2026-10-13T00:00:00Z'), shipments: [],
+    items: [{ id: 'i', productId: 'p', receivedQuantity: '0.333333', salesUnitPrice: '12', supplyUnitPrice: '9',
+      unitSnapshot: null, product: { name: '商品', imageFile: { id: 'image' }, baseUnit: { name: '已变更单位' } } }] }] } } } as any);
+  const sales = await service.orderAmounts({ includeItems: true });
+  assert.equal(sales.orders[0]?.items?.[0]?.goodsAmount, '4.00');
+  assert.equal(sales.orders[0]?.items?.[0]?.receivedQuantity, '0.333333');
+  assert.equal(sales.orders[0]?.items?.[0]?.unitName, '历史单位未记录');
+  assert.equal(sales.orders[0]?.items?.[0]?.imageFile?.id, 'image');
+  const supply = await service.orderAmounts({ includeItems: true, amountBasis: 'SUPPLY' });
+  assert.equal(supply.orders[0]?.items?.[0]?.unitPrice, '9');
+  assert.equal(supply.orders[0]?.items?.[0]?.goodsAmount, '3.00');
+  assert.equal('salesUnitPrice' in supply.orders[0]!.items![0]!, false);
+  assert.equal((await service.orderAmounts({})).orders[0]?.items, undefined);
+  const controller = new ReportsController(service);
+  assert.throws(() => controller.orderAmounts({ includeItems: 'invalid' }, {} as any), BadRequestException);
+});
+
 test('supplier order reports use supply amounts and preserve freight rather than revealing sales', async () => {
   const service = new ReportsService({ client: { supplierOrder: { findMany: async () => [{ id: 'order', storeId: 'store', supplierId: 'supplier',
     completedAt: new Date('2026-09-10'), shipments: [{ freight: '5' }], items: [{ receivedQuantity: '10', salesUnitPrice: '12', supplyUnitPrice: '9' }] }] } } } as any);

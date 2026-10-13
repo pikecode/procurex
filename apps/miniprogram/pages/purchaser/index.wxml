@@ -1,11 +1,11 @@
 <test-context wx:if="{{activeView === 'mine'}}" />
 <wxs src="../../utils/labels.wxs" module="labels" />
 <view class="page {{workspaceTabbarVisible ? 'has-workspace-tabbar' : ''}}{{user.testWorkbenchEnabled && !user.testIdentity ? 'has-test-workbench-root' : ''}} {{requestId && selectedRequest && (activeView === 'rejections' || selectedRequest.status === 'PENDING_PROCUREMENT') || activeView === 'freight' && selectedFreight.status === 'PENDING' ? 'has-action-bar' : ''}}">
-  <view class="business-heading" wx:if="{{!requestId && !selectedFreight}}"><view><text class="business-title">采购管理</text><text class="muted">{{user.displayName}}</text></view><view class="heading-actions" wx:if="{{!requestId}}"><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{loading}}">刷新</button></view></view>
+  <view class="business-heading" wx:if="{{!requestId && !selectedFreight}}"><view><text class="business-title">采购管理</text><text class="muted">{{user.displayName}}</text></view><view class="heading-actions" wx:if="{{!requestId && activeView !== 'reports'}}"><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{loading}}">刷新</button></view></view>
   <view class="workspace-loading" wx:if="{{loading}}">正在更新采购信息</view>
   <view wx:if="{{error && !detailError}}" class="error-banner"><text>{{error}}</text><button class="ghost" bindtap="loadWork" disabled="{{loading || confirming || reallocating || freightReviewing}}">刷新数据</button></view>
   <view wx:if="{{pendingCommand}}" class="command-recovery"><view><text class="row-title">{{pendingCommand.title}} · 结果待确认</text><text class="muted">{{pendingCommand.dateText}}</text></view><button class="secondary" bindtap="recoverCommand" disabled="{{recovering || confirming || reallocating || freightReviewing}}" loading="{{recovering}}">确认提交结果</button></view>
-  <view class="business-nav"><view class="nav-item {{taskOrigin || activeView === 'tasks' || activeView === 'rejections' || activeView === 'freight' ? 'is-active' : ''}}" data-view="tasks" bindtap="changeView">待办<text class="nav-badge" wx:if="{{!loading && !error && procurementTasks.length + rejectionTodos.length + pendingFreight.length}}">{{procurementTasks.length + rejectionTodos.length + pendingFreight.length}}</text></view><view class="nav-item {{activeView === 'orders' && !taskOrigin ? 'is-active' : ''}}" data-view="orders" bindtap="changeView">订单</view><view class="nav-item {{activeView === 'mine' || activeView === 'history' || activeView === 'reports' ? 'is-active' : ''}}" data-view="mine" bindtap="changeView">我的</view></view>
+  <view class="business-nav"><view class="nav-item {{taskOrigin || activeView === 'tasks' || activeView === 'rejections' || activeView === 'freight' ? 'is-active' : ''}}" data-view="tasks" bindtap="changeView">待办<text class="nav-badge" wx:if="{{!loading && !error && procurementTasks.length + rejectionTodos.length + pendingFreight.length}}">{{procurementTasks.length + rejectionTodos.length + pendingFreight.length}}</text></view><view class="nav-item {{activeView === 'orders' && !taskOrigin ? 'is-active' : ''}}" data-view="orders" bindtap="changeView">订单</view><view class="nav-item {{activeView === 'mine' || activeView === 'reports' ? 'is-active' : ''}}" data-view="mine" bindtap="changeView">我的</view></view>
   <block wx:if="{{activeView === 'tasks'}}">
     <view class="procurement-tabs sticky-bar">
       <view class="procurement-tab {{taskType === 'requests' ? 'selected' : ''}}" data-type="requests" bindtap="changeTaskType"><text class="task-count {{loading || error || !procurementTasks.length ? 'is-empty' : ''}}">{{loading || error ? '—' : procurementTasks.length}}</text><text>下货单确认</text></view>
@@ -42,9 +42,7 @@
   </block>
   <view class="card" wx:if="{{activeView === 'mine'}}"><view class="task-entry" data-view="reports" bindtap="changeView"><text>采购统计</text><text>›</text></view></view>
   <view class="card" wx:if="{{(activeView === 'freight' || activeView === 'rejections' && !requestId) && !selectedFreight}}"><view class="back-link" data-view="tasks" bindtap="changeView">‹ 返回待办</view></view>
-  <block wx:if="{{activeView === 'mine'}}"><view class="card"><text class="card-title">{{user.displayName}}</text><text class="muted">采购工作台</text></view><view class="account-menu"><view class="account-menu-item" data-view="history" bindtap="changeView"><text>本机提交记录</text><text>›</text></view></view><button class="account-logout" bindtap="logout">退出登录</button></block>
-  <view class="card" wx:if="{{activeView === 'history'}}"><view class="back-link" data-view="mine" bindtap="changeView">‹ 返回我的</view></view>
-  <view wx:if="{{activeView === 'history'}}" class="command-history"><text class="card-title">本机提交记录</text><view class="row" wx:for="{{commandHistory}}" wx:key="key"><view class="row-title"><text>{{item.title}}</text><text>{{item.status === 'SUCCEEDED' ? '已确认' : '未成功'}}</text></view><view class="muted">{{item.dateText}}</view><view class="muted" wx:if="{{item.message}}">{{item.message}}</view></view><view class="muted" wx:if="{{!commandHistory.length}}">暂无提交记录</view></view>
+  <block wx:if="{{activeView === 'mine'}}"><view class="card"><text class="card-title">{{user.displayName}}</text><text class="muted">采购工作台</text></view><button class="account-logout" bindtap="logout">退出登录</button></block>
 
   <view class="card" wx:if="{{activeView === 'freight' && !selectedFreight}}">
     <view class="section-head"><text class="card-title">运费记录</text><button class="ghost" bindtap="loadFreight">刷新</button></view>
@@ -179,23 +177,43 @@
   </view>
 
   <view class="card" wx:if="{{activeView === 'reports'}}">
+    <view class="back-link" data-view="mine" bindtap="changeView">‹ 返回我的</view>
     <view class="section-head">
       <text class="card-title">统计概览</text>
-      <button class="ghost" loading="{{loading}}" bindtap="loadReports">刷新</button>
+      <button class="ghost" loading="{{reportsLoading}}" disabled="{{reportsLoading}}" bindtap="loadReports">刷新</button>
     </view>
-    <view class="muted">{{reportRange.from}} 至 {{reportRange.to}}</view>
-    <view class="metric-grid" wx:if="{{reports.orderAmount}}">
-      <view class="metric"><text class="metric-label">订货金额</text><text class="metric-value">{{reports.orderAmount.months[0].totalAmount || '0.00'}}</text></view>
-      <view class="metric"><text class="metric-label">完成单数</text><text class="metric-value">{{reports.orderAmount.months[0].orderCount || 0}}</text></view>
-      <view class="metric"><text class="metric-label">商品种数</text><text class="metric-value">{{reports.productQuantity.products.length || 0}}</text></view>
-      <view class="metric"><text class="metric-label">商品差额</text><text class="metric-value">{{reports.profit.totals.profit || '0.00'}}</text></view>
+    <view class="report-presets"><view class="{{reportPreset === 'today' ? 'selected' : ''}}" data-preset="today" bindtap="chooseReportPreset">今日</view><view class="{{reportPreset === 'week' ? 'selected' : ''}}" data-preset="week" bindtap="chooseReportPreset">本周</view><view class="{{reportPreset === 'month' ? 'selected' : ''}}" data-preset="month" bindtap="chooseReportPreset">本月</view><view class="{{reportPreset === 'lastMonth' ? 'selected' : ''}}" data-preset="lastMonth" bindtap="chooseReportPreset">上月</view></view>
+    <view class="report-date-range"><picker mode="date" value="{{reportDraft.from}}" data-field="from" bindchange="changeReportDate"><view><text class="report-date-label">开始日期</text><text>{{reportDraft.from}} ▾</text></view></picker><text>至</text><picker mode="date" value="{{reportDraft.to}}" data-field="to" bindchange="changeReportDate"><view><text class="report-date-label">结束日期</text><text>{{reportDraft.to}} ▾</text></view></picker></view>
+    <view class="report-entity-filters"><picker range="{{reportStoreOptions}}" range-key="name" value="{{reportStoreIndex}}" data-field="storeId" bindchange="chooseReportFilter"><view><text class="report-date-label">门店</text><text>{{reportStoreOptions[reportStoreIndex].name}} ▾</text></view></picker><picker range="{{reportSupplierOptions}}" range-key="name" value="{{reportSupplierIndex}}" data-field="supplierId" bindchange="chooseReportFilter"><view><text class="report-date-label">供应商</text><text>{{reportSupplierOptions[reportSupplierIndex].name}} ▾</text></view></picker></view>
+    <view class="report-query-row"><text>自定义区间最多三个月</text><button class="secondary" bindtap="applyReportRange" disabled="{{reportsLoading}}">查询</button></view>
+    <view class="report-scope">按订单完成日期 · {{reportRange.from}} 至 {{reportRange.to}}</view>
+    <view class="workspace-loading" wx:if="{{reportsLoading}}">正在查询统计</view>
+    <view class="error-banner" wx:if="{{reportsError}}">{{reportsError}}</view>
+    <view class="metric-grid procurement-report-metrics" wx:if="{{reportSummary}}">
+      <view class="metric"><text class="metric-label">完成订单金额</text><text class="metric-value">¥{{labels.money(reportSummary.amount)}}</text><text class="report-metric-note">含运费</text></view>
+      <view class="metric"><text class="metric-label">完成订单数</text><text class="metric-value">{{reportSummary.count}}</text><text class="report-metric-note">供应商订单</text></view>
+      <view class="metric"><text class="metric-label">收货商品种数</text><text class="metric-value">{{reportSummary.productCount}}</text></view>
     </view>
-    <view class="list" wx:if="{{reports.profit.rows.length}}">
-      <view class="row" wx:for="{{reports.profit.rows}}" wx:key="supplierOrderId">
-        <view class="row-title"><text>{{item.productName}}</text><text class="tag">{{item.profit}}</text></view>
-        <view class="muted">销售 {{item.salesGoodsAmount}}，供货 {{item.supplyGoodsAmount}}</view>
+    <view class="report-order-list" wx:if="{{reportSummary}}">
+      <text class="card-title">采购明细 · {{reportSummary.count}} 单</text>
+      <view class="report-supplier-group" wx:for="{{reportSupplierGroups}}" wx:key="supplierId" wx:for-item="group">
+      <view class="report-supplier-heading"><text>{{group.supplierName}}</text><text>{{group.orders.length}} 单</text></view>
+      <view class="report-order" wx:for="{{group.orders}}" wx:key="supplierOrderId" wx:for-item="order">
+        <view class="report-order-heading" data-id="{{order.supplierOrderId}}" bindtap="toggleReportOrder">
+          <view class="row-title"><document-no value="{{order.supplierOrderNo}}" /><text>¥{{labels.money(order.totalAmount)}}</text></view>
+          <view class="muted">门店 · {{order.storeName}}</view>
+          <view class="muted">完成 · {{order.completedText}}</view>
+          <view class="report-order-foot"><text>{{order.items.length}} 种商品 · 已完成</text><text>{{order.open ? '收起商品 ∧' : '查看商品 ›'}}</text></view>
+        </view>
+        <view wx:if="{{order.open}}" class="report-order-products">
+          <view class="report-product" wx:for="{{order.items}}" wx:key="id"><product-card product="{{item}}" variant="compact" bind:retryimage="retryReportImage"><view class="row-title"><text>{{item.productName}}</text><text>¥{{labels.money(item.goodsAmount)}}</text></view><view class="muted">实收 {{item.quantityText}} {{item.unitName}}</view><view class="muted">销售价格 ¥{{labels.money(item.unitPrice)}} / {{item.unitName}}</view></product-card></view>
+          <view class="report-order-foot report-order-totals"><text>商品 ¥{{labels.money(order.goodsAmount)}}</text><text>运费 ¥{{labels.money(order.freightAmount)}}</text></view>
+        </view>
+      </view>
       </view>
     </view>
+    <button class="secondary" wx:if="{{moreReportDetails}}" bindtap="nextReportDetails">加载更多供应商</button>
+    <view class="empty-state" wx:if="{{reportSummary && !reportSummary.count}}">该区间暂无已完成订单</view>
   </view>
 
   <view class="card" wx:if="{{result}}">

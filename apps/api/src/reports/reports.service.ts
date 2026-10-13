@@ -3,8 +3,10 @@ import { Decimal } from 'decimal.js';
 import { SettlementMode, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
 import { DatabaseService } from '../database/database.service.js';
 import { assignedStoreIds, storeFilter, type BusinessScope } from '../auth/store-scope.js';
+import { readUnitDisplayNames, displaySalesUnitName } from '../catalog/transaction-units.js';
+import type { Prisma } from '../../../../packages/backend/generated/prisma/client.js';
 
-export type ReportFilters = { from?: string; to?: string; storeId?: string; storeIds?: string[]; supplierId?: string; productId?: string; amountBasis?: 'SALES' | 'SUPPLY' };
+export type ReportFilters = { from?: string; to?: string; storeId?: string; storeIds?: string[]; supplierId?: string; productId?: string; amountBasis?: 'SALES' | 'SUPPLY'; profitDateBasis?: 'completedAt' | 'firstShippedAt'; includeItems?: boolean };
 export type ReportType = 'order-amounts' | 'product-quantities' | 'profit';
 export type ExportHealthView = {
   generatedAt: string;
@@ -157,7 +159,8 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async orderAmounts(filters: ReportFilters) {
-    const orders = await this.database.client.supplierOrder.findMany({ where: where(filters, 'completedAt'), include: { shipments: true, items: true }, orderBy: [{ completedAt: 'desc' }, { id: 'desc' }] });
+    const orders = await this.database.client.supplierOrder.findMany({ where: where(filters, 'completedAt'), include: { store: { select: { name: true } }, supplier: { select: { name: true } }, shipments: true, items: { include: { product: { select: { name: true, imageFile: { select: { id: true } }, baseUnit: { select: { name: true } } } } } } }, orderBy: [{ completedAt: 'desc' }, { id: 'desc' }] });
+    const unitNames = filters.includeItems ? await readUnitDisplayNames(this.database.client as Prisma.TransactionClient, orders.flatMap(order => order.items.map(item => item.unitSnapshot))) : new Map<string, string>();
     const months = new Map<string, { orderCount: number; goodsAmount: Decimal; freightAmount: Decimal }>();
     const rows = orders.map((order) => {
       const goodsAmount = sum(order.items.map((item) => new Decimal(item.receivedQuantity).mul(filters.amountBasis === 'SUPPLY' ? item.supplyUnitPrice : item.salesUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2)));
@@ -168,7 +171,13 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
       total.goodsAmount = total.goodsAmount.plus(goodsAmount);
       total.freightAmount = total.freightAmount.plus(freightAmount);
       months.set(month, total);
-      return { supplierOrderId: order.id, storeId: order.storeId, supplierId: order.supplierId, completedAt: order.completedAt!.toISOString(), goodsAmount, freightAmount, totalAmount: new Decimal(goodsAmount).plus(freightAmount).toFixed(2) };
+      return { supplierOrderId: order.id, supplierOrderNo: order.supplierOrderNo, storeName: order.store?.name ?? '', supplierName: order.supplier?.name ?? '', storeId: order.storeId, supplierId: order.supplierId, completedAt: order.completedAt!.toISOString(), goodsAmount, freightAmount, totalAmount: new Decimal(goodsAmount).plus(freightAmount).toFixed(2),
+        ...(filters.includeItems ? { items: order.items.map(item => {
+          const price = filters.amountBasis === 'SUPPLY' ? item.supplyUnitPrice : item.salesUnitPrice;
+          return { id: item.id, productId: item.productId, productName: item.product?.name ?? '', imageFile: item.product?.imageFile ?? null,
+            unitName: displaySalesUnitName(item.unitSnapshot, unitNames) ?? '历史单位未记录', receivedQuantity: item.receivedQuantity.toString(), unitPrice: price.toString(),
+            goodsAmount: new Decimal(item.receivedQuantity).mul(price).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2) };
+        }) } : {}) };
     });
     return envelope('completedAt', filters.amountBasis === 'SUPPLY' ? 'Completed order supply goods amount plus freight, including every settlement mode.' : 'Completed order sales goods amount plus freight, including every settlement mode.', {
       amountBasis: filters.amountBasis === 'SUPPLY' ? 'SUPPLY' : 'SALES',
@@ -189,22 +198,23 @@ export class ReportsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async profit(filters: ReportFilters) {
-    const orderWhere = where(filters, 'firstShippedAt');
+    const dateBasis = filters.profitDateBasis ?? 'firstShippedAt';
+    const orderWhere = where(filters, dateBasis);
     const orders = await this.database.client.supplierOrder.findMany({
       where: { ...orderWhere, settlementMode: { not: SettlementMode.SUPPLIER_TERM } },
-      include: { shipments: true, items: { where: filters.productId ? { productId: filters.productId } : undefined, include: { product: { include: { baseUnit: true } } } } },
-      orderBy: [{ firstShippedAt: 'desc' }, { id: 'desc' }],
+      include: { store: { select: { name: true } }, supplier: { select: { name: true } }, shipments: true, items: { where: filters.productId ? { productId: filters.productId } : undefined, include: { product: { include: { baseUnit: true } } } } },
+      orderBy: [{ [dateBasis]: 'desc' }, { id: 'desc' }],
     });
     const rows = orders.flatMap((order) => order.items.map((item) => {
       const quantity = new Decimal(item.receivedQuantity);
       const sales = quantity.mul(item.salesUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
       const supply = quantity.mul(item.supplyUnitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
-      return { supplierOrderId: order.id, storeId: order.storeId, supplierId: order.supplierId, productId: item.productId, productName: item.product.name, unit: item.product.baseUnit.name, firstShippedAt: order.firstShippedAt!.toISOString(), quantity: quantity.toFixed(6), salesGoodsAmount: sales.toFixed(2), supplyGoodsAmount: supply.toFixed(2), profit: sales.minus(supply).toFixed(2), freightAmount: '0.00' };
+      return { supplierOrderId: order.id, supplierOrderNo: order.supplierOrderNo, storeName: order.store?.name ?? '', supplierName: order.supplier?.name ?? '', completedAt: order.completedAt?.toISOString() ?? null, storeId: order.storeId, supplierId: order.supplierId, productId: item.productId, productName: item.product.name, unit: item.product.baseUnit.name, firstShippedAt: order.firstShippedAt?.toISOString() ?? null, quantity: quantity.toFixed(6), salesGoodsAmount: sales.toFixed(2), supplyGoodsAmount: supply.toFixed(2), profit: sales.minus(supply).toFixed(2), freightAmount: '0.00' };
     }));
     const freightAmount = sum(orders.map((order) => sum(order.shipments.map((shipment) => shipment.freight))));
     const salesGoodsAmount = sum(rows.map((row) => row.salesGoodsAmount));
     const supplyGoodsAmount = sum(rows.map((row) => row.supplyGoodsAmount));
-    return envelope('firstShippedAt', 'Completed non-direct orders only. Profit is final received quantity times sales/supply price delta; freight is separate and excluded from profit.', {
+    return envelope(dateBasis, 'Completed non-direct orders only. Profit is final received quantity times sales/supply price delta; freight is separate and excluded from profit.', {
       totals: { salesGoodsAmount, supplyGoodsAmount, profit: new Decimal(salesGoodsAmount).minus(supplyGoodsAmount).toFixed(2), freightAmount }, rows,
     });
   }

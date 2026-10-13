@@ -674,3 +674,6 @@
 }
 /* 搜索命中的分类提示：说明结果跨越了哪些分类。 */
 .search-scope-hint { flex-shrink: 0; padding: 0 18rpx 12rpx; color: var(--ink-4); font-size: 22rpx; line-height: 1.5; }
+.checkout-funding-group { padding: 12rpx 0; }
+.checkout-funding-group + .checkout-funding-group { border-top: 1rpx solid #e2e6e4; }
+.checkout-remaining { color: #167e5a; font-size: 24rpx; }
