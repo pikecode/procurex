@@ -1,15 +1,16 @@
 import { lazy, StrictMode, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { Alert, App as AntApp, Button, ConfigProvider, Drawer, Form, Input, Menu, Result, Spin, Tooltip } from 'antd';
+import { Alert, App as AntApp, Button, ConfigProvider, Drawer, Dropdown, Form, Input, Menu, Result, Spin, Tooltip, type MenuProps } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import { BarChart3, Building2, ChevronLeft, ExternalLink, Folders, Landmark, LogOut, Menu as MenuIcon, Package, Settings, ShoppingCart, SlidersHorizontal, Store as StoreIcon } from 'lucide-react';
+import { BarChart3, Building2, ChevronDown, ChevronLeft, Folders, Landmark, Menu as MenuIcon, Package, Settings, ShoppingCart, SlidersHorizontal, Store as StoreIcon } from 'lucide-react';
 import { clearSession, getSession, hasRole, login, logout, onExpired, restore, type User } from './lib/api';
 import './styles.css';
 import { Notifications } from './components/Notifications';
 import { ChangePassword } from './components/ChangePassword';
 import { allowedPages, canAccessPage } from './lib/access';
 import { billingAccess } from './lib/billingAccess';
+import { avatarColor, identitySummary, initialOf } from './lib/identity';
 
 const Stores = lazy(() => import('./pages/Stores'));
 const Directories = lazy(() => import('./pages/Directories'));
@@ -28,13 +29,11 @@ const SettlementDifferences = lazy(() => import('./pages/SettlementDifferences')
 const Reports = lazy(() => import('./pages/Reports'));
 const Commands = lazy(() => import('./pages/Commands'));
 const Users = lazy(() => import('./pages/Users'));
-const legacyUrl = import.meta.env.VITE_LEGACY_URL || (import.meta.env.DEV ? 'http://127.0.0.1:4173/app.html' : '/legacy/');
 
 function Login({ authenticated }: { authenticated: (user: User) => void }) {
   const [loading, setLoading] = useState(false); const [error, setError] = useState('');
   return <main className="login-page"><section className="login-form">
-    <div className="login-brand"><Building2 size={32} /><div><h1>ProcureX</h1><span>后台管理</span></div></div>
-    <h2>账号登录</h2>
+    <div className="login-brand"><span className="login-mark"><Building2 size={20} /></span><div><h1>ProcureX</h1><span>后台管理</span></div></div>
     {error && <Alert type="error" showIcon title={error} />}
     <Form layout="vertical" onFinish={async ({ username, password }) => {
       if (loading) return; setLoading(true); setError('');
@@ -52,7 +51,7 @@ labels['/reports'] = '业务报表'; labels['/settlement-differences'] = '结算
 labels['/commands'] = '命令诊断';
 labels['/users'] = '用户管理';
 function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
-  const [collapsed, setCollapsed] = useState(false); const [mobileOpen, setMobileOpen] = useState(false); const [leaving, setLeaving] = useState(false);
+  const [collapsed, setCollapsed] = useState(false); const [mobileOpen, setMobileOpen] = useState(false); const [leaving, setLeaving] = useState(false); const [passwordOpen, setPasswordOpen] = useState(false);
   const { message } = AntApp.useApp(); const location = useLocation(); const navigate = useNavigate();
   const central = hasRole(user, 'ADMIN', 'HQ_FINANCE'); const storeRole = ['STORE', 'STORE_FINANCE'].includes(user.scope?.type || '') || (!hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER') && hasRole(user, 'STORE', 'STORE_FINANCE'));
   const supplierRole = user.scope?.type === 'SUPPLIER' || (!storeRole && !hasRole(user, 'ADMIN', 'HQ_FINANCE', 'PURCHASER') && hasRole(user, 'SUPPLIER'));
@@ -81,25 +80,43 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
     if (item.children ? item.children.length === 0 : !canAccessPage(user, item.key)) items.splice(index, 1);
   }
   const activeGroup = items.find(item => item.children?.some(child => child.key === location.pathname))?.key;
+  const displayName = user.displayName || user.username || '管理员';
+  const identity = identitySummary(user);
+  // 账号相关操作收进一个菜单：修改密码是常规操作，退出登录是破坏性操作，
+  // 原来并排成两个同权重图标按钮，误触退出的代价和改密码一样高。
+  const userMenu: MenuProps['items'] = [
+    { type: 'group', label: <div className="user-card"><strong>{displayName}</strong>{user.username ? <span>登录账号 {user.username}</span> : null}{identity ? <span>{identity}</span> : null}</div> },
+    { key: 'password', label: '修改密码' },
+    { key: 'logout', label: leaving ? '正在退出…' : '退出登录', danger: true },
+  ];
+  const onUserMenu: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'logout') {
+      setLeaving(true); logout().catch(failure => message.warning((failure as Error).message)).finally(() => { signedOut(); setLeaving(false); });
+    } else if (key === 'password') setPasswordOpen(true);
+  };
   const [openKeys, setOpenKeys] = useState<string[]>([]);
   useEffect(() => { setOpenKeys(activeGroup ? [activeGroup] : []); }, [activeGroup]);
   const navigation = <Menu mode="inline" selectedKeys={[location.pathname]} openKeys={collapsed ? undefined : openKeys} onOpenChange={setOpenKeys} items={items}
     onClick={({ key }) => { navigate(key); setMobileOpen(false); }} inlineCollapsed={collapsed} />;
   if (!supported) return <Result status="403" title="当前账号无可用权限或未绑定所属单位" extra={<Button onClick={async () => { try { await logout(); } finally { signedOut(); } }}>退出登录</Button>} />;
   const authorized = canAccessPage(user, location.pathname);
-  return <div className={`admin-shell ${collapsed ? 'is-collapsed' : ''}`}>
+  return <><ChangePassword open={passwordOpen} onClose={() => setPasswordOpen(false)} signedOut={signedOut} />
+  <div className={`admin-shell ${collapsed ? 'is-collapsed' : ''}`}>
     <aside className="sidebar"><Link className="brand" to={home}><Building2 size={24} /><span>ProcureX<small>采购协同</small></span></Link>{navigation}</aside>
     <Drawer title="ProcureX" placement="left" open={mobileOpen} onClose={() => setMobileOpen(false)} width={250}><Menu mode="inline" selectedKeys={[location.pathname]} openKeys={openKeys} onOpenChange={setOpenKeys} items={items} onClick={({ key }) => { navigate(key); setMobileOpen(false); }} /></Drawer>
     <div className="main-column"><header className="topbar"><div className="actions">
       <Tooltip title={collapsed ? '展开菜单' : '收起菜单'}><Button className="desktop-menu" type="text" aria-label={collapsed ? '展开菜单' : '收起菜单'} icon={<ChevronLeft size={18} style={{ transform: collapsed ? 'rotate(180deg)' : undefined }} />} onClick={() => setCollapsed(!collapsed)} /></Tooltip>
       <Button className="mobile-menu" type="text" aria-label="打开菜单" icon={<MenuIcon size={18} />} onClick={() => setMobileOpen(true)} />
       <span className="breadcrumb">{location.pathname === '/finance' ? billingLabel : location.pathname === '/store-finance' ? (storeRole ? '门店账户' : '门店财务') : location.pathname === '/store-orders' ? '门店订单' : labels[location.pathname] || '后台管理'}</span></div>
-      <div className="actions"><Notifications key={user.id} userId={user.id} /><a className="legacy-link" href={legacyUrl} target="_blank" rel="noreferrer">原后台<ExternalLink size={13} /></a>
-        <span className="user-name">{user.displayName || user.username || '管理员'}</span>
-        <ChangePassword signedOut={signedOut} />
-        <Tooltip title="退出登录"><Button type="text" aria-label="退出登录" loading={leaving} icon={<LogOut size={17} />} onClick={async () => {
-          setLeaving(true); try { await logout(); } catch (failure) { message.warning((failure as Error).message); } finally { signedOut(); setLeaving(false); }
-        }} /></Tooltip></div>
+      <div className="actions"><Notifications key={user.id} userId={user.id} />
+        <Dropdown menu={{ items: userMenu, onClick: onUserMenu }} placement="bottomRight" trigger={['click']}>
+          <button className="user-trigger" aria-label="账号菜单" aria-haspopup="menu">
+            <span className="user-avatar" style={{ background: avatarColor(user.id || user.username || '') }} aria-hidden="true">{initialOf(user.displayName || user.username || '')}</span>
+            <span className="user-name">{displayName}</span>
+            <ChevronDown size={15} aria-hidden="true" />
+          </button>
+        </Dropdown>
+      </div>
     </header><main className="page-content">{authorized ? <Suspense fallback={<Spin />}><Routes>
       <Route path="/commands" element={hasRole(user, 'ADMIN') ? <Commands user={user} /> : <Result status="403" title="无权访问此页面" />} />
       <Route path="/users" element={hasRole(user, 'ADMIN') ? <Users /> : <Result status="403" title="无权访问此页面" />} />
@@ -122,7 +139,7 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
       <Route path="/" element={<Navigate to={home} replace />} />
       <Route path="*" element={<Result status="404" title="页面不存在" extra={<Link to="/stores"><Button>返回门店管理</Button></Link>} />} />
     </Routes></Suspense> : <Result status="403" title="无权访问此页面" extra={<Link to={home}><Button>返回首页</Button></Link>} />}</main></div>
-  </div>;
+  </div></>;
 }
 function Application() {
   const [user, setUser] = useState<User | null>(null); const [checking, setChecking] = useState(Boolean(getSession()));
