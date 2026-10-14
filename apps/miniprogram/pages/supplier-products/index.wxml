@@ -1,0 +1,15 @@
+<view class="catalog-page">
+  <view class="catalog-heading"><view><text class="catalog-title">供货商品</text><text class="catalog-subtitle">{{supplierName || '当前供应商'}}</text></view><button class="ghost" bindtap="loadProducts" loading="{{loading}}" disabled="{{loading || !!saving}}">刷新</button></view>
+  <view class="error-banner" wx:if="{{error}}">{{error}}</view>
+  <view class="catalog-tools"><view class="catalog-search"><icon type="search" size="17" /><input placeholder="搜索商品名称、货号或规格" value="{{search}}" bindinput="onSearch" /></view></view>
+  <view class="catalog-browser" wx:if="{{products.length}}">
+    <scroll-view scroll-y class="catalog-categories"><view wx:for="{{categories}}" wx:key="key" class="catalog-category {{primaryCategoryId === item.id ? 'is-active' : ''}}" data-id="{{item.id}}" bindtap="choosePrimaryCategory"><text>{{item.name}}</text><text class="catalog-category-count">{{item.count}}</text></view></scroll-view>
+    <view class="catalog-products"><scroll-view wx:if="{{subcategories.length}}" scroll-x class="subcategory-strip"><view class="subcategory-track"><view wx:for="{{subcategories}}" wx:key="id" class="subcategory-option {{categoryId === item.id ? 'is-active' : ''}}" data-id="{{item.id}}" bindtap="chooseCategory">{{item.name}}</view></view></scroll-view><view class="catalog-caption"><text>{{search ? '搜索结果' : '商品列表'}}</text><text>{{visibleProducts.length}} 件</text></view><scroll-view scroll-y class="catalog-list">
+      <view class="catalog-list-inner"><view class="catalog-row" wx:for="{{visibleProducts}}" wx:key="id"><product-card product="{{item}}" variant="compact" bind:retryimage="retryProductImage"><view class="catalog-row-head"><text class="catalog-name">{{item.name}}</text></view><text class="catalog-meta">{{item.specification || '常规规格'}}{{item.unitName ? ' · ' + item.unitName : ''}}</text><view class="catalog-row-bottom"><text class="catalog-status {{!item.productActive ? 'is-disabled' : item.supplyEnabled ? 'is-listed' : ''}}">{{!item.productActive ? '商品停用' : item.supplyEnabled ? '供货中' : '已下架'}}</text><button class="{{item.supplyEnabled ? 'ghost' : 'secondary'}} catalog-listing" data-id="{{item.id}}" bindtap="changeListing" disabled="{{!item.productActive || !!saving}}" loading="{{saving === item.id}}">{{!item.productActive ? '已停用' : item.supplyEnabled ? '下架' : '上架'}}</button></view></product-card></view>
+      <view wx:if="{{!visibleProducts.length}}" class="empty-state">没有匹配的商品</view>
+      </view>
+    </scroll-view></view>
+  </view>
+  <view wx:if="{{loading && !products.length}}" class="empty-state">正在读取供货商品</view>
+  <view wx:if="{{!loading && !error && !products.length}}" class="empty-state">暂无关联商品，请联系采购维护</view>
+</view>

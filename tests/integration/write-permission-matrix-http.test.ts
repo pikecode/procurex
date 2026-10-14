@@ -46,7 +46,7 @@ add(purchaser, [
 ]);
 add([...purchaser, 'PURCHASE_FOLLOWER'], ['POST /purchase-requests/:id/confirm', 'POST /purchase-requests/:id/reject']);
 add(['ADMIN', 'PURCHASER', 'SUPPLIER'], ['PATCH /suppliers/:id/managed-products/:productId']);
-add(['ADMIN'], ['POST /auth/test-identity', 'POST /stores', 'PATCH /stores/:id', 'POST /stores/group-memberships', 'POST /users', 'PATCH /users/:id', 'POST /users/:id/password', 'POST /users/:id/revoke-sessions',
+add(['ADMIN'], ['POST /auth/test-identity', 'POST /stores', 'PATCH /stores/:id', 'DELETE /stores/:id', 'POST /stores/group-memberships', 'POST /users', 'PATCH /users/:id', 'POST /users/:id/password', 'POST /users/:id/revoke-sessions',
   'POST /store-groups', 'PATCH /store-groups/:id', 'DELETE /store-groups/:id',
   'POST /commands/:id/reviews', 'POST /commands/:id/close-rolled-back-price', 'POST /commands/:id/close-uncommitted-price']);
 add(finance, ['POST /collection-accounts', 'PATCH /collection-accounts/:id', 'POST /stores/:id/recharges', 'PATCH /stores/:id/credit-limit',

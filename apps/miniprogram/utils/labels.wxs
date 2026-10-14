@@ -18,6 +18,14 @@ function status(value) { return names[value] || value || '待确认'; }
 // Tones are computed in each page's view helper, so status text alone stays colour-neutral here.
 var sources = { RECHARGE: '账户充值', PURCHASE_REQUEST: '订货扣款', ADJUSTMENT: '订单金额调整', CLEARING: '挂账清账', REFUND: '退款', CREDIT_LIMIT_CHANGE: '授信调整' };
 function source(value) { return sources[value] || '账户变动'; }
+function quantity(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  var text = '' + value;
+  if (text.indexOf('.') < 0) return text;
+  while (text.charAt(text.length - 1) === '0') text = text.slice(0, text.length - 1);
+  if (text.charAt(text.length - 1) === '.') text = text.slice(0, text.length - 1);
+  return text === '-0' ? '0' : text;
+}
 function money(value) {
   if (value === null || value === undefined || value === '') return '—';
   var text = '' + value;
@@ -38,4 +46,4 @@ function money(value) {
   }
   return (negative && digits * 1 !== 0 ? '-' : '') + digits.slice(0, digits.length - 2) + '.' + digits.slice(digits.length - 2);
 }
-module.exports = { status: status, source: source, money: money };
+module.exports = { status: status, source: source, money: money, quantity: quantity };

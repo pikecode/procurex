@@ -14,6 +14,19 @@
   border-bottom: 4rpx solid transparent;
 }
 .reconcile-tabs .selected { color: var(--brand); font-weight: 700; border-bottom-color: var(--brand); }
+.reconcile-guide {
+  margin: var(--space-section-y) var(--space-page-x) 0;
+  padding: 20rpx 22rpx;
+  border-left: 5rpx solid var(--brand);
+  border-radius: 12rpx;
+  background: var(--brand-soft);
+  color: var(--ink-3);
+  font-size: 23rpx;
+  line-height: 1.55;
+}
+.reconcile-guide text { display: block; }
+.reconcile-guide-title { margin-bottom: 4rpx; color: var(--brand-ink); font-size: 26rpx; font-weight: 700; }
+.supplier-mine-menu { margin-top: var(--space-section-y); }
 
 .source-return {
   padding: 22rpx var(--space-content-x);
@@ -89,7 +102,18 @@
   background: var(--sunken);
   overflow-wrap: anywhere;
 }
-.destination .card-title { font-size: 30rpx; }
+.destination-label { display: block; color: var(--ink-3); font-size: 22rpx; font-weight: 600; }
+.supplier-order-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 18rpx; margin: 8rpx 0 22rpx; }
+.supplier-order-summary > view { min-width: 0; flex: 1; }
+.supplier-order-summary .muted { display: block; margin-top: 8rpx; }
+.summary-store { display: block; color: var(--ink-1); font-size: 34rpx; font-weight: 700; line-height: 1.35; }
+.operation-title { margin: 22rpx 0 12rpx; color: var(--ink-1); font-size: 30rpx; font-weight: 700; }
+.detail-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-top: 26rpx; padding: 18rpx 0 10rpx; border-top: 1rpx solid var(--line); color: var(--ink-1); font-size: 28rpx; font-weight: 700; }
+.detail-section-heading > text:last-child { color: var(--ink-3); font-size: 22rpx; font-weight: 400; }
+.shipment-history { margin-top: 8rpx; }
+.shipment-history .detail-section-heading { margin-top: 0; }
+.shipment-history-row { padding: 20rpx 0; }
+.shipment-products { margin-top: 8rpx; color: var(--ink-2); font-size: 24rpx; }
 
 .supplier-order-list-item { padding: 24rpx 0; }
 .order-list-footer {
@@ -189,3 +213,5 @@
 .statement-adjustment-source, .statement-payment-source { transition: background-color .15s ease; }
 /* 额外运费申请：与主操作区之间保持明确的分隔 */
 .freight-request { margin-top: 28rpx; padding-top: 24rpx; border-top: 1rpx solid var(--line); }
+/* Phone numbers are the contact action; no separate call-to-contact button. */
+.contact-phone { color: var(--brand, #167e5a); text-decoration: underline; }

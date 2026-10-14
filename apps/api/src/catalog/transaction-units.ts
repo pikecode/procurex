@@ -4,6 +4,8 @@ import type { Prisma } from '../../../../packages/backend/generated/prisma/clien
 import { purchaseUnitPrice, salesQuantityFromInput } from '../../../../packages/domain/src/unit-conversion.js';
 
 export type TransactionUnitSnapshot = {
+  originalRequestedQuantity?: string;
+  originalInputQuantity?: string;
   templateId?: string;
   templateVersion?: number;
   minOrderQty?: string;

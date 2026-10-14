@@ -18,6 +18,10 @@
   font-size: 30rpx;
   font-weight: 700;
 }
+.action-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18rpx; margin-bottom: 24rpx; }
+.action-heading > view { min-width: 0; flex: 1; }
+.action-heading .form-title { margin-bottom: 6rpx; }
+.action-step { flex: none; padding: 8rpx 12rpx; border-radius: 999rpx; background: var(--sunken); color: var(--ink-3); font-size: 20rpx; }
 .form-title { display: block; margin-bottom: 24rpx; font-weight: 600; }
 
 .business-heading { margin: 0 calc(-1 * var(--space-page-x)); border-radius: 0; }
@@ -60,6 +64,7 @@
 .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 14rpx; margin: 18rpx 0; }
 .filters picker { min-width: 0; }
 .filters .supplier { grid-column: 1 / -1; }
+.filters .picker-value { display: flex; align-items: center; justify-content: space-between; gap: 10rpx; }
 
 /* ---------- 销账多选 ---------- */
 
@@ -67,11 +72,32 @@
   display: flex;
   align-items: center;
   gap: 14rpx;
-  padding: 22rpx 0;
+  margin: 0 -12rpx;
+  padding: 22rpx 12rpx;
   border-bottom: 1rpx solid var(--line-soft);
 }
+.credit-row.is-selected { background: var(--brand-soft); }
 .credit-row > view { min-width: 0; flex: 1; }
 .credit-row > text { flex-shrink: 0; color: var(--ink-1); font-weight: 600; font-variant-numeric: tabular-nums; }
+.credit-order-no { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-1); font-size: 25rpx; font-weight: 600; }
+.credit-row .muted { display: block; margin-top: 6rpx; font-size: 21rpx; }
+.clearing-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 14rpx; margin-bottom: 20rpx; }
+.clearing-summary > view { padding: 18rpx; border-radius: 14rpx; background: var(--sunken); }
+.clearing-summary text { display: block; color: var(--ink-3); font-size: 21rpx; }
+.clearing-summary text:last-child { margin-top: 7rpx; color: var(--ink-1); font-size: 29rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
+.clearing-summary .selected-amount { color: var(--brand); }
+.selection-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; padding: 8rpx 0 4rpx; }
+.selection-heading > view { min-width: 0; }
+.selection-heading > view > text { display: block; color: var(--ink-1); font-size: 27rpx; font-weight: 700; }
+.selection-heading > view > .muted { margin-top: 4rpx; color: var(--ink-3); font-size: 21rpx; font-weight: 400; }
+.selection-heading button { flex: none; width: 112rpx; height: 58rpx; margin: 0; font-size: 22rpx; }
+.confirmation-summary { padding: 4rpx 0; }
+.confirmation-amount { display: flex; align-items: baseline; justify-content: space-between; gap: 16rpx; margin: 20rpx 0; padding: 22rpx; border-radius: 14rpx; background: var(--brand-soft); }
+.confirmation-amount text:last-child { color: var(--brand); font-size: 36rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
+.preview-item { display: flex; align-items: center; justify-content: space-between; gap: 18rpx; padding: 18rpx 0; border-bottom: 1rpx solid var(--line-soft); }
+.preview-item > view { min-width: 0; flex: 1; }
+.preview-item > view > text { display: block; }
+.preview-item > text { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* ---------- 按钮组 ---------- */
 

@@ -78,7 +78,9 @@ export async function refreshRequestPaymentSummary(tx: Prisma.TransactionClient,
 }
 
 // Account and request are locked by the caller. All cash movements are net changes, never a second split-order debit.
-export async function synchronizeRequestFunding(tx: Prisma.TransactionClient, requestId: string, options: { requireFull?: boolean; sourceId?: string; priceAdjustmentId?: string; initial?: boolean; deferCreditShortfall?: boolean; excludeShipmentFreightId?: string } = {}): Promise<RequestFundingResult> {
+type EffectiveFundingItem = { supplierId: string; salesLineAmount: Decimal.Value; settlementModeSnapshot?: SettlementMode | null; settlementCycleSnapshot?: string | null };
+
+export async function synchronizeRequestFunding(tx: Prisma.TransactionClient, requestId: string, options: { requireFull?: boolean; sourceId?: string; priceAdjustmentId?: string; initial?: boolean; deferCreditShortfall?: boolean; excludeShipmentFreightId?: string; effectiveItems?: EffectiveFundingItem[]; effectiveSalesGoodsAmount?: Decimal.Value } = {}): Promise<RequestFundingResult> {
   const request = await tx.purchaseRequest.findUniqueOrThrow({ where: { id: requestId }, include: { items: true, supplierOrders: { include: { shipments: true } } } });
   const account = await tx.storeAccount.findUniqueOrThrow({ where: { storeId: request.storeId } });
   const creditMovement = (id: string, before: Decimal.Value, after: Decimal.Value) => recordCreditMovement(tx, {
@@ -87,10 +89,11 @@ export async function synchronizeRequestFunding(tx: Prisma.TransactionClient, re
   });
   const terms = await resolveSettlementTerms(tx, request.templateId, [...new Set(request.items.map(item => item.supplierId))], request.storeId);
   const targets = new Map<string, { method: 'STORED_VALUE' | 'CREDIT'; amount: Decimal; orderId?: string }>();
-  for (const item of request.items) {
+  const fundingItems = options.effectiveItems ?? request.items;
+  for (const item of fundingItems) {
     const policy = terms.get(item.supplierId)!;
     const mode = item.settlementModeSnapshot ?? policy.mode;
-    if (!item.settlementModeSnapshot || !item.settlementCycleSnapshot) await tx.requestItem.update({ where: { id: item.id }, data: {
+    if (!options.effectiveItems && (!item.settlementModeSnapshot || !item.settlementCycleSnapshot)) await tx.requestItem.update({ where: { id: (item as typeof request.items[number]).id }, data: {
       settlementModeSnapshot: mode, settlementCycleSnapshot: item.settlementCycleSnapshot ?? policy.cycle,
     } });
     if (request.status === 'CANCELED' || (mode !== 'STORED_VALUE' && mode !== 'CREDIT')) continue;
@@ -261,7 +264,7 @@ export async function synchronizeRequestFunding(tx: Prisma.TransactionClient, re
   const totalFreight = request.supplierOrders.filter(order => order.status !== 'REJECTED' && order.status !== 'CANCELED')
     .reduce((sum, order) => sum.plus(order.shipments.reduce((freight, shipment) => shipment.id === options.excludeShipmentFreightId ? freight : freight.plus(shipment.freight), new Decimal(0))), new Decimal(0));
   await tx.purchaseRequest.update({ where: { id: requestId }, data: {
-    paidAmount, shortfallAmount, paymentStatus: paidAmount.gte(new Decimal(request.salesGoodsAmount).plus(totalFreight)) ? 'PAID' : 'UNPAID',
+    paidAmount, shortfallAmount, paymentStatus: paidAmount.gte(new Decimal(options.effectiveSalesGoodsAmount ?? request.salesGoodsAmount).plus(totalFreight)) ? 'PAID' : 'UNPAID',
   } });
   return { canConfirm, paidAmount, shortfallAmount, storedRequired, storedPaid, storedReserved, available: new Decimal(updatedAccount.balance).minus(updatedAccount.reservedBalance) };
 }

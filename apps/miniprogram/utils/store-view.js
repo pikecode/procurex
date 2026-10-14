@@ -12,6 +12,26 @@ function decimalText(value) {
   return text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text;
 }
 
+// Native dialogs cannot use labels.wxs; keep the same decimal-string rounding.
+function moneyText(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(value));
+  if (!match) return '—';
+  const fraction = (match[3] || '').padEnd(3, '0');
+  let digits = match[2] + fraction.slice(0, 2);
+  if (fraction[2] >= '5') {
+    let carry = 1;
+    let rounded = '';
+    for (let i = digits.length - 1; i >= 0; i--) {
+      const digit = Number(digits[i]) + carry;
+      carry = digit >= 10 ? 1 : 0;
+      rounded = (digit % 10) + rounded;
+    }
+    digits = (carry ? '1' : '') + rounded;
+  }
+  return `${match[1] && Number(digits) !== 0 ? '-' : ''}${digits.slice(0, -2)}.${digits.slice(-2)}`;
+}
+
 function orderStage(order) {
   if (['pending', 'receive', 'completed', 'canceled'].includes(order.fulfillmentStage)) return order.fulfillmentStage;
   if (['CANCELED', 'CANCELLED', 'REJECTED'].includes(order.status)) return 'canceled';
@@ -156,4 +176,4 @@ function checkoutFunding(preview) {
   };
 }
 
-module.exports = { dateText, decimalText, orderStage, orderStageTone, statusTone, previewGroups, requestGroups, previewSignature, monthRange, statementPeriod, checkoutFunding, reportPreset, reportRangeError, reportSummary };
+module.exports = { dateText, decimalText, moneyText, orderStage, orderStageTone, statusTone, previewGroups, requestGroups, previewSignature, monthRange, statementPeriod, checkoutFunding, reportPreset, reportRangeError, reportSummary };

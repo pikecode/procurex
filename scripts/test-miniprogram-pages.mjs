@@ -22,6 +22,74 @@ function page(role, request = async () => ({}), apiOverrides = {}, wxOverrides =
 }
 
 const tap = (id, extra = {}) => ({ currentTarget: { dataset: { id, ...extra } } });
+test('supplier report quantities remove trailing zeroes without rounding fractional units', () => {
+  const labels = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/labels.wxs', 'utf8'), { module: labels });
+  for (const [value, expected] of [['5.000000', '5'], ['5.250000', '5.25'], ['0.000001', '0.000001'], ['0.000000', '0'], ['-0.000000', '0'], ['-1.500000', '-1.5'], [0, '0'], [null, '—']]) assert.equal(labels.exports.quantity(value), expected);
+  const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
+  assert.ok(markup.includes("{{labels.quantity(item.quantity)}} {{item.unit || ''}}"));
+});
+test('supplier reconciliation, payment lists and native money labels keep two decimals without changing amounts', async () => {
+  const labels = { exports: {} }; const view = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/labels.wxs', 'utf8'), { module: labels });
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/store-view.js', 'utf8'), { module: view });
+  for (const [value, expected] of [['10', '10.00'], ['20.1', '20.10'], ['1.005', '1.01'], ['9.999', '10.00'], ['-1.005', '-1.01'], ['-0.001', '0.00'], ['9999999999.999999', '10000000000.00'], [null, '—']]) {
+    assert.equal(labels.exports.money(value), expected);
+    assert.equal(view.exports.moneyText(value), expected);
+  }
+  const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
+  for (const field of ['payableAmount', 'pendingPaymentAmount', 'confirmedPaidAmount', 'amount']) assert.ok(markup.includes(`labels.money(item.${field})`));
+  assert.equal(/\{\{item\.(?:payableAmount|pendingPaymentAmount|confirmedPaidAmount|amount)\}\}/.test(markup), false);
+  const supplier = page('supplier', async () => ({ freightConfirmations: [{ id: 'f1', status: 'CONFIRMED', amount: '1.005', reason: '配送' }] }));
+  supplier.data.supplierOrderId = 'o1'; supplier.data.selectedOrder = { id: 'o1', version: 2 };
+  await supplier.refreshFreight();
+  assert.equal(supplier.data.freightChoices[1].label, '¥1.01 · 配送');
+  assert.equal(supplier.data.freightChoices[1].amount, '1.005');
+});
+test('freight refresh exposes only approved unused fees without resetting shipment quantities or accepting a new order version', async () => {
+  const supplier = page('supplier', async () => ({ version: 9, requiresFreightSnapshot: true, freightConfirmations: [
+    { id: 'approved', amount: '10.00', status: 'CONFIRMED' }, { id: 'pending', status: 'PENDING' }, { id: 'used', status: 'CONFIRMED', usedAt: 'today' }
+  ] }));
+  supplier.data.supplierOrderId = 'o1'; supplier.data.selectedOrder = { id: 'o1', version: 2 };
+  supplier.data.shipmentItems = [{ id: 'i1', shipQuantity: '3' }]; supplier.data.freightChoices = [{ id: '', amount: '0.00' }];
+  await supplier.refreshFreight();
+  assert.equal(supplier.data.freightChoices.length, 2); assert.equal(supplier.data.freightChoices[1].id, 'approved');
+  assert.equal(supplier.data.shipmentItems[0].shipQuantity, '3'); assert.equal(supplier.data.selectedOrder.version, 2);
+});
+test('shipping navigation, clickable recipient phone and account statement labels avoid ambiguous duplicate controls', () => {
+  const supplier = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
+  assert.ok(supplier.includes("!statementReturnId && orderMode === 'detail'"));
+  assert.ok(supplier.includes('class="contact-phone" bindtap="callContact"'));
+  assert.equal(supplier.includes('联系收货人</button>'), false);
+  const store = readFileSync('apps/miniprogram/pages/store/index.wxml', 'utf8');
+  assert.ok(store.includes('返回我的')); assert.ok(store.includes('暂无公司账期账单'));
+  const finance = readFileSync('apps/miniprogram/pages/finance/index.wxml', 'utf8');
+  assert.ok(finance.includes("=== 'OPEN' ? '待结清'"));
+});
+test('store and purchaser default to formal orders and retain a separate source record view', async () => {
+  for (const role of ['store', 'purchaser']) {
+    const instance = page(role, async () => ({ id: 'r1', status: 'CONFIRMED', items: [], supplierOrders: [] }));
+    assert.equal(instance.data.recordType, 'orders');
+    let opened = '';
+    instance.selectComponent = () => ({ data: { active: true }, open: event => { opened = event.currentTarget.dataset.id; } });
+    instance.openOrderSource({ detail: { id: 'r1', orderId: 'order1' } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(instance.data.recordType, 'requests');
+    assert.equal(instance.data.sourceOrderReturn, true);
+    if (role === 'store') instance.closeRequest(); else instance.backToList();
+    assert.equal(instance.data.recordType, 'orders'); assert.equal(opened, 'order1');
+    assert.equal(instance.data.sourceOrderReturn, false);
+  }
+});
+test('procurement generated-order entry opens the exact formal order and does not reconfirm', () => {
+  const instance = page('purchaser');
+  instance.data.activeView = 'orders'; instance.data.requestId = 'r1'; instance.data.taskOrigin = true;
+  let opened = '';
+  instance.selectComponent = () => ({ open: event => { opened = event.currentTarget.dataset.id; } });
+  instance.openGeneratedOrder(tap('order2'));
+  assert.equal(instance.data.requestId, ''); assert.equal(instance.data.activeView, 'orders');
+  assert.equal(instance.data.recordType, 'orders'); assert.equal(instance.data.taskOrigin, false); assert.equal(opened, 'order2');
+});
 test('procurement reports group separate orders under supplier identity across pagination', () => {
   const purchaser = page('purchaser');
   purchaser.data.reports.orderAmount = { orders: [
@@ -367,6 +435,19 @@ test('test workbench confirmation cancellation does not change identity', async 
   await workbench.select(tap('a'));
   assert.equal(switched, false); assert.equal(workbench.data.switching, false);
 });
+test('test workbench groups identities by business role and supports logout', () => {
+  let loggedOut = false; const calls = [];
+  const workbench = page('test-workbench', undefined, { logout: () => { loggedOut = true; } }, { reLaunch: value => calls.push(value.url) });
+  workbench.data.items = [
+    { id: 's1', username: 'store1', displayName: '门店用户1', entityName: '门店1', roles: ['STORE'], roleText: '门店厨政经理' },
+    { id: 'p1', username: 'supplier1', displayName: '供应商用户1', entityName: '供应商1', roles: ['SUPPLIER'], roleText: '供应商' },
+    { id: 'b1', username: 'buyer1', displayName: '采购用户1', roles: ['PURCHASER'], roleText: '公司采购' },
+  ];
+  workbench.groupItems();
+  assert.deepEqual(plain(workbench.data.groups.map(group => [group.role, group.items.length])), [['STORE', 1], ['SUPPLIER', 1], ['PURCHASER', 1]]);
+  workbench.logout();
+  assert.equal(loggedOut, true); assert.deepEqual(calls, ['/pages/login/index']);
+});
 
 for (const role of ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER']) {
   test(`assigned-store workspace routes ${role} and rejects empty authorization`, () => {
@@ -664,25 +745,44 @@ test('all role workspaces omit device submission history entries', () => {
 test('native own profiles require a binding and never enumerate foreign entities', async () => {
   const calls = [];
   const user = { id: 'supplier-user', roles: ['SUPPLIER'], scope: { supplierId: 'own' } };
-  const profile = page('profile', async path => {
+  const request = async path => {
     calls.push(path);
-    return path.endsWith('/managed-products') ? { items: [{ id: 'p', name: 'Water', sku: 'W', productActive: true, supplyEnabled: true, version: 1 }] }
+    return path.endsWith('/managed-products') ? { items: [
+      { id: 'p', name: 'Water', sku: 'W', categoryId: 'water', categoryName: '饮用水', categoryParentId: 'drink', categoryParentName: '饮品', productActive: true, supplyEnabled: true, version: 1 },
+      { id: 'p2', name: 'Tea', sku: 'T', categoryId: 'tea', categoryName: '茶饮', categoryParentId: 'drink', categoryParentName: '饮品', productActive: true, supplyEnabled: false, version: 2 },
+      { id: 'p3', name: 'Rice', sku: 'R', categoryId: 'rice', categoryName: '米面', categoryParentId: 'food', categoryParentName: '粮油', productActive: true, supplyEnabled: true, version: 3 }
+    ] }
       : { id: 'own', name: 'Own supplier', bankAccount: 'own-bank', defaultSettlementMode: 'COMPANY_TERM', status: 'ACTIVE' };
-  }, { currentUser: () => user });
+  };
+  const profile = page('profile', request, { currentUser: () => user });
   profile.onLoad({ kind: 'supplier' }); await profile.loadProfile();
+  assert.deepEqual(calls, ['/suppliers/own']);
+  const catalog = page('supplier-products', request, { currentUser: () => user });
+  await catalog.loadProducts();
   assert.deepEqual(calls, ['/suppliers/own', '/suppliers/own/managed-products']);
   assert.equal(profile.data.profile.id, 'own');
   assert.equal(profile.data.fields.find(item => item.label === '银行账号').value, 'own-bank');
-  profile.onSearch({ detail: { value: 'NO-MATCH' } }); assert.equal(profile.data.visibleProducts.length, 0);
-  user.scope = {}; await profile.loadProfile();
-  assert.equal(calls.length, 2); assert.equal(profile.data.profile, null); assert.match(profile.data.error, /尚未配置/);
+  assert.deepEqual(plain(catalog.data.categories.map(item => [item.name, item.level, item.count])), [
+    ['全部商品', 0, 3], ['饮品', 1, 2], ['粮油', 1, 1]
+  ]);
+  catalog.choosePrimaryCategory(tap('drink')); assert.deepEqual(catalog.data.visibleProducts.map(item => item.id), ['p', 'p2']);
+  assert.deepEqual(plain(catalog.data.subcategories.map(item => item.name)), ['全部', '饮用水', '茶饮']);
+  catalog.chooseCategory(tap('tea')); assert.deepEqual(catalog.data.visibleProducts.map(item => item.id), ['p2']);
+  catalog.choosePrimaryCategory(tap('food')); assert.equal(catalog.data.categoryId, '');
+  assert.deepEqual(catalog.data.visibleProducts.map(item => item.id), ['p3']);
+  assert.deepEqual(plain(catalog.data.subcategories.map(item => item.name)), ['全部', '米面']);
+  catalog.chooseCategory(tap('tea')); assert.equal(catalog.data.categoryId, '');
+  catalog.onSearch({ detail: { value: 'Rice' } }); assert.equal(catalog.data.categoryId, ''); assert.deepEqual(catalog.data.visibleProducts.map(item => item.id), ['p3']);
+  catalog.onSearch({ detail: { value: 'NO-MATCH' } }); assert.equal(catalog.data.visibleProducts.length, 0);
+  user.scope = {}; await catalog.loadProducts();
+  assert.equal(calls.length, 2); assert.equal(catalog.data.products.length, 0); assert.match(catalog.data.error, /尚未配置/);
 });
 
 test('supplier listing prevents duplicate confirmation and sends versioned status only', async () => {
   const calls = [];
   let confirm;
   const user = { id: 'supplier', roles: ['SUPPLIER'], scope: { supplierId: 'own' } };
-  const profile = page('profile', async (path, options) => calls.push({ path, options }),
+  const profile = page('supplier-products', async (path, options) => calls.push({ path, options }),
     { currentUser: () => user }, { showModal: options => { confirm = options.success; } });
   profile.data.products = [{ id: 'p', name: 'Rice', productActive: true, supplyEnabled: true, version: 3 }];
   profile.loadProfile = async () => {};
@@ -690,7 +790,10 @@ test('supplier listing prevents duplicate confirmation and sends versioned statu
   await profile.changeListing(tap('p'));
   assert.equal(calls.length, 0);
   confirm({ confirm: true }); await pending;
-  assert.deepEqual(plain(calls), [{ path: '/suppliers/own/managed-products/p', options: { method: 'PATCH', data: { supplyEnabled: false, expectedVersion: 3 } } }]);
+  assert.deepEqual(plain(calls), [
+    { path: '/suppliers/own/managed-products/p', options: { method: 'PATCH', data: { supplyEnabled: false, expectedVersion: 3 } } },
+    { path: '/suppliers/own/managed-products' }
+  ]);
   assert.equal(profile.data.saving, '');
 });
 
@@ -699,7 +802,7 @@ test('supplier listing confirmation cannot submit after leaving page or switchin
     let confirm;
     let user = { id: 'supplier', roles: ['SUPPLIER'], scope: { supplierId: 'own' } };
     const calls = [];
-    const profile = page('profile', async path => calls.push(path), { currentUser: () => user },
+    const profile = page('supplier-products', async path => calls.push(path), { currentUser: () => user },
       { showModal: options => { confirm = options.success; } });
     profile.data.products = [{ id: 'p', productActive: true, supplyEnabled: true, version: 1 }];
     const pending = profile.changeListing(tap('p'));
@@ -1059,11 +1162,17 @@ test('finance clearing filters selections and submits exact service preview vers
   const account = financeAccounts(async path => path.endsWith('/preview') ? { totalAmount: '12.34', items: [{ fundingAllocationId: 'one', version: 7, clearableAmount: '12.34' }] } : [],
     { roleCommand: (...args) => { commands.push(args); return new Promise(resolve => { finish = resolve; }); } });
   account.loadAccount = async () => {};
-  account.data.credits = [{ fundingAllocationId: 'one', date: '2026-10-10', supplierName: '供应商A' }, { fundingAllocationId: 'two', date: '2026-09-01', supplierName: '供应商B' }];
+  account.data.credits = [
+    { fundingAllocationId: 'one', date: '2026-10-10', dateText: '2026-10-10', supplierName: '供应商A', supplierOrderNo: 'SO001', creditOutstanding: '12.34' },
+    { fundingAllocationId: 'two', date: '2026-09-01', dateText: '2026-09-01', supplierName: '供应商B', supplierOrderNo: 'SO002', creditOutstanding: '0.01' }
+  ];
   account.data.from = '2026-10-01'; account.filterCredits();
   account.chooseCredits({ detail: { value: ['one', 'two', 'one'] } }); assert.deepEqual(plain(account.data.chosen), ['one']);
+  assert.equal(account.data.selectedTotal, 12.34);
   account.data.mode = 'clearing'; account.data.evidenceFiles = [{ id: 'evidence' }];
   await account.prepare(); assert.equal(account.data.confirming, true);
+  assert.equal(account.data.preview.items[0].supplierOrderNo, 'SO001');
+  assert.equal(account.data.preview.items[0].supplierName, '供应商A');
   const first = account.submit(); await account.submit(); assert.equal(commands.length, 1);
   assert.deepEqual(plain(commands[0][2].data.items), [{ fundingAllocationId: 'one', expectedVersion: 7, expectedAmount: '12.34' }]);
   assert.deepEqual(plain(commands[0][2].data.evidenceFileIds), ['evidence']); finish({}); await first;
@@ -1579,6 +1688,62 @@ test('purchaser replaces one product supplier only after valid price preview and
   assert.ok(command.options.header['idempotency-key']);
   assert.ok(!calls.some(call => call.path.endsWith('/confirm')));
   assert.equal(purchaser.data.reallocating, false);
+});
+
+test('purchaser validates and generates orders directly from the adjustment page', async () => {
+  const calls = [];
+  const preview = { items: [{ productId: 'p1', priceVersionId: 'sale-1', supplyPriceVersionId: 'supply-1' }],
+    totals: { salesGoodsAmount: '12.00', supplyGoodsAmount: '10.00' }, funding: { canConfirm: true } };
+  const purchaser = page('purchaser', async (path, options) => {
+    calls.push({ path, options });
+    if (path.endsWith('/items-preview')) return preview;
+    if (path.endsWith('/confirm-adjusted')) return { requestId: 'request', status: 'CONFIRMED', supplierOrderIds: ['order-1'] };
+    return { id: 'request' };
+  });
+  purchaser.data.requestId = 'request';
+  purchaser.data.canReallocate = true;
+  purchaser.data.selectedRequest = { id: 'request', version: 3, items: [{ productId: 'p1', productName: '苹果', supplierId: 'supplier-1', quantity: '5', unitSnapshot: { inputQuantity: '5', inputUnitId: 'unit-1', inputUnitName: '斤' } }] };
+  purchaser.data.editCatalog = { items: [{ product: { id: 'p1', name: '苹果', baseUnitId: 'unit-1', unitName: '斤', version: 5, minOrderQty: '1', orderMultiple: '1' }, suppliers: [{ supplierId: 'supplier-1', supplierName: '供应商甲', priceVersionId: 'sale-1', supplyPriceVersionId: 'supply-1', salesPrice: '2', supplyPrice: '1.5' }] }] };
+  purchaser.loadRequests = async () => {};
+  purchaser.loadRequestDetail = async () => {};
+  purchaser.startRequestEdit();
+  purchaser.editInput({ currentTarget: { dataset: { field: 'editReason' } }, detail: { value: '门店确认核减' } });
+  purchaser.changeEditQuantity({ currentTarget: { dataset: { id: 'p1' } }, detail: { value: '4' } });
+  purchaser.changeEditQuantity({ currentTarget: { dataset: { id: 'p1' } }, detail: { value: '6' } });
+  assert.match(purchaser.data.error, /不能超过门店原下单数量 5 斤/);
+  assert.equal(purchaser.data.editItems[0].quantity, '4');
+  await purchaser.confirmRequestEdit();
+  assert.equal(calls[0].path, '/purchase-requests/request/items-preview');
+  assert.equal(calls[0].options.data.items[0].quantity, '4');
+  assert.equal(calls[1].path, '/purchase-requests/request/confirm-adjusted');
+  assert.equal(calls[1].options.method, 'POST');
+  assert.equal(calls[1].options.data.items[0].expectedPriceVersionId, 'sale-1');
+  assert.equal(calls.length, 2);
+  assert.equal(purchaser.data.editingRequest, false);
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  for (const label of ['调整下货单', '取消调整', '确认并生成订单', '供应商价格', '门店原下单量']) assert.ok(markup.includes(label));
+  assert.equal(markup.includes('核对调整'), false);
+  for (const handler of ['chooseEditPrimaryCategory', 'stepEditProduct', 'setEditProductQuantity', 'changeEditSupplier']) assert.ok(markup.includes(`bindtap="${handler}"`) || markup.includes(`bindblur="${handler}"`) || markup.includes(`bindchange="${handler}"`));
+  assert.equal(markup.includes('>编辑商品</button>'), false);
+});
+
+test('purchaser rejection requires a reason and cancels the whole request through the command endpoint', async () => {
+  const calls = [];
+  const purchaser = page('purchaser', async (path, options) => { calls.push({ path, options }); return { status: 'CANCELED' }; }, {}, {
+    showModal: options => options.success({ confirm: true })
+  });
+  purchaser.data.selectedRequest = { id: 'request', version: 4 };
+  purchaser.data.rejectingRequest = true;
+  purchaser.loadRequests = async () => {};
+  purchaser.loadRequestDetail = async () => {};
+  await purchaser.rejectRequest();
+  assert.match(purchaser.data.error, /拒单原因/);
+  purchaser.data.rejectReason = '商品信息不符';
+  await purchaser.rejectRequest();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].path, '/purchase-requests/request/reject');
+  assert.deepEqual(plain(calls[0].options.data), { expectedVersion: 4, reason: '商品信息不符' });
+  assert.equal(purchaser.data.rejectingRequest, false);
 });
 
 test('purchaser groups confirmation products by supplier and rebuilds groups after reassignment', async () => {
@@ -2152,8 +2317,8 @@ test('workspace navigation follows role and assigned-store permissions', () => {
   for (const [role, expected] of [['STORE', 'store'], ['STORE_FINANCE', 'store'], ['SUPPLIER', 'supplier'], ['PURCHASER', 'purchaser'], ['HQ_FINANCE', 'finance']]) {
     assert.deepEqual(names({ roles: [role] }), [expected]);
   }
-  assert.deepEqual(names({ roles: ['ADMIN'] }), ['purchaser', 'finance']);
-  assert.deepEqual(names({ roles: ['ADMIN', 'STORE', 'SUPPLIER'], scope: { type: 'ALL' } }), ['purchaser', 'finance']);
+  assert.deepEqual(names({ roles: ['ADMIN'] }), []);
+  assert.deepEqual(names({ roles: ['ADMIN', 'STORE', 'SUPPLIER'], scope: { type: 'ALL' } }), []);
   assert.deepEqual(names({ roles: ['STORE', 'SUPPLIER', 'STORE'] }), ['store', 'supplier']);
   for (const role of ['REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER']) {
     assert.deepEqual(names({ roles: [role], scope: { type: 'MULTI_STORE', storeIds: ['s1'] } }), ['region']);
@@ -2161,18 +2326,26 @@ test('workspace navigation follows role and assigned-store permissions', () => {
   }
 });
 
-test('admin login uses the shared workspace routing even with a store role', async () => {
+test('administrator root cannot open a business workspace directly', () => {
+  const calls = []; const module = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/api.js', 'utf8'), { module,
+    wx: { getStorageSync: () => ({ roles: ['ADMIN'], testWorkbenchEnabled: true }), reLaunch: value => calls.push(value.url) } });
+  assert.equal(module.exports.openWorkspace('purchaser'), null);
+  assert.deepEqual(calls, ['/pages/test-workbench/index']);
+});
+
+test('admin login opens only the identity picker even with another role', async () => {
   const module = { exports: {} };
   vm.runInNewContext(readFileSync('apps/miniprogram/utils/api.js', 'utf8'), { module });
   const calls = [];
   const login = page('login', undefined, {
     checkHealth: async () => ({}),
-    login: async () => ({ id: 'admin', roles: ['ADMIN', 'STORE'], scope: { type: 'ALL' } }),
+    login: async () => ({ id: 'admin', roles: ['ADMIN', 'STORE'], scope: { type: 'ALL' }, testWorkbenchEnabled: true }),
     workspaceNames: module.exports.workspaceNames,
-  }, { setStorageSync() {}, switchTab: value => calls.push(value.url) });
+  }, { setStorageSync() {}, switchTab: value => calls.push(value.url), reLaunch: value => calls.push(value.url) });
   login.setData({ username: 'admin', password: 'test' });
   await login.submit();
-  assert.deepEqual(calls, ['/pages/purchaser/index']);
+  assert.deepEqual(calls, ['/pages/test-workbench/index']);
   assert.equal(login.data.error, '');
 });
 
@@ -2196,6 +2369,7 @@ test('custom navigation refreshes account permissions and guards workspace switc
   assert.equal(bar.data.selected, 'purchaser');
   user = { roles: ['ADMIN'], testWorkbenchEnabled: true }; bar.refresh();
   assert.equal(bar.data.visible, false);
+  assert.deepEqual(plain(bar.data.items), []);
   user = { roles: ['PURCHASER', 'HQ_FINANCE'] }; bar.refresh();
   bar.switchWorkspace({ currentTarget: { dataset: { name: 'store' } } });
   assert.equal(calls.length, 0);
@@ -2238,6 +2412,7 @@ test('supplier allocates replenishment gaps and uses only confirmed unused freig
   supplier.onGapQuantity({ currentTarget: { dataset: { id: 'i1', gapId: 'g1' } }, detail: { value: '2' } });
   supplier.selectFreight({ detail: { value: '1' } }); await supplier.shipOrder();
   assert.equal(payload.freight, '8.50'); assert.equal(payload.freightConfirmationId, 'f1');
+  assert.equal(supplier.data.result, null);
   assert.deepEqual(plain(payload.items[0].gapAllocations), [{ gapId: 'g1', quantity: '2' }]);
   await supplier.loadOrder('o1'); supplier.onShipQuantity(input('i1', '1'));
   supplier.onGapQuantity({ currentTarget: { dataset: { id: 'i1', gapId: 'g1' } }, detail: { value: '2' } });

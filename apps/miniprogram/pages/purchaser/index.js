@@ -1,5 +1,6 @@
 const api = require('../../utils/api');
 const view = require('../../utils/store-view');
+const quantity = require('../../utils/quantity');
 
 function groupAssignments(items) {
   const groups = new Map();
@@ -20,6 +21,10 @@ function groupAssignments(items) {
 Page({
   data: {
     activeView: 'tasks',
+    canReallocate: false,
+    recordType: 'orders',
+    sourceOrderReturn: false,
+    orderRevision: 0,
     taskType: 'requests',
     taskOrigin: false,
     procurementTasks: [],
@@ -42,6 +47,24 @@ Page({
     supplierIndex: -1,
     assignmentItems: [],
     assignmentGroups: [],
+    editCatalog: null,
+    editingRequest: false,
+    editItems: [],
+    editProducts: [],
+    visibleEditProducts: [],
+    editSearch: '',
+    editPrimaryCategoryId: '',
+    editCategoryId: '',
+    editCategories: [],
+    editSubcategories: [],
+    editEstimatedAmount: '0.00',
+    editCartOpen: false,
+    addableProducts: [],
+    editReason: '',
+    editRevision: 0,
+    savingRequest: false,
+    rejectingRequest: false,
+    rejectReason: '',
     showPriceDetails: false,
     expandedOrders: {},
     showOriginalRequest: false,
@@ -82,18 +105,20 @@ Page({
     const user = api.openWorkspace('purchaser');
     if (!user) return;
     if (this.data.user.id !== user.id) {
+      this.sourceOrderId = '';
+      this.setData({ recordType: 'orders', sourceOrderReturn: false });
       this.setData({ reportRange: view.reportPreset('month'), reportDraft: view.reportPreset('month'), reportPreset: 'month', reportSummary: null, reportsError: '',
         reportFilterDraft: { storeId: '', supplierId: '' }, reportFilters: { storeId: '', supplierId: '' }, reportStoreIndex: 0, reportSupplierIndex: 0,
         reportStoreOptions: [{ id: '', name: '全部门店' }], reportSupplierOptions: [{ id: '', name: '全部供应商' }] });
       this.setData({ visibleRequests: [], search: '', statusFilter: 'all', activeView: 'tasks', taskType: 'requests', taskOrigin: false });
       this.setData({ requests: [], rejectionTodos: [], selectedRequest: null, requestId: '', rejectedOrderId: '', targetSupplierId: '',
-        suppliers: [], supplierIndex: -1, assignmentItems: [], assignmentGroups: [], showPriceDetails: false, detailError: '', result: null, freightConfirmations: [], selectedFreight: null, procurementTasks: [], pendingFreight: [],
+        suppliers: [], supplierIndex: -1, assignmentItems: [], assignmentGroups: [], editCatalog: null, editingRequest: false, editItems: [], addableProducts: [], editReason: '', savingRequest: false, rejectReason: '', rejectingRequest: false, showPriceDetails: false, detailError: '', result: null, freightConfirmations: [], selectedFreight: null, procurementTasks: [], pendingFreight: [],
         reports: { orderAmount: null, productQuantity: null } });
     }
-    this.setData({ user, roleText: '采购' });
+    this.setData({ user, roleText: '采购', canReallocate: (user.roles || []).some(role => ['ADMIN', 'PURCHASER'].includes(role)) });
     this.syncCommands();
     this.loadWork();
-    if (this.data.requestId && !this.data.detailing && !this.data.confirming && !this.data.reallocating && !this.data.recovering) this.loadRequestDetail();
+    if (this.data.requestId && !this.data.detailing && !this.data.confirming && !this.data.reallocating && !this.data.recovering && !this.data.savingRequest && !this.data.editingRequest && !this.data.rejectingRequest) this.loadRequestDetail();
   },
 
   syncCommands() {
@@ -126,36 +151,68 @@ Page({
   },
 
   changeView(event) {
-    if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest || this.data.freightReviewing) return;
+    this.sourceOrderId = '';
     if (event.currentTarget.dataset.view !== this.data.activeView) this.backToList();
-    this.setData({ activeView: event.currentTarget.dataset.view, error: '' });
+    this.setData({ activeView: event.currentTarget.dataset.view, error: '', sourceOrderReturn: false });
   },
 
   changeTaskType(event) {
     const taskType = event.currentTarget.dataset.type;
     if (['requests', 'rejections', 'freight'].includes(taskType)) this.setData({ taskType });
   },
+  changeRecordType(event) {
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest || this.data.freightReviewing) return;
+    this.sourceOrderId = ''; this.backToList(); this.setData({ recordType: event.currentTarget.dataset.type });
+  },
+  openOrderSource(event) {
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest || this.data.freightReviewing) return;
+    this.sourceOrderId = event.detail.orderId;
+    this.setData({ recordType: 'requests', sourceOrderReturn: true });
+    this.selectRequest({ currentTarget: { dataset: { id: event.detail.id } } });
+  },
+  openOrderReallocation(event) {
+    if (!this.data.canReallocate) return;
+    this.setData({ activeView: 'rejections', taskOrigin: true });
+    this.selectRejection({ currentTarget: { dataset: event.detail } });
+  },
+  openGeneratedOrder(event) {
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest || this.data.freightReviewing) return;
+    const id = event.currentTarget.dataset.id;
+    this.backToList();
+    this.setData({ activeView: 'orders', recordType: 'orders', taskOrigin: false });
+    const open = () => this.selectComponent('#formal-orders').open({ currentTarget: { dataset: { id } } });
+    if (wx.nextTick) wx.nextTick(open); else open();
+  },
 
   openTaskRejection(event) {
-    if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest || this.data.freightReviewing) return;
     this.setData({ activeView: 'rejections', taskOrigin: true, result: null });
     return this.selectRejection(event);
   },
 
   openTaskRequest(event) {
-    if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest || this.data.freightReviewing) return;
     this.setData({ activeView: 'orders', taskOrigin: true, result: null });
     return this.selectRequest(event);
   },
   openTaskFreight(event) {
-    if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest || this.data.freightReviewing) return;
     this.setData({ activeView: 'freight', taskOrigin: true, result: null });
     this.selectFreight(event);
   },
 
   backToList() {
-    if (this.data.confirming || this.data.reallocating || this.data.freightReviewing) return;
-    this.setData({ ...(this.data.taskOrigin ? { activeView: 'tasks' } : {}), taskOrigin: false, result: null, requestId: '', selectedRequest: null, assignmentItems: [], assignmentGroups: [], showPriceDetails: false, detailError: '', selectedFreight: null, rejectedOrderId: '', targetSupplierId: '', supplierIndex: -1 });
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest || this.data.freightReviewing) return;
+    const orderId = this.sourceOrderId;
+    this.sourceOrderId = '';
+    this.setData({ sourceOrderReturn: false });
+    this.setData({ ...(this.data.taskOrigin ? { activeView: 'tasks' } : {}), taskOrigin: false, result: null, requestId: '', selectedRequest: null, assignmentItems: [], assignmentGroups: [], editCatalog: null, editingRequest: false, editItems: [], addableProducts: [], editReason: '', rejectReason: '', rejectingRequest: false, showPriceDetails: false, detailError: '', selectedFreight: null, rejectedOrderId: '', targetSupplierId: '', supplierIndex: -1 });
+    if (orderId) {
+      this.setData({ activeView: 'orders', recordType: 'orders' });
+      const open = () => { const center = this.selectComponent('#formal-orders'); if (center?.data.active) center.open({ currentTarget: { dataset: { id: orderId } } }); };
+      if (wx.nextTick) wx.nextTick(open); else open();
+    }
   },
 
   togglePriceDetails(event) {
@@ -203,8 +260,14 @@ Page({
     this.setData({ [event.currentTarget.dataset.field]: event.detail.value });
   },
 
+  editInput(event) {
+    if (this.data.savingRequest) return;
+    this.setData({ [event.currentTarget.dataset.field]: event.detail.value });
+    if (event.currentTarget.dataset.field === 'editReason') this.markRequestEditChanged();
+  },
+
   selectSupplier(event) {
-    if (this.data.confirming || this.data.reallocating) return;
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest) return;
     const supplierIndex = Number(event.detail.value);
     this.setData({ supplierIndex, targetSupplierId: this.data.suppliers[supplierIndex].id });
   },
@@ -221,14 +284,14 @@ Page({
   },
 
   async selectRequest(event) {
-    if (this.data.confirming || this.data.reallocating) return;
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest) return;
     const requestId = event.currentTarget.dataset.id;
-    this.setData({ requestId, rejectedOrderId: '', targetSupplierId: '', supplierIndex: -1, selectedRequest: null, showPriceDetails: false });
+    this.setData({ requestId, rejectedOrderId: '', targetSupplierId: '', supplierIndex: -1, selectedRequest: null, editCatalog: null, editingRequest: false, editItems: [], addableProducts: [], editReason: '', rejectReason: '', rejectingRequest: false, showPriceDetails: false });
     await this.loadRequestDetail(requestId);
   },
 
   async selectRejection(event) {
-    if (this.data.confirming || this.data.reallocating) return;
+    if (this.data.confirming || this.data.reallocating || this.data.savingRequest) return;
     this.setData({
       requestId: event.currentTarget.dataset.requestId,
       rejectedOrderId: event.currentTarget.dataset.supplierOrderId,
@@ -243,7 +306,7 @@ Page({
     try {
       await Promise.all([this.loadRequests(false), this.loadRejections(false), this.loadReports(false), this.loadSuppliers(), this.loadFreight()]);
     } finally {
-      this.setData({ loading: false });
+      this.setData({ loading: false, orderRevision: this.data.orderRevision + 1 });
     }
   },
 
@@ -255,7 +318,7 @@ Page({
       if (this.data.user.id !== actorId) return;
       const names = new Map((Array.isArray(stores) ? stores : []).map(item => [item.id, item.name]));
       const rows = Array.isArray(requests) ? requests.map(item => ({ ...item, storeName: item.storeName || names.get(item.storeId) || '', submittedText: view.dateText(item.submittedAt) })) : [];
-      this.setData({ requests: rows, procurementTasks: rows.filter(item => item.status === 'PENDING_PROCUREMENT'), reportStoreOptions: [{ id: '', name: '全部门店' }, ...(Array.isArray(stores) ? stores : []).map(row => ({ id: row.id, name: row.name }))] });
+      this.setData({ requests: rows, procurementTasks: rows.filter(item => ['PENDING_PROCUREMENT', 'PENDING_FUNDS'].includes(item.status)), reportStoreOptions: [{ id: '', name: '全部门店' }, ...(Array.isArray(stores) ? stores : []).map(row => ({ id: row.id, name: row.name }))] });
       this.refreshList();
     } catch (error) {
       this.setData({ error: error.message });
@@ -297,7 +360,7 @@ Page({
         header: { 'idempotency-key': `mini-freight-review-${action}-${Date.now()}` }
       });
       this.setData({ selectedFreight: { ...confirmation, ...reviewed },
-        result: { title: confirmation.supplierOrderNo, status: reviewed.status, detail: `运费 ¥${reviewed.amount} ${action === 'confirm' ? '已确认' : '已驳回'}` } });
+        result: { title: confirmation.supplierOrderNo, status: reviewed.status, detail: `运费 ¥${view.moneyText(reviewed.amount)} ${action === 'confirm' ? '已确认' : '已驳回'}` } });
       await this.loadFreight();
     } catch (error) {
       this.setData({ error: error.message });
@@ -340,7 +403,7 @@ Page({
       }));
       if (this.data.requestId !== id || sequence !== this.detailRequestSequence) return;
       const sameRequest = this.data.selectedRequest?.id === selectedRequest.id;
-      this.setData({ selectedRequest, assignmentItems: [], assignmentGroups: [],
+      this.setData({ selectedRequest, assignmentItems: [], assignmentGroups: [], editCatalog: null,
         ...(!sameRequest ? { expandedOrders: this.data.rejectedOrderId ? { [this.data.rejectedOrderId]: true } : {}, showOriginalRequest: false } : {}) });
       if (['PENDING_PROCUREMENT', 'PENDING_FUNDS'].includes(selectedRequest.status) && !(selectedRequest.supplierOrders || []).length) {
         const catalog = await api.request(`/purchase-requests/${id}/edit-catalog`);
@@ -349,7 +412,7 @@ Page({
           const options = ((catalog.items || []).find(row => row.product.id === item.productId) || {}).suppliers || [];
           return { ...item, options, supplierIndex: options.findIndex(option => option.supplierId === item.supplierId) };
         });
-        this.setData({ assignmentItems, assignmentGroups: groupAssignments(assignmentItems) });
+        this.setData({ editCatalog: catalog, assignmentItems, assignmentGroups: groupAssignments(assignmentItems) });
       }
       this.loadProductImages(selectedRequest, sequence);
     } catch (error) {
@@ -544,6 +607,313 @@ Page({
     }
   },
 
+  refreshAddableProducts(editItems = this.data.editItems) {
+    const selected = new Set(editItems.map(item => item.productId));
+    const addableProducts = (this.data.editCatalog?.items || [])
+      .filter(item => !selected.has(item.product.id) && item.suppliers.length)
+      .map(item => ({ id: item.product.id, name: item.product.name, specification: item.product.specification || '' }));
+    this.setData({ addableProducts });
+  },
+
+  refreshEditCatalog(editItems = this.data.editItems) {
+    const search = this.data.editSearch.trim().toLowerCase();
+    const editProducts = (this.data.editCatalog?.items || []).filter(row => row.product.isActive !== false).map(row => {
+      const line = editItems.find(item => item.productId === row.product.id);
+      const original = (this.data.selectedRequest?.items || []).find(item => item.productId === row.product.id);
+      const visual = this.data.editProducts.find(item => item.id === row.product.id) || {};
+      const supplierIndex = line ? line.supplierIndex : 0;
+      const supplier = supplierIndex >= 0 ? row.suppliers[supplierIndex] || {} : {};
+      const purchase = line?.unitId && line.unitId === row.product.purchaseUnitConversion?.purchaseUnitId;
+      const maxRequestedQuantity = original ? String(original.unitSnapshot?.originalInputQuantity || original.unitSnapshot?.inputQuantity || original.quantity) : '';
+      return { ...row.product, imageUrl: visual.imageUrl || '', imageLoading: !!visual.imageLoading, imageFailed: !!visual.imageFailed,
+        suppliers: row.suppliers, supplierIndex, supplierId: supplier.supplierId || '', supplierName: supplierIndex < 0 ? '请选择有效供应商' : supplier.supplierName || '暂无有效供应商',
+        cartQuantity: line?.quantity || '0', usesPurchaseUnit: !!purchase, displayUnitName: purchase ? row.product.purchaseUnitName : row.product.unitName,
+        displaySalesPrice: purchase ? supplier.purchaseSalesPrice : supplier.salesPrice,
+        displaySupplyPrice: purchase ? supplier.purchaseSupplyPrice : supplier.supplyPrice,
+        maxRequestedQuantity, atOriginalMaximum: !!maxRequestedQuantity && Number(line?.quantity || 0) >= Number(maxRequestedQuantity),
+        canOrder: !!supplier.priceVersionId && !!supplier.supplyPriceVersionId };
+    });
+    const categories = [{ id: '', name: '全部商品' }];
+    for (const product of editProducts) {
+      const id = product.categoryParentId || product.categoryId;
+      if (id && !categories.some(item => item.id === id)) categories.push({ id, name: product.categoryParentName || product.categoryName || '未分类' });
+    }
+    const primaryCategoryId = categories.some(item => item.id === this.data.editPrimaryCategoryId) ? this.data.editPrimaryCategoryId : '';
+    const children = [];
+    for (const product of editProducts) if (primaryCategoryId && product.categoryParentId === primaryCategoryId && !children.some(item => item.id === product.categoryId)) children.push({ id: product.categoryId, name: product.categoryName || '未分类' });
+    const editCategoryId = children.some(item => item.id === this.data.editCategoryId) ? this.data.editCategoryId : '';
+    const visibleEditProducts = editProducts.filter(product => (!primaryCategoryId || (product.categoryParentId || product.categoryId) === primaryCategoryId)
+      && (!editCategoryId || product.categoryId === editCategoryId) && (!search || `${product.name} ${product.sku || ''}`.toLowerCase().includes(search)));
+    const estimate = editProducts.reduce((total, product) => total + Number(product.cartQuantity || 0) * Number(product.displaySalesPrice || 0), 0);
+    this.setData({ editProducts, visibleEditProducts, editCategories: categories, editSubcategories: children.length ? [{ id: '', name: '全部' }, ...children] : [],
+      editPrimaryCategoryId: primaryCategoryId, editCategoryId, editEstimatedAmount: estimate.toFixed(2) });
+  },
+
+  onEditSearch(event) { this.setData({ editSearch: event.detail.value, editPrimaryCategoryId: '', editCategoryId: '' }); this.refreshEditCatalog(); },
+  chooseEditPrimaryCategory(event) { this.setData({ editPrimaryCategoryId: event.currentTarget.dataset.id, editCategoryId: '', editSearch: '' }); this.refreshEditCatalog(); },
+  chooseEditCategory(event) { this.setData({ editCategoryId: event.currentTarget.dataset.id, editSearch: '' }); this.refreshEditCatalog(); },
+  toggleEditCart() { if (!this.data.savingRequest) this.setData({ editCartOpen: !this.data.editCartOpen }); },
+  keepEditCartOpen() {},
+  removeEditCartItem(event) {
+    this.updateEditProduct(this.data.editProducts.find(item => item.id === event.currentTarget.dataset.id), '0');
+  },
+  updateEditProduct(product, value) {
+    if (this.data.savingRequest || !product) return;
+    try {
+      let amount;
+      try {
+        amount = quantity.validate(String(value).trim(), { allowZero: true,
+          max: product.maxRequestedQuantity || undefined,
+          min: Number(value) === 0 ? undefined : product.usesPurchaseUnit ? '1' : product.minOrderQty,
+          multiple: Number(value) === 0 || product.usesPurchaseUnit ? undefined : product.orderMultiple });
+      } catch (error) {
+        if (product.maxRequestedQuantity && error.message === '数量不能超过待处理数量') {
+          throw new Error(`${product.name} 数量不能超过门店原下单数量 ${product.maxRequestedQuantity} ${product.displayUnitName}`);
+        }
+        throw error;
+      }
+      const existing = this.data.editItems.find(item => item.productId === product.id);
+      const original = (this.data.selectedRequest?.items || []).find(item => item.productId === product.id);
+      let editItems = this.data.editItems.filter(item => item.productId !== product.id);
+      if (Number(amount) > 0) {
+        const supplier = product.suppliers[product.supplierIndex] || product.suppliers[0];
+        if (!supplier?.priceVersionId || !supplier?.supplyPriceVersionId) throw new Error(`${product.name} 当前供应商没有有效价格`);
+        const restored = original ? this.requestEditLine(original) : null;
+        editItems.push(existing ? { ...existing, quantity: amount } : restored ? {
+          ...restored, quantity: amount, supplierId: supplier.supplierId, supplierIndex: product.supplierIndex >= 0 ? product.supplierIndex : 0,
+          expectedProductVersion: product.version, unavailable: false
+        } : {
+          productId: product.id, productName: product.name, specification: product.specification || '', quantity: amount,
+          unitId: product.baseUnitId, unitName: product.unitName, supplierId: supplier.supplierId, supplierIndex: product.supplierIndex,
+          suppliers: product.suppliers, expectedProductVersion: product.version, currentSalesUnitPrice: null, currentSupplyUnitPrice: null,
+          currentSalesLineAmount: null, currentSupplyLineAmount: null, unavailable: false
+        });
+      }
+      this.setData({ editItems, error: '' });
+      this.markRequestEditChanged();
+      this.refreshEditCatalog(editItems);
+    } catch (error) { this.setData({ error: error.message }); }
+  },
+
+  stepEditProduct(event) {
+    const product = this.data.editProducts.find(item => item.id === event.currentTarget.dataset.id);
+    if (!product) return;
+    try { this.updateEditProduct(product, quantity.step(product.cartQuantity || '0', product.usesPurchaseUnit ? '1' : product.orderMultiple, product.usesPurchaseUnit ? '1' : product.minOrderQty, Number(event.currentTarget.dataset.direction))); }
+    catch (error) { this.setData({ error: error.message }); }
+  },
+
+  setEditProductQuantity(event) {
+    this.updateEditProduct(this.data.editProducts.find(item => item.id === event.currentTarget.dataset.id), event.detail.value);
+  },
+
+  async loadEditCatalogImages() {
+    const requestId = this.data.requestId;
+    const files = this.data.editProducts.filter(item => item.imageFile?.id || item.imageFileId);
+    for (const product of files) {
+      const file = product.imageFile || { id: product.imageFileId };
+      this.updateEditProductImage(product.id, { imageLoading: true, imageFailed: false });
+      try {
+        const imageUrl = await api.imagePath(file);
+        if (requestId !== this.data.requestId || !this.data.editingRequest) return;
+        this.updateEditProductImage(product.id, { imageUrl, imageLoading: false, imageFailed: false });
+      } catch {
+        if (requestId !== this.data.requestId || !this.data.editingRequest) return;
+        this.updateEditProductImage(product.id, { imageLoading: false, imageFailed: true });
+      }
+    }
+  },
+
+  updateEditProductImage(productId, state) {
+    this.setData({ editProducts: this.data.editProducts.map(item => item.id === productId ? { ...item, ...state } : item),
+      visibleEditProducts: this.data.visibleEditProducts.map(item => item.id === productId ? { ...item, ...state } : item) });
+  },
+
+  async retryEditProductImage(event) {
+    const product = this.data.editProducts.find(item => item.id === event.currentTarget.dataset.id);
+    const file = product?.imageFile || (product?.imageFileId ? { id: product.imageFileId } : null);
+    if (!file) return;
+    this.updateEditProductImage(product.id, { imageLoading: true, imageFailed: false });
+    try { this.updateEditProductImage(product.id, { imageUrl: await api.imagePath(file), imageLoading: false, imageFailed: false }); }
+    catch { this.updateEditProductImage(product.id, { imageLoading: false, imageFailed: true }); }
+  },
+
+  requestEditLine(item) {
+    const catalogItem = (this.data.editCatalog?.items || []).find(row => row.product.id === item.productId);
+    const snapshot = item.unitSnapshot || {};
+    const supplierIndex = catalogItem ? catalogItem.suppliers.findIndex(row => row.supplierId === item.supplierId) : -1;
+    return {
+      productId: item.productId,
+      productName: item.productName || catalogItem?.product.name || '商品已失效',
+      specification: catalogItem?.product.specification || '',
+      quantity: snapshot.inputQuantity || item.quantity,
+      originalRequestedQuantity: snapshot.originalInputQuantity || snapshot.inputQuantity || item.quantity,
+      unitId: snapshot.inputUnitId || catalogItem?.product.baseUnitId || '',
+      unitName: snapshot.inputUnitName || item.unitName || catalogItem?.product.unitName || '',
+      supplierId: supplierIndex >= 0 ? item.supplierId : '',
+      supplierIndex,
+      suppliers: catalogItem?.suppliers || [],
+      expectedProductVersion: catalogItem?.product.version,
+      currentSalesUnitPrice: item.salesUnitPrice,
+      currentSupplyUnitPrice: item.supplyUnitPrice,
+      currentSalesLineAmount: item.salesLineAmount,
+      currentSupplyLineAmount: item.supplyLineAmount,
+      unavailable: !catalogItem
+    };
+  },
+
+  startRequestEdit() {
+    const detail = this.data.selectedRequest;
+    if (!this.data.canReallocate || !detail || !this.data.editCatalog || this.data.savingRequest || this.data.rejectingRequest) return;
+    const editItems = detail.items.map(item => this.requestEditLine(item));
+    this.setData({ editingRequest: true, editCartOpen: false, rejectReason: '', editItems, editProducts: [], visibleEditProducts: [], editSearch: '', editPrimaryCategoryId: '', editCategoryId: '', editReason: '', editRevision: this.data.editRevision + 1, error: '' });
+    this.refreshAddableProducts(editItems);
+    this.refreshEditCatalog(editItems);
+    this.loadEditCatalogImages();
+  },
+
+  cancelRequestEdit() {
+    if (this.data.savingRequest) return;
+    this.setData({ editingRequest: false, editCartOpen: false, editItems: [], editProducts: [], visibleEditProducts: [], addableProducts: [], editReason: '', error: '' });
+  },
+
+  markRequestEditChanged() {
+    this.setData({ editRevision: this.data.editRevision + 1 });
+  },
+
+  changeEditQuantity(event) {
+    if (this.data.savingRequest) return;
+    const productId = event.currentTarget.dataset.id;
+    const product = this.data.editProducts.find(item => item.id === productId);
+    if (product) this.updateEditProduct(product, event.detail.value);
+  },
+
+  changeEditSupplier(event) {
+    if (this.data.savingRequest) return;
+    const productId = event.currentTarget.dataset.id;
+    const index = Number(event.detail.value);
+    this.setData({ editItems: this.data.editItems.map(item => item.productId === productId && item.suppliers[index]
+      ? { ...item, supplierIndex: index, supplierId: item.suppliers[index].supplierId } : item) });
+    this.markRequestEditChanged();
+    this.refreshEditCatalog();
+  },
+
+  removeEditItem(event) {
+    if (this.data.savingRequest) return;
+    if (this.data.editItems.length <= 1) {
+      this.setData({ error: '下货单至少保留一种商品；如需全部取消，请使用采购拒单' });
+      return;
+    }
+    const editItems = this.data.editItems.filter(item => item.productId !== event.currentTarget.dataset.id);
+    this.setData({ editItems, error: '' });
+    this.refreshAddableProducts(editItems);
+    this.markRequestEditChanged();
+  },
+
+  addEditProduct(event) {
+    if (this.data.savingRequest) return;
+    const choice = this.data.addableProducts[Number(event.detail.value)];
+    const catalogItem = choice && (this.data.editCatalog?.items || []).find(item => item.product.id === choice.id);
+    if (!catalogItem || !catalogItem.suppliers.length) return;
+    const product = catalogItem.product;
+    const editItems = [...this.data.editItems, {
+      productId: product.id, productName: product.name, specification: product.specification || '', quantity: product.minOrderQty,
+      unitId: product.baseUnitId, unitName: product.unitName, supplierId: catalogItem.suppliers[0].supplierId,
+      supplierIndex: 0, suppliers: catalogItem.suppliers, expectedProductVersion: product.version,
+      currentSalesUnitPrice: null, currentSupplyUnitPrice: null, currentSalesLineAmount: null, currentSupplyLineAmount: null, unavailable: false
+    }];
+    this.setData({ editItems, error: '' });
+    this.refreshAddableProducts(editItems);
+    this.markRequestEditChanged();
+  },
+
+  requestEditBody() {
+    const reason = this.data.editReason.trim();
+    if (!reason) throw new Error('请填写修改原因');
+    if (!this.data.editItems.length) throw new Error('下货单至少保留一种商品');
+    return {
+      expectedVersion: this.data.selectedRequest.version,
+      reason,
+      items: this.data.editItems.map(item => {
+        if (item.unavailable) throw new Error(`${item.productName} 已失效，请移除后再保存`);
+        if (!item.supplierId) throw new Error(`请为 ${item.productName} 选择有效供应商`);
+        let checkedQuantity;
+        try { checkedQuantity = quantity.validate(item.quantity, { max: item.originalRequestedQuantity || undefined }); }
+        catch (error) {
+          if (item.originalRequestedQuantity && error.message === '数量不能超过待处理数量') throw new Error(`${item.productName} 数量不能超过门店原下单数量 ${item.originalRequestedQuantity} ${item.unitName}`);
+          throw error;
+        }
+        return { productId: item.productId, supplierId: item.supplierId, quantity: checkedQuantity, unitId: item.unitId,
+          expectedProductVersion: item.expectedProductVersion };
+      })
+    };
+  },
+
+  async confirmRequestEdit() {
+    if (this.data.savingRequest) return;
+    let body;
+    if (!this.data.editReason.trim()) {
+      const decision = await new Promise((resolve, reject) => wx.showModal({ title: '填写调整原因', editable: true, placeholderText: '例如：门店确认调整数量', confirmText: '确认生成', success: resolve, fail: reject }));
+      const reason = String(decision.content || '').trim();
+      if (!decision.confirm || !reason) { if (decision.confirm) this.setData({ error: '请填写调整原因' }); return; }
+      this.setData({ editReason: reason });
+    }
+    try { body = this.requestEditBody(); } catch (error) { this.setData({ error: error.message }); return; }
+    const revision = this.data.editRevision;
+    const requestId = this.data.requestId;
+    this.setData({ savingRequest: true, error: '' });
+    try {
+      const preview = await api.request(`/purchase-requests/${requestId}/items-preview`, { method: 'POST', data: body });
+      if (requestId !== this.data.requestId || revision !== this.data.editRevision) return;
+      if (!preview.funding?.canConfirm) throw new Error('调整后资金不足，暂时无法生成订单');
+      const prices = new Map((preview.items || []).map(item => [item.productId, item]));
+      body.items = body.items.map(item => {
+        const priced = prices.get(item.productId);
+        if (!priced?.priceVersionId || !priced?.supplyPriceVersionId) throw new Error('商品价格已变化，请重新预览');
+        return { ...item, expectedPriceVersionId: priced.priceVersionId, expectedSupplyPriceVersionId: priced.supplyPriceVersionId };
+      });
+      const confirmed = await this.submitCommand(`/purchase-requests/${requestId}/confirm-adjusted`, { method: 'POST', data: body,
+        header: { 'idempotency-key': `mini-purchaser-confirm-adjusted-${Date.now()}` } });
+      this.setData({ editingRequest: false, editItems: [], addableProducts: [], editReason: '',
+        result: { title: '调整并确认成功', status: confirmed.status || 'CONFIRMED', detail: `已生成 ${(confirmed.supplierOrderIds || []).length} 张供应商订单` } });
+      await this.loadWork();
+      await this.loadRequestDetail(this.data.requestId);
+      if (wx.pageScrollTo && (this.data.selectedRequest?.supplierOrders || []).length) {
+        const scroll = () => wx.pageScrollTo({ selector: '#supplier-order-summary', duration: 200 });
+        if (wx.nextTick) wx.nextTick(scroll); else scroll();
+      }
+    } catch (error) { this.setData({ error: error.message }); }
+    finally { this.setData({ savingRequest: false }); }
+  },
+
+  startRequestReject() {
+    if (this.data.savingRequest || this.data.rejectingRequest) return;
+    this.setData({ rejectingRequest: true, editingRequest: false, rejectReason: '', error: '' });
+  },
+
+  cancelRequestReject() {
+    if (this.data.confirming) return;
+    this.setData({ rejectingRequest: false, rejectReason: '', error: '' });
+  },
+
+  async rejectRequest() {
+    const detail = this.data.selectedRequest;
+    const reason = this.data.rejectReason.trim();
+    if (!detail || this.data.confirming || this.data.savingRequest) return;
+    if (!reason) { this.setData({ error: '请填写采购拒单原因' }); return; }
+    const decision = await new Promise((resolve, reject) => wx.showModal({ title: '确认采购拒单',
+      content: `拒单后下货单将取消，并释放未扣的资金占用。\n原因：${reason}`, confirmText: '确认拒单', confirmColor: '#b42318', success: resolve, fail: reject }));
+    if (!decision.confirm) return;
+    this.setData({ confirming: true, error: '' });
+    try {
+      const result = await this.submitCommand(`/purchase-requests/${detail.id}/reject`, { method: 'POST', data: { expectedVersion: detail.version, reason },
+        header: { 'idempotency-key': `mini-purchaser-reject-${Date.now()}` } });
+      this.setData({ rejectingRequest: false, rejectReason: '', result: { title: '采购已拒单', status: result.status || 'CANCELED', detail: reason } });
+      await this.loadRequests();
+      await this.loadRequestDetail(detail.id);
+    } catch (error) { this.setData({ error: error.message }); }
+    finally { this.setData({ confirming: false }); }
+  },
+
   async changeItemSupplier(event) {
     if (this.data.reallocating || this.data.confirming || this.data.detailing || this.data.detailError || this.data.pendingCommand) return;
     const detail = this.data.selectedRequest;
@@ -557,7 +927,7 @@ Page({
       const line = preview.items && preview.items[0];
       if (preview.requestId !== detail.id || preview.supplierId !== target.supplierId || preview.items.length !== 1 || !line || line.requestItemId !== item.id || !line.eligible || !line.priceVersionId || !line.supplyPriceVersionId) throw new Error('该供应商当前不可供货，请刷新后重新选择');
       const decision = await new Promise((resolve, reject) => wx.showModal({ title: '核对供应商调整',
-        content: `${item.productName || '商品'} → ${target.supplierName}\n销售金额 ¥${item.salesLineAmount} → ¥${line.salesLineAmount}\n供应商金额 ¥${item.supplyLineAmount} → ¥${line.supplyLineAmount}`,
+        content: `${item.productName || '商品'} → ${target.supplierName}\n销售金额 ¥${view.moneyText(item.salesLineAmount)} → ¥${view.moneyText(line.salesLineAmount)}\n供应商金额 ¥${view.moneyText(item.supplyLineAmount)} → ¥${view.moneyText(line.supplyLineAmount)}`,
         confirmText: '保存调整', success: resolve, fail: reject }));
       if (!decision.confirm) return;
       if (this.data.requestId !== detail.id) throw new Error('下货单已切换，请刷新');

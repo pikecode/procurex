@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "门店",
   "usingComponents": {
+    "order-center": "../../components/order-center/index",
     "evidence-files": "../../components/evidence/index",
     "document-no": "../../components/document-no/index"
   }

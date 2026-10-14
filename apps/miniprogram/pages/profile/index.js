@@ -4,37 +4,14 @@ const settlements = { STORED_VALUE: '储值', CREDIT: '授信', COMPANY_TERM: '�
 const cycles = { IMMEDIATE: '现结', MONTHLY: '月结', HALF_MONTHLY: '半月结', WEEKLY: '周结' };
 const storeTypes = { DIRECT: '直营店', FRANCHISE: '加盟店', JOINT: '联营店' };
 Page({
-  data: { kind: '', activeView: 'profile', profile: null, fields: [], products: [], visibleProducts: [], search: '', loading: false, error: '' },
+  data: { kind: '', profile: null, fields: [], loading: false, error: '' },
   onLoad(options) { this.setData({ kind: options.kind === 'supplier' ? 'supplier' : options.kind === 'store' ? 'store' : '' }); },
   onShow() { this.loadProfile(); },
   onHide() { this.sequence = (this.sequence || 0) + 1; },
   onUnload() { this.sequence = (this.sequence || 0) + 1; },
-  changeView(event) { this.setData({ activeView: event.currentTarget.dataset.view }); },
-  onSearch(event) { this.setData({ search: event.detail.value }); this.filterProducts(); },
-  async changeListing(event) {
-    if (this.data.saving) return;
-    const item = this.data.products.find(row => row.id === event.currentTarget.dataset.id);
-    if (!item || !item.productActive) return;
-    const user = api.currentUser();
-    if (!user || !user.roles.includes('SUPPLIER') || !user.scope?.supplierId) return;
-    const sequence = this.sequence;
-    this.setData({ saving: item.id, error: '' });
-    const active = () => this.sequence === sequence && api.currentUser()?.id === user.id;
-    try {
-      const result = await new Promise(resolve => wx.showModal({ title: item.supplyEnabled ? '确认下架' : '确认上架', content: item.name, success: resolve, fail: () => resolve({ confirm: false }) }));
-      if (!result.confirm || !active()) return;
-      await api.request(`/suppliers/${user.scope.supplierId}/managed-products/${item.id}`, { method: 'PATCH', data: { supplyEnabled: !item.supplyEnabled, expectedVersion: item.version } });
-      if (active()) await this.loadProfile();
-    } catch (error) { if (active()) this.setData({ error: error.message }); }
-    finally { this.setData({ saving: '' }); }
-  },
-  filterProducts() {
-    const search = this.data.search.trim().toLowerCase();
-    this.setData({ visibleProducts: this.data.products.filter(item => [item.name, item.sku, item.specification].some(value => String(value || '').toLowerCase().includes(search))) });
-  },
   async loadProfile() {
     const sequence = this.sequence = (this.sequence || 0) + 1;
-    this.setData({ profile: null, fields: [], products: [], visibleProducts: [], loading: true, error: '' });
+    this.setData({ profile: null, fields: [], loading: true, error: '' });
     const user = api.currentUser();
     if (!user) { this.setData({ loading: false }); wx.redirectTo({ url: '/pages/login/index' }); return; }
     const supplier = this.data.kind === 'supplier';
@@ -50,11 +27,6 @@ Page({
       else entries.push(['分组', profile.groupName], ['门店类型', storeTypes[profile.storeType] || profile.storeType], ['收货地址', profile.receiptAddress || profile.address], ['收货人', profile.receiptContactName || profile.contactName], ['收货电话', profile.receiptContactPhone || profile.contactPhone]);
       entries.push(['状态', profile.isArchived ? '已归档' : profile.status === 'ACTIVE' ? '启用' : '停用']);
       this.setData({ profile, fields: entries.map(([label, value]) => ({ label, value: value == null || value === '' ? '未配置' : value })) });
-      if (supplier) {
-        const catalog = await api.request(`/suppliers/${id}/managed-products`);
-        if (!active()) return;
-        this.setData({ products: catalog.items }); this.filterProducts();
-      }
     } catch (error) { if (active()) this.setData({ error: error.message }); }
     finally { if (active()) this.setData({ loading: false }); }
   }

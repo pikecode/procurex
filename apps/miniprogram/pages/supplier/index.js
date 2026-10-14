@@ -164,6 +164,10 @@ Page({
     if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting) return;
     wx.navigateTo({ url: '/pages/profile/index?kind=supplier' });
   },
+  openProducts() {
+    if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting) return;
+    wx.navigateTo({ url: '/pages/supplier-products/index' });
+  },
 
   backToList() {
     if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting || this.data.evidenceLoading || this.data.revising || this.data.revisionUploading) return;
@@ -321,7 +325,7 @@ Page({
             item.status === this.data.statusFilter);
     const filtered = this.data.orders.filter(item =>
       matches(item) &&
-      [item.supplierOrderNo, item.storeName, item.productSummary].some(value => String(value || '').toLowerCase().includes(search)));
+      [item.supplierOrderNo, item.requestNo, item.storeName, item.productSummary].some(value => String(value || '').toLowerCase().includes(search)));
     this.setData({ visibleOrders: filtered.slice(0, limit), orderLimit: limit, orderTotal: filtered.length, moreOrders: filtered.length > limit });
   },
 
@@ -433,11 +437,15 @@ Page({
       if (this.data.supplierOrderId !== id || this.data.user.id !== actorId) return;
       this.setData({ deliveryIndex: selectedOrder.defaultDeliveryMode === 'LOGISTICS' ? 1 : 0, selectedOrder: { ...selectedOrder,
         canRequestFreight: selectedOrder.requiresFreightSnapshot !== false,
-        shipments: (selectedOrder.shipments || []).map(shipment => ({ ...shipment, shippedDate: view.dateText(shipment.shippedAt), items: shipment.items.map(line => ({ ...line, productName: selectedOrder.items.find(item => item.id === line.orderItemId)?.productName || '商品' })) })),
+        shipments: (selectedOrder.shipments || []).map(shipment => {
+          const items = shipment.items.map(line => ({ ...line, productName: selectedOrder.items.find(item => item.id === line.orderItemId)?.productName || '商品' }));
+          return { ...shipment, shippedDate: view.dateText(shipment.shippedAt), items,
+            productPreview: items.length ? `${items[0].productName}${items.length > 1 ? ` 等 ${items.length} 种` : ''}` : '暂无商品' };
+        }),
         canShip: ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED'].includes(selectedOrder.status) || (selectedOrder.status === 'SHIPPED' && selectedOrder.items.some(item => (item.replenishmentGaps || []).some(gap => ['PENDING', 'PARTIAL_FILLED'].includes(gap.status) && Number(gap.remainingQuantity) > 0))),
         canReject: ['PUSHED', 'ACCEPTED'].includes(selectedOrder.status) && !selectedOrder.firstShippedAt && selectedOrder.fulfillmentStatus === 'PENDING'
       }, freightChoices: [{ id: '', amount: '0.00', label: '无运费' }].concat((selectedOrder.freightConfirmations || [])
-        .filter(item => selectedOrder.requiresFreightSnapshot !== false && item.status === 'CONFIRMED' && !item.usedAt).map(item => ({ ...item, label: `¥${item.amount} · ${item.reason}` }))),
+        .filter(item => selectedOrder.requiresFreightSnapshot !== false && item.status === 'CONFIRMED' && !item.usedAt).map(item => ({ ...item, label: `¥${view.moneyText(item.amount)} · ${item.reason}` }))),
       shipmentItems: selectedOrder.items.map(item => ({
         ...item, imageUrl: '', imageFailed: false, imageLoading: Boolean(item.imageFile?.id || item.imageFileId), remainingQuantity: quantity.sum([quantity.remaining(item.quantity, item.shippedQuantity), ...(item.replenishmentGaps || []).filter(gap => Number(gap.remainingQuantity) > 0 && ['PENDING', 'PARTIAL_FILLED'].includes(gap.status)).map(gap => gap.remainingQuantity)]),
         shipQuantity: quantity.remaining(item.quantity, item.shippedQuantity),
@@ -504,6 +512,22 @@ Page({
     if (this.data.shipping || this.data.rejecting) return;
     this.setData({ freightIndex: Number(event.detail.value) });
   },
+  async refreshFreight() {
+    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting || this.data.freightRefreshing || !this.data.selectedOrder) return;
+    const id = this.data.supplierOrderId, actorId = this.data.user.id;
+    const chosenId = this.data.freightChoices[this.data.freightIndex]?.id || '';
+    this.setData({ freightRefreshing: true });
+    try {
+      const order = await api.request(`/supplier-orders/${id}`);
+      if (this.data.supplierOrderId !== id || this.data.user.id !== actorId) return;
+      const freightChoices = [{ id: '', amount: '0.00', label: '无运费' }].concat((order.freightConfirmations || [])
+        .filter(item => order.requiresFreightSnapshot !== false && item.status === 'CONFIRMED' && !item.usedAt)
+        .map(item => ({ ...item, label: `¥${view.moneyText(item.amount)} · ${item.reason || '已确认运费'}` })));
+      this.setData({ freightChoices, freightIndex: Math.max(0, freightChoices.findIndex(item => item.id === chosenId)),
+        selectedOrder: { ...this.data.selectedOrder, freightConfirmations: order.freightConfirmations || [] } });
+    } catch (error) { if (this.data.supplierOrderId === id && this.data.user.id === actorId) this.setData({ error: error.message }); }
+    finally { this.setData({ freightRefreshing: false }); }
+  },
 
   async requestFreight() {
     if (this.data.freightRequesting || this.data.shipping || this.data.rejecting || !this.data.selectedOrder) return;
@@ -519,7 +543,7 @@ Page({
         header: { 'idempotency-key': `mini-freight-${Date.now()}` }
       });
       this.setData({ selectedOrder: { ...this.data.selectedOrder, freightConfirmations: [confirmation].concat(this.data.selectedOrder.freightConfirmations || []) },
-        freightRequestAmount: '', freightRequestReason: '', result: { title: this.data.selectedOrder.supplierOrderNo, status: 'PENDING', detail: `运费 ¥${confirmation.amount} 已提交采购确认` } });
+        freightRequestAmount: '', freightRequestReason: '', result: { title: this.data.selectedOrder.supplierOrderNo, status: 'PENDING', detail: `运费 ¥${view.moneyText(confirmation.amount)} 已提交采购确认` } });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -737,7 +761,7 @@ Page({
         method: 'POST',
         data: { expectedVersion: order.version, items, freight: freight.amount, ...(freight.id ? { freightConfirmationId: freight.id } : {}) }
       });
-      const shipment = await this.submitCommand(`/supplier-orders/${this.data.supplierOrderId}/shipments`, {
+      await this.submitCommand(`/supplier-orders/${this.data.supplierOrderId}/shipments`, {
         method: 'POST',
         data: {
           expectedVersion: order.version,
@@ -749,16 +773,10 @@ Page({
         },
         header: { 'idempotency-key': `mini-supplier-ship-${Date.now()}` }
       });
-      this.setData({
-        result: {
-          title: shipment.shipmentNo || '发货已提交',
-          supplierOrderId: order.id || this.data.supplierOrderId,
-          status: shipment.status || 'SHIPPED',
-          detail: `本次发货 ${items.length} 种商品，共 ${preview.totals.shipQuantity}`
-        }
-      });
+      this.setData({ result: null });
       await this.loadWork();
       this.setData({ supplierOrderId: '', selectedOrder: null, shipmentItems: [], trackingNo: '' });
+      if (wx.showToast) wx.showToast({ title: '发货成功', icon: 'success' });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -862,7 +880,7 @@ Page({
         result: {
           title: handled.paymentNo || handled.id,
           status: handled.status,
-          detail: `付款金额 ¥${handled.amount}，${action === 'confirm' ? '已确认收款' : '已驳回付款'}`
+          detail: `付款金额 ¥${view.moneyText(handled.amount)}，${action === 'confirm' ? '已确认收款' : '已驳回付款'}`
         }
       });
       await this.loadPayments(false);

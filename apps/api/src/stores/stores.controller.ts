@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import { masterDataAuditContext } from '../audit/master-data-audit.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
@@ -131,6 +131,13 @@ export class StoresController {
     });
     throwIfInvalid(issues);
     return this.storesService.changeGroups(stores as { id: string; expectedVersion: number }[], typeof body.groupName === 'string' ? body.groupName.trim() : null, masterDataAuditContext(request));
+  }
+
+  @Delete(':id')
+  @RequireRoles('ADMIN')
+  removeStore(@Param('id') id: string, @Body() body: Record<string, unknown>, @Req() request: AuthenticatedRequest) {
+    throwIfInvalid([...validateUuid('id', id), ...validateExpectedVersion('expectedVersion', body.expectedVersion)]);
+    return this.storesService.removeStore(id, body.expectedVersion as number, masterDataAuditContext(request));
   }
 
   @Get(':id/account')

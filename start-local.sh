@@ -5,6 +5,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 children=()
 cleanup() {
   trap - EXIT INT TERM
+  [ "${#children[@]}" -gt 0 ] || return 0
   for pid in "${children[@]}"; do kill "$pid" 2>/dev/null || true; done
   for pid in "${children[@]}"; do wait "$pid" 2>/dev/null || true; done
 }
@@ -39,7 +40,7 @@ else
   npm run db:generate
   npm run db:migrate
   npm run build
-  FILE_STORAGE=local PORT=3114 TEST_WORKBENCH_ENABLED=true TEST_WORKBENCH_USERNAMES=test_chef_stored,test_finance_stored,test_supplier_stored,test_purchase,test_hq_finance node --env-file-if-exists=.env dist/apps/api/main.js &
+  FILE_STORAGE=local PORT=3114 TEST_WORKBENCH_ENABLED=true TEST_WORKBENCH_USERNAMES=store1,store2,store3,store4,store5,store6,store7,store8,store9,store10,storefin1,storefin2,storefin3,storefin4,storefin5,storefin6,storefin7,storefin8,storefin9,storefin10,supplier1,supplier2,supplier3,supplier4,supplier5,buyer1,fin1 node --env-file-if-exists=.env dist/apps/api/main.js &
   children+=("$!")
   ready=0
   for ((i=0; i<60; i++)); do

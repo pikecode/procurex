@@ -7,7 +7,7 @@
   padding: 30rpx var(--space-content-x) 28rpx;
   background: var(--brand-deep);
 }
-.profile-heading-main, .catalog-row-head, .catalog-caption {
+.profile-heading-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -34,8 +34,6 @@
   border-color: rgba(255, 255, 255, .45);
 }
 
-.profile-tabs { margin-top: var(--space-section-y); padding: 8rpx var(--space-page-x) 4rpx; }
-
 .profile-fields {
   margin: var(--space-section-y) var(--space-page-x) 0;
   padding: 8rpx var(--space-content-x);
@@ -54,25 +52,5 @@
 .profile-label { color: var(--ink-3); font-size: 24rpx; }
 .profile-value { min-width: 0; color: var(--ink-1); font-size: 27rpx; overflow-wrap: anywhere; }
 
-.catalog-tools { padding: var(--space-section-y) var(--space-content-x) 0; background: var(--surface); }
-.catalog-search {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  padding: 0 20rpx;
-  border-radius: 12rpx;
-  background: var(--sunken);
-}
-.catalog-search icon { flex-shrink: 0; }
-.catalog-search input { min-width: 0; flex: 1; height: 76rpx; padding: 0; border: 0; background: transparent; font-size: 26rpx; }
-.catalog-caption { padding: 24rpx var(--space-content-x); color: var(--ink-3); font-size: 23rpx; }
-.catalog-list { padding: 0 var(--space-content-x); border-radius: 20rpx; background: var(--surface); }
-.catalog-row { padding: 26rpx 0; border-bottom: 1rpx solid var(--line-soft); }
-.catalog-row:last-child { border-bottom: 0; }
-.catalog-name { min-width: 0; flex: 1; color: var(--ink-1); font-size: 28rpx; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
-.catalog-row-head .tag { flex-shrink: 0; }
-.catalog-row > text { display: block; margin-top: 10rpx; overflow-wrap: anywhere; }
-.catalog-row button { margin-top: 18rpx; }
-.supply-price { color: var(--brand); font-size: 27rpx; font-weight: 600; }
 .loading-state { padding: 56rpx var(--space-content-x); color: var(--ink-3); font-size: 25rpx; text-align: center; }
 .profile-page .error-banner { margin: var(--space-section-y) var(--space-page-x) 0; }

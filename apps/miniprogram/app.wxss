@@ -4,6 +4,10 @@
    类型阶梯：meta 23 · body 26 · title 32 · display 40 · amount 30 · amount-lg 38
    =========================================================================== */
 
+.document-tabs { display: flex; gap: 36rpx; padding: 20rpx 24rpx 0; background: #fff; }
+.document-tabs text { padding: 0 0 18rpx; color: #66766d; font-size: 28rpx; }
+.document-tabs .is-active { color: #167e5a; font-weight: 600; border-bottom: 4rpx solid #167e5a; }
+
 page {
   --space-page-x: 24rpx;
   --space-content-x: 28rpx;

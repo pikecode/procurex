@@ -6,6 +6,7 @@
     "pages/supplier/index",
     "pages/purchaser/index",
     "pages/profile/index",
+    "pages/supplier-products/index",
     "pages/finance/index",
     "pages/region/index",
     "pages/finance-accounts/index"

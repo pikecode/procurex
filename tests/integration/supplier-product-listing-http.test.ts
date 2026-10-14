@@ -34,8 +34,10 @@ test('supplier can list and unlist only its own associated products', async () =
     assert.equal((await call(`/suppliers/${suppliers[1]!.id}/managed-products`)).status, 403);
     const managedResponse = await call(`/suppliers/${suppliers[0]!.id}/managed-products`);
     assert.equal(managedResponse.status, 200);
-    const managed = (await managedResponse.json() as { data: { items: Array<{ id: string; supplyEnabled: boolean; version: number }> } }).data.items[0]!;
+    const managed = (await managedResponse.json() as { data: { items: Array<{ id: string; categoryId: string; categoryName: string; categoryParentId: string | null; categoryParentName: string | null; supplyEnabled: boolean; version: number }> } }).data.items[0]!;
     assert.equal(managed.id, product.id); assert.equal(managed.supplyEnabled, true); assert.equal(managed.version, link.updatedAt.getTime());
+    assert.equal(managed.categoryId, category.id); assert.equal(managed.categoryName, category.name);
+    assert.equal(managed.categoryParentId, null); assert.equal(managed.categoryParentName, null);
     assert.equal('supplyPrice' in managed, false);
 
     const unlistedResponse = await call(`/suppliers/${suppliers[0]!.id}/managed-products/${product.id}`, 'PATCH', { supplyEnabled: false, expectedVersion: managed.version });

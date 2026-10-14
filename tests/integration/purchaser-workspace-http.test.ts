@@ -45,22 +45,31 @@ test('purchaser draft preview, item edits and assignments guard approved prices 
         prices.set(`${product.id}:${supplier.id}`, price.id);
       }
     }
-    const createBody = { storeId: store.id, items: [{ productId: products[0]!.id, quantity: '2' }] };
+    const createBody = { storeId: store.id, items: [{ productId: products[0]!.id, quantity: '5' }] };
     const quote = await call('/purchase-requests/preview', 'POST', createBody);
-    assert.equal(quote.status, 201); assert.equal(quote.body.data.totals.salesGoodsAmount, '20.00');
+    assert.equal(quote.status, 201); assert.equal(quote.body.data.totals.salesGoodsAmount, '50.00');
     assert.equal(await db.purchaseRequest.count({ where: { storeId: store.id } }), 0);
     assert.equal((await call('/purchase-requests', 'POST', { ...createBody, expectedTemplateId: store.id }, `${prefix}staletemplate`)).status, 409);
     const staleCreate = await call('/purchase-requests', 'POST', { ...createBody, items: [{ ...createBody.items[0], expectedPriceVersionId: prices.get(`${products[0]!.id}:${suppliers[1]!.id}`) }] }, `${prefix}stalecreate`);
     assert.equal(staleCreate.status, 409); assert.equal(await db.purchaseRequest.count({ where: { storeId: store.id } }), 0);
     const created = await call('/purchase-requests', 'POST', createBody, `${prefix}create`); assert.equal(created.status, 201);
     const request = created.body.data;
+    const overLimit = await call(`/purchase-requests/${request.id}/items-preview`, 'POST', { expectedVersion: request.version, reason: 'Invalid increase', items: [{ productId: products[0]!.id, supplierId: suppliers[0]!.id, quantity: '6', unitId: unit.id }] });
+    assert.equal(overLimit.status, 409); assert.equal(overLimit.body.code, 'PURCHASE_REQUEST_QUANTITY_EXCEEDS_ORIGINAL');
     const edit = { expectedVersion: request.version, reason: 'Draft edit', items: products.map(product => ({ productId: product.id, supplierId: suppliers[0]!.id, quantity: '3', unitId: unit.id })) };
     const editPreview = await call(`/purchase-requests/${request.id}/items-preview`, 'POST', edit);
     assert.equal(editPreview.status, 201); assert.equal(editPreview.body.data.totals.salesGoodsAmount, '60.00');
+    assert.equal(editPreview.body.data.funding.canConfirm, true, 'term-funded adjustments must not be blocked by an empty stored-value balance');
     assert.equal((await db.purchaseRequest.findUniqueOrThrow({ where: { id: request.id } })).version, request.version);
     const expectedItems = editPreview.body.data.items.map((item: any, index: number) => ({ ...edit.items[index], expectedPriceVersionId: item.priceVersionId, expectedSupplyPriceVersionId: item.supplyPriceVersionId }));
     const edited = await call(`/purchase-requests/${request.id}/items`, 'PATCH', { ...edit, items: expectedItems }, `${prefix}edit`);
     assert.equal(edited.status, 200); assert.equal(edited.body.data.salesGoodsAmount, '60.00');
+    const restoreWithinOriginal = await call(`/purchase-requests/${request.id}/items-preview`, 'POST', { ...edit, expectedVersion: edited.body.data.version,
+      items: [{ ...edit.items[0], quantity: '4' }, edit.items[1]!] });
+    assert.equal(restoreWithinOriginal.status, 201, 'a reduced item can be restored up to the immutable store-request quantity');
+    const increasePastOriginal = await call(`/purchase-requests/${request.id}/items-preview`, 'POST', { ...edit, expectedVersion: edited.body.data.version,
+      items: [{ ...edit.items[0], quantity: '6' }, edit.items[1]!] });
+    assert.equal(increasePastOriginal.status, 409); assert.equal(increasePastOriginal.body.code, 'PURCHASE_REQUEST_QUANTITY_EXCEEDS_ORIGINAL');
     const replayEdit = await call(`/purchase-requests/${request.id}/items`, 'PATCH', { ...edit, items: expectedItems }, `${prefix}edit`);
     assert.equal(replayEdit.status, 200); assert.deepEqual(replayEdit.body.data, edited.body.data);
     assert.equal(await db.auditLog.count({ where: { actorUserId: user.id, action: 'purchase-request.items.replace' } }), 1);
@@ -130,6 +139,20 @@ test('purchaser draft preview, item edits and assignments guard approved prices 
     await db.supplier.update({ where: { id: suppliers[0]!.id }, data: { status: 'ACTIVE' } });
     const confirm = await call(`/purchase-requests/${request.id}/confirm`, 'POST', { expectedVersion: assigned.body.data.version }, `${prefix}confirm`);
     assert.equal(confirm.status, 201); assert.equal(await db.supplierOrder.count({ where: { requestId: request.id } }), 1);
+    const immutableRequest = (await call('/purchase-requests', 'POST', { storeId: store.id, items: [{ productId: products[0]!.id, quantity: '5' }] }, `${prefix}immutable-create`)).body.data;
+    const adjustedBody = { expectedVersion: immutableRequest.version, reason: 'Reduce generated order only',
+      items: [{ productId: products[0]!.id, supplierId: suppliers[0]!.id, quantity: '2', unitId: unit.id }] };
+    const adjustedPreview = (await call(`/purchase-requests/${immutableRequest.id}/items-preview`, 'POST', adjustedBody)).body.data;
+    const adjustedConfirm = await call(`/purchase-requests/${immutableRequest.id}/confirm-adjusted`, 'POST', { ...adjustedBody,
+      items: [{ ...adjustedBody.items[0], expectedPriceVersionId: adjustedPreview.items[0].priceVersionId,
+        expectedSupplyPriceVersionId: adjustedPreview.items[0].supplyPriceVersionId }] }, `${prefix}immutable-confirm`);
+    assert.equal(adjustedConfirm.status, 201);
+    const immutableStored = await db.purchaseRequest.findUniqueOrThrow({ where: { id: immutableRequest.id }, include: { items: true, supplierOrders: { include: { items: true } } } });
+    assert.equal(immutableStored.salesGoodsAmount.toFixed(2), '50.00', 'the store request total remains immutable');
+    assert.equal(immutableStored.items[0]!.quantity.toString(), '5', 'the store request quantity remains immutable');
+    assert.equal(immutableStored.supplierOrders[0]!.salesGoodsAmount.toFixed(2), '20.00');
+    assert.equal(immutableStored.supplierOrders[0]!.items[0]!.quantity.toString(), '2', 'only the generated order uses the purchaser adjustment');
+    assert.equal(await db.auditLog.count({ where: { entityId: immutableRequest.id, action: 'purchase-request.confirm-adjusted' } }), 1);
     const finalOrders = (await call(`/purchase-requests/${request.id}`)).body.data.supplierOrders;
     assert.ok(finalOrders.every((order: any) => order.supplierId === suppliers[1]!.id), 'final orders must use the adjusted supplier');
     assert.equal((await call(`/purchase-requests/${request.id}/assign`, 'POST', { ...assignment, expectedVersion: assigned.body.data.version + 1, expectedPrices: currentPrices }, `${prefix}afterconfirm`)).status, 409);

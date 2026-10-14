@@ -53,16 +53,34 @@ test('completed order amount details expose readable context for every settlemen
   let query: any;
   const service = new ReportsService({ client: { supplierOrder: { findMany: async (input: any) => {
     query = input;
-    return [{ id: 'o', supplierOrderNo: 'SO-001', storeId: 'store', supplierId: 'supplier', store: { name: '门店' }, supplier: { name: '供应商' },
+    return [{ id: 'o', supplierOrderNo: 'SO-001', request: { requestNo: 'PR-001' }, storeId: 'store', supplierId: 'supplier', store: { name: '门店' }, supplier: { name: '供应商' },
       completedAt: new Date('2026-10-13T00:00:00Z'), settlementMode: 'SUPPLIER_TERM', shipments: [{ freight: '2.00' }],
       items: [{ receivedQuantity: '3', salesUnitPrice: '10', supplyUnitPrice: '8' }] }];
   } } } } as any);
   const report = await service.orderAmounts({ from: '2026-10-01', to: '2026-10-13' });
   assert.equal(query.where.settlementMode, undefined);
   assert.equal(report.orders[0]?.supplierOrderNo, 'SO-001');
+  assert.equal(report.orders[0]?.requestNo, 'PR-001');
+  assert.deepEqual(query.include.request.select, { requestNo: true });
   assert.equal(report.orders[0]?.storeName, '门店');
   assert.equal(report.orders[0]?.supplierName, '供应商');
   assert.equal(report.orders[0]?.totalAmount, '32.00');
+});
+
+test('new order and profit exports append readable order and source numbers without changing existing columns', async () => {
+  let saved: any;
+  const service = new ReportsService({ client: { exportJob: { update: async (value: any) => { saved = value; } } } } as any);
+  const row = { supplierOrderId: 'o1', supplierOrderNo: 'SO-001', requestNo: 'PR-001' };
+  (service as any).orderAmounts = async () => ({ orders: [row] });
+  (service as any).profit = async () => ({ rows: [row] });
+  for (const type of ['order-amounts', 'profit']) {
+    await (service as any).generateExport('job', type, {});
+    assert.equal(saved.data.status, 'READY');
+    const [header, line] = saved.data.csvContent.split('\r\n');
+    assert.ok(header.startsWith('"supplierOrderId","storeId","supplierId"'));
+    assert.ok(header.endsWith('"supplierOrderNo","requestNo"'));
+    assert.ok(line.endsWith('"SO-001","PR-001"'));
+  }
 });
 
 test('report order products use final receipt amounts and protect supplier sales pricing', async () => {

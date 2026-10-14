@@ -1,0 +1,31 @@
+:host { display: block; min-width: 0; }
+.center { color: var(--ink-1, #1c2923); font-size: 26rpx; }
+.controls { position: sticky; top: 0; z-index: 2; background: #fff; padding: 16rpx 24rpx 0; }
+input { height: 68rpx; background: #f3f5f4; border-radius: 8rpx; padding: 0 20rpx; font-size: 26rpx; }
+.filters { display: flex; gap: 28rpx; white-space: nowrap; padding: 22rpx 0; }
+.filters text { color: #66766d; padding-bottom: 8rpx; }
+.filters .selected { color: #167e5a; border-bottom: 4rpx solid #167e5a; font-weight: 600; }
+.dates { display: flex; align-items: center; gap: 20rpx; padding: 18rpx 24rpx; background: #fff; color: #66766d; font-size: 24rpx; }
+.dates picker { min-width: 0; flex: 1; }
+.date-error { display: block; padding: 12rpx 24rpx; color: #ae3838; }
+.caption, .toolbar { padding: 20rpx 24rpx; display: flex; justify-content: space-between; color: #66766d; font-size: 24rpx; }
+.caption text:last-child, .toolbar text:first-child { color: #167e5a; }
+.entry { padding: 24rpx; border-bottom: 1rpx solid #e1e7e3; background: #fff; }
+.row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16rpx; }
+.title { font-size: 28rpx; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.state { flex-shrink: 0; font-size: 23rpx; color: #66766d; }
+.meta { display: block; color: #66766d; font-size: 24rpx; margin-top: 10rpx; }
+.phone { color: #167e5a; }
+.number { color: #66766d; font-size: 23rpx; overflow-wrap: anywhere; margin: 12rpx 0; }
+.summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: #526359; line-height: 1.6; margin: 12rpx 0; }
+.money { white-space: nowrap; font-weight: 600; font-size: 28rpx; }
+.empty, .error { padding: 48rpx 24rpx; text-align: center; color: #66766d; }
+.error { color: #ae3838; }
+.band { padding: 24rpx; margin-bottom: 16rpx; background: #fff; }
+.product, .batch { padding: 22rpx 0; border-bottom: 1rpx solid #e1e7e3; }
+.product:last-child, .batch:last-child { border-bottom: 0; }
+.product-name { min-width: 0; overflow-wrap: anywhere; }
+.price-switch { display: flex; align-items: center; font-size: 23rpx; color: #66766d; }
+.price-switch switch { transform: scale(.7); transform-origin: right center; }
+button { font-size: 26rpx; color: #167e5a; background: #f0f7f3; margin-top: 20rpx; border-radius: 8rpx; }
+.more { margin: 24rpx; }

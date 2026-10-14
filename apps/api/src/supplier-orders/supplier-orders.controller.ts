@@ -2,6 +2,7 @@ import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, Use
 import { BusinessScopeGuard } from '../auth/business-scope.guard.js';
 import { AllowAssignedStores, assignedStoreIds, ASSIGNED_STORE_ROLES, isCompanyUser } from '../auth/store-scope.js';
 import { SupplierPricePrivacyInterceptor } from './supplier-price-privacy.interceptor.js';
+import { StorePricePrivacyInterceptor } from '../common/store-price-privacy.interceptor.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { type AuthenticatedSession } from '../auth/auth.service.js';
@@ -75,7 +76,7 @@ type CreateFreightConfirmationBody = {
 
 @Controller('supplier-orders')
 @UseGuards(AuthGuard, RolesGuard, BusinessScopeGuard)
-@UseInterceptors(SupplierPricePrivacyInterceptor)
+@UseInterceptors(SupplierPricePrivacyInterceptor, StorePricePrivacyInterceptor)
 export class SupplierOrdersController {
   constructor(
     private readonly supplierOrdersService: SupplierOrdersService,
@@ -86,10 +87,16 @@ export class SupplierOrdersController {
 
   @Get()
   @AllowAssignedStores()
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   list(@Req() request: AuthenticatedRequest, @Query() query: ListQuery): Promise<SupplierOrderSummaryView[]> {
     const scope = supplierScope(request);
     const input = parseListQuery(query);
+    const storeScope = request.auth!.user.scope;
+    if (!isCompanyUser(request.auth!.user) && ['STORE', 'STORE_FINANCE'].includes(storeScope?.type ?? '')) {
+      if (!storeScope?.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Store scope is not configured' });
+      if (input.storeId && input.storeId !== storeScope.storeId) throw new ForbiddenException({ code: 'SCOPE_MISMATCH', message: 'Orders are outside the current store scope' });
+      input.storeId = storeScope.storeId;
+    }
     if (!isCompanyUser(request.auth!.user)) input.storeIds = assignedStoreIds(request.auth!.user.scope);
     if (scope) {
       if (!scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
@@ -101,10 +108,10 @@ export class SupplierOrdersController {
 
   @Get(':id')
   @AllowAssignedStores()
-  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER', ...ASSIGNED_STORE_ROLES)
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER', 'STORE', 'STORE_FINANCE', ...ASSIGNED_STORE_ROLES)
   get(@Req() request: AuthenticatedRequest, @Param('id') id: string): Promise<SupplierOrderDetailView> {
     throwIfInvalid(validateUuid('id', id));
-    const scope = supplierScope(request) ?? (!isCompanyUser(request.auth!.user) && request.auth!.user.scope?.type === 'MULTI_STORE' ? request.auth!.user.scope : undefined);
+    const scope = !isCompanyUser(request.auth!.user) ? request.auth!.user.scope : undefined;
     if (scope?.type === 'SUPPLIER' && !scope.supplierId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: 'Supplier scope is not configured' });
     return this.supplierOrdersService.get(id, scope);
   }

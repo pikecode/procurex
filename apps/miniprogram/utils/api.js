@@ -178,7 +178,9 @@ function retryRoleCommand(workspace) {
 function workspaceNames(user) {
   if (!user) return [];
   const roles = user.roles || [];
-  if (roles.includes('ADMIN') && !user.testIdentity) return ['purchaser', 'finance'];
+  // The administrator root identity is only an identity picker in the mini-program.
+  // Business and master-data work must use an explicit target identity or the desktop admin.
+  if (roles.includes('ADMIN') && !user.testIdentity) return [];
   const workspaces = [];
   if (roles.includes('STORE') || roles.includes('STORE_FINANCE')) workspaces.push('store');
   if (roles.includes('SUPPLIER')) workspaces.push('supplier');
@@ -200,6 +202,10 @@ function openWorkspace(name) {
   refreshWorkspaceNavigation();
   if (!user) {
     wx.redirectTo({ url: '/pages/login/index' });
+    return null;
+  }
+  if (user.testWorkbenchEnabled && (user.roles || []).includes('ADMIN') && !user.testIdentity) {
+    wx.reLaunch({ url: '/pages/test-workbench/index' });
     return null;
   }
   const workspaces = workspaceNames(user);

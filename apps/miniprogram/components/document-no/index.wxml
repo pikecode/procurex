@@ -1,4 +1,1 @@
-<text wx:if="{{parts.plain}}" class="doc-no-plain">{{parts.full}}</text>
-<text wx:else class="doc-no" title="{{parts.full}}">
-  <text class="doc-no-date">{{parts.date}}</text><text class="doc-no-seq"> #{{parts.sequence}}</text>
-</text>
+<text class="doc-no-plain" user-select="{{true}}">{{parts.full}}</text>

@@ -49,6 +49,7 @@ export type SupplierOrderSummaryView = {
   id: string;
   supplierOrderNo: string;
   requestId: string;
+  requestNo?: string;
   storeId: string;
   supplierId: string;
   status: SupplierOrderStatus;
@@ -64,6 +65,7 @@ export type SupplierOrderSummaryView = {
 };
 
 export type SupplierOrderDetailView = SupplierOrderSummaryView & {
+  supplierContact?: { contactName: string | null; contactPhone: string | null; deliveryContactPhone: string | null; address: string | null };
   defaultDeliveryMode: DeliveryMode;
   requiresFreightSnapshot?: boolean | null;
   destination?: { name: string; address: string | null; contactName: string | null; contactPhone: string | null };
@@ -230,21 +232,23 @@ export class SupplierOrdersService {
         status: input.status,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      include: { supplier: { select: { name: true } }, store: { select: { name: true } }, items: {
+      include: { request: { select: { requestNo: true } }, supplier: { select: { name: true } }, store: { select: { name: true } }, items: {
         orderBy: { createdAt: 'asc' }, select: { product: { select: { name: true } } },
       } },
     });
 
-    return orders.map(order => ({ ...toSupplierOrderSummaryView(order), supplierName: order.supplier.name, storeName: order.store.name,
+    return orders.map(order => ({ ...toSupplierOrderSummaryView(order), requestNo: order.request.requestNo, supplierName: order.supplier.name, storeName: order.store.name,
       productSummary: order.items.map(item => item.product.name).join('、') }));
   }
 
   async get(id: string, scope?: BusinessScope): Promise<SupplierOrderDetailView> {
     const order = await this.database.client.supplierOrder.findUnique({
       where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined,
+        ...(['STORE', 'STORE_FINANCE'].includes(scope?.type ?? '') ? { storeId: scope?.storeId ?? '' } : {}),
         ...(scope?.type === 'MULTI_STORE' ? { storeId: storeFilter(undefined, assignedStoreIds(scope)) } : {}) },
       include: {
-        supplier: { select: { deliveryMode: true, name: true } },
+        request: { select: { requestNo: true } },
+        supplier: { select: { deliveryMode: true, name: true, contactName: true, contactPhone: true, deliveryContactPhone: true, address: true } },
         store: { select: { name: true, address: true, contactName: true, contactPhone: true, receiptAddress: true, receiptContactName: true, receiptContactPhone: true } },
         items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true, imageFile: { select: { id: true } } } }, shipmentItems: { select: { permanentlyReduced: true, gapAllocations: { select: { quantity: true } } } }, replenishmentGaps: { orderBy: { createdAt: 'asc' } } } },
         freightConfirmations: { orderBy: { createdAt: 'desc' } },
@@ -265,8 +269,10 @@ export class SupplierOrdersService {
     const names = await readUnitDisplayNames(this.database.client as Prisma.TransactionClient, order.items.map(item => item.unitSnapshot));
     return {
       ...toSupplierOrderDetailView(order),
+      requestNo: order.request.requestNo,
       defaultDeliveryMode: order.supplier.deliveryMode,
       supplierName: order.supplier.name,
+      supplierContact: { contactName: order.supplier.contactName, contactPhone: order.supplier.contactPhone, deliveryContactPhone: order.supplier.deliveryContactPhone, address: order.supplier.address },
       storeName: order.store.name,
       destination: storeDestination(order.store),
       requiresFreightSnapshot: order.requiresFreightSnapshot,

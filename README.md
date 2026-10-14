@@ -28,7 +28,8 @@ npm run start:worker
 - 默认后台是 React：http://127.0.0.1:4174 。`npm start`、`npm run start:web` 和 `npm run start:admin` 均启动它；端口占用时使用 Vite 输出的地址。
 - API 使用3114，后台以同源 `/api` 代理访问，无需在浏览器URL传入API地址。API端口改变时通过 `ADMIN_API_TARGET` 配置后台代理目标。
 - 小程序在微信开发者工具打开 `apps/miniprogram`；真机登录、合法域名与正式发布另行验收。
-- 小程序当前默认连接本地 `http://127.0.0.1:3114/api/v1`，地址在 `apps/miniprogram/app.js` 统一配置。暂不部署；本地上传测试可使用 `FILE_STORAGE=local PORT=3114 npm run start:api`。
+- 小程序接口地址在 `apps/miniprogram/app.js` 统一配置。本地数据使用 `http://127.0.0.1:3114/api/v1`，服务器数据使用 `https://pr.moshuo.fun/api/v1`；本地上传测试可使用 `FILE_STORAGE=local PORT=3114 npm run start:api`。开发者工具本地测试需关闭合法域名校验；本机 `project.private.config.json` 的 `setting.urlCheck` 会覆盖项目公共配置，修改后重开项目。
+- 当前本地编号数据的账号、价格、模板/门店/供应商对应关系和测试步骤见[本地编号测试数据](docs/numbered-local-test-data.md)。
 - 旧后台只用于回退和历史验收：`npm run start:web:legacy`，地址 http://127.0.0.1:4173/app.html 。两套后台共用业务数据，切换入口不会回退数据库或撤销业务操作。
 - API默认端口为3100，因此本地启动务必显式设置 `PORT=3114`，不要仅运行 `start:api` 后期待3114可用。
 

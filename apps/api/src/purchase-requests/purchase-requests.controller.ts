@@ -209,6 +209,25 @@ export class PurchaseRequestsController {
     return this.purchaseRequestsService.previewReplacement(input.id, input.expectedVersion, input.items);
   }
 
+  @Post(':id/confirm-adjusted')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  async confirmAdjusted(@Param('id') id: string, @Body() body: PatchItemsBody, @Req() request: AuthenticatedRequest,
+    @CurrentAuth() auth: AuthenticatedSession): Promise<ConfirmPurchaseRequestResult> {
+    const input = parsePatchItemsBody(id, body);
+    const traceId = getOrCreateTraceId(request);
+    const command = await this.commandsService.begin({ actorUserId: auth.user.actorUserId ?? auth.user.id, action: 'purchase-request.confirm',
+      idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, ...body } as never, traceId });
+    if (command.state === 'replay') return command.command.responseBody as ConfirmPurchaseRequestResult;
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.purchaseRequestsService.confirmAdjusted(input.id, input.expectedVersion, input.items, tx);
+      await this.commandsService.succeed({ commandId: command.command.id, resourceType: 'PurchaseRequest', resourceId: result.requestId, responseBody: result as never }, tx);
+      await this.audit.record({ actorUserId: auth.user.actorUserId ?? auth.user.id, activeScope: auditScope(auth), action: 'purchase-request.confirm-adjusted',
+        entityType: 'PurchaseRequest', entityId: result.requestId, traceId, reason: input.reason,
+        after: { status: result.status, supplierOrderIds: result.supplierOrderIds, adjustedItems: input.items } }, tx);
+      return result;
+    });
+  }
+
   @Post(':id/reassign-preview')
   @RequireRoles('ADMIN', 'PURCHASER')
   reassignPreview(@Param('id') id: string, @Body() body: ReassignBody): Promise<ReassignPurchaseRequestPreview> {

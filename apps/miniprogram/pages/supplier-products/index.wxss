@@ -1,0 +1,40 @@
+.catalog-page { height: 100vh; box-sizing: border-box; padding-bottom: env(safe-area-inset-bottom); display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
+.catalog-heading, .catalog-tools, .catalog-page > .error-banner { flex-shrink: 0; }
+.catalog-heading { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding: 26rpx var(--space-content-x); background: var(--brand-deep); }
+.catalog-heading > view { min-width: 0; flex: 1; }
+.catalog-title, .catalog-subtitle { display: block; }
+.catalog-title { color: #fff; font-size: 34rpx; font-weight: 700; }
+.catalog-subtitle { margin-top: 8rpx; color: rgba(255,255,255,.76); font-size: 23rpx; }
+.catalog-heading button { flex: none; margin: 0; color: #fff; border-color: rgba(255,255,255,.45); background: transparent; }
+.catalog-page .error-banner { margin: 18rpx var(--space-page-x) 0; }
+.catalog-tools { padding: 18rpx var(--space-content-x); border-bottom: 1rpx solid var(--line); background: var(--surface); }
+.catalog-search { display: flex; align-items: center; gap: 14rpx; padding: 0 20rpx; border-radius: 12rpx; background: var(--sunken); }
+.catalog-search input { min-width: 0; flex: 1; height: 72rpx; padding: 0; border: 0; background: transparent; font-size: 25rpx; }
+.catalog-browser { display: flex; flex: 1; min-height: 0; overflow: hidden; border-top: 1rpx solid var(--line-soft); }
+.catalog-categories { flex: 0 0 154rpx; width: 154rpx; height: 100%; background: var(--sunken); border-right: 1rpx solid var(--line); }
+.catalog-category { position: relative; display: flex; align-items: center; gap: 6rpx; min-height: 78rpx; padding: 16rpx 12rpx 16rpx 18rpx; border-left: 5rpx solid transparent; color: var(--ink-3); font-size: 23rpx; }
+.catalog-category > text:first-child { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.subcategory-strip { flex-shrink: 0; width: 100%; white-space: nowrap; padding: 16rpx 0; border-bottom: 1rpx solid var(--line-soft); }
+.subcategory-track { display: inline-flex; gap: 12rpx; padding: 0 18rpx; }
+.subcategory-option { flex: none; padding: 10rpx 16rpx; border-radius: 8rpx; color: var(--ink-3); background: var(--sunken); font-size: 23rpx; }
+.subcategory-option.is-active { background: var(--brand-pale, #e3f0e9); color: var(--brand-ink); font-weight: 600; }
+.catalog-category.is-active { border-left-color: var(--brand); background: var(--surface); color: var(--brand-ink); font-weight: 700; }
+.catalog-category-count { flex: none; color: var(--ink-4); font-size: 19rpx; font-weight: 400; }
+.catalog-products { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; }
+.catalog-caption { display: flex; justify-content: space-between; flex: none; padding: 18rpx 20rpx; color: var(--ink-3); font-size: 22rpx; border-bottom: 1rpx solid var(--line-soft); }
+.catalog-list { flex: 1; width: 100%; height: 0; min-height: 0; }
+.catalog-list-inner { padding: 0 20rpx 32rpx; box-sizing: border-box; }
+.catalog-row { padding: 18rpx 0; border-bottom: 1rpx solid var(--line-soft); }
+.catalog-row product-card { display: block; width: 100%; min-width: 0; }
+.catalog-row-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10rpx; }
+.catalog-name { min-width: 0; flex: 1; color: var(--ink-1); font-size: 27rpx; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.catalog-row-head .tag { flex: none; }
+.catalog-path, .catalog-meta { display: block; margin-top: 7rpx; font-size: 21rpx; line-height: 1.4; }
+.catalog-path { color: var(--brand-ink); }
+.catalog-meta { color: var(--ink-3); }
+.catalog-row-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10rpx; margin-top: 10rpx; }
+.catalog-status { flex: 1; min-width: 0; font-size: 21rpx; color: var(--ink-3); }
+.catalog-status.is-listed { color: var(--brand-ink); }
+.catalog-status.is-disabled { color: var(--ink-4); }
+.catalog-listing { flex: none; width: 108rpx; min-width: 108rpx; height: 56rpx; min-height: 56rpx; line-height: 54rpx; padding: 0 12rpx; margin: 0; font-size: 23rpx; box-sizing: border-box; border-radius: 8rpx; }
+.empty-state { padding: 56rpx 20rpx; color: var(--ink-3); text-align: center; }

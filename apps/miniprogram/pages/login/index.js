@@ -21,6 +21,10 @@ Page({
     this.setData({ loading: true, loadingText: '恢复登录中...', error: '' });
     try {
       const user = await api.restoreSession();
+      if (user?.testWorkbenchEnabled && (user.roles || []).includes('ADMIN') && !user.testIdentity) {
+        wx.reLaunch({ url: '/pages/test-workbench/index' });
+        return;
+      }
       const workspace = api.workspaceNames(user)[0];
       if (workspace) {
         wx.switchTab({ url: `/pages/${workspace}/index` });
@@ -50,6 +54,10 @@ Page({
       await api.checkHealth();
       this.setData({ loadingText: '登录中...' });
       const user = await api.login(this.data.username, this.data.password);
+      if (user?.testWorkbenchEnabled && (user.roles || []).includes('ADMIN') && !user.testIdentity) {
+        wx.reLaunch({ url: '/pages/test-workbench/index' });
+        return;
+      }
       const workspace = api.workspaceNames(user)[0];
       if (workspace) {
         wx.switchTab({ url: `/pages/${workspace}/index` });

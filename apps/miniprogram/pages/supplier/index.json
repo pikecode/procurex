@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "供应商",
   "usingComponents": {
+    "document-no": "../../components/document-no/index",
     "evidence-files": "../../components/evidence/index",
     "product-card": "../../components/product-card/index"
   }

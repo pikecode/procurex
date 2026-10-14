@@ -1,5 +1,16 @@
 # 接口详细设计
 
+## 2026-10-14 门店删除
+
+`DELETE /stores/{id}` 仅 ADMIN，JSON 请求体包含 `expectedVersion`。成功返回 `{ id, deleted: true }`。门店不存在返回 `STORE_NOT_FOUND`，版本变化返回 `VERSION_CONFLICT`，存在模板、账户、订单、用户范围等关联返回 `STORE_IN_USE` 并说明原因。事务内锁定门店、检查所有直接关联、删除并记录审计；不会级联删除业务数据。
+
+## 2026-10-14 订单来源与展示边界
+
+- `GET /supplier-orders` 和 `GET /supplier-orders/:id` 补充 `requestNo`，从订单关联的下货单读取；既有 `requestId`、`storeId`、`supplierId` 继续保留。只返回来源单号，不嵌入整张下货单或其他供应商订单，不扩大读取权限。
+- 一张订单关联一个门店、一个供应商、一张下货单，不跨门店、跨下货单合单；确认前不生成正式订单。供应商可服务多个门店，仍只读取自己的订单。
+- 两个只读订单接口新增 `STORE` / `STORE_FINANCE` 角色：列表强制绑定当前门店并拒绝跨门店参数，详情在数据库查询内限制门店，门店响应移除供应商成本字段；不开放发货写权限。门店及采购主视图已实现，单号及日期筛选、每 10 张订单的分段展示在客户端完成，API 不新增分页协议。
+- 金额及经营差额报表明细补充 `requestNo`，新生成的 CSV 在原有列后追加 `supplierOrderNo` / `requestNo`，不修改金额与范围规则；商品数量仍聚合，不伪造唯一来源。完成状态见 [流程方案](./store-request-supplier-order-plan.md#当前确认口径2026-10-14)。
+
 > 2026-10-10 当前主数据口径：供应商联系及银行等辅助资料选填，业务号码 `contactPhone` 与配送号码 `deliveryContactPhone` 分开。供应商唯一结算方式不可由模板覆盖，仅账期类配置周期。下方带日期的旧增量描述保留历史过程，与本节及 `template-current-spec.md` 冲突时按当前口径执行。
 
 2026-10-06储值时点更新：新`POST /purchase-requests`下单足额冻结，不扣账面余额；`funding.stored`新增reserved，paid只表示实际扣款，available扣除全店其他订单冻结。采购确认/拆单/发货仅调整冻结；供应商执行单收货完成（含差异处理）时同事务转实际扣款，重复命令和重算不重复扣款。

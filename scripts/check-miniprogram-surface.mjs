@@ -55,6 +55,7 @@ assert.deepEqual(appJson.pages, [
   'pages/supplier/index',
   'pages/purchaser/index',
   'pages/profile/index',
+  'pages/supplier-products/index',
   'pages/finance/index',
   'pages/region/index',
   'pages/finance-accounts/index',
@@ -72,6 +73,7 @@ for (const path of [
   'apps/miniprogram/utils/api.js',
   'apps/miniprogram/utils/quantity.js',
   'apps/miniprogram/utils/store-view.js',
+  'apps/miniprogram/components/order-center/index.js',
   'scripts/check-miniprogram-flow.mjs',
   'scripts/test-miniprogram-pages.mjs',
   'scripts/capture-miniprogram-journey.mjs',
@@ -98,9 +100,10 @@ for (const folder of ['pages/products', 'pages/prices']) {
 }
 const profileSource = await read('apps/miniprogram/pages/profile/index.js');
 assertIncludes(profileSource, 'user.scope', 'own profile scope');
-assertIncludes(profileSource, '/managed-products', 'own supplier catalog');
-assertIncludes(profileSource, 'supplyEnabled', 'supplier listing state');
-assert.ok(!profileSource.includes('/prices/'), 'supplier catalog cannot manage prices');
+const supplierProductsSource = await read('apps/miniprogram/pages/supplier-products/index.js');
+assertIncludes(supplierProductsSource, '/managed-products', 'own supplier catalog');
+assertIncludes(supplierProductsSource, 'supplyEnabled', 'supplier listing state');
+assert.ok(!supplierProductsSource.includes('/prices/'), 'supplier catalog cannot manage prices');
 assert.equal(files.filter((file) => file.endsWith('.html')).length, 0, 'mini-program surface must not use HTML pages');
 
 const loginJs = await read('apps/miniprogram/pages/login/index.js');
@@ -150,9 +153,11 @@ assertIncludes(storeJs, 'expectedOrderVersion', 'store receipt order version gua
 assertIncludes(storeJs, 'expectedReceiptRevision', 'store receipt revision guard');
 assertIncludes(storeWxml, '商品目录', 'store catalog screen');
 assertIncludes(storeWxml, '账户余额', 'store account screen');
-assertIncludes(storeWxml, '核对订货单', 'store checkout button');
-assertIncludes(storeWxml, '提交订货单', 'store request submit button');
-assertIncludes(storeWxml, '订货单', 'store purchase request list');
+assertIncludes(storeWxml, '核对下货单', 'store checkout button');
+assertIncludes(storeWxml, '提交下货单', 'store request submit button');
+assertIncludes(storeWxml, '下货记录', 'store purchase request list');
+assertIncludes(storeWxml, '<order-center', 'store formal order center');
+assertIncludes(await read('apps/miniprogram/components/order-center/index.wxml'), '来源下货单', 'formal order source trace');
 assertIncludes(storeWxml, '收货处理', 'store shipment notification screen');
 assertIncludes(storeWxml, 'class="order-entry shipment-todo"', 'store shipment notification list');
 assertIncludes(storeWxml, '确认收货', 'store full receipt action');
@@ -189,7 +194,7 @@ assertIncludes(supplierJs, 'openStatementSource', 'supplier statement source nav
 assertIncludes(supplierJs, 'statementRequestSequence', 'same-statement stale response protection');
 assertIncludes(supplierWxml, 'statement-payment-source', 'supplier bill payment source');
 assertIncludes(supplierWxml, 'statement-adjustment-source', 'supplier bill adjustment source');
-assertIncludes(supplierWxml, '收款确认', 'supplier payment confirmation screen');
+assertIncludes(supplierWxml, '收款核对', 'supplier payment confirmation screen');
 assertIncludes(supplierWxml, '确认收款', 'supplier payment confirm action');
 assertIncludes(supplierWxml, '驳回付款', 'supplier payment reject action');
 assertIncludes(supplierWxml, '统计概览', 'supplier statistics screen');

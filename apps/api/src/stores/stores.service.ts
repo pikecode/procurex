@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { Prisma as PrismaRuntime } from '../../../../packages/backend/generated/prisma/client.js';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import {
@@ -284,6 +285,30 @@ export class StoresService {
     await this.assertStoreExists(storeId);
     const account = await this.database.client.storeAccount.findUnique({ where: { storeId } });
     return toStoreAccountView(storeId, account);
+  }
+
+  async removeStore(id: string, expectedVersion: number, context?: MasterDataAuditContext) {
+    try {
+      return await auditedMasterDataTransaction(this.database, this.audit, context, 'store.delete', 'Store', async tx => {
+        await tx.$queryRaw(PrismaRuntime.sql`SELECT "id" FROM "Store" WHERE "id" = ${id}::uuid FOR UPDATE`);
+        const store = await tx.store.findUnique({ where: { id }, include: { _count: { select: {
+          bindings: true, cycleOverrides: true, accounts: true, requests: true, supplierOrders: true,
+          rechargeDocuments: true, clearingDocuments: true, userScopes: true, assignedUserScopes: true, overpayments: true
+        } } } });
+        if (!store) throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: '门店不存在或已删除' });
+        if (storeVersion(store) !== expectedVersion) throw new ConflictException({ code: 'VERSION_CONFLICT', message: '门店资料已变化，请刷新后重试' });
+        const labels: Record<string, string> = { bindings: '订货模板', cycleOverrides: '结算配置', accounts: '门店账户', requests: '下货单', supplierOrders: '供应商订单', rechargeDocuments: '充值记录', clearingDocuments: '销账记录', userScopes: '绑定账号', assignedUserScopes: '授权账号', overpayments: '溢付款记录' };
+        const related = Object.entries(store._count).filter(([, count]) => count > 0).map(([key]) => labels[key]);
+        if (related.length) throw new ConflictException({ code: 'STORE_IN_USE', message: `该门店已关联${related.join('、')}，不能删除；不再使用可停用门店` });
+        await tx.store.delete({ where: { id } });
+        return { id, deleted: true };
+      });
+    } catch (error) {
+      if (error instanceof PrismaRuntime.PrismaClientKnownRequestError && error.code === 'P2003') {
+        throw new ConflictException({ code: 'STORE_IN_USE', message: '该门店已有关联数据，不能删除，请刷新后重试' });
+      }
+      throw error;
+    }
   }
 
   async changeGroups(stores: { id: string; expectedVersion: number }[], groupName: string | null, context: MasterDataAuditContext) {

@@ -60,7 +60,7 @@
     "mini:check": "node scripts/check-miniprogram-surface.mjs",
     "mini:visual-evidence": "node scripts/check-native-visual-evidence.mjs --with-price-recovery --with-multirole-navigation",
     "mini:visual-evidence-test": "node --test scripts/test-native-visual-evidence.mjs",
-    "mini:test": "node --test scripts/test-miniprogram-pages.mjs",
+    "mini:test": "node --test scripts/test-miniprogram-pages.mjs scripts/test-order-center.mjs",
     "mini:capture-profile-prices": "node --env-file-if-exists=.env scripts/capture-native-profile-prices.mjs",
     "mini:capture-journey": "node scripts/capture-miniprogram-journey.mjs",
     "mini:capture-extended": "node --env-file-if-exists=.env scripts/capture-miniprogram-journey.mjs --extended",

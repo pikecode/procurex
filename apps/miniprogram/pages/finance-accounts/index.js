@@ -4,7 +4,7 @@ const view = require('../../utils/store-view');
 Page({
   data: { user: {}, loading: false, submitting: false, uploading: false, error: '', stores: [], visibleStores: [], search: '',
     store: null, account: null, credits: [], visibleCredits: [], suppliers: ['全部供应商'], supplierIndex: 0,
-    from: '', to: '', chosen: [], history: [], document: null, mode: '', preview: null, confirming: false,
+    from: '', to: '', chosen: [], selectedTotal: 0, history: [], document: null, mode: '', preview: null, confirming: false,
     amount: '', reason: '', remark: '', businessDate: '', collectionAccounts: [], collectionIndex: -1, evidenceFiles: [], pendingCommand: null },
   onShow() {
     const user = api.openWorkspace('finance');
@@ -40,7 +40,7 @@ Page({
     const store = this.data.stores.find(row => row.id === event.currentTarget.dataset.id);
     if (!store) return;
     const sequence = this.sequence = (this.sequence || 0) + 1, actor = this.data.user.id;
-    this.setData({ store, account: null, document: null, mode: '', confirming: false, chosen: [], from: '', to: '', supplierIndex: 0, loading: true, error: '' });
+    this.setData({ store, account: null, document: null, mode: '', confirming: false, chosen: [], selectedTotal: 0, from: '', to: '', supplierIndex: 0, loading: true, error: '' });
     try { await this.loadAccount(store, sequence, actor); }
     catch (error) { if (this.valid(sequence, actor)) this.setData({ error: error.message }); }
     finally { if (this.valid(sequence, actor)) this.setData({ loading: false }); }
@@ -58,7 +58,7 @@ Page({
       clearings.set(row.sourceId, { id: row.sourceId, kind: 'clearings', title: '销账', amount: ((previous ? Math.round(Number(previous.amount) * 100) : 0) + Math.round(Number(row.amount) * 100)) / 100, dateText: view.dateText(row.occurredAt) });
     }
     this.setData({ account, credits: credits.map(row => ({ ...row, dateText: view.dateText(row.occurredAt), date: view.dateText(row.occurredAt, false) })),
-      suppliers: ['全部供应商', ...new Set(credits.map(row => row.supplierName).filter(Boolean))], history: [...history, ...clearings.values()].sort((a, b) => b.dateText.localeCompare(a.dateText)), chosen: [], preview: null, supplierIndex: 0 });
+      suppliers: ['全部供应商', ...new Set(credits.map(row => row.supplierName).filter(Boolean))], history: [...history, ...clearings.values()].sort((a, b) => b.dateText.localeCompare(a.dateText)), chosen: [], selectedTotal: 0, preview: null, supplierIndex: 0 });
     this.setData({ stores: this.data.stores.map(row => row.id === store.id ? { ...row, account } : row) });
     this.onSearch({ detail: { value: this.data.search } });
     this.filterCredits();
@@ -72,7 +72,7 @@ Page({
     const mode = event.currentTarget.dataset.mode;
     if (!['recharge', 'credit', 'clearing'].includes(mode)) return;
     this.setData({ mode, amount: mode === 'credit' ? this.data.account.creditLimit : '', reason: '', remark: '',
-      businessDate: view.dateText(new Date().toISOString(), false), collectionIndex: -1, evidenceFiles: [], chosen: [], preview: null, confirming: false, error: '' });
+      businessDate: view.dateText(new Date().toISOString(), false), collectionIndex: -1, evidenceFiles: [], chosen: [], selectedTotal: 0, preview: null, confirming: false, error: '' });
     this.filterCredits();
   },
   cancelAction() { if (!this.busy()) this.setData({ mode: '', confirming: false, preview: null, error: '' }); },
@@ -86,7 +86,7 @@ Page({
   onFilter(event) {
     if (this.busy() || this.data.confirming) return;
     const field = event.currentTarget.dataset.field;
-    if (['from', 'to', 'supplierIndex'].includes(field)) this.setData({ [field]: field === 'supplierIndex' ? Number(event.detail.value) : event.detail.value, chosen: [], preview: null });
+    if (['from', 'to', 'supplierIndex'].includes(field)) this.setData({ [field]: field === 'supplierIndex' ? Number(event.detail.value) : event.detail.value, chosen: [], selectedTotal: 0, preview: null });
     this.filterCredits();
   },
   filterCredits() {
@@ -97,11 +97,19 @@ Page({
   chooseCredits(event) {
     if (this.busy() || this.data.confirming) return;
     const allowed = new Set(this.data.visibleCredits.map(row => row.fundingAllocationId));
-    this.setData({ chosen: [...new Set(event.detail.value)].filter(id => allowed.has(id)), preview: null }); this.filterCredits();
+    const chosen = [...new Set(event.detail.value)].filter(id => allowed.has(id));
+    this.setData({ chosen, selectedTotal: this.chosenTotal(chosen), preview: null }); this.filterCredits();
   },
   selectAll() {
     if (this.busy() || this.data.confirming) return;
-    this.setData({ chosen: this.data.chosen.length === this.data.visibleCredits.length ? [] : this.data.visibleCredits.map(row => row.fundingAllocationId), preview: null }); this.filterCredits();
+    const chosen = this.data.chosen.length === this.data.visibleCredits.length ? [] : this.data.visibleCredits.map(row => row.fundingAllocationId);
+    this.setData({ chosen, selectedTotal: this.chosenTotal(chosen), preview: null }); this.filterCredits();
+  },
+  chosenTotal(chosen) {
+    const ids = new Set(chosen);
+    const cents = this.data.credits.filter(row => ids.has(row.fundingAllocationId))
+      .reduce((sum, row) => sum + Math.round(Number(row.creditOutstanding || 0) * 100), 0);
+    return cents / 100;
   },
   async addEvidence() {
     if (this.busy() || this.data.confirming || this.data.pendingCommand || !['recharge', 'clearing'].includes(this.data.mode) || this.data.evidenceFiles.length >= 5) return;
@@ -138,7 +146,13 @@ Page({
       if (mode === 'clearing') {
         const preview = await api.request(`/stores/${this.data.store.id}/clearings/preview`, { method: 'POST', data: { fundingAllocationIds: chosen } });
         if (!this.valid(sequence, actor)) return;
-        this.setData({ preview });
+        const creditById = new Map(this.data.credits.map(item => [item.fundingAllocationId, item]));
+        this.setData({ preview: { ...preview, items: (preview.items || []).map(item => ({
+          ...item,
+          supplierOrderNo: creditById.get(item.fundingAllocationId)?.supplierOrderNo || '挂账明细',
+          supplierName: creditById.get(item.fundingAllocationId)?.supplierName || '公司结算',
+          occurredAt: creditById.get(item.fundingAllocationId)?.dateText || ''
+        })) } });
       }
       if (this.valid(sequence, actor)) this.setData({ confirming: true });
     } catch (error) { if (this.valid(sequence, actor)) fail(error.message); }

@@ -42,7 +42,12 @@ export type SupplierManagedProductView = {
   name: string;
   sku: string | null;
   specification: string | null;
+  categoryId: string;
+  categoryName: string;
+  categoryParentId: string | null;
+  categoryParentName: string | null;
   unitName: string;
+  imageFile: { id: string; filename: string; mimeType: string; sizeBytes: string } | null;
   productActive: boolean;
   supplyEnabled: boolean;
   supplyPrice: string | null;
@@ -103,12 +108,15 @@ export class SuppliersService {
     if (!supplier) throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'Supplier was not found' });
     const links = await this.database.client.supplierProduct.findMany({
       where: { supplierId: id }, orderBy: [{ product: { name: 'asc' } }, { productId: 'asc' }],
-      include: { product: { include: { baseUnit: true } } },
+      include: { product: { include: { baseUnit: true, imageFile: true, category: { include: { parent: true } } } } },
     });
     const prices = new Map((await this.productPrices(this.database.client, id)).map(item => [item.productId, item.supplyPrice]));
     return { supplierId: id, items: links.map(link => ({
       id: link.productId, name: link.product.name, sku: link.product.sku, specification: link.product.specification,
+      categoryId: link.product.categoryId, categoryName: link.product.category.name,
+      categoryParentId: link.product.category.parentId, categoryParentName: link.product.category.parent?.name ?? null,
       unitName: link.product.baseUnit.name, productActive: link.product.isActive, supplyEnabled: link.supplyEnabled,
+      imageFile: link.product.imageFile ? { id: link.product.imageFile.id, filename: link.product.imageFile.filename, mimeType: link.product.imageFile.mimeType, sizeBytes: link.product.imageFile.sizeBytes.toString() } : null,
       supplyPrice: prices.get(link.productId) ?? null, version: link.updatedAt.getTime(),
     })) };
   }
@@ -118,16 +126,22 @@ export class SuppliersService {
     return auditedMasterDataTransaction(this.database, this.audit, context, supplyEnabled ? 'supplier.product.list' : 'supplier.product.unlist', 'SupplierProduct', async tx => {
       await lockCatalog(tx);
       await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "SupplierProduct" WHERE "supplierId" = ${supplierId}::uuid AND "productId" = ${productId}::uuid FOR UPDATE`);
-      const link = await tx.supplierProduct.findUnique({ where: { supplierId_productId: { supplierId, productId } }, include: { supplier: true, product: { include: { baseUnit: true } } } });
+      const link = await tx.supplierProduct.findUnique({
+        where: { supplierId_productId: { supplierId, productId } },
+        include: { supplier: true, product: { include: { baseUnit: true, imageFile: true, category: { include: { parent: true } } } } },
+      });
       if (!link) throw new NotFoundException({ code: 'SUPPLIER_PRODUCT_NOT_FOUND', message: 'Supplier product was not found' });
       if (link.supplier.isArchived || link.supplier.status !== SupplierStatus.ACTIVE) throw new ConflictException({ code: 'SUPPLIER_UNAVAILABLE', message: 'Supplier is unavailable' });
       if (link.updatedAt.getTime() !== expectedVersion) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Supplier product status has changed' });
       const updated = link.supplyEnabled === supplyEnabled ? link : await tx.supplierProduct.update({
-        where: { id: link.id }, data: { supplyEnabled, updatedAt: new Date(Math.max(Date.now(), expectedVersion + 1)) }, include: { product: { include: { baseUnit: true } } },
+        where: { id: link.id }, data: { supplyEnabled, updatedAt: new Date(Math.max(Date.now(), expectedVersion + 1)) }, include: { product: { include: { baseUnit: true, imageFile: true, category: { include: { parent: true } } } } },
       });
       const price = await effectivePriceVersion(tx, productId, supplierId, new Date());
       return { supplierId, id: updated.productId, name: updated.product.name, sku: updated.product.sku,
         specification: updated.product.specification, unitName: updated.product.baseUnit.name,
+        categoryId: updated.product.categoryId, categoryName: updated.product.category.name,
+        categoryParentId: updated.product.category.parentId, categoryParentName: updated.product.category.parent?.name ?? null,
+        imageFile: updated.product.imageFile ? { id: updated.product.imageFile.id, filename: updated.product.imageFile.filename, mimeType: updated.product.imageFile.mimeType, sizeBytes: updated.product.imageFile.sizeBytes.toString() } : null,
         productActive: updated.product.isActive, supplyEnabled: updated.supplyEnabled,
         supplyPrice: price?.supplyPrice.toString() ?? null, version: updated.updatedAt.getTime() };
     });

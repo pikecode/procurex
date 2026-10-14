@@ -1,0 +1,7 @@
+{
+  "component": true,
+  "usingComponents": {
+    "document-no": "../document-no/index",
+    "product-card": "../product-card/index"
+  }
+}

@@ -1,12 +1,23 @@
 <view class="page">
-  <view class="workbench-heading"><text class="title">切换角色</text><button wx:if="{{user.testIdentity}}" class="secondary" bindtap="select" disabled="{{switching || loading}}">返回管理员</button></view>
-  <view class="current-identity">当前：{{user.testIdentity ? user.testIdentity.displayName : '管理员'}}</view>
-  <input class="search" placeholder="搜索账号、门店或供应商" value="{{search}}" bindinput="onSearch" />
-  <view wx:if="{{error}}" class="error-banner">{{error}}</view>
-  <view wx:if="{{loading}}" class="muted">正在加载测试账号</view>
-  <view class="identity-row" wx:for="{{filtered}}" wx:key="id">
-    <view class="identity-info"><text class="identity-name">{{item.displayName}}</text><text class="muted">{{item.roleText}} · {{item.username}}</text><text wx:if="{{item.entityName}}" class="muted">{{item.entityName}}</text></view>
-    <button class="secondary" data-id="{{item.id}}" bindtap="select" disabled="{{switching || loading || user.testIdentity.userId === item.id}}">{{user.testIdentity.userId === item.id ? '当前' : '进入'}}</button>
+  <view class="admin-hero">
+    <view class="hero-top"><text class="eyebrow">PROCUREX · 管理员入口</text><button class="text-button" bindtap="logout" disabled="{{switching || loading}}">退出登录</button></view>
+    <text class="hero-title">{{user.testIdentity ? '切换业务身份' : '选择业务身份'}}</text>
+    <text class="hero-copy">小程序用于处理各角色的移动业务。用户、门店、供应商、商品和模板等资料，请在电脑后台维护。</text>
   </view>
-  <view wx:if="{{!loading && !error && !filtered.length}}" class="empty-state">暂无可用测试账号</view>
+  <view wx:if="{{user.testIdentity}}" class="current-card">
+    <view><text class="current-label">当前身份</text><text class="current-name">{{user.testIdentity.displayName}}</text></view>
+    <button class="secondary return-button" bindtap="select" disabled="{{switching || loading}}">返回管理员</button>
+  </view>
+  <view class="picker-head"><view><text class="section-title">可用身份</text><text class="section-copy">进入后，权限和数据范围以所选账号为准</text></view><text class="identity-count">{{items.length}} 个</text></view>
+  <view wx:if="{{error}}" class="error-banner">{{error}}</view>
+  <view wx:if="{{loading}}" class="loading-card"><view class="loading-line wide"></view><view class="loading-line"></view><text>正在加载可用身份</text></view>
+  <view class="role-group" wx:for="{{groups}}" wx:key="role" wx:for-item="group">
+    <view class="role-heading"><view class="role-mark role-{{group.tone}}"></view><text>{{group.label}}</text><text class="role-count">{{group.items.length}}</text></view>
+    <view class="identity-card" wx:for="{{group.items}}" wx:key="id" wx:for-item="identity">
+      <view class="identity-info"><text class="identity-name">{{identity.displayName}}</text><text wx:if="{{identity.entityName}}" class="entity-name">{{identity.entityName}}</text><text class="account-name">{{identity.username}}</text></view>
+      <button class="enter-button {{currentUserId === identity.id ? 'is-current' : ''}}" data-id="{{identity.id}}" bindtap="select" disabled="{{switching || loading || currentUserId === identity.id}}">{{currentUserId === identity.id ? '当前' : '进入'}}</button>
+    </view>
+  </view>
+  <view wx:if="{{!loading && !error && !items.length}}" class="empty-state">暂无可用身份，请检查服务器白名单</view>
+  <view wx:if="{{!loading && items.length}}" class="admin-note"><text class="note-title">管理员本身不展示业务数据</text><text>请选择业务身份进入对应工作区；完成后可在“我的”中切换或返回管理员。</text></view>
 </view>

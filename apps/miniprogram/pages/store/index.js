@@ -28,6 +28,9 @@ Page({
   },
   data: {
     activeView: 'order',
+    recordType: 'orders',
+    sourceOrderReturn: false,
+    orderRevision: 0,
     orderStep: 'catalog',
     store: {},
     orderDate: '',
@@ -107,6 +110,8 @@ Page({
     if (!user) return;
     const scopedStoreId = user.scope && user.scope.storeId;
     if (this.data.user.id !== user.id || this.data.storeId !== scopedStoreId) {
+      this.sourceOrderId = '';
+      this.setData({ recordType: 'orders', sourceOrderReturn: false });
       this.catalogRequestSequence = (this.catalogRequestSequence || 0) + 1;
       this.receiptUploadSequence = (this.receiptUploadSequence || 0) + 1;
       this.setData({ cart: [], requests: [], account: null, ledgers: [], products: [], productId: '', productIndex: -1, primaryCategoryId: '', categoryId: '', categories: [], subcategories: [],
@@ -136,11 +141,12 @@ Page({
     // 与采购/供应商一致：切换工作区视图时先退出下钻详情，
     // 否则「订单 → 详情 → 我的 → 订单」会把用户弹回刚才那张详情。
     if (view !== this.data.activeView) {
+      this.sourceOrderId = '';
       this.statementSequence = (this.statementSequence || 0) + 1;
       this.setData({ selectedRequest: null, selectedRequestId: '', selectedShipment: null, shipmentId: '',
         receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false, selectedStatement: null, statementLoading: false });
     }
-    this.setData({ activeView: view, error: '' });
+    this.setData({ activeView: view, error: '', sourceOrderReturn: false });
   },
 
   async loadStatements() {
@@ -151,6 +157,17 @@ Page({
       if (this.data.storeId === storeId) this.setData({ statements: statements.map(item => ({ ...item, periodText: storeView.statementPeriod(item) })) });
     } catch (error) { if (this.data.storeId === storeId) this.setData({ error: error.message }); }
   },
+  changeRecordType(event) {
+    this.sourceOrderId = '';
+    this.closeRequest();
+    this.setData({ recordType: event.currentTarget.dataset.type });
+  },
+  openOrderSource(event) {
+    this.sourceOrderId = event.detail.orderId;
+    this.setData({ recordType: 'requests', sourceOrderReturn: true });
+    this.selectRequest({ currentTarget: { dataset: { id: event.detail.id } } });
+  },
+  openOrderReceipt(event) { this.selectShipment({ currentTarget: { dataset: { id: event.detail.id } } }); },
   async loadStoreProfile() {
     const storeId = this.data.storeId;
     if (!storeId) return;
@@ -219,7 +236,15 @@ Page({
   openPendingOrder() { this.setData({ activeView: 'order', orderStep: 'confirm', error: '' }); },
   openProfile() { if (!this.data.submitting && !this.data.receiving) wx.navigateTo({ url: '/pages/profile/index?kind=store' }); },
   backToCatalog() { if (!this.data.submitting && !this.data.pendingOrder) this.setData({ orderStep: 'catalog', error: '' }); },
-  closeRequest() { this.setData({ selectedRequest: null, selectedRequestId: '', requestLoading: false }); },
+  closeRequest() {
+    const orderId = this.sourceOrderId;
+    this.sourceOrderId = '';
+    this.setData({ selectedRequest: null, selectedRequestId: '', requestLoading: false, sourceOrderReturn: false, ...(orderId ? { recordType: 'orders' } : {}) });
+    if (orderId) {
+      const open = () => { const center = this.selectComponent('#formal-orders'); if (center?.data.active) center.open({ currentTarget: { dataset: { id: orderId } } }); };
+      if (wx.nextTick) wx.nextTick(open); else open();
+    }
+  },
   closeShipment() { if (!this.data.receiving && !this.data.pendingReceipt && !this.data.receiptUploading) this.setData({ selectedShipment: null, shipmentId: '', receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false }); },
 
   updateCart(product, value) {
@@ -465,7 +490,7 @@ Page({
 
   async selectRequest(event) {
     const id = event.currentTarget.dataset.id;
-    this.setData({ selectedRequest: null, selectedRequestId: id, requestLoading: true, error: '' });
+    this.setData({ recordType: 'requests', selectedRequest: null, selectedRequestId: id, requestLoading: true, error: '' });
     try {
       const detail = await api.request(`/purchase-requests/${id}`);
       if (this.data.selectedRequestId !== id) return;
@@ -500,7 +525,7 @@ Page({
       }
       await Promise.all(tasks);
     } finally {
-      this.setData({ loading: false });
+      this.setData({ loading: false, orderRevision: this.data.orderRevision + 1 });
     }
   },
 

@@ -1,7 +1,7 @@
 <test-context wx:if="{{activeView === 'mine'}}" />
 <wxs src="../../utils/labels.wxs" module="labels" />
-<view class="page {{workspaceTabbarVisible ? 'has-workspace-tabbar' : ''}}{{user.testWorkbenchEnabled && !user.testIdentity ? 'has-test-workbench-root' : ''}} {{requestId && selectedRequest && (activeView === 'rejections' || selectedRequest.status === 'PENDING_PROCUREMENT') || activeView === 'freight' && selectedFreight.status === 'PENDING' ? 'has-action-bar' : ''}}">
-  <view class="business-heading" wx:if="{{!requestId && !selectedFreight}}"><view><text class="business-title">采购管理</text><text class="muted">{{user.displayName}}</text></view><view class="heading-actions" wx:if="{{!requestId && activeView !== 'reports'}}"><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{loading}}">刷新</button></view></view>
+<view class="page {{workspaceTabbarVisible ? 'has-workspace-tabbar' : ''}}{{user.testWorkbenchEnabled && !user.testIdentity ? 'has-test-workbench-root' : ''}} {{requestId && selectedRequest && (activeView === 'rejections' || selectedRequest.status === 'PENDING_PROCUREMENT' || selectedRequest.status === 'PENDING_FUNDS') || activeView === 'freight' && selectedFreight.status === 'PENDING' ? 'has-action-bar' : ''}}">
+  <view class="business-heading" wx:if="{{!requestId && !selectedFreight}}"><view><text class="business-title">采购管理</text><text class="muted">{{user.displayName}}</text></view><view class="heading-actions" wx:if="{{!requestId && activeView !== 'reports' && (activeView !== 'orders' || recordType === 'requests')}}"><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{loading}}">刷新</button></view></view>
   <view class="workspace-loading" wx:if="{{loading}}">正在更新采购信息</view>
   <view wx:if="{{error && !detailError}}" class="error-banner"><text>{{error}}</text><button class="ghost" bindtap="loadWork" disabled="{{loading || confirming || reallocating || freightReviewing}}">刷新数据</button></view>
   <view wx:if="{{pendingCommand}}" class="command-recovery"><view><text class="row-title">{{pendingCommand.title}} · 结果待确认</text><text class="muted">{{pendingCommand.dateText}}</text></view><button class="secondary" bindtap="recoverCommand" disabled="{{recovering || confirming || reallocating || freightReviewing}}" loading="{{recovering}}">确认提交结果</button></view>
@@ -17,8 +17,8 @@
       <block wx:if="{{taskType === 'requests'}}">
         <view class="procurement-task" wx:for="{{procurementTasks}}" wx:key="id" data-id="{{item.id}}" bindtap="openTaskRequest">
           <view class="procurement-task-top"><text class="procurement-store">{{item.storeName || '门店订货'}}</text><text class="procurement-amount">¥{{labels.money(item.salesGoodsAmount)}}</text></view>
-          <view class="procurement-task-meta"><document-no value="{{item.requestNo}}" /><text>{{item.submittedText}}</text></view>
-          <view class="procurement-task-bottom"><text class="procurement-state">待采购确认</text><text class="procurement-command">查看并确认 ›</text></view>
+          <view class="procurement-task-meta"><view>下货单号 <document-no value="{{item.requestNo}}" /></view><text>{{item.submittedText}}</text></view>
+          <view class="procurement-task-bottom"><text class="procurement-state {{item.status === 'PENDING_FUNDS' ? 'warning' : ''}}">{{item.status === 'PENDING_FUNDS' ? '资金待补足' : '待采购确认'}}</text><text class="procurement-command">查看并处理 ›</text></view>
         </view>
       </block>
       <block wx:if="{{taskType === 'rejections'}}">
@@ -75,8 +75,8 @@
     </view>
   </view>
 
-  <view class="card" wx:if="{{(activeView === 'orders' || activeView === 'rejections') && requestId}}">
-    <view class="task-detail-toolbar"><text class="back-link" bindtap="backToList">‹ {{taskOrigin ? '返回待办' : '返回列表'}}</text><text>{{activeView === 'rejections' && rejectedOrderId ? '拒单改派' : selectedRequest.supplierOrders.length ? '采购确认结果' : '下货单确认'}}</text></view>
+  <view class="card" wx:if="{{(activeView === 'orders' || activeView === 'rejections') && requestId && !editingRequest}}">
+    <view class="task-detail-toolbar"><text class="back-link" bindtap="backToList">‹ {{sourceOrderReturn ? '返回订单详情' : taskOrigin ? '返回待办' : '返回列表'}}</text><text>{{activeView === 'rejections' && rejectedOrderId ? '拒单改派' : selectedRequest.supplierOrders.length ? '采购确认结果' : '下货单确认'}}</text></view>
     <block wx:if="{{selectedRequest}}">
     <view class="task-detail-identity"><text class="request-store">{{selectedRequest.storeName || '门店下货单'}}</text><text class="status {{selectedRequest.paymentStatus === 'SHORTFALL' ? 'tone-warn' : selectedRequest.status === 'CONFIRMED' ? 'tone-brand' : ''}}">{{labels.status(selectedRequest.status)}}</text></view>
     <view class="task-detail-metric"><text>订货金额</text><text>¥{{labels.money(selectedRequest.salesGoodsAmount)}}</text></view>
@@ -87,9 +87,10 @@
       <view class="section-head"><text class="card-title">{{activeView === 'rejections' && rejectedOrderId ? '被拒订单' : '供应商订单'}}</text><text class="order-count" wx:if="{{!rejectedOrderId}}">已生成 {{selectedRequest.supplierOrders.length}} 张</text></view>
       <view class="price-details-control"><text>供应商价格明细</text><switch aria-label="显示供应商价格明细" checked="{{showPriceDetails}}" bindchange="togglePriceDetails" color="#167e5a" /></view>
       <view wx:for="{{selectedRequest.supplierOrders}}" wx:key="id" class="row" wx:if="{{activeView !== 'rejections' || !rejectedOrderId || item.id === rejectedOrderId}}">
+        <button class="secondary" data-id="{{item.id}}" bindtap="openGeneratedOrder">跟进此订单 ›</button>
         <view class="supplier-order-toggle pressable" data-id="{{item.id}}" bindtap="toggleSupplierOrder">
         <view class="row-title"><text>{{item.supplierName || '供应商订单'}}</text><text class="status {{item.status === 'REJECTED' ? 'tone-danger' : item.status === 'COMPLETED' ? 'tone-brand' : 'tone-warn'}}">{{labels.status(item.status)}}</text></view>
-        <view class="muted">{{item.supplierOrderNo}}</view>
+        <view class="muted">订单号 <document-no value="{{item.supplierOrderNo}}" /></view>
         <view class="muted">履约 {{labels.status(item.fulfillmentStatus)}}</view>
         <view class="supplier-order-overview"><text>{{item.itemsError ? '商品清单待加载' : item.items.length + ' 种商品'}} · ¥{{labels.money(item.salesGoodsAmount)}}</text><text class="supplier-order-fold">{{expandedOrders[item.id] ? '收起商品 ∧' : '查看商品 ›'}}</text></view>
         </view>
@@ -105,7 +106,7 @@
       </view>
       <view class="original-request-toggle" bindtap="toggleOriginalRequest"><text>{{showOriginalRequest ? '收起原下货单' : '查看原下货单'}}</text><text>{{showOriginalRequest ? '∧' : '›'}}</text></view>
     </view>
-    <view class="task-decision-section" wx:if="{{activeView === 'rejections' && rejectedOrderId && selectedRequest}}">
+    <view class="task-decision-section" wx:if="{{activeView === 'rejections' && canReallocate && rejectedOrderId && selectedRequest}}">
       <text class="card-title">重新分配</text>
       <view class="field"><text class="field-label">目标供应商</text><picker range="{{suppliers}}" range-key="name" value="{{supplierIndex}}" bindchange="selectSupplier" disabled="{{reallocating || detailing || recovering || pendingCommand || detailError}}"><view class="picker-value">{{supplierIndex >= 0 ? suppliers[supplierIndex].name : '选择供应商'}} ▾</view></picker></view>
       <view class="field"><text class="field-label">改派原因</text><textarea value="{{reallocateReason}}" data-field="reallocateReason" bindinput="onInput" maxlength="300" placeholder="填写改派原因" auto-height disabled="{{reallocating}}" /></view>
@@ -113,15 +114,63 @@
     <view class="muted" wx:if="{{detailing}}">正在更新明细</view>
     <view class="error-banner" wx:if="{{detailError}}"><text>{{detailError}}</text><button class="ghost" bindtap="loadRequestDetail" disabled="{{detailing || confirming || reallocating || recovering || pendingCommand}}">重试</button></view>
     <view class="funding-shortfall" wx:if="{{selectedRequest.status === 'PENDING_FUNDS'}}"><text>待补资金 ¥{{labels.money(selectedRequest.shortfallAmount)}}</text></view>
-    <view class="button-row action-bar" wx:if="{{activeView === 'orders' && selectedRequest.status === 'PENDING_PROCUREMENT' && !selectedRequest.supplierOrders.length}}">
-      <button class="primary" disabled="{{confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" loading="{{confirming}}" bindtap="confirmRequest">确认并生成订单</button>
+    <view class="request-decision-panel" wx:if="{{activeView === 'orders' && rejectingRequest}}">
+      <text class="card-title">采购拒单</text>
+      <text class="muted">拒单后整张下货单取消，并释放尚未扣除的资金占用。</text>
+      <view class="field"><text class="field-label">拒单原因</text><textarea value="{{rejectReason}}" data-field="rejectReason" bindinput="editInput" maxlength="500" placeholder="必填，请说明拒单原因" auto-height disabled="{{confirming}}" /></view>
     </view>
-    <view class="button-row action-bar" wx:if="{{activeView === 'rejections' && selectedRequest && rejectedOrderId}}">
+    <view class="button-row action-bar" wx:if="{{activeView === 'orders' && (selectedRequest.status === 'PENDING_PROCUREMENT' || selectedRequest.status === 'PENDING_FUNDS') && !selectedRequest.supplierOrders.length && !editingRequest && !rejectingRequest}}">
+      <button wx:if="{{canReallocate}}" class="secondary action-secondary" disabled="{{confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" bindtap="startRequestEdit">调整下货单</button>
+      <button class="danger action-secondary" disabled="{{confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" bindtap="startRequestReject">拒单</button>
+      <button class="primary" disabled="{{selectedRequest.status === 'PENDING_FUNDS' || confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" loading="{{confirming}}" bindtap="confirmRequest">确认并生成订单</button>
+    </view>
+    <view class="button-row action-bar" wx:if="{{activeView === 'orders' && rejectingRequest}}">
+      <button class="secondary action-secondary" disabled="{{confirming}}" bindtap="cancelRequestReject">取消</button>
+      <button class="danger" loading="{{confirming}}" disabled="{{confirming || !rejectReason}}" bindtap="rejectRequest">确认拒单</button>
+    </view>
+    <view class="button-row action-bar" wx:if="{{activeView === 'rejections' && canReallocate && selectedRequest && rejectedOrderId}}">
       <button class="primary" loading="{{reallocating}}" disabled="{{!targetSupplierId || !rejectedOrderId || reallocating || detailing || recovering || pendingCommand || detailError}}" bindtap="reallocateRequest">确认改派</button>
     </view>
   </view>
 
-  <view class="card" wx:if="{{(activeView === 'orders' || activeView === 'rejections') && requestId && selectedRequest && (!selectedRequest.supplierOrders.length || showOriginalRequest)}}">
+  <view class="request-catalog" wx:if="{{activeView === 'orders' && requestId && selectedRequest && editingRequest}}">
+    <view class="request-catalog-tools">
+      <view class="request-edit-title"><text class="card-title">调整下货单</text><text>操作方式与门店下单一致；已选 {{editItems.length}} 种商品</text></view>
+      <view class="request-search"><icon type="search" size="18" color="#6e7975" /><input placeholder="搜索商品名称或编码" value="{{editSearch}}" bindinput="onEditSearch" confirm-type="search" /></view>
+    </view>
+    <view class="request-catalog-browser">
+      <scroll-view scroll-y class="request-category-sidebar"><view wx:for="{{editCategories}}" wx:key="id" class="request-category-option {{editPrimaryCategoryId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="chooseEditPrimaryCategory">{{item.name}}</view></scroll-view>
+      <view class="request-catalog-content">
+        <scroll-view wx:if="{{editSubcategories.length}}" scroll-x class="request-subcategories"><view><text wx:for="{{editSubcategories}}" wx:key="id" class="{{editCategoryId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="chooseEditCategory">{{item.name}}</text></view></scroll-view>
+        <view class="request-catalog-count"><text>可调整商品</text><text>{{visibleEditProducts.length}} 件</text></view>
+        <scroll-view scroll-y class="request-product-scroll">
+          <view class="request-product-list">
+            <view class="request-product-row" wx:for="{{visibleEditProducts}}" wx:key="id">
+              <view class="request-product-media"><view class="cart-badge" wx:if="{{item.cartQuantity !== '0'}}">{{item.cartQuantity}}</view><image wx:if="{{item.imageUrl}}" src="{{item.imageUrl}}" mode="aspectFit" /><view class="request-missing-image" wx:else data-id="{{item.id}}" bindtap="retryEditProductImage"><icon type="info" size="18" color="#87928c" /><text>{{item.imageFailed ? '重试' : item.imageFileId ? '加载中' : '无图'}}</text></view></view>
+              <view class="request-product-main">
+                <view class="request-product-heading"><text class="request-product-name">{{item.name}}</text><text class="request-product-price">{{item.displaySalesPrice ? '¥' + labels.money(item.displaySalesPrice) : '暂无有效价格'}}<text wx:if="{{item.displaySalesPrice}}">/{{item.displayUnitName}}</text></text></view>
+                <text class="request-product-meta" wx:if="{{item.specification}}">{{item.specification}}</text>
+                <picker wx:if="{{item.cartQuantity !== '0'}}" range="{{item.suppliers}}" range-key="supplierName" value="{{item.supplierIndex}}" data-id="{{item.id}}" bindchange="changeEditSupplier" disabled="{{savingRequest}}"><view class="request-supplier-select">供应商：{{item.supplierName}} ▾</view></picker>
+                <view class="request-price-detail" wx:if="{{item.cartQuantity !== '0'}}"><text>供应商价格 ¥{{labels.money(item.displaySupplyPrice)}} / {{item.displayUnitName}}</text></view>
+                <view class="request-product-bottom"><text wx:if="{{item.maxRequestedQuantity}}">最多 {{item.maxRequestedQuantity}} {{item.displayUnitName}}（门店原下单量）</text><text wx:else>起订 {{item.minOrderQty}} · 倍数 {{item.orderMultiple}}</text><view class="quantity-stepper"><button class="step-button" data-id="{{item.id}}" data-direction="-1" bindtap="stepEditProduct" disabled="{{item.cartQuantity === '0' || savingRequest}}">−</button><input class="quantity-input" type="digit" value="{{item.cartQuantity}}" data-id="{{item.id}}" bindblur="setEditProductQuantity" disabled="{{savingRequest}}" /><button class="step-button step-add" data-id="{{item.id}}" data-direction="1" bindtap="stepEditProduct" disabled="{{!item.canOrder || item.atOriginalMaximum || savingRequest}}">+</button></view></view>
+              </view>
+            </view>
+            <view class="empty-state" wx:if="{{!visibleEditProducts.length}}">没有匹配的商品</view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+    <view class="request-edit-summary"><view bindtap="toggleEditCart"><text>已选 {{editItems.length}} 种 ›</text><text>预估 ¥{{labels.money(editEstimatedAmount)}}</text></view><text>提交时自动校验数量、价格、供应商和资金</text></view>
+  </view>
+
+  <view class="button-row action-bar" wx:if="{{activeView === 'orders' && editingRequest}}">
+    <button class="secondary action-secondary" disabled="{{savingRequest}}" bindtap="cancelRequestEdit">取消调整</button>
+    <button class="primary" loading="{{savingRequest}}" disabled="{{savingRequest || !editItems.length}}" bindtap="confirmRequestEdit">确认并生成订单</button>
+  </view>
+
+  <view class="sheet-mask" wx:if="{{editingRequest && editCartOpen}}" bindtap="toggleEditCart"><view class="request-cart-sheet" catchtap="keepEditCartOpen"><view class="section-head"><text class="card-title">下货清单 · {{editItems.length}} 种</text><button class="ghost" bindtap="toggleEditCart">关闭</button></view><scroll-view scroll-y><view class="request-cart-line" wx:for="{{editItems}}" wx:key="productId"><view><text>{{item.productName}}</text><text class="muted">{{item.quantity}} {{item.unitName}} · {{item.supplierIndex >= 0 ? item.suppliers[item.supplierIndex].supplierName : '请选择有效供应商'}}</text></view><button class="ghost" data-id="{{item.productId}}" bindtap="removeEditCartItem">移除</button></view></scroll-view><view class="request-cart-total">预估 ¥{{labels.money(editEstimatedAmount)}}</view></view></view>
+
+  <view class="card" wx:if="{{(activeView === 'orders' || activeView === 'rejections') && requestId && selectedRequest && !editingRequest && (!selectedRequest.supplierOrders.length || showOriginalRequest)}}">
     <view class="product-list-toolbar"><text class="card-title">{{selectedRequest.supplierOrders.length ? '原下货单清单' : '待审核商品清单'}}</text><view class="price-details-control"><text>价格明细</text><switch aria-label="显示价格明细" checked="{{showPriceDetails}}" bindchange="togglePriceDetails" color="#167e5a" /></view></view>
     <view class="procurement-summary"><text>{{selectedRequest.items.length}} 种商品</text><text wx:if="{{showPriceDetails}}">供应商金额 ¥{{labels.money(selectedRequest.supplyGoodsAmount)}}</text></view>
     <view class="list">
@@ -131,7 +180,7 @@
         <view class="assignment-group-totals" wx:if="{{showPriceDetails}}"><text>销售金额 ¥{{labels.money(group.salesAmount)}}</text><text>供应商金额 ¥{{labels.money(group.supplyAmount)}}</text></view>
         <view wx:for="{{group.items}}" wx:key="id" class="row assignment-product">
           <product-card product="{{item}}" bind:retryimage="retryProductImage"><view class="row-title assignment-product-heading"><text>{{item.productName}}</text>
-            <picker wx:if="{{item.options.length > 1 || (item.options.length && item.supplierIndex < 0)}}" class="assignment-change" range="{{item.options}}" range-key="supplierName" value="{{item.supplierIndex >= 0 ? item.supplierIndex : 0}}" data-id="{{item.id}}" bindchange="changeItemSupplier" disabled="{{confirming || reallocating || detailing || pendingCommand || detailError}}"><view class="assignment-change-label {{confirming || reallocating || detailing || pendingCommand || detailError ? 'is-disabled' : ''}}">更换供应商</view></picker>
+            <picker wx:if="{{canReallocate && (item.options.length > 1 || (item.options.length && item.supplierIndex < 0))}}" class="assignment-change" range="{{item.options}}" range-key="supplierName" value="{{item.supplierIndex >= 0 ? item.supplierIndex : 0}}" data-id="{{item.id}}" bindchange="changeItemSupplier" disabled="{{confirming || reallocating || detailing || pendingCommand || detailError}}"><view class="assignment-change-label {{confirming || reallocating || detailing || pendingCommand || detailError ? 'is-disabled' : ''}}">更换供应商</view></picker>
           </view>
           <view class="product-line-summary"><text class="product-quantity">订货 {{item.quantity}} {{item.unitName || item.unitSnapshot.salesUnitName || ''}}</text><text class="product-line-amount">¥{{labels.money(item.salesLineAmount)}}</text></view>
           <view class="assignment-price-grid" wx:if="{{showPriceDetails}}">
@@ -157,7 +206,9 @@
     </view>
   </view>
 
-  <view class="card" wx:if="{{activeView === 'orders' && !requestId}}">
+  <view wx:if="{{activeView === 'orders' && !requestId}}" class="document-tabs"><text class="{{recordType === 'orders' ? 'is-active' : ''}}" data-type="orders" bindtap="changeRecordType">订单</text><text class="{{recordType === 'requests' ? 'is-active' : ''}}" data-type="requests" bindtap="changeRecordType">下货记录</text></view>
+  <order-center id="formal-orders" active="{{activeView === 'orders' && !requestId && recordType === 'orders'}}" revision="{{orderRevision}}" mode="purchaser" can-reallocate="{{canReallocate}}" bind:source="openOrderSource" bind:reallocate="openOrderReallocation" />
+  <view class="card" wx:if="{{activeView === 'orders' && !requestId && recordType === 'requests'}}">
     <view id="order-list-controls" class="order-list-controls sticky-bar">
     <input class="business-search" value="{{search}}" bindinput="onSearch" confirm-type="search" placeholder="搜索门店或下货单号" />
     <scroll-view scroll-x show-scrollbar="{{false}}" class="order-status-scroll">

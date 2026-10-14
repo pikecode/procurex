@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { assignedStoreIds, storeFilter, type BusinessScope } from '../auth/store-scope.js';
 import { lockCatalog } from '../catalog/catalog-registries.service.js';
-import { readTransactionUnits, readUnitDisplayNames, requireTransactionUnitsUnchanged, transactionUnitView } from '../catalog/transaction-units.js';
+import { readTransactionUnits, readUnitDisplayNames, readUnitSnapshot, requireTransactionUnitsUnchanged, transactionUnitView } from '../catalog/transaction-units.js';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import { evaluateStoredValueFunding } from '../../../../packages/domain/src/funding.js';
@@ -289,15 +289,16 @@ export class PurchaseRequestsService {
   }
 
   async previewReplacement(id: string, expectedVersion: number, items: ReplacePurchaseRequestItemInput[]) {
-    const { request, pricedItems, salesGoodsAmount, supplyGoodsAmount } = await this.prepareReplacement(id, expectedVersion, items);
+    const { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding } = await this.prepareReplacement(id, expectedVersion, items);
     return { requestId: request.id, templateId: request.templateId, version: request.version, items: pricedItems,
-      totals: { salesGoodsAmount: salesGoodsAmount.toFixed(2), supplyGoodsAmount: supplyGoodsAmount.toFixed(2) } };
+      totals: { salesGoodsAmount: salesGoodsAmount.toFixed(2), supplyGoodsAmount: supplyGoodsAmount.toFixed(2) },
+      funding: { canConfirm: funding.canConfirm } };
   }
 
   private async prepareReplacement(id: string, expectedVersion: number, items: ReplacePurchaseRequestItemInput[]) {
     const request = await this.database.client.purchaseRequest.findUnique({
       where: { id },
-      include: { supplierOrders: true },
+      include: { supplierOrders: true, items: { select: { productId: true, quantity: true, unitSnapshot: true } } },
     });
     if (!request) {
       throw new NotFoundException({
@@ -379,13 +380,32 @@ export class PurchaseRequestsService {
           });
         }
 
+        const originalItem = request.items.find(original => original.productId === item.productId);
+        const originalSnapshot = readUnitSnapshot(originalItem?.unitSnapshot);
+        const originalRequestedQuantity = new Decimal(originalSnapshot?.originalRequestedQuantity ?? originalItem?.quantity ?? quantity);
+        if (originalItem && quantity.gt(originalRequestedQuantity)) {
+          throw new ConflictException({
+            code: 'PURCHASE_REQUEST_QUANTITY_EXCEEDS_ORIGINAL',
+            message: '采购调整数量不能超过门店原下单数量',
+            details: {
+              productId: item.productId,
+              originalQuantity: originalRequestedQuantity.toString(),
+              requestedQuantity: quantity.toString(),
+            },
+          });
+        }
+
         const price = await this.pricingService.getEffectivePrice(item.productId, item.supplierId, new Date(), request.templateId);
         if ((item.expectedPriceVersionId !== undefined && item.expectedPriceVersionId !== price.versionId)
           || (item.expectedSupplyPriceVersionId !== undefined && item.expectedSupplyPriceVersionId !== price.supplyVersionId)) {
           throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Approved price changed; preview again' });
         }
         return {
-          unitSnapshot: units.unitSnapshot,
+          unitSnapshot: originalItem ? {
+            ...units.unitSnapshot,
+            originalRequestedQuantity: originalRequestedQuantity.toString(),
+            originalInputQuantity: originalSnapshot?.originalInputQuantity ?? originalSnapshot?.inputQuantity,
+          } : units.unitSnapshot,
           productId: item.productId,
           supplierId: item.supplierId,
           priceVersionId: price.versionId,
@@ -401,8 +421,30 @@ export class PurchaseRequestsService {
 
     const salesGoodsAmount = pricedItems.reduce((sum, item) => sum.plus(item.salesLineAmount), toMoney(0));
     const supplyGoodsAmount = pricedItems.reduce((sum, item) => sum.plus(item.supplyLineAmount), toMoney(0));
-    const account = await this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } });
-    const funding = evaluateStoredValueFunding(toMoney(account?.balance ?? 0), salesGoodsAmount);
+    const [account, allocations, terms] = await Promise.all([
+      this.database.client.storeAccount.findUnique({ where: { storeId: request.storeId } }),
+      this.database.client.fundingAllocation.findMany({ where: { requestId: request.id, active: true } }),
+      resolveSettlementTerms(this.database.client, request.templateId, [...new Set(pricedItems.map(item => item.supplierId))], request.storeId),
+    ]);
+    const storedRequired = pricedItems.filter(item => terms.get(item.supplierId)?.mode === 'STORED_VALUE')
+      .reduce((sum, item) => sum.plus(item.salesLineAmount), toMoney(0));
+    const creditTargets = new Map<string, Decimal>();
+    for (const item of pricedItems.filter(row => terms.get(row.supplierId)?.mode === 'CREDIT')) {
+      creditTargets.set(item.supplierId, (creditTargets.get(item.supplierId) ?? toMoney(0)).plus(item.salesLineAmount));
+    }
+    const priorStored = allocations.filter(item => item.method === 'STORED_VALUE').reduce((sum, item) => sum.plus(item.netPaid), toMoney(0));
+    const priorReserved = allocations.reduce((sum, item) => sum.plus(item.reservedAmount), toMoney(0));
+    const priorCredit = allocations.reduce((sum, item) => sum.plus(item.creditOutstanding), toMoney(0));
+    const storedAvailable = toMoney(account?.balance ?? 0).minus(account?.reservedBalance ?? 0).plus(priorStored).plus(priorReserved);
+    const creditRequired = [...creditTargets].reduce((sum, [supplierId, target]) => {
+      const paid = allocations.filter(item => item.method === 'CREDIT' && item.supplierId === supplierId).reduce((total, item) => total.plus(item.netPaid), toMoney(0));
+      return sum.plus(Decimal.max(0, target.minus(paid)));
+    }, toMoney(0));
+    const creditAvailable = toMoney(account?.creditLimit ?? 0).minus(account?.creditUsed ?? 0).plus(priorCredit);
+    const storedFunding = evaluateStoredValueFunding(storedAvailable, storedRequired);
+    const creditShortfall = Decimal.max(0, creditRequired.minus(creditAvailable));
+    const funding = { ...storedFunding, canConfirm: storedFunding.canConfirm && creditShortfall.isZero(),
+      shortfallAmount: storedFunding.shortfallAmount.plus(creditShortfall) };
     return { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding };
   }
 
@@ -932,7 +974,13 @@ export class PurchaseRequestsService {
     );
   }
 
-  async confirm(id: string, expectedVersion: number, transaction?: Prisma.TransactionClient): Promise<ConfirmPurchaseRequestResult> {
+  async confirmAdjusted(id: string, expectedVersion: number, items: ReplacePurchaseRequestItemInput[], transaction?: Prisma.TransactionClient): Promise<ConfirmPurchaseRequestResult> {
+    const prepared = await this.prepareReplacement(id, expectedVersion, items);
+    return this.confirm(id, expectedVersion, transaction, prepared.pricedItems);
+  }
+
+  async confirm(id: string, expectedVersion: number, transaction?: Prisma.TransactionClient,
+    adjustedItems?: Awaited<ReturnType<PurchaseRequestsService['prepareReplacement']>>['pricedItems']): Promise<ConfirmPurchaseRequestResult> {
     const client = transaction ?? (this.database.client as Prisma.TransactionClient);
     const request = await client.purchaseRequest.findUnique({
       where: { id },
@@ -969,8 +1017,9 @@ export class PurchaseRequestsService {
       });
     }
 
-    const supplierGroups = new Map<string, typeof request.items>();
-    for (const item of request.items) {
+    const effectiveItems = adjustedItems ?? request.items;
+    const supplierGroups = new Map<string, Array<(typeof effectiveItems)[number]>>();
+    for (const item of effectiveItems) {
       const group = supplierGroups.get(item.supplierId) ?? [];
       group.push(item);
       supplierGroups.set(item.supplierId, group);
@@ -981,7 +1030,9 @@ export class PurchaseRequestsService {
     const execute = async (tx: Prisma.TransactionClient) => {
       await lockFundingRequest(tx, request.storeId, request.id);
       await requireRequestVersion(tx, request.id, expectedVersion);
-      await synchronizeRequestFunding(tx, request.id, { requireFull: true });
+      const effectiveSalesGoodsAmount = effectiveItems.reduce((sum, item) => sum.plus(item.salesLineAmount), new Decimal(0));
+      await synchronizeRequestFunding(tx, request.id, { requireFull: true,
+        ...(adjustedItems ? { effectiveItems, effectiveSalesGoodsAmount } : {}) });
       const snapshotItems = await tx.requestItem.findMany({ where: { requestId: request.id } });
       const createdOrderIds: string[] = [];
 
@@ -994,9 +1045,9 @@ export class PurchaseRequestsService {
             requestId: request.id,
             storeId: request.storeId,
             supplierId,
-            settlementMode: snapshotItems.find(item => item.supplierId === supplierId)?.settlementModeSnapshot ?? suppliersById.get(supplierId)!.defaultSettlementMode,
+            settlementMode: adjustedItems ? suppliersById.get(supplierId)!.defaultSettlementMode : snapshotItems.find(item => item.supplierId === supplierId)?.settlementModeSnapshot ?? suppliersById.get(supplierId)!.defaultSettlementMode,
             requiresFreightSnapshot: suppliersById.get(supplierId)!.requiresFreight,
-            settlementCycleSnapshot: snapshotItems.find(item => item.supplierId === supplierId)?.settlementCycleSnapshot ?? (await resolveSettlementTerms(tx, request.templateId, [supplierId], request.storeId)).get(supplierId)!.cycle,
+            settlementCycleSnapshot: adjustedItems ? (await resolveSettlementTerms(tx, request.templateId, [supplierId], request.storeId)).get(supplierId)!.cycle : snapshotItems.find(item => item.supplierId === supplierId)?.settlementCycleSnapshot ?? (await resolveSettlementTerms(tx, request.templateId, [supplierId], request.storeId)).get(supplierId)!.cycle,
             status: SupplierOrderStatus.PUSHED,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             pushedAt: new Date(),
