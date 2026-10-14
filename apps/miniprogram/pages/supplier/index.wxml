@@ -37,6 +37,13 @@
         </product-card>
       </view>
       <view class="list shipment-history" wx:if="{{orderMode === 'detail' && selectedOrder.shipments.length}}"><view class="detail-section-heading"><text>发货记录</text><text>{{selectedOrder.shipments.length}} 批</text></view><view class="row shipment-history-row" wx:for="{{selectedOrder.shipments}}" wx:key="id"><view class="row-title"><text>{{item.kind === 'INITIAL' ? '首次发货' : '补发'}} · {{item.shipmentNo}}</text><text class="status tone-muted">第 {{item.revision}} 版</text></view><view class="shipment-products">{{item.productPreview}}</view><view class="muted">{{item.shippedDate}} · {{item.currentReceiptRevision ? '门店已提交收货' : '待门店收货'}}</view><button wx:if="{{item.canRevise}}" class="secondary" data-id="{{item.id}}" bindtap="beginShipmentRevision">修订本批数量</button></view></view>
+      <block wx:if="{{orderMode === 'detail'}}" wx:for="{{selectedOrder.shipments}}" wx:key="id"><view class="field" wx:if="{{item.note || item.evidenceFiles.length}}"><text class="field-label">{{item.shipmentNo}} · 发货说明与凭证</text><text wx:if="{{item.note}}" class="muted">{{item.note}}</text><evidence-files files="{{item.evidenceFiles}}" /></view></block>
+      <view class="field" wx:if="{{selectedOrder.canShip && orderMode === 'ship' && shipmentNeedsExplanation}}">
+        <text class="field-label">发货数量调整说明或凭证 *</text><text class="muted">本次未足量发货，请填写说明或上传凭证，至少一项</text>
+        <textarea maxlength="500" value="{{revisionNote}}" data-field="revisionNote" bindinput="onInput" disabled="{{shipping || revisionUploading}}" placeholder="例如：库存不足，本次先发3件，余量后续补发" />
+        <evidence-files files="{{revisionEvidence}}" /><view class="button-row"><button class="secondary" bindtap="chooseRevisionEvidence" loading="{{revisionUploading}}" disabled="{{shipping || revisionUploading || revisionEvidence.length >= 6}}">上传凭证</button></view>
+        <button class="ghost" wx:for="{{revisionEvidence}}" wx:key="id" data-index="{{index}}" bindtap="removeRevisionEvidence" disabled="{{shipping || revisionUploading}}">移除凭证 {{index + 1}}</button>
+      </view>
       <view class="field" wx:if="{{selectedOrder.canShip && orderMode === 'ship'}}"><text class="field-label">配送方式</text><picker class="freight-picker" range="{{deliveryChoices}}" range-key="label" value="{{deliveryIndex}}" disabled="{{shipping || rejecting}}" bindchange="selectDelivery"><view class="picker-value">{{deliveryChoices[deliveryIndex].label}}</view></picker></view>
       <view class="field" wx:if="{{selectedOrder.canShip && orderMode === 'ship' && deliveryIndex === 1}}"><text class="field-label">物流单号</text><input maxlength="100" value="{{trackingNo}}" data-field="trackingNo" disabled="{{shipping || rejecting}}" bindinput="onInput" placeholder="选填" /></view>
       <view class="field" wx:if="{{selectedOrder.canReject && orderMode === 'reject'}}"><text class="field-label">拒单原因</text><input value="{{rejectionReason}}" data-field="rejectionReason" disabled="{{rejecting}}" bindinput="onInput" placeholder="请输入无法供货的原因" /></view>
@@ -45,7 +52,7 @@
     <view class="button-row action-bar" wx:if="{{selectedOrder && orderMode !== 'revise' && (selectedOrder.canShip || selectedOrder.canReject)}}">
       <button wx:if="{{orderMode === 'detail' && selectedOrder.canShip}}" class="primary" data-mode="ship" bindtap="changeOrderMode">去发货</button>
       <button wx:if="{{orderMode === 'detail' && selectedOrder.canReject}}" class="ghost action-secondary" data-mode="reject" bindtap="changeOrderMode">无法供货</button>
-      <button wx:if="{{orderMode === 'ship'}}" class="primary" disabled="{{shipping || rejecting || freightRequesting}}" loading="{{shipping}}" bindtap="shipOrder">确认发货</button>
+      <button wx:if="{{orderMode === 'ship'}}" class="primary" disabled="{{shipping || rejecting || freightRequesting || revisionUploading}}" loading="{{shipping}}" bindtap="shipOrder">确认发货</button>
       <button wx:if="{{orderMode === 'reject'}}" class="danger" disabled="{{rejecting || shipping}}" loading="{{rejecting}}" bindtap="rejectOrder">确认拒单</button>
     </view>
     <view wx:if="{{orderMode === 'ship' && selectedOrder.canShip && selectedOrder.canRequestFreight}}" class="freight-request">

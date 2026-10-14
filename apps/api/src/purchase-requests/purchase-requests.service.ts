@@ -1028,6 +1028,19 @@ export class PurchaseRequestsService {
     const suppliersById = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
 
     const execute = async (tx: Prisma.TransactionClient) => {
+      if (adjustedItems) {
+        await lockPricePublication(tx);
+        await lockCatalog(tx, true);
+        for (const item of adjustedItems) {
+          await requireTransactionUnitsUnchanged(tx, item.productId, item.unitSnapshot);
+          const allowed = await tx.templateItem.findFirst({ where: { templateId: request.templateId, productId: item.productId, isEnabled: true,
+            product: { isActive: true }, suppliers: { some: { supplierId: item.supplierId, supplier: { status: 'ACTIVE', isArchived: false } } } } });
+          const enabled = await tx.supplierProduct.findUnique({ where: { supplierId_productId: { supplierId: item.supplierId, productId: item.productId } }, select: { supplyEnabled: true } });
+          if (!allowed || !enabled?.supplyEnabled) throw new ConflictException({ code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT', message: 'Supplier eligibility changed; preview again' });
+          const price = await effectivePriceVersion(tx, item.productId, item.supplierId, new Date(), request.templateId);
+          if (price?.id !== item.priceVersionId || price?.supplyVersionId !== item.supplyPriceVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Effective price changed; preview again' });
+        }
+      }
       await lockFundingRequest(tx, request.storeId, request.id);
       await requireRequestVersion(tx, request.id, expectedVersion);
       const effectiveSalesGoodsAmount = effectiveItems.reduce((sum, item) => sum.plus(item.salesLineAmount), new Decimal(0));

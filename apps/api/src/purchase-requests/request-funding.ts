@@ -64,16 +64,20 @@ export async function loadFundingPaymentStates(tx: Prisma.TransactionClient, all
 }
 
 export async function refreshRequestPaymentSummary(tx: Prisma.TransactionClient, requestId: string): Promise<void> {
-  const request = await tx.purchaseRequest.findUniqueOrThrow({ where: { id: requestId }, include: { supplierOrders: { include: { shipments: true } } } });
+  const request = await tx.purchaseRequest.findUniqueOrThrow({ where: { id: requestId }, include: { supplierOrders: { include: { shipments: true, items: true } } } });
   const allocations = await tx.fundingAllocation.findMany({ where: { AND: [requestFundingWhere(requestId), {
     OR: [{ supplierOrderId: null }, { supplierOrder: { status: { notIn: ['REJECTED', 'CANCELED'] } } }],
   }] } });
   const states = await loadFundingPaymentStates(tx, allocations);
   const paidAmount = allocations.reduce((sum, row) => sum.plus(states.get(row.id)!.effectivePaid), new Decimal(0));
-  const freight = request.supplierOrders.filter(order => order.status !== 'REJECTED' && order.status !== 'CANCELED')
+  const activeOrders = request.supplierOrders.filter(order => order.status !== 'REJECTED' && order.status !== 'CANCELED');
+  const freight = activeOrders
     .reduce((sum, order) => sum.plus(order.shipments.reduce((total, shipment) => total.plus(shipment.freight), new Decimal(0))), new Decimal(0));
+  const executionGoodsAmount = request.supplierOrders.length
+    ? activeOrders.reduce((sum, order) => sum.plus(order.items.reduce((total, item) => total.plus(item.salesLineAmount), new Decimal(0))), new Decimal(0))
+    : new Decimal(request.salesGoodsAmount);
   await tx.purchaseRequest.update({ where: { id: requestId }, data: {
-    paidAmount, paymentStatus: paidAmount.gte(new Decimal(request.salesGoodsAmount).plus(freight)) ? 'PAID' : 'UNPAID',
+    paidAmount, paymentStatus: paidAmount.gte(executionGoodsAmount.plus(freight)) ? 'PAID' : 'UNPAID',
   } });
 }
 
@@ -81,19 +85,25 @@ export async function refreshRequestPaymentSummary(tx: Prisma.TransactionClient,
 type EffectiveFundingItem = { supplierId: string; salesLineAmount: Decimal.Value; settlementModeSnapshot?: SettlementMode | null; settlementCycleSnapshot?: string | null };
 
 export async function synchronizeRequestFunding(tx: Prisma.TransactionClient, requestId: string, options: { requireFull?: boolean; sourceId?: string; priceAdjustmentId?: string; initial?: boolean; deferCreditShortfall?: boolean; excludeShipmentFreightId?: string; effectiveItems?: EffectiveFundingItem[]; effectiveSalesGoodsAmount?: Decimal.Value } = {}): Promise<RequestFundingResult> {
-  const request = await tx.purchaseRequest.findUniqueOrThrow({ where: { id: requestId }, include: { items: true, supplierOrders: { include: { shipments: true } } } });
+  const request = await tx.purchaseRequest.findUniqueOrThrow({ where: { id: requestId }, include: { items: true, supplierOrders: { include: { shipments: true, items: true } } } });
   const account = await tx.storeAccount.findUniqueOrThrow({ where: { storeId: request.storeId } });
   const creditMovement = (id: string, before: Decimal.Value, after: Decimal.Value) => recordCreditMovement(tx, {
     accountId: account.id, fundingAllocationId: id, before, after,
     sourceType: options.initial ? 'PURCHASE_REQUEST' : 'ADJUSTMENT', sourceId: options.sourceId ?? requestId,
   });
-  const terms = await resolveSettlementTerms(tx, request.templateId, [...new Set(request.items.map(item => item.supplierId))], request.storeId);
   const targets = new Map<string, { method: 'STORED_VALUE' | 'CREDIT'; amount: Decimal; orderId?: string }>();
-  const fundingItems = options.effectiveItems ?? request.items;
+  const activeOrders = request.supplierOrders.filter(order => order.status !== 'REJECTED' && order.status !== 'CANCELED');
+  const orderItems: EffectiveFundingItem[] = activeOrders.flatMap(order => order.items.map(item => ({
+    supplierId: order.supplierId, salesLineAmount: item.salesLineAmount,
+    settlementModeSnapshot: order.settlementMode, settlementCycleSnapshot: order.settlementCycleSnapshot,
+  })));
+  const fundingItems: EffectiveFundingItem[] | typeof request.items = options.effectiveItems ?? (request.supplierOrders.length ? orderItems : request.items);
+  const terms = await resolveSettlementTerms(tx, request.templateId, [...new Set(fundingItems.map(item => item.supplierId))], request.storeId);
+  const usingOriginalRequestItems = !options.effectiveItems && !request.supplierOrders.length;
   for (const item of fundingItems) {
     const policy = terms.get(item.supplierId)!;
     const mode = item.settlementModeSnapshot ?? policy.mode;
-    if (!options.effectiveItems && (!item.settlementModeSnapshot || !item.settlementCycleSnapshot)) await tx.requestItem.update({ where: { id: (item as typeof request.items[number]).id }, data: {
+    if (usingOriginalRequestItems && (!item.settlementModeSnapshot || !item.settlementCycleSnapshot)) await tx.requestItem.update({ where: { id: (item as typeof request.items[number]).id }, data: {
       settlementModeSnapshot: mode, settlementCycleSnapshot: item.settlementCycleSnapshot ?? policy.cycle,
     } });
     if (request.status === 'CANCELED' || (mode !== 'STORED_VALUE' && mode !== 'CREDIT')) continue;
@@ -261,10 +271,13 @@ export async function synchronizeRequestFunding(tx: Prisma.TransactionClient, re
     accountId: account.id, requestId, direction: cashDelta.gt(0) ? 'DEBIT' : 'CREDIT', amount: cashDelta.abs(), balanceAfter: updatedAccount.balance,
     sourceType: options.initial ? 'PURCHASE_REQUEST' : 'ADJUSTMENT', sourceId: options.sourceId ?? randomUUID(), note: 'Purchase request funding reconciliation',
   } });
-  const totalFreight = request.supplierOrders.filter(order => order.status !== 'REJECTED' && order.status !== 'CANCELED')
+  const totalFreight = activeOrders
     .reduce((sum, order) => sum.plus(order.shipments.reduce((freight, shipment) => shipment.id === options.excludeShipmentFreightId ? freight : freight.plus(shipment.freight), new Decimal(0))), new Decimal(0));
+  const executionSalesGoodsAmount = options.effectiveSalesGoodsAmount ?? (request.supplierOrders.length
+    ? orderItems.reduce((sum, item) => sum.plus(item.salesLineAmount), new Decimal(0))
+    : request.salesGoodsAmount);
   await tx.purchaseRequest.update({ where: { id: requestId }, data: {
-    paidAmount, shortfallAmount, paymentStatus: paidAmount.gte(new Decimal(options.effectiveSalesGoodsAmount ?? request.salesGoodsAmount).plus(totalFreight)) ? 'PAID' : 'UNPAID',
+    paidAmount, shortfallAmount, paymentStatus: paidAmount.gte(new Decimal(executionSalesGoodsAmount).plus(totalFreight)) ? 'PAID' : 'UNPAID',
   } });
   return { canConfirm, paidAmount, shortfallAmount, storedRequired, storedPaid, storedReserved, available: new Decimal(updatedAccount.balance).minus(updatedAccount.reservedBalance) };
 }

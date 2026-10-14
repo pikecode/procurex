@@ -38,7 +38,7 @@ add(purchaser, [
   'PUT /templates/:id/stores', 'PUT /templates/:id/items', 'PUT /templates/:id/settlement-cycles', 'PUT /templates/:id/configuration',
   'PUT /templates/:id/supplier-settings', 'PUT /templates/:id/supplier-settings/:supplierId', 'DELETE /templates/:id/supplier-settings/:supplierId',
   'POST /price-changes', 'POST /prices/quote', 'POST /prices/impact-preview', 'POST /jobs/:id/process',
-  'PATCH /purchase-requests/:id/items', 'POST /purchase-requests/:id/items-preview',
+  'PATCH /purchase-requests/:id/items', 'POST /purchase-requests/:id/items-preview', 'POST /purchase-requests/:id/confirm-adjusted',
   'POST /purchase-requests/:id/reassign-preview', 'POST /purchase-requests/:id/assign',
   'POST /purchase-requests/:id/reallocate',
   'POST /supplier-orders/:id/reconcile-funding',

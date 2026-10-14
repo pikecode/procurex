@@ -1,5 +1,7 @@
 # 接口详细设计
 
+`POST /supplier-orders/{id}/shipments` 支持 `note`（最多500字）及 `evidenceFileIds`（最多6张 SHIPMENT_ADJUSTMENT 图片）。累计未满足订购数量时两者至少一项，否则返回 `SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED`。凭证归属、用途、就绪状态及未使用状态在发货事务内校验；材料保存于首版 ShipmentRevision，并随订单发货记录返回。
+
 ## 2026-10-14 门店删除
 
 `DELETE /stores/{id}` 仅 ADMIN，JSON 请求体包含 `expectedVersion`。成功返回 `{ id, deleted: true }`。门店不存在返回 `STORE_NOT_FOUND`，版本变化返回 `VERSION_CONFLICT`，存在模板、账户、订单、用户范围等关联返回 `STORE_IN_USE` 并说明原因。事务内锁定门店、检查所有直接关联、删除并记录审计；不会级联删除业务数据。

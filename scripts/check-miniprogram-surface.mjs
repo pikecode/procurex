@@ -220,7 +220,8 @@ assertIncludes(purchaserJs, '/reports/order-amounts', 'purchaser order amount re
 assertIncludes(purchaserJs, '/reports/product-quantities', 'purchaser product quantity report');
 assert.ok(!purchaserJs.includes('/reports/profit'), 'procurement mini-program must not request profit reports');
 assertIncludes(purchaserWxml, '确认并生成订单', 'purchaser confirmation screen');
-assertIncludes(purchaserWxml, 'changeItemSupplier', 'purchaser per-item supplier assignment');
+assertIncludes(purchaserWxml, 'changeEditSupplier', 'purchaser execution-adjustment supplier assignment');
+assert.ok(!purchaserWxml.includes('bindchange="changeItemSupplier"'), 'original request detail must remain read-only');
 assertIncludes(purchaserWxml, '重试', 'purchaser request detail failure recovery');
 assert.ok(!purchaserWxml.includes('刷新明细'), 'purchaser detail must not expose redundant refresh action');
 assertIncludes(purchaserWxml, '下货单确认', 'purchaser request detail screen');

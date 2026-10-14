@@ -57,6 +57,7 @@ Page({
     supplierOrderId: '',
     selectedOrder: null,
     shipmentItems: [],
+    shipmentNeedsExplanation: false,
     revisionShipment: null,
     revisionItems: [],
     revisionNote: '',
@@ -330,7 +331,7 @@ Page({
   },
 
   changeOrderMode(event) {
-    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting) return;
+    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting || this.data.revisionUploading) return;
     const mode = event.currentTarget.dataset.mode;
     if (mode === 'ship' && !this.data.selectedOrder?.canShip) return;
     if (mode === 'reject' && !this.data.selectedOrder?.canReject) return;
@@ -353,13 +354,17 @@ Page({
   },
 
   async chooseRevisionEvidence() {
-    if (this.data.revising || this.data.revisionUploading || this.data.revisionEvidence.length >= 6) return;
+    if (this.data.shipping || this.data.revising || this.data.revisionUploading || this.data.revisionEvidence.length >= 6) return;
+    const orderId = this.data.supplierOrderId, actorId = api.currentUser()?.id;
+    const active = () => this.data.supplierOrderId === orderId && api.currentUser()?.id === actorId;
     this.setData({ revisionUploading: true, error: '' });
     try {
       const files = await api.chooseEvidence(6 - this.data.revisionEvidence.length);
+      if (!active()) return;
       const evidence = [...this.data.revisionEvidence];
       for (const file of files) {
         const uploaded = await api.uploadEvidence(file.path, 'SHIPMENT_ADJUSTMENT');
+        if (!active()) return;
         evidence.push({ ...uploaded, path: file.path });
         this.setData({ revisionEvidence: evidence });
       }
@@ -368,7 +373,7 @@ Page({
   },
 
   removeRevisionEvidence(event) {
-    if (this.data.revising || this.data.revisionUploading) return;
+    if (this.data.shipping || this.data.revising || this.data.revisionUploading) return;
     this.setData({ revisionEvidence: this.data.revisionEvidence.filter((_, index) => index !== Number(event.currentTarget.dataset.index)) });
   },
 
@@ -431,7 +436,7 @@ Page({
   async loadOrder(id) {
     if (this.data.shipping || this.data.rejecting || this.data.freightRequesting) return;
     const actorId = this.data.user.id;
-    this.setData({ supplierOrderId: id, selectedOrder: null, shipmentItems: [], orderLoading: true, freightIndex: 0, freightChoices: [], error: '', orderMode: 'detail', trackingNo: '', rejectionReason: '', freightRequestAmount: '', freightRequestReason: '', result: null });
+    this.setData({ supplierOrderId: id, selectedOrder: null, shipmentItems: [], orderLoading: true, freightIndex: 0, freightChoices: [], error: '', orderMode: 'detail', trackingNo: '', rejectionReason: '', freightRequestAmount: '', freightRequestReason: '', result: null, revisionNote: '', revisionEvidence: [], shipmentNeedsExplanation: false });
     try {
       const selectedOrder = await api.request(`/supplier-orders/${id}`);
       if (this.data.supplierOrderId !== id || this.data.user.id !== actorId) return;
@@ -492,6 +497,7 @@ Page({
     if (this.data.shipping || this.data.rejecting) return;
     this.setData({ shipmentItems: this.data.shipmentItems.map(item => item.id === event.currentTarget.dataset.id
       ? { ...item, shipQuantity: event.detail.value, shipQuantityError: shipmentQuantityError(event.detail.value, item.remainingQuantity, item.unitName) } : item) });
+    this.setData({ shipmentNeedsExplanation: this.data.shipmentItems.some(item => Number(item.shipQuantity || 0) < Number(quantity.remaining(item.quantity || item.remainingQuantity, item.shippedQuantity || '0'))) });
   },
 
   selectDelivery(event) {
@@ -743,7 +749,7 @@ Page({
   },
 
   async shipOrder() {
-    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting || !this.data.selectedOrder) return;
+    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting || this.data.revisionUploading || !this.data.selectedOrder) return;
     this.setData({ shipping: true, error: '', result: null });
     try {
       const order = this.data.selectedOrder;
@@ -756,6 +762,8 @@ Page({
         return { orderItemId: item.id, shipQuantity, permanentlyReduceQuantity: '0', ...(gapAllocations.length ? { gapAllocations } : {}) };
       }).filter(item => Number(item.shipQuantity) > 0);
       if (!items.length) throw new Error('至少填写一项发货数量');
+      const shortShipment = this.data.shipmentItems.some(item => Number(item.shipQuantity || 0) < Number(quantity.remaining(item.quantity, item.shippedQuantity)));
+      if (shortShipment && !this.data.revisionNote.trim() && !this.data.revisionEvidence.length) throw new Error('发货数量少于订购数量，请填写说明或上传凭证');
       const freight = this.data.freightChoices[this.data.freightIndex] || { amount: '0.00' };
       const preview = await api.request(`/supplier-orders/${this.data.supplierOrderId}/shipment-preview`, {
         method: 'POST',
@@ -766,6 +774,8 @@ Page({
         data: {
           expectedVersion: order.version,
           items,
+          ...(this.data.revisionNote.trim() ? { note: this.data.revisionNote.trim() } : {}),
+          ...(this.data.revisionEvidence.length ? { evidenceFileIds: this.data.revisionEvidence.map(file => file.id) } : {}),
           freight: freight.amount,
           ...(freight.id ? { freightConfirmationId: freight.id } : {}),
           deliveryMode: this.data.deliveryChoices[this.data.deliveryIndex].value,

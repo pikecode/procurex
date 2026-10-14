@@ -74,6 +74,22 @@ test('purchaser draft preview, item edits and assignments guard approved prices 
     assert.equal(replayEdit.status, 200); assert.deepEqual(replayEdit.body.data, edited.body.data);
     assert.equal(await db.auditLog.count({ where: { actorUserId: user.id, action: 'purchase-request.items.replace' } }), 1);
     assert.equal((await db.auditLog.findFirstOrThrow({ where: { actorUserId: user.id, action: 'purchase-request.items.replace' } })).reason, 'Draft edit');
+    const immutableRequest = (await call('/purchase-requests', 'POST', { storeId: store.id, items: [{ productId: products[0]!.id, quantity: '5' }] }, `${prefix}immutable-create`)).body.data;
+    const adjustedBody = { expectedVersion: immutableRequest.version, reason: 'Reduce generated order only',
+      items: [{ productId: products[0]!.id, supplierId: suppliers[1]!.id, quantity: '2', unitId: unit.id }] };
+    const adjustedPreview = (await call(`/purchase-requests/${immutableRequest.id}/items-preview`, 'POST', adjustedBody)).body.data;
+    const adjustedConfirm = await call(`/purchase-requests/${immutableRequest.id}/confirm-adjusted`, 'POST', { ...adjustedBody,
+      items: [{ ...adjustedBody.items[0], expectedPriceVersionId: adjustedPreview.items[0].priceVersionId,
+        expectedSupplyPriceVersionId: adjustedPreview.items[0].supplyPriceVersionId }] }, `${prefix}immutable-confirm`);
+    assert.equal(adjustedConfirm.status, 201);
+    const immutableStored = await db.purchaseRequest.findUniqueOrThrow({ where: { id: immutableRequest.id }, include: { items: true, supplierOrders: { include: { items: true } } } });
+    assert.equal(immutableStored.salesGoodsAmount.toFixed(2), '50.00', 'the store request total remains immutable');
+    assert.equal(immutableStored.items[0]!.quantity.toString(), '5', 'the store request quantity remains immutable');
+    assert.equal(immutableStored.items[0]!.supplierId, suppliers[0]!.id, 'the store request supplier remains immutable');
+    assert.equal(immutableStored.supplierOrders[0]!.supplierId, suppliers[1]!.id, 'the generated order uses the adjusted supplier');
+    assert.equal(immutableStored.supplierOrders[0]!.salesGoodsAmount.toFixed(2), '24.00');
+    assert.equal(immutableStored.supplierOrders[0]!.items[0]!.quantity.toString(), '2', 'only the generated order uses the purchaser adjustment');
+    assert.equal(await db.auditLog.count({ where: { entityId: immutableRequest.id, action: 'purchase-request.confirm-adjusted' } }), 1);
     const changed = edited.body.data;
     const assignment = { expectedVersion: changed.version, supplierId: suppliers[1]!.id, itemIds: changed.items.map((item: any) => item.id) };
     const ineligible = await call(`/purchase-requests/${request.id}/reassign-preview`, 'POST', { ...assignment, supplierId: suppliers[2]!.id });
@@ -139,20 +155,6 @@ test('purchaser draft preview, item edits and assignments guard approved prices 
     await db.supplier.update({ where: { id: suppliers[0]!.id }, data: { status: 'ACTIVE' } });
     const confirm = await call(`/purchase-requests/${request.id}/confirm`, 'POST', { expectedVersion: assigned.body.data.version }, `${prefix}confirm`);
     assert.equal(confirm.status, 201); assert.equal(await db.supplierOrder.count({ where: { requestId: request.id } }), 1);
-    const immutableRequest = (await call('/purchase-requests', 'POST', { storeId: store.id, items: [{ productId: products[0]!.id, quantity: '5' }] }, `${prefix}immutable-create`)).body.data;
-    const adjustedBody = { expectedVersion: immutableRequest.version, reason: 'Reduce generated order only',
-      items: [{ productId: products[0]!.id, supplierId: suppliers[0]!.id, quantity: '2', unitId: unit.id }] };
-    const adjustedPreview = (await call(`/purchase-requests/${immutableRequest.id}/items-preview`, 'POST', adjustedBody)).body.data;
-    const adjustedConfirm = await call(`/purchase-requests/${immutableRequest.id}/confirm-adjusted`, 'POST', { ...adjustedBody,
-      items: [{ ...adjustedBody.items[0], expectedPriceVersionId: adjustedPreview.items[0].priceVersionId,
-        expectedSupplyPriceVersionId: adjustedPreview.items[0].supplyPriceVersionId }] }, `${prefix}immutable-confirm`);
-    assert.equal(adjustedConfirm.status, 201);
-    const immutableStored = await db.purchaseRequest.findUniqueOrThrow({ where: { id: immutableRequest.id }, include: { items: true, supplierOrders: { include: { items: true } } } });
-    assert.equal(immutableStored.salesGoodsAmount.toFixed(2), '50.00', 'the store request total remains immutable');
-    assert.equal(immutableStored.items[0]!.quantity.toString(), '5', 'the store request quantity remains immutable');
-    assert.equal(immutableStored.supplierOrders[0]!.salesGoodsAmount.toFixed(2), '20.00');
-    assert.equal(immutableStored.supplierOrders[0]!.items[0]!.quantity.toString(), '2', 'only the generated order uses the purchaser adjustment');
-    assert.equal(await db.auditLog.count({ where: { entityId: immutableRequest.id, action: 'purchase-request.confirm-adjusted' } }), 1);
     const finalOrders = (await call(`/purchase-requests/${request.id}`)).body.data.supplierOrders;
     assert.ok(finalOrders.every((order: any) => order.supplierId === suppliers[1]!.id), 'final orders must use the adjusted supplier');
     assert.equal((await call(`/purchase-requests/${request.id}/assign`, 'POST', { ...assignment, expectedVersion: assigned.body.data.version + 1, expectedPrices: currentPrices }, `${prefix}afterconfirm`)).status, 409);

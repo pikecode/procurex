@@ -52,6 +52,8 @@ type ReconcileFundingBody = {
 };
 
 type ShipmentPreviewBody = {
+  note?: unknown;
+  evidenceFileIds?: unknown;
   deliveryMode?: unknown;
   expectedVersion?: unknown;
   items?: unknown;
@@ -488,6 +490,20 @@ function parseShipmentPreviewBody(
     issues.push(...validateUuid('freightConfirmationId', body.freightConfirmationId));
   }
   const trackingNo = optionalTrimmedString('trackingNo', body.trackingNo, issues);
+  let note: string | undefined;
+  if (body.note !== undefined) {
+    if (typeof body.note !== 'string' || body.note.trim().length > 500) issues.push({ field: 'note', code: 'INVALID_SHIPMENT_NOTE', message: '说明最多500字' });
+    else note = body.note.trim() || undefined;
+  }
+  let evidenceFileIds: string[] | undefined;
+  if (body.evidenceFileIds !== undefined) {
+    if (!Array.isArray(body.evidenceFileIds) || !body.evidenceFileIds.length || body.evidenceFileIds.length > 6) issues.push({ field: 'evidenceFileIds', code: 'INVALID_EVIDENCE', message: '最多上传6张凭证' });
+    else {
+      evidenceFileIds = body.evidenceFileIds.filter((id): id is string => typeof id === 'string');
+      body.evidenceFileIds.forEach((id, index) => issues.push(...validateUuid(`evidenceFileIds.${index}`, id)));
+      if (new Set(evidenceFileIds).size !== evidenceFileIds.length) issues.push({ field: 'evidenceFileIds', code: 'INVALID_EVIDENCE', message: '凭证不能重复' });
+    }
+  }
   if (body.deliveryMode !== undefined && body.deliveryMode !== DeliveryMode.SELF && body.deliveryMode !== DeliveryMode.LOGISTICS) {
     issues.push({ field: 'deliveryMode', code: 'INVALID_DELIVERY_MODE', message: '请选择自配送或物流' });
   }
@@ -502,6 +518,8 @@ function parseShipmentPreviewBody(
       freight: freight as string,
       freightConfirmationId: typeof body.freightConfirmationId === 'string' ? body.freightConfirmationId : undefined,
       trackingNo,
+      note,
+      evidenceFileIds,
     },
   };
 }

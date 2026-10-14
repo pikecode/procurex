@@ -1815,10 +1815,11 @@ test('purchaser detail retries failures and blocks commands until refreshed', as
   const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
   assert.ok(!markup.includes('刷新明细'));
   assert.ok(markup.includes('wx:if="{{detailError}}"'));
-  assert.ok(markup.includes('更换供应商'));
+  assert.ok(!markup.includes('bindchange="changeItemSupplier"'), 'the original request detail must not expose a mutating supplier shortcut');
+  assert.ok(markup.includes('bindchange="changeEditSupplier"'), 'supplier changes belong to the execution-adjustment flow');
   assert.ok(!markup.includes('class="field-label">供货供应商'));
   assert.ok(!markup.includes('item.options[item.supplierIndex].supplierName'));
-  assert.ok(markup.includes('item.options.length > 1'));
+  assert.ok(markup.includes('供应商：{{item.supplierName}}'));
   assert.ok(markup.includes('待补资金 ¥'));
 });
 
@@ -2243,7 +2244,10 @@ test('supplier partial shipment uses remaining quantities and omits zero rows', 
   });
   await supplier.loadOrder('o1'); assert.equal(supplier.data.shipmentItems[0].shipQuantity, '0.1');
   supplier.onShipQuantity(input('i2', '0')); await supplier.shipOrder();
+  assert.equal(payload, undefined); assert.match(supplier.data.error, /说明或上传凭证/);
+  supplier.data.revisionNote = '库存不足，分批发货'; await supplier.shipOrder();
   assert.equal(payload.expectedVersion, 9);
+  assert.equal(payload.note, '库存不足，分批发货');
   assert.deepEqual(plain(payload.items), [{ orderItemId: 'i1', shipQuantity: '0.1', permanentlyReduceQuantity: '0' }]);
   payload = null; await supplier.loadOrder('o1'); supplier.onShipQuantity(input('i1', '0.2'));
   await supplier.shipOrder(); assert.equal(payload, null); assert.match(supplier.data.error, /超过/);
@@ -2257,7 +2261,7 @@ test('supplier immediately explains shipment quantity above available amount', a
   assert.equal(supplier.data.shipmentItems[0].shipQuantityError, '本次最多可发 3 箱');
   const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
   assert.match(markup, /shipment-quantity-error/);
-  assert.match(markup, /disabled="\{\{shipping \|\| rejecting \|\| freightRequesting\}\}" loading="\{\{shipping\}\}" bindtap="shipOrder"/);
+  assert.match(markup, /disabled="\{\{shipping \|\| rejecting \|\| freightRequesting \|\| revisionUploading\}\}" loading="\{\{shipping\}\}" bindtap="shipOrder"/);
   assert.equal(requests, 0);
 });
 

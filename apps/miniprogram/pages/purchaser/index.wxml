@@ -179,9 +179,7 @@
         <view class="assignment-group-heading"><text>{{group.supplierName}}</text><text class="muted">{{group.itemCount}} 种商品</text></view>
         <view class="assignment-group-totals" wx:if="{{showPriceDetails}}"><text>销售金额 ¥{{labels.money(group.salesAmount)}}</text><text>供应商金额 ¥{{labels.money(group.supplyAmount)}}</text></view>
         <view wx:for="{{group.items}}" wx:key="id" class="row assignment-product">
-          <product-card product="{{item}}" bind:retryimage="retryProductImage"><view class="row-title assignment-product-heading"><text>{{item.productName}}</text>
-            <picker wx:if="{{canReallocate && (item.options.length > 1 || (item.options.length && item.supplierIndex < 0))}}" class="assignment-change" range="{{item.options}}" range-key="supplierName" value="{{item.supplierIndex >= 0 ? item.supplierIndex : 0}}" data-id="{{item.id}}" bindchange="changeItemSupplier" disabled="{{confirming || reallocating || detailing || pendingCommand || detailError}}"><view class="assignment-change-label {{confirming || reallocating || detailing || pendingCommand || detailError ? 'is-disabled' : ''}}">更换供应商</view></picker>
-          </view>
+          <product-card product="{{item}}" bind:retryimage="retryProductImage"><view class="row-title assignment-product-heading"><text>{{item.productName}}</text></view>
           <view class="product-line-summary"><text class="product-quantity">订货 {{item.quantity}} {{item.unitName || item.unitSnapshot.salesUnitName || ''}}</text><text class="product-line-amount">¥{{labels.money(item.salesLineAmount)}}</text></view>
           <view class="assignment-price-grid" wx:if="{{showPriceDetails}}">
             <view><text class="price-label">销售价格</text><text class="price-value">¥{{labels.money(item.salesUnitPrice)}}<text class="price-unit"> / {{item.unitName || item.unitSnapshot.salesUnitName || ''}}</text></text></view>

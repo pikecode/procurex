@@ -122,6 +122,8 @@ export type ReconcileSupplierOrderFundingResult = {
 };
 
 export type ShipmentPreviewInput = {
+  note?: string;
+  evidenceFileIds?: string[];
   deliveryMode?: DeliveryMode;
   items: ShipmentPreviewItemInput[];
   freight: string;
@@ -255,7 +257,7 @@ export class SupplierOrdersService {
         shipments: { orderBy: { sequence: 'asc' }, include: {
           items: { include: { orderItem: true, gapAllocations: true } },
           receipts: { where: { isCurrent: true }, include: { items: { include: { discrepancy: { include: { returnRecord: { select: { id: true } } } } } } } },
-          revisions: { orderBy: { revision: 'desc' }, take: 1, select: { revision: true } },
+          revisions: { orderBy: { revision: 'desc' }, take: 1, include: { evidenceFiles: { select: { id: true, filename: true, mimeType: true, sizeBytes: true } } } },
         } },
       },
     });
@@ -286,6 +288,8 @@ export class SupplierOrdersService {
           item.discrepancy?.status === DiscrepancyStatus.OPEN ||
           (item.discrepancy?.status === DiscrepancyStatus.RESOLVED && Boolean(item.discrepancy.returnRecord))));
         return { ...toShipmentView(shipment), revision: shipment.revisions[0]?.revision ?? 0,
+          note: shipment.revisions[0]?.note ?? null,
+          evidenceFiles: (shipment.revisions[0]?.evidenceFiles || []).map(file => ({ ...file, sizeBytes: file.sizeBytes.toString() })),
           currentReceiptRevision: currentReceipt?.revision ?? 0, canRevise };
       }),
     };
@@ -472,6 +476,12 @@ export class SupplierOrdersService {
     const sequence = order.shipments.length + 1;
     const kind = sequence === 1 ? ShipmentKind.INITIAL : ShipmentKind.REPLENISHMENT;
     const hasRemainingAfter = preview.items.some((item) => new Decimal(item.remainingQuantityAfter).gt(0));
+    const quantities = new Map(input.items.map(item => [item.orderItemId, new Decimal(item.shipQuantity)]));
+    const shortShipment = order.items.some(item => new Decimal(item.shippedQuantity).plus(quantities.get(item.id) ?? 0).lt(item.quantity));
+    if (shortShipment && !input.note?.trim() && !input.evidenceFileIds?.length) {
+      throw new ConflictException({ code: 'SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED', message: '发货数量少于订购数量，请填写说明或上传凭证' });
+    }
+    if (input.note && input.note.trim().length > 500) throw new ConflictException({ code: 'INVALID_SHIPMENT_NOTE', message: '说明最多500字' });
 
     const execute = async (tx: Prisma.TransactionClient) => {
       await lockPricePublication(tx);
@@ -557,8 +567,13 @@ export class SupplierOrdersService {
       }
 
       const initialRevision = await tx.shipmentRevision.create({ data: {
-        shipmentId: created.id, revision: 1, expectedOrderVersion: expectedVersion, actorUserId: actorUserId ?? null,
+        shipmentId: created.id, revision: 1, expectedOrderVersion: expectedVersion, actorUserId: actorUserId ?? null, note: input.note?.trim() || null,
       } });
+      if (input.evidenceFileIds?.length) {
+        if (!actorUserId || input.evidenceFileIds.length > 6 || new Set(input.evidenceFileIds).size !== input.evidenceFileIds.length) throw new ConflictException({ code: 'SHIPMENT_EVIDENCE_INVALID', message: '最多上传6张不同凭证' });
+        const attached = await tx.fileObject.updateMany({ where: { id: { in: input.evidenceFileIds }, ownerId: actorUserId, purpose: 'SHIPMENT_ADJUSTMENT', status: 'READY', shipmentRevisionId: null, receiptId: null, paymentId: null }, data: { shipmentRevisionId: initialRevision.id } });
+        if (attached.count !== input.evidenceFileIds.length) throw new ConflictException({ code: 'SHIPMENT_EVIDENCE_INVALID', message: '发货凭证无效、已使用或不属于当前账号' });
+      }
       const createdShipmentItems = await tx.shipmentItem.findMany({ where: { shipmentId: created.id } });
       if (createdShipmentItems.length) await tx.shipmentRevisionItem.createMany({ data: createdShipmentItems.map(item => ({
         shipmentRevisionId: initialRevision.id, shipmentItemId: item.id, quantity: item.quantity,
