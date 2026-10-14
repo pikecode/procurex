@@ -113,7 +113,7 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
       columns={[{ title: '申请编号', dataIndex: 'requestNo', width: 205 }, { title: '门店', dataIndex: 'storeName', width: 170 },
         { title: '状态', dataIndex: 'status', width: 125, render: value => <Tag>{workflowName(value)}</Tag> }, { title: '储值/挂账入账', dataIndex: 'paymentStatus', width: 130, render: accountFundingName },
         { title: '销售金额', dataIndex: 'salesGoodsAmount', width: 110 }, { title: '资金缺口', dataIndex: 'shortfallAmount', width: 110 },
-        { title: '提交时间', dataIndex: 'submittedAt', width: 165, render: workflowTime }, { title: '操作', width: 64, fixed: 'right', render: (_, row) => <Tooltip title="查看下货单"><Button type="text" aria-label={`查看${row.requestNo}`} icon={<Eye size={16} />} onClick={() => setParams({ request: row.id })} /></Tooltip> }]} />
+        { title: '提交时间', dataIndex: 'submittedAt', width: 165, render: workflowTime }, { title: '操作', align: 'right' as const, width: 88, fixed: 'right', render: (_, row) => <RowActions ariaLabel={row.requestNo} actions={[{ key: 'view', label: '查看', icon: <Eye size={15} />, onClick: () => setParams({ request: row.id }) }]} /> }]} />
     {canWrite && <RejectionTodos revision={revision} onOpen={openRejection} />}
     {canWrite && selected && rejectedOrder && <RejectionEditor key={`${selected}:${rejectedOrder}`} requestId={selected} orderId={rejectedOrder} command={command} canRecover={canRecoverWorkflow(user, command.pending?.path)} onClose={closeRejection} onSaved={() => { setParams({ request: selected }); refresh(); }} />}
     <Modal title={detail?.requestNo || '下货单详情'} open={Boolean(selected) && !(canWrite && rejectedOrder)} onCancel={() => { if (!command.busy && !mode && !assigning) setParams({}); }} footer={null} width={1000} closable={!mode && !assigning && !command.busy}>
@@ -176,3 +176,4 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
     </Modal>
   </>;
 }
+import { RowActions } from '../components/RowActions';

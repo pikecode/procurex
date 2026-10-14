@@ -41,12 +41,12 @@ export default function Directories({ user, kind }: { user: User; kind: 'groups'
           { title: '开户银行', dataIndex: 'bankName', width: 180 }, { title: '开户户名', dataIndex: 'accountName', width: 200 }, { title: '账号', dataIndex: 'accountNo', width: 230 },
         ]),
         { title: '状态', dataIndex: 'status', width: 90, render: value => <Status value={value} /> },
-        ...(writable ? [{ title: '操作', width: 90, fixed: 'right' as const, render: (_: unknown, item: Group & CollectionAccount) => <div className="row-actions">
-          <Tooltip title="编辑"><Button type="text" aria-label={`编辑${item.name}`} icon={<Pencil size={16} />} onClick={() => edit(item)} /></Tooltip>
-          {groups && <Popconfirm title={`删除分组“${item.name}”？`} onConfirm={() => remove(item)} disabled={item.storeCount > 0}>
-            <Tooltip title={item.storeCount ? '分组仍有关联门店' : '删除分组'}><Button type="text" danger disabled={item.storeCount > 0} aria-label={`删除${item.name}`} icon={<Trash2 size={16} />} /></Tooltip>
-          </Popconfirm>}
-        </div> }] : []),
+        ...(writable ? [{ title: '操作', align: 'right' as const, width: 140, fixed: 'right' as const, render: (_: unknown, item: Group & CollectionAccount) => <RowActions ariaLabel={item.name} actions={[
+          { key: 'edit', label: '编辑', icon: <Pencil size={15} />, onClick: () => edit(item) },
+          groups && { key: 'delete', label: '删除', icon: <Trash2 size={15} />, danger: true,
+            disabled: item.storeCount > 0, disabledReason: item.storeCount ? '分组仍有关联门店' : undefined,
+            confirm: { title: `删除分组“${item.name}”？` }, onClick: () => remove(item) },
+        ]} /> }] : []),
       ]} />
     <Modal title={`${editing ? '编辑' : '新增'}${groups ? '分组' : '收款账户'}`} open={editing !== undefined} onCancel={() => { if (!saving) setEditing(undefined); }} onOk={save}
       okText="保存" cancelText="取消" confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving} width={groups ? 440 : 600}>
@@ -65,3 +65,4 @@ export default function Directories({ user, kind }: { user: User; kind: 'groups'
     </Modal>
   </>;
 }
+import { RowActions } from '../components/RowActions';

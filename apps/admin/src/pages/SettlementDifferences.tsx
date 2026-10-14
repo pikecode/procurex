@@ -63,7 +63,7 @@ function Workspace({ user, scoped, supplier }: { user: User; scoped: boolean; su
     <ListPage title="结算差异" rows={list.rows.filter(inScope).map(row => ({ ...row, name: row.supplierOrderNo }))} loading={list.loading || checking} error={list.error} reload={list.reload} filters={[{ key: 'processingStatus', label: '处置状态', options: ['PENDING_DISPOSAL', 'DISPOSED'].map(value => ({ value, label: names[value] })) }, { key: 'type', label: '差异类型', options: ['RETURN_SHORTAGE', 'PRICE_CHANGE', 'ACCEPTED_SHORTAGE', 'PERMANENT_REDUCTION', 'FREIGHT_CHANGE', 'ORDER_REJECTION'].map(value => ({ value, label: names[value] })) }]} columns={[
       { title: '供应商订单', dataIndex: 'supplierOrderNo', width: 190 }, { title: '差异类型', dataIndex: 'type', render: value => names[value] || value }, { title: '方向', dataIndex: 'direction', render: value => names[value] || value },
       { title: '原账期 / 记账账期', render: (_, row) => <>{row.originalPeriodKey}<small>{row.actualPeriodKey}</small></> }, { title: '差额', dataIndex: 'adjustmentAmount', align: 'right' }, { title: '待返还 / 抵扣', dataIndex: 'pendingReturnOrOffsetAmount', align: 'right' }, { title: '状态', dataIndex: 'processingStatus', render: value => names[value] || value },
-      { title: '操作', fixed: 'right', width: 60, render: (_, row) => <Tooltip title="查看差异"><Button type="text" aria-label={`查看差异${row.id}`} icon={<Eye size={16} />} disabled={checking} onClick={() => open(row.id)} /></Tooltip> },
+      { title: '操作', fixed: 'right', align: 'right' as const, width: 88, render: (_, row) => <RowActions ariaLabel={row.id} actions={[{ key: 'view', label: '查看', icon: <Eye size={15} />, disabled: checking, onClick: () => open(row.id) }]} /> },
     ]} />
     <Modal open={Boolean(detail)} title="结算差异明细" width={780} onCancel={() => { if (!checking && !command.busy) { sequence.current++; setDetail(undefined); setDisposal(undefined); } }} maskClosable={false} closable={!checking && !command.busy} keyboard={!checking && !command.busy} footer={detail && <div className="actions workflow-actions">
       {canCreate(detail) && <Button type="primary" icon={<Plus size={16} />} disabled={blocked} onClick={() => { setError(''); form.resetFields(); form.setFieldsValue({ method: 'OFFLINE_RETURN', businessDate: new Date().toLocaleDateString('sv-SE') }); setEditing(true); }}>登记处置</Button>}
@@ -86,3 +86,4 @@ function Workspace({ user, scoped, supplier }: { user: User; scoped: boolean; su
     </Modal>
   </>;
 }
+import { RowActions } from '../components/RowActions';

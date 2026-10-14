@@ -116,14 +116,16 @@ export default function Suppliers({ user }: { user: User }) {
       { title: '供应商名称', dataIndex: 'name', width: 320 },
       { title: '供应商类别', dataIndex: 'supplierType', width: 180, render: value => supplierTypes.find(item => item.value === value)?.label || '-' },
       { title: '结算周期', dataIndex: 'defaultSettlementCycle', width: 180, render: (value, row) => ['SUPPLIER_TERM', 'COMPANY_TERM'].includes(row.defaultSettlementMode) ? cycle.find(item => item.value === value)?.label || value || '-' : '-' },
-      { title: '操作', fixed: 'right', width: 120, render: (_, row) => <div className="row-actions">
-        <Tooltip title={writable ? '编辑' : '查看'}><Button type="text" aria-label={`${writable ? '编辑' : '查看'}${row.name}`} disabled={row.isArchived} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip>
-        <Tooltip title="关联商品"><Button type="text" aria-label={`关联商品${row.name}`} disabled={row.isArchived} icon={<Link2 size={16} />} onClick={() => openLinks(row)} /></Tooltip>
-        {writable && <Popconfirm title="删除供应商？" description="删除后解除商品及模板关联，历史订单不受影响，仍显示该供应商。" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={async () => {
-          try { await request(`/suppliers/${row.id}/archive`, { method: 'POST', body: { expectedVersion: row.version } }); data.reload(); message.success('供应商已删除'); }
-          catch (failure) { message.error((failure as Error).message); }
-        }}><Tooltip title="删除供应商" styles={{ root: { pointerEvents: 'none' } }}><Button type="text" danger disabled={row.isArchived} aria-label={`删除${row.name}`} icon={<Trash2 size={16} />} /></Tooltip></Popconfirm>}
-      </div> },
+      { title: '操作', fixed: 'right', align: 'right' as const, width: 116, render: (_, row) => <RowActions ariaLabel={row.name} actions={[
+     { key: 'edit', label: writable ? '编辑' : '查看', icon: <Pencil size={15} />, disabled: row.isArchived, disabledReason: row.isArchived ? '已归档供应商不可编辑' : undefined, onClick: () => edit(row) },
+     { key: 'links', label: '关联商品', icon: <Link2 size={15} />, disabled: row.isArchived, disabledReason: row.isArchived ? '已归档供应商不可维护商品' : undefined, onClick: () => openLinks(row) },
+     writable && { key: 'delete', label: '删除', icon: <Trash2 size={15} />, danger: true, disabled: row.isArchived,
+       confirm: { title: '删除供应商？', description: '删除后解除商品及模板关联，历史订单不受影响，仍显示该供应商。', okText: '删除', cancelText: '取消' },
+       onClick: async () => {
+         try { await request(`/suppliers/${row.id}/archive`, { method: 'POST', body: { expectedVersion: row.version } }); data.reload(); message.success('供应商已删除'); }
+         catch (failure) { message.error((failure as Error).message); }
+       } },
+   ]} /> },
     ]} />
     <Modal title={`管理商品 · ${linking?.name || ''}`} open={Boolean(linking)} width={1100} className="supplier-products-modal" maskClosable={false} closable={!saving} keyboard={!saving} onCancel={() => { if (!saving) leaveLinks(); }} footer={<div className="supplier-products-footer"><span>已供 {selected.length} 件{dirty && ` · 待新增 ${selected.filter(id => !links?.productIds.includes(id)).length} 件 · 待移除 ${links?.productIds.filter(id => !selected.includes(id)).length || 0} 件`}</span><div className="actions"><Button disabled={saving} onClick={leaveLinks}>取消</Button>{writable && <Button type="primary" icon={<Save size={16} />} loading={saving} disabled={!dirty || !links || products.loading || Boolean(products.error)} onClick={saveLinks}>保存修改</Button>}</div></div>}>
       {(error || products.error || categories.error || units.error) && <Alert type="error" showIcon title={error || products.error || categories.error || units.error} action={<Button disabled={saving} onClick={() => { products.reload(); categories.reload(); units.reload(); if (!links && linking) void openLinks(linking); }}>重试</Button>} />}
@@ -132,7 +134,18 @@ export default function Suppliers({ user }: { user: User }) {
         <aside><strong>商品分类</strong><Tree titleRender={node => <Tooltip title={String(node.title)}><span className="supplier-category-label">{String(node.title)}</span></Tooltip>} blockNode defaultExpandAll selectedKeys={[category || 'all']} onSelect={keys => { setCategory(keys[0] === 'all' || !keys.length ? undefined : String(keys[0])); }} treeData={[{ key: 'all', title: `全部商品 (${adding ? products.rows.filter(row => availableProduct(row)).length : selected.length})` }, ...categoryNodes(null)]} /></aside>
         <div className="supplier-products-main">
           <div className="supplier-products-toolbar"><Input aria-label="搜索供应商品" placeholder="商品名称、货号" value={productSearch} onChange={event => setProductSearch(event.target.value)} allowClear /><div className="actions">{writable && !adding && <Button disabled={!removals.length || saving || !links} danger icon={<Trash2 size={16} />} onClick={() => { setSelected(current => current.filter(id => !removals.includes(id))); setRemovals([]); }}>移除所选{removals.length ? ` (${removals.length})` : ''}</Button>}</div></div>
-          <Table<Product> key={`${adding}-${category || 'all'}-${productSearch}`} rowKey="id" size="small" loading={!links && !error || products.loading} scroll={{ x: 820, y: 420 }} locale={{ emptyText: adding ? '暂无可添加商品' : '暂无供应商品' }} dataSource={products.rows.filter(row => (adding ? availableProduct(row) : selected.includes(row.id)) && matching(row))} rowSelection={writable ? { selectedRowKeys: adding ? selected.filter(id => !links?.productIds.includes(id)) : removals, preserveSelectedRowKeys: true, onChange: keys => { if (adding) setSelected(current => [...current.filter(id => links?.productIds.includes(id)), ...keys.map(String)]); else setRemovals(keys.map(String)); }, getCheckboxProps: () => ({ disabled: saving || !links }) } : undefined} columns={[...productColumns, ...(adding ? [{ title: '供应状态', width: 90, render: (_: unknown, row: Product) => selected.includes(row.id) ? <Tag color="processing">待新增</Tag> : '-' }] : writable ? [{ title: '操作', fixed: 'right' as const, width: 150, render: (_: unknown, row: Product) => <div className="row-actions">{managed[row.id]?.supplyEnabled ? <Popconfirm title={`下架“${row.name}”？`} description="门店将不能再向当前供应商新订购此商品，历史订单不受影响。" okText="确认下架" cancelText="取消" onConfirm={() => changeListing(row)}><Tooltip title="下架"><Button type="text" danger aria-label={`下架${row.name}`} disabled={saving || !links || !row.isActive} icon={<EyeOff size={15} />} /></Tooltip></Popconfirm> : <Tooltip title="上架"><Button type="text" aria-label={`上架${row.name}`} disabled={saving || !links || !row.isActive} icon={<PackageCheck size={15} />} onClick={() => changeListing(row)} /></Tooltip>}<Tooltip title="移除关联"><Button type="text" danger aria-label={`移除${row.name}`} disabled={saving || !links} icon={<Trash2 size={15} />} onClick={() => { setSelected(current => current.filter(id => id !== row.id)); setRemovals(current => current.filter(id => id !== row.id)); }} /></Tooltip></div> }] : [])]} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条` }} />
+          <Table<Product> key={`${adding}-${category || 'all'}-${productSearch}`} rowKey="id" size="small" loading={!links && !error || products.loading} scroll={{ x: 820, y: 420 }} locale={{ emptyText: adding ? '暂无可添加商品' : '暂无供应商品' }} dataSource={products.rows.filter(row => (adding ? availableProduct(row) : selected.includes(row.id)) && matching(row))} rowSelection={writable ? { selectedRowKeys: adding ? selected.filter(id => !links?.productIds.includes(id)) : removals, preserveSelectedRowKeys: true, onChange: keys => { if (adding) setSelected(current => [...current.filter(id => links?.productIds.includes(id)), ...keys.map(String)]); else setRemovals(keys.map(String)); }, getCheckboxProps: () => ({ disabled: saving || !links }) } : undefined} columns={[...productColumns, ...(adding ? [{ title: '供应状态', width: 90, render: (_: unknown, row: Product) => selected.includes(row.id) ? <Tag color="processing">待新增</Tag> : '-' }] : writable ? [{ title: '操作', fixed: 'right' as const, align: 'right' as const, width: 132, render: (_: unknown, row: Product) => <RowActions ariaLabel={row.name} actions={[
+     managed[row.id]?.supplyEnabled
+       ? { key: 'listing', label: '下架', icon: <EyeOff size={15} />, danger: true, disabled: saving || !links || !row.isActive,
+           disabledReason: !row.isActive ? '商品已停用，不能上下架' : undefined,
+           confirm: { title: `下架“${row.name}”？`, description: '门店将不能再向当前供应商新订购此商品，历史订单不受影响。', okText: '确认下架', cancelText: '取消' },
+           onClick: () => changeListing(row) }
+       : { key: 'listing', label: '上架', icon: <PackageCheck size={15} />, disabled: saving || !links || !row.isActive,
+           disabledReason: !row.isActive ? '商品已停用，不能上下架' : undefined, onClick: () => changeListing(row) },
+     { key: 'remove', label: '移除关联', icon: <Trash2 size={15} />, danger: true, disabled: saving || !links,
+       disabledReason: !links ? '尚未载入关联关系' : undefined,
+       onClick: () => { setSelected(current => current.filter(id => id !== row.id)); setRemovals(current => current.filter(id => id !== row.id)); } },
+   ]} /> }] : [])]} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条` }} />
         </div>
       </div>
     </Modal>
@@ -154,3 +167,4 @@ export default function Suppliers({ user }: { user: User }) {
     </Modal>
   </>;
 }
+import { RowActions } from '../components/RowActions';

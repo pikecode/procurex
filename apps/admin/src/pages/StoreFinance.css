@@ -43,13 +43,6 @@
   .finance-group-panel { display: none; }
   .finance-group-mobile { display: flex; width: 100%; margin-bottom: 14px; }
 }
-.finance-row-actions { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
-.finance-row-actions .ant-btn { padding: 0; width: 28px; min-width: 28px; height: 28px; color: #475467; }
-.finance-row-actions .ant-btn:hover { color: #1677ff; background: #eff6ff; }
-.finance-row-actions .ant-btn:disabled { color: #b8bec8; }
-@media (max-width: 767px) {
-  .finance-row-actions { display: grid; grid-template-columns: repeat(2, 28px); gap: 4px; }
-}
 .store-finance-selection .actions { flex-wrap: wrap; }
 .finance-history-mobile { display: none; }
 @media (max-width: 600px) {

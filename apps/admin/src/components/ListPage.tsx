@@ -14,7 +14,12 @@ export function ListPage<T extends BaseRow>({ title, rows, columns, loading, err
   const [search, setSearch] = useState(''); const [values, setValues] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1); const [size, setSize] = useState(10);
   const filtered = rows.filter(row => Object.values(row).filter(value => typeof value === 'string').join(' ').toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
-    && filters.every(filter => !values[String(filter.key)] || row[filter.key] === values[String(filter.key)]));
+    && filters.every(filter => !values[String(filter.key)] || row[filter.key] === values[String(filter.key)] as unknown as typeof row[typeof filter.key]));
+  // scroll.x 写死会和实际列宽脱节：表格要么溢出容器，要么撑不到右边，固定列的行为随之失准。
+  // 这里按显式列宽加未指定列的基准宽度算一个下限，保证容器永远装得下，固定右侧也才有意义。
+  const explicit = columns.reduce((sum, column) => sum + (typeof column.width === 'number' ? column.width : 0), 0);
+  const flexible = columns.filter(column => typeof column.width !== 'number').length * 140;
+  const scrollX = Math.max(900, explicit + flexible);
   return <section className="list-page">
     <div className="page-heading"><h1>{title}</h1><div className="actions">{tools}
       <Tooltip title="刷新列表"><Button aria-label="刷新列表" icon={<RotateCcw size={16} />} onClick={reload} loading={loading} /></Tooltip>
@@ -28,7 +33,7 @@ export function ListPage<T extends BaseRow>({ title, rows, columns, loading, err
       <Tooltip title="重置筛选"><Button aria-label="重置筛选" icon={<RotateCcw size={16} />} onClick={() => { setSearch(''); setValues({}); setPage(1); }} /></Tooltip>
     </div>
     {error && <Alert type="error" showIcon title={error} action={<Button size="small" onClick={reload}>重试</Button>} />}
-    <Table<T> rowKey="id" size="small" loading={loading} columns={columns} dataSource={filtered} rowSelection={rowSelection} scroll={{ x: 900 }}
+    <Table<T> rowKey="id" size="small" loading={loading} columns={columns} dataSource={filtered} rowSelection={rowSelection} scroll={{ x: scrollX }}
       pagination={{ current: Math.min(page, Math.max(1, Math.ceil(filtered.length / size))), pageSize: size, showSizeChanger: true,
         pageSizeOptions: [10, 20, 50, 100], showTotal: total => `共 ${total} 条`, onChange: (current, pageSize) => { setPage(pageSize !== size ? 1 : current); setSize(pageSize); } }} />
   </section>;

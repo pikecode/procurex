@@ -52,7 +52,7 @@ function Workspace({ user, supplierId }: { user: User; supplierId: string }) {
     {command.pending && <Alert type="warning" showIcon title={`待确认提交：${command.pending.label}`} action={<Button loading={command.busy} onClick={recover}>恢复原提交</Button>} />}
     {view === 'orders' && <ListPage title="供应商工作台" rows={list.rows.filter(row => row.supplierId === supplierId).map(row => ({ ...row, name: row.supplierOrderNo }))} loading={list.loading || reading} error={list.error} reload={list.reload}
       filters={[{ key: 'status', label: '订单状态', options: ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED', 'SHIPPED', 'REJECTED', 'CANCELED'].map(value => ({ value, label: workflowName(value) })) }]}
-      columns={[{ title: '订单编号', dataIndex: 'supplierOrderNo' }, { title: '门店', dataIndex: 'storeName' }, { title: '订单状态', dataIndex: 'status', render: workflowName }, { title: '履约状态', dataIndex: 'fulfillmentStatus', render: workflowName }, { title: '供货金额', dataIndex: 'supplyGoodsAmount' }, { title: '创建时间', dataIndex: 'createdAt', render: workflowTime }, { title: '操作', fixed: 'right', width: 92, render: (_, row) => <Button size="small" icon={<Eye size={14} />} onClick={() => open(row.id)}>查看</Button> }]} />}
+      columns={[{ title: '订单编号', dataIndex: 'supplierOrderNo' }, { title: '门店', dataIndex: 'storeName' }, { title: '订单状态', dataIndex: 'status', render: workflowName }, { title: '履约状态', dataIndex: 'fulfillmentStatus', render: workflowName }, { title: '供货金额', dataIndex: 'supplyGoodsAmount' }, { title: '创建时间', dataIndex: 'createdAt', render: workflowTime }, { title: '操作', fixed: 'right', align: 'right' as const, width: 88, render: (_, row) => <RowActions ariaLabel={row.supplierOrderNo} actions={[{ key: 'view', label: '查看', icon: <Eye size={15} />, onClick: () => open(row.id) }]} /> }]} />}
     {view === 'products' && <ManagedProducts supplierId={supplierId} />}
     <Modal open={Boolean(order)} title={order?.supplierOrderNo} width={920} footer={null} maskClosable={false} closable={!command.busy && !editor} onCancel={() => setOrder(undefined)}>
       {order && <>
@@ -107,9 +107,16 @@ function ManagedProducts({ supplierId }: { supplierId: string }) {
       { title: '商品名称', dataIndex: 'name' }, { title: '规格', dataIndex: 'specification', render: value => value || '-' },
       { title: '单位', dataIndex: 'unitName', width: 100 },
       { title: '供货状态', width: 110, render: (_, row) => !row.productActive ? <Tag>商品已停用</Tag> : row.supplyEnabled ? <Tag color="success">已上架</Tag> : <Tag>已下架</Tag> },
-      { title: '操作', fixed: 'right', width: 110, render: (_, row) => row.supplyEnabled ? <Popconfirm title={`下架“${row.name}”？`} description="门店将不能再向当前供应商新订购此商品，历史订单不受影响。" okText="确认下架" cancelText="取消" onConfirm={() => change(row)}>
-        <Button size="small" danger disabled={!row.productActive || Boolean(saving)} loading={saving === row.id} icon={<EyeOff size={14} />}>下架</Button>
-      </Popconfirm> : <Button size="small" disabled={!row.productActive || Boolean(saving)} loading={saving === row.id} icon={<PackageCheck size={14} />} onClick={() => change(row)}>上架</Button> },
+      { title: '操作', fixed: 'right', align: 'right' as const, width: 96, render: (_, row) => <RowActions ariaLabel={row.name} actions={[
+     row.supplyEnabled
+       ? { key: 'listing', label: '下架', icon: <EyeOff size={15} />, danger: true, disabled: !row.productActive || Boolean(saving),
+           disabledReason: row.productActive ? undefined : '商品已停用，不能上下架',
+           confirm: { title: `下架“${row.name}”？`, description: '门店将不能再向当前供应商新订购此商品，历史订单不受影响。', okText: '确认下架', cancelText: '取消' },
+           onClick: () => change(row) }
+       : { key: 'listing', label: '上架', icon: <PackageCheck size={15} />, disabled: !row.productActive || Boolean(saving),
+           disabledReason: row.productActive ? undefined : '商品已停用，不能上下架', onClick: () => change(row) },
+   ]} /> },
     ]} />
   </section>;
 }
+import { RowActions } from '../components/RowActions';

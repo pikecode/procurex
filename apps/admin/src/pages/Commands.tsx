@@ -26,7 +26,7 @@ export default function Commands({ user }: { user: User }) {
       columns={[
         { title: '操作', dataIndex: 'action', width: 200 }, { title: '状态', dataIndex: 'status', width: 100, render: value => <Tag>{statuses[value] || value}</Tag> },
         { title: '提交时间', dataIndex: 'startedAt', width: 180, render: workflowTime }, { title: '资源类型', dataIndex: 'resourceType', width: 160 },
-        { title: '错误代码', dataIndex: 'errorCode', width: 220 }, { title: '操作', width: 70, render: (_, row) => <Tooltip title="查看命令"><Button aria-label="查看命令" icon={<Eye size={16} />} onClick={() => { setDetail(row); setOperation(''); setError(''); }} /></Tooltip> },
+        { title: '错误代码', dataIndex: 'errorCode', width: 220 }, { title: '操作', align: 'right' as const, width: 88, render: (_, row) => <RowActions ariaLabel={row.id} actions={[{ key: 'view', label: '查看', icon: <Eye size={15} />, onClick: () => { setDetail(row); setOperation(''); setError(''); } }]} /> },
       ]} />
     <Modal title="命令详情" open={Boolean(detail)} onCancel={() => { if (!checking && !command.busy) setDetail(null); }} footer={null} width={680}>
       {detail && <>
@@ -56,3 +56,4 @@ export default function Commands({ user }: { user: User }) {
     </Modal>
   </section>;
 }
+import { RowActions } from '../components/RowActions';

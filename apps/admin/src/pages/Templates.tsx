@@ -172,18 +172,13 @@ export default function Templates() {
       { title: '门店数', width: 78, align: 'center', render: (_, row) => row.storeIds.length },
       { title: '备注', dataIndex: 'remark', ellipsis: true },
       { title: '状态', width: 76, ellipsis: true, render: (_, row) => row.isArchived ? '已归档' : '有效' },
-      { title: '操作', width: 136, fixed: 'right', render: (_, row) => <div className="row-actions template-list-actions">
-        <Button type="link" disabled={row.isArchived} icon={<Pencil size={15} />} onClick={() => edit('edit', row)}>编辑</Button>
-        <Dropdown trigger={['click']} disabled={row.isArchived} menu={{ items: [
-          { key: 'products', icon: <PackageOpen size={15} />, label: titles.products },
-          { key: 'settlement', icon: <CalendarClock size={15} />, label: titles.settlement },
-          { type: 'divider' },
-          { key: 'copy', icon: <Copy size={15} />, label: titles.copy },
-          { key: 'archive', icon: <Archive size={15} />, label: titles.archive, danger: true },
-        ], onClick: ({ key }) => edit(key as Mode, row) }}>
-          <Button type="text" disabled={row.isArchived} aria-label={`更多操作${row.name}`} icon={<MoreHorizontal size={17} />} />
-        </Dropdown>
-      </div> },
+      { title: '操作', align: 'right' as const, width: 116, fixed: 'right', render: (_, row) => <RowActions ariaLabel={row.name} actions={[
+      { key: 'edit', label: '编辑', icon: <Pencil size={15} />, disabled: row.isArchived, disabledReason: row.isArchived ? '已归档模板不可编辑' : undefined, onClick: () => edit('edit', row) },
+      { key: 'products', label: titles.products, icon: <PackageOpen size={15} />, disabled: row.isArchived, disabledReason: row.isArchived ? '已归档模板不可配置' : undefined, onClick: () => edit('products', row) },
+      { key: 'settlement', label: titles.settlement, icon: <CalendarClock size={15} />, disabled: row.isArchived, disabledReason: row.isArchived ? '已归档模板不可配置' : undefined, onClick: () => edit('settlement', row) },
+      { key: 'copy', label: titles.copy, icon: <Copy size={15} />, onClick: () => edit('copy', row) },
+      { key: 'archive', label: titles.archive, icon: <Archive size={15} />, danger: true, onClick: () => edit('archive', row) },
+    ]} /> },
     ]} />
     <Modal className={mode === 'products' ? 'template-product-editor' : undefined} title={detail ? `${titles[mode]} · ${detail.name}` : '新增模板'} open={open} width={mode === 'products' ? 'min(1400px, 94vw)' : mode === 'settlement' ? 'min(1100px, 92vw)' : 640} onCancel={close} onOk={save} okText={mode === 'archive' ? '确认归档' : '保存'} confirmLoading={saving} okButtonProps={{ disabled: loading || refsLoading || !!refsError || !!(sourceId && !detail), danger: mode === 'archive' }} closable={!saving} maskClosable={false} keyboard={!saving}>
       {(error || refsError) && <Alert type="error" title={error || refsError} showIcon />}
@@ -196,3 +191,4 @@ export default function Templates() {
     </Modal>
   </>;
 }
+import { RowActions } from '../components/RowActions';

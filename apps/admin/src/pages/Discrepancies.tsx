@@ -44,7 +44,7 @@ function Workspace({ user }: { user: User }) {
   }}>恢复原提交</Button>} />;
   return <>
     {!id && recovery}{!id && (error || command.error) && <Alert type="error" showIcon title={error || command.error} />}
-    <ListPage title="收货差异" {...rows} rows={rows.rows.map(row => ({ ...row, name: row.productName || row.supplierOrderNo || row.id }))} reload={reload} filters={[{ key: 'status', label: '差异状态', options: ['OPEN', 'REPLENISH_PENDING'].map(value => ({ value, label: statusName(value) })) }]} columns={[{ title: '商品', dataIndex: 'productName', width: 210 }, { title: '供应商订单', dataIndex: 'supplierOrderNo', width: 220 }, { title: '短缺数量', dataIndex: 'missingQuantity', width: 110 }, { title: '状态', dataIndex: 'status', render: statusName, width: 100 }, { title: '操作', width: 70, fixed: 'right', render: (_, row) => <Button type="text" aria-label={`查看差异${row.id}`} icon={<Eye size={16} />} onClick={() => setParams({ discrepancy: row.id })} /> }]} />
+    <ListPage title="收货差异" {...rows} rows={rows.rows.map(row => ({ ...row, name: row.productName || row.supplierOrderNo || row.id }))} reload={reload} filters={[{ key: 'status', label: '差异状态', options: ['OPEN', 'REPLENISH_PENDING'].map(value => ({ value, label: statusName(value) })) }]} columns={[{ title: '商品', dataIndex: 'productName', width: 210 }, { title: '供应商订单', dataIndex: 'supplierOrderNo', width: 220 }, { title: '短缺数量', dataIndex: 'missingQuantity', width: 110 }, { title: '状态', dataIndex: 'status', render: statusName, width: 100 }, { title: '操作', align: 'right' as const, width: 88, fixed: 'right', render: (_, row) => <RowActions ariaLabel={row.id} actions={[{ key: 'view', label: '查看', icon: <Eye size={15} />, onClick: () => setParams({ discrepancy: row.id }) }]} /> }]} />
     <Modal title="收货差异" width={650} open={Boolean(id)} footer={null} maskClosable={!command.busy} closable={!command.busy} onCancel={() => { if (!command.busy) setParams({}); }}>
       {recovery}{(error || command.error) && <Alert type="error" showIcon title={error || command.error} />}
       {loading ? <Spin /> : detail && <>
@@ -63,3 +63,4 @@ function Workspace({ user }: { user: User }) {
     </Modal>
   </>;
 }
+import { RowActions } from '../components/RowActions';

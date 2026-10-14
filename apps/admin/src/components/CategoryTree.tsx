@@ -42,11 +42,13 @@ export function CategoryTree({ rows, loading, error, reload, writable, edit, rem
           <span style={{ overflowWrap: 'anywhere' }}>{row.name}</span>
           {!!row.children?.length && <Tag>{row.children.length}</Tag>}
         </span> },
-        ...(writable ? [{ title: '操作', width: 132, fixed: 'right' as const, render: (_: unknown, row: Node) => <div className="row-actions">
-          {!row.parentId && <Tooltip title="新增子分类"><Button type="text" aria-label={`新增子分类${row.name}`} icon={<Plus size={16} />} onClick={() => edit(null, row.id)} /></Tooltip>}
-          <Tooltip title="编辑"><Button type="text" aria-label={`编辑${row.name}`} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip>
-          <Popconfirm title={`删除“${row.name}”？`} onConfirm={() => remove(row)}><Tooltip title="删除"><Button danger type="text" aria-label={`删除${row.name}`} icon={<Trash2 size={16} />} /></Tooltip></Popconfirm>
-        </div> }] : []),
+        ...(writable ? [{ title: '操作', align: 'right' as const, width: 132, fixed: 'right' as const, render: (_: unknown, row: Node) => <RowActions ariaLabel={row.name} actions={[
+          // 编辑最常用，留在外面；新增子分类与删除收进「更多」。
+          { key: 'edit', label: '编辑', icon: <Pencil size={15} />, onClick: () => edit(row) },
+          !row.parentId && { key: 'child', label: '新增子分类', icon: <Plus size={15} />, onClick: () => edit(null, row.id) },
+          { key: 'delete', label: '删除', icon: <Trash2 size={15} />, danger: true, confirm: { title: `删除“${row.name}”？` }, onClick: () => remove(row) },
+        ]} /> }] : []),
       ]} />
   </section>;
 }
+import { RowActions } from './RowActions';

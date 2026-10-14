@@ -110,7 +110,11 @@ export default function Stores({ user }: { user: User }) {
         { title: '门店联系号码', dataIndex: 'contactPhone', width: 180, render: value => value || '-' },
         { title: '门店类型', dataIndex: 'storeType', width: 120, render: value => types.find(type => type.value === value)?.label || '-' },
         { title: '门店状态', dataIndex: 'status', width: 100, render: value => <Status value={value} /> },
-        { title: '操作', width: 126, fixed: 'right', render: (_, row) => <div className="row-actions"><Tooltip title="查看门店"><Button type="text" aria-label={`查看${row.name}`} icon={<Eye size={16} />} onClick={() => setDetail(row)} /></Tooltip>{writable && <><Tooltip title="编辑门店"><Button type="text" aria-label={`编辑${row.name}`} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip><Tooltip title="删除门店"><Button type="text" danger aria-label={`删除${row.name}`} icon={<Trash2 size={16} />} onClick={() => { setDeleteError(''); setDeleting(row); }} /></Tooltip></>}</div> },
+        { title: '操作', align: 'right' as const, width: 116, fixed: 'right', render: (_, row) => <RowActions ariaLabel={row.name} actions={[
+     { key: 'view', label: '查看', icon: <Eye size={15} />, onClick: () => setDetail(row) },
+     writable && { key: 'edit', label: '编辑', icon: <Pencil size={15} />, onClick: () => edit(row) },
+     writable && { key: 'delete', label: '删除', icon: <Trash2 size={15} />, danger: true, onClick: () => { setDeleteError(''); setDeleting(row); } },
+   ]} /> },
       ]} />
       </div>
     </div>
@@ -169,3 +173,4 @@ export default function Stores({ user }: { user: User }) {
     </Modal>
   </>;
 }
+import { RowActions } from '../components/RowActions';

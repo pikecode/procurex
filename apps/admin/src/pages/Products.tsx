@@ -175,9 +175,7 @@ const useNarrow = () => { const [narrow, setNarrow] = useState(() => typeof wind
               { title: '商品价格（参考）', dataIndex: 'defaultSalesPrice', align: 'right' as const, width: 140, render: money },
               { title: '状态', width: 72, render: (_: unknown, row: Product) => <Tag color={row.isActive ? 'green' : 'default'}>{row.isActive ? '启用' : '停用'}</Tag> },
             ]),
-            { title: '操作', width: 64, fixed: narrow ? undefined : 'right', render: (_, row) => <div className="row-actions">
-              <Tooltip title={writable ? '编辑' : '查看'}><Button type="text" aria-label={`${writable ? '编辑' : '查看'}${row.name}`} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip>
-            </div> },
+            { title: '操作', align: 'right' as const, width: 88, fixed: narrow ? undefined : 'right', render: (_, row) => <RowActions ariaLabel={row.name} actions={[{ key: 'edit', label: writable ? '编辑' : '查看', icon: <Pencil size={15} />, onClick: () => edit(row) }]} /> },
           ]} />
       </div>
     </section>
@@ -232,3 +230,4 @@ const useNarrow = () => { const [narrow, setNarrow] = useState(() => typeof wind
 
   </>;
 }
+import { RowActions } from '../components/RowActions';

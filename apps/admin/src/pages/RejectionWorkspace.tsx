@@ -19,7 +19,7 @@ export function RejectionTodos({ revision, onOpen }: { revision: number; onOpen:
   return <ListPage title="拒单待办" rows={list.rows.map(row => ({ ...row, name: row.supplierOrderNo }))} loading={list.loading} error={list.error} reload={list.reload}
     columns={[{ title: '订单编号', dataIndex: 'supplierOrderNo', width: 210 }, { title: '采购申请', dataIndex: 'requestNo', width: 210 }, { title: '门店', dataIndex: 'storeName', width: 160 },
       { title: '供应商', dataIndex: 'supplierName', width: 160 }, { title: '拒单原因', dataIndex: 'reason', width: 240 }, { title: '拒单时间', dataIndex: 'createdAt', render: workflowTime, width: 170 },
-      { title: '操作', width: 64, fixed: 'right', render: (_, row) => <Tooltip title="处理拒单"><Button type="text" aria-label={`处理${row.supplierOrderNo}`} icon={<RotateCcw size={16} />} onClick={() => onOpen(row.purchaseRequestId, row.supplierOrderId)} /></Tooltip> }]} />;
+      { title: '操作', align: 'right' as const, width: 92, fixed: 'right', render: (_, row) => <RowActions ariaLabel={row.supplierOrderNo} actions={[{ key: 'handle', label: '处理', icon: <RotateCcw size={15} />, onClick: () => onOpen(row.purchaseRequestId, row.supplierOrderId) }]} /> }]} />;
 }
 
 export function RejectionEditor({ requestId, orderId, command, canRecover, onClose, onSaved }: { requestId: string; orderId: string; command: ReturnType<typeof useWorkflowCommand>; canRecover: boolean; onClose: () => void; onSaved: () => void }) {
@@ -95,3 +95,4 @@ export function RejectionEditor({ requestId, orderId, command, canRecover, onClo
     </>}
   </Modal>;
 }
+import { RowActions } from '../components/RowActions';

@@ -66,7 +66,12 @@ export default function Users() {
     { title: '状态', width: 90, render: (_, row) => <Tag color={row.status === 'ACTIVE' ? 'green' : undefined}>{row.status === 'ACTIVE' ? '启用' : '停用'}</Tag> },
     { title: '创建时间', width: 160, render: (_, row) => new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false }) },
     { title: '最近登录', width: 160, render: (_, row) => row.lastLoginAt ? new Date(row.lastLoginAt).toLocaleString('zh-CN', { hour12: false }) : '未记录' },
-    { title: '操作', width: 160, fixed: 'right', render: (_, row) => <div className="actions"><Tooltip title="编辑用户"><Button type="text" aria-label={`编辑${row.username}`} icon={<Pencil size={16} />} onClick={() => edit(row)} /></Tooltip><Tooltip title="重置密码"><Button type="text" aria-label={`重置${row.username}密码`} icon={<KeyRound size={16} />} onClick={() => { setPasswordUser(row); setPasswordError(''); passwordForm.resetFields(); }} /></Tooltip><Tooltip title="强制退出登录"><Button type="text" aria-label={`强制退出${row.username}的登录`} icon={<LogOut size={16} />} onClick={() => revoke(row)} /></Tooltip><Tooltip title="操作记录"><Button type="text" aria-label={`查看${row.username}操作记录`} icon={<History size={16} />} onClick={() => setHistoryUser(row)} /></Tooltip></div> },
+    { title: '操作', align: 'right' as const, width: 116, fixed: 'right', render: (_, row) => <RowActions ariaLabel={row.username} actions={[
+     { key: 'edit', label: '编辑', icon: <Pencil size={15} />, onClick: () => edit(row) },
+     { key: 'history', label: '操作记录', icon: <History size={15} />, onClick: () => setHistoryUser(row) },
+     { key: 'password', label: '重置密码', icon: <KeyRound size={15} />, onClick: () => { setPasswordUser(row); setPasswordError(''); passwordForm.resetFields(); } },
+     { key: 'revoke', label: '强制退出', icon: <LogOut size={15} />, danger: true, onClick: () => revoke(row) },
+   ]} /> },
   ]} /><Modal title={editing ? '编辑用户' : '新增用户'} open={open} width={560} onCancel={() => !saving && setOpen(false)} onOk={save} confirmLoading={saving} okText="保存" cancelText="取消" maskClosable={!saving}>
     {error && <Alert type="error" title={error} showIcon />}
     {editing && <Alert type="info" title={`账号：${editing.username} · 当前角色：${editing.roles.map(code => roles.find(item => item.value === code)?.label || code).join('、')}`} />}
@@ -87,3 +92,4 @@ export default function Users() {
     <Form form={passwordForm} layout="vertical" disabled={passwordSaving}><Form.Item name="password" label="新密码" rules={[{ required: true }, { min: 8, max: 128, message: '密码需为8至128位' }]}><Input.Password autoComplete="new-password" /></Form.Item><Form.Item name="confirmPassword" label="确认新密码" dependencies={['password']} rules={[{ required: true }, ({ getFieldValue }) => ({ validator: (_, value) => value === getFieldValue('password') ? Promise.resolve() : Promise.reject(new Error('两次密码不一致')) })]}><Input.Password autoComplete="new-password" /></Form.Item></Form>
   </Modal>{historyUser && <AccountHistory row={historyUser} close={() => setHistoryUser(null)} />}</>;
 }
+import { RowActions } from '../components/RowActions';
