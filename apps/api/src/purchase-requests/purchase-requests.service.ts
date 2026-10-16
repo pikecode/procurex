@@ -292,10 +292,10 @@ export class PurchaseRequestsService {
   }
 
   async previewReplacement(id: string, expectedVersion: number, items: ReplacePurchaseRequestItemInput[]) {
-    const { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding, fundingDetail } = await this.prepareReplacement(id, expectedVersion, items);
+    const { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding, fundingDetail, settlementGroups } = await this.prepareReplacement(id, expectedVersion, items);
     return { requestId: request.id, templateId: request.templateId, version: request.version, items: pricedItems,
       totals: { salesGoodsAmount: salesGoodsAmount.toFixed(2), supplyGoodsAmount: supplyGoodsAmount.toFixed(2) },
-      funding: { canConfirm: funding.canConfirm, ...fundingDetail } };
+      funding: { canConfirm: funding.canConfirm, ...fundingDetail }, settlementGroups };
   }
 
   async replaceStoreItems(id: string, expectedVersion: number, input: PurchaseRequestPreviewInput, transaction: Prisma.TransactionClient) {
@@ -464,7 +464,11 @@ export class PurchaseRequestsService {
     const funding = { ...storedFunding, canConfirm: storedFunding.canConfirm && creditShortfall.isZero(),
       shortfallAmount: storedFunding.shortfallAmount.plus(creditShortfall) };
     const funds = (required: Decimal, available: Decimal) => ({ required: required.toFixed(2), available: available.toFixed(2), shortfall: Decimal.max(0, required.minus(available)).toFixed(2) });
-    return { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding,
+    const settlementGroups = [...new Set(pricedItems.map(item => item.supplierId))].map(supplierId => ({
+      supplierId, mode: terms.get(supplierId)!.mode,
+      amount: pricedItems.filter(item => item.supplierId === supplierId).reduce((sum, item) => sum.plus(item.salesLineAmount), toMoney(0)).toFixed(2),
+    }));
+    return { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding, settlementGroups,
       fundingDetail: { stored: funds(storedRequired, storedAvailable), credit: funds(creditRequired, creditAvailable) } };
   }
 

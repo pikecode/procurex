@@ -5,14 +5,20 @@
       <view class="funds-grid funds-table-heading"><text>支付方式</text><text>本单所需</text><text>本单可用</text></view>
       <view class="funds-grid funds-table-row"><text>储值</text><text>¥{{fundingView.stored.required}}</text><text>¥{{fundingView.stored.available}}</text></view>
       <view class="funds-grid funds-table-row"><text>挂账</text><text>¥{{fundingView.credit.required}}</text><text>¥{{fundingView.credit.available}}</text></view>
+      <view class="funding-suppliers" wx:if="{{!editingRequest && fundingSupplierRows.length}}">
+        <view class="funding-suppliers-title">供应商结算方式</view>
+        <view class="funding-supplier-row" wx:for="{{fundingSupplierRows}}" wx:key="supplierId">
+          <view><text class="funding-supplier-name">{{item.supplierName}}</text><text class="funding-supplier-meta">{{item.settlementLabel}} · ¥{{item.amount}}</text></view>
+        </view>
+      </view>
       <view class="funds-gap" wx:if="{{!fundingView.canConfirm}}">
         <view wx:if="{{fundingView.stored.shortfall !== '0.00'}}"><text>待充值金额</text><text>¥{{fundingView.stored.shortfall}}</text></view>
         <view wx:if="{{fundingView.credit.shortfall !== '0.00'}}"><text>待补挂账额度</text><text>¥{{fundingView.credit.shortfall}}</text></view>
-        <text class="funds-next-step">请联系财务补足后重新核验，暂不能生成订单。</text>
+        <text class="funds-next-step">可减少对应支付方式的商品金额，或联系财务补足。</text>
       </view>
       <view class="funds-ready" wx:else>资金充足，可确认生成订单</view>
     </block>
-    <text class="funds-next-step" wx:else>尚未核验，请重新核验资金。</text>
+    <text class="funds-next-step" wx:else>{{editingRequest ? '商品已调整，请重新核验剩余缺口。' : '尚未核验，请重新核验资金。'}}</text>
   </view>
 </template>
 <test-context wx:if="{{activeView === 'mine'}}" />
@@ -22,7 +28,7 @@
   <view class="workspace-loading" wx:if="{{loading}}">正在更新采购信息</view>
   <view wx:if="{{error && !detailError}}" class="error-banner"><text>{{error}}</text><button class="ghost" bindtap="loadWork" disabled="{{loading || confirming || reallocating || freightReviewing}}">刷新数据</button></view>
   <view wx:if="{{pendingCommand}}" class="command-recovery"><view><text class="row-title">{{pendingCommand.title}} · 结果待确认</text><text class="muted">{{pendingCommand.dateText}}</text></view><button class="secondary" bindtap="recoverCommand" disabled="{{recovering || confirming || reallocating || freightReviewing}}" loading="{{recovering}}">确认提交结果</button></view>
-  <view class="business-nav"><view class="nav-item {{taskOrigin || activeView === 'tasks' || activeView === 'rejections' || activeView === 'freight' ? 'is-active' : ''}}" data-view="tasks" bindtap="changeView">待办<text class="nav-badge" wx:if="{{!loading && !error && procurementTasks.length + rejectionTodos.length + pendingFreight.length}}">{{procurementTasks.length + rejectionTodos.length + pendingFreight.length}}</text></view><view class="nav-item {{activeView === 'orders' && !taskOrigin ? 'is-active' : ''}}" data-view="orders" bindtap="changeView">订单</view><view class="nav-item {{activeView === 'mine' || activeView === 'reports' ? 'is-active' : ''}}" data-view="mine" bindtap="changeView">我的</view></view>
+  <view class="business-nav"><view class="nav-item {{taskOrigin || activeView === 'tasks' || activeView === 'rejections' || activeView === 'freight' ? 'is-active' : ''}}" data-view="tasks" bindtap="changeView">待办</view><view class="nav-item {{activeView === 'orders' && !taskOrigin ? 'is-active' : ''}}" data-view="orders" bindtap="changeView">订单</view><view class="nav-item {{activeView === 'mine' || activeView === 'reports' ? 'is-active' : ''}}" data-view="mine" bindtap="changeView">我的</view></view>
   <block wx:if="{{activeView === 'tasks'}}">
     <view class="procurement-tabs sticky-bar">
       <view class="procurement-tab {{taskType === 'requests' ? 'selected' : ''}}" data-type="requests" bindtap="changeTaskType"><text class="task-count {{loading || error || !procurementTasks.length ? 'is-empty' : ''}}">{{loading || error ? '—' : procurementTasks.length}}</text><text>下货单确认</text></view>
@@ -139,7 +145,7 @@
       <text class="muted">拒单后整张下货单取消，并释放尚未扣除的资金占用。</text>
       <view class="field"><text class="field-label">拒单原因</text><textarea value="{{rejectReason}}" data-field="rejectReason" bindinput="editInput" maxlength="500" placeholder="必填，请说明拒单原因" auto-height disabled="{{confirming}}" /></view>
     </view>
-    <template is="confirmationFunds" data="{{fundingView, fundingLoading, savingRequest, confirming}}" wx:if="{{activeView === 'orders' && !selectedRequest.supplierOrders.length && !editingRequest && (selectedRequest.status === 'PENDING_PROCUREMENT' || selectedRequest.status === 'PENDING_FUNDS' || selectedRequest.status === 'PENDING_FINANCE')}}" />
+    <template is="confirmationFunds" data="{{fundingView, fundingLoading, savingRequest, confirming, canReallocate, editingRequest, fundingSupplierRows}}" wx:if="{{activeView === 'orders' && !selectedRequest.supplierOrders.length && !editingRequest && (selectedRequest.status === 'PENDING_PROCUREMENT' || selectedRequest.status === 'PENDING_FUNDS' || selectedRequest.status === 'PENDING_FINANCE')}}" />
     <view class="button-row action-bar confirmation-actions" wx:if="{{activeView === 'orders' && (selectedRequest.status === 'PENDING_PROCUREMENT' || selectedRequest.status === 'PENDING_FUNDS' || selectedRequest.status === 'PENDING_FINANCE') && !selectedRequest.supplierOrders.length && !editingRequest && !rejectingRequest}}">
       <button wx:if="{{canReallocate}}" class="secondary action-secondary" disabled="{{confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" bindtap="startRequestEdit">调整商品</button>
       <button class="danger action-secondary" disabled="{{confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" bindtap="startRequestReject">拒单</button>
@@ -156,8 +162,9 @@
 
   <view class="request-catalog" wx:if="{{activeView === 'orders' && requestId && selectedRequest && editingRequest}}">
     <view class="request-catalog-tools">
-      <view class="request-edit-title"><text class="card-title">调整下货单</text><text>操作方式与门店下单一致；已选 {{editItems.length}} 种商品</text></view>
+      <view class="request-edit-title"><text class="card-title">调整下货单</text><text>已选 {{editItems.length}} 种商品</text></view>
       <view class="request-search"><icon type="search" size="18" color="#6e7975" /><input placeholder="搜索商品名称或编码" value="{{editSearch}}" bindinput="onEditSearch" confirm-type="search" /></view>
+
     </view>
     <view class="request-catalog-browser">
       <scroll-view scroll-y class="request-category-sidebar"><view wx:for="{{editCategories}}" wx:key="id" class="request-category-option {{editPrimaryCategoryId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="chooseEditPrimaryCategory">{{item.name}}</view></scroll-view>
@@ -181,14 +188,14 @@
         </scroll-view>
       </view>
     </view>
-    <view class="request-edit-summary"><view bindtap="toggleEditCart"><text>已选 {{editItems.length}} 种 ›</text><text>预估 ¥{{labels.money(editEstimatedAmount)}}</text></view><text>提交时自动校验数量、价格、供应商和资金</text></view>
+    <view class="request-edit-summary"><view bindtap="toggleEditCart"><text>已选 {{editItems.length}} 种 ›</text><text>预估 ¥{{labels.money(editEstimatedAmount)}}</text></view></view>
   </view>
 
-  <view wx:if="{{activeView === 'orders' && editingRequest}}" class="section-band"><input value="{{editReason}}" data-field="editReason" bindinput="editInput" maxlength="300" placeholder="调整原因（必填）" /><template is="confirmationFunds" data="{{fundingView, fundingLoading, savingRequest, confirming}}" /></view>
+  <view wx:if="{{activeView === 'orders' && editingRequest}}" class="section-band"><input value="{{editReason}}" data-field="editReason" bindinput="editInput" maxlength="300" placeholder="调整原因（必填）" /></view>
   <view class="button-row action-bar" wx:if="{{activeView === 'orders' && editingRequest}}">
     <button class="secondary action-secondary" disabled="{{savingRequest}}" bindtap="cancelRequestEdit">取消调整</button>
     <button class="secondary" disabled="{{savingRequest || pendingCommand}}" bindtap="saveRequestDraft">保存调整</button>
-    <button class="primary" loading="{{savingRequest}}" disabled="{{savingRequest || !editItems.length || (fundingView && !fundingView.canConfirm)}}" bindtap="confirmRequestEdit">确认并生成订单</button>
+    <button class="primary" loading="{{savingRequest}}" disabled="{{savingRequest || !editItems.length}}" bindtap="confirmRequestEdit">确认并生成订单</button>
   </view>
 
   <view class="sheet-mask" wx:if="{{editingRequest && editCartOpen}}" bindtap="toggleEditCart"><view class="request-cart-sheet" catchtap="keepEditCartOpen"><view class="section-head"><text class="card-title">下货清单 · {{editItems.length}} 种</text><button class="ghost" bindtap="toggleEditCart">关闭</button></view><scroll-view scroll-y><view class="request-cart-line" wx:for="{{editItems}}" wx:key="productId"><view><text>{{item.productName}}</text><text class="muted">{{item.quantity}} {{item.unitName}} · {{item.supplierIndex >= 0 ? item.suppliers[item.supplierIndex].supplierName : '请选择有效供应商'}}</text></view><button class="ghost" data-id="{{item.productId}}" bindtap="removeEditCartItem">移除</button></view></scroll-view><view class="request-cart-total">预估 ¥{{labels.money(editEstimatedAmount)}}</view></view></view>
@@ -200,6 +207,7 @@
       <view class="assignment-caption" wx:if="{{assignmentGroups.length}}">供货分组 · {{assignmentGroups.length}} 家供应商</view>
       <view class="assignment-group" wx:for="{{assignmentGroups}}" wx:key="supplierId" wx:for-item="group">
         <view class="assignment-group-heading"><text>{{group.supplierName}}</text><text class="muted">{{group.itemCount}} 种商品</text></view>
+        <view class="assignment-settlement" wx:if="{{group.settlementLabel}}"><text>{{group.settlementLabel}}</text><text>销售金额 ¥{{labels.money(group.salesAmount)}}</text></view>
         <view class="assignment-group-totals" wx:if="{{showPriceDetails}}"><text>销售金额 ¥{{labels.money(group.salesAmount)}}</text><text>供应商金额 ¥{{labels.money(group.supplyAmount)}}</text></view>
         <view wx:for="{{group.items}}" wx:key="id" class="row assignment-product">
           <product-card product="{{item}}" bind:retryimage="retryProductImage"><view class="row-title assignment-product-heading"><text>{{item.productName}}</text></view>

@@ -1,6 +1,7 @@
 const api = require('../../utils/api');
 const view = require('../../utils/store-view');
 const quantity = require('../../utils/quantity');
+const settlementLabels = { STORED_VALUE: '储值支付', CREDIT: '挂账支付', SUPPLIER_TERM: '供应商账期', COMPANY_TERM: '公司账期' };
 
 function groupAssignments(items) {
   const groups = new Map();
@@ -47,6 +48,8 @@ Page({
     supplierIndex: -1,
     assignmentItems: [],
     assignmentGroups: [],
+    fundingGroups: [],
+    fundingSupplierRows: [],
     editCatalog: null,
     editingRequest: false,
     editItems: [],
@@ -389,7 +392,7 @@ Page({
     }
 
     const sequence = this.detailRequestSequence = (this.detailRequestSequence || 0) + 1;
-    this.setData({ detailing: true, detailError: '', error: '', fundingView: null });
+    this.setData({ detailing: true, detailError: '', error: '', fundingView: null, fundingGroups: [] });
     try {
       const selectedRequest = await api.request(`/purchase-requests/${id}`);
       selectedRequest.storeName = selectedRequest.storeName || (this.data.requests || []).find(row => row.id === id)?.storeName || '';
@@ -617,9 +620,19 @@ Page({
     this.setData({ fundingLoading: true });
     try {
       const review = this.data.editingRequest
-        ? await api.request(`/purchase-requests/${id}/items-preview`, { method: 'POST', data: this.requestEditBody() })
+        ? await api.request(`/purchase-requests/${id}/items-preview`, { method: 'POST', data: this.requestEditBody(true) })
         : await api.request(`/purchase-requests/${id}/confirmation-preview`);
-      if (id === this.data.requestId && revision === this.data.editRevision) this.setData({ fundingView: review.funding, error: '' });
+      if (id === this.data.requestId && revision === this.data.editRevision) {
+        const fundingGroups = review.settlementGroups || [];
+        const supplierNames = new Map((this.data.editCatalog?.items || []).flatMap(item => item.suppliers.map(supplier => [supplier.supplierId, supplier.supplierName])));
+        const fundingSupplierRows = fundingGroups.map(group => ({ ...group, supplierName: group.supplierName || supplierNames.get(group.supplierId) || '供应商', settlementLabel: settlementLabels[group.mode] || '结算方式待核验' }));
+        this.setData({ fundingView: review.funding, fundingGroups, fundingSupplierRows, error: '',
+          assignmentGroups: this.data.assignmentGroups.map(group => ({ ...group,
+            settlementLabel: settlementLabels[fundingGroups.find(row => row.supplierId === group.supplierId)?.mode] || '结算方式待核验' })) });
+        if (this.data.editingRequest) {
+          this.refreshEditCatalog();
+        }
+      }
     } catch (error) { if (id === this.data.requestId && revision === this.data.editRevision) this.setData({ fundingView: null, error: error.message }); }
     finally { this.setData({ fundingLoading: false }); }
   },
@@ -656,7 +669,8 @@ Page({
       const supplier = supplierIndex >= 0 ? row.suppliers[supplierIndex] || {} : {};
       const purchase = line?.unitId && line.unitId === row.product.purchaseUnitConversion?.purchaseUnitId;
       const maxRequestedQuantity = original ? String(original.unitSnapshot?.originalInputQuantity || original.unitSnapshot?.inputQuantity || original.quantity) : '';
-      return { ...row.product, imageUrl: visual.imageUrl || '', imageLoading: !!visual.imageLoading, imageFailed: !!visual.imageFailed,
+      const mode = (this.data.fundingGroups || []).find(group => group.supplierId === supplier.supplierId)?.mode;
+      return { ...row.product, settlementMode: mode || '', settlementLabel: settlementLabels[mode] || '结算方式待核验', imageUrl: visual.imageUrl || '', imageLoading: !!visual.imageLoading, imageFailed: !!visual.imageFailed,
         suppliers: row.suppliers, supplierIndex, supplierId: supplier.supplierId || '', supplierName: supplierIndex < 0 ? '请选择有效供应商' : supplier.supplierName || '暂无有效供应商',
         cartQuantity: line?.quantity || '0', usesPurchaseUnit: !!purchase, displayUnitName: purchase ? row.product.purchaseUnitName : row.product.unitName,
         displaySalesPrice: purchase ? supplier.purchaseSalesPrice : supplier.salesPrice,
@@ -804,7 +818,8 @@ Page({
 
   cancelRequestEdit() {
     if (this.data.savingRequest) return;
-    this.setData({ editingRequest: false, editCartOpen: false, editItems: [], editProducts: [], visibleEditProducts: [], addableProducts: [], editReason: '', error: '' });
+    this.setData({ editingRequest: false, editRevision: this.data.editRevision + 1, fundingView: null, editCartOpen: false, editItems: [], editProducts: [], visibleEditProducts: [], addableProducts: [], editReason: '', error: '' });
+    this.refreshConfirmationFunding();
   },
 
   markRequestEditChanged() {
@@ -857,8 +872,8 @@ Page({
     this.markRequestEditChanged();
   },
 
-  requestEditBody() {
-    const reason = this.data.editReason.trim();
+  requestEditBody(previewOnly = false) {
+    const reason = this.data.editReason.trim() || (previewOnly ? '资金调整预览' : '');
     if (!reason) throw new Error('请填写修改原因');
     if (!this.data.editItems.length) throw new Error('下货单至少保留一种商品');
     return {

@@ -22,6 +22,59 @@ function page(role, request = async () => ({}), apiOverrides = {}, wxOverrides =
 }
 
 const tap = (id, extra = {}) => ({ currentTarget: { dataset: { id, ...extra } } });
+test('purchaser supplier funding hints do not restrict the product editor', () => {
+  const purchaser = page('purchaser', undefined, {}, { pageScrollTo() {} });
+  purchaser.data.editingRequest = true;
+  purchaser.data.selectedRequest = { version: 1, items: [] };
+  purchaser.data.fundingGroups = [{ supplierId: 's1', mode: 'CREDIT', amount: '300.00' }, { supplierId: 's2', mode: 'CREDIT', amount: '210.00' }];
+  purchaser.data.editCatalog = { items: ['s1', 's2'].map((id, index) => ({ product: { id, name: id }, suppliers: [{ supplierId: id, supplierName: id, salesPrice: index ? '210' : '300' }] })) };
+  purchaser.data.editItems = ['s1', 's2'].map(id => ({ productId: id, quantity: '1', supplierIndex: 0 }));
+  purchaser.refreshEditCatalog();
+  assert.deepEqual(Array.from(purchaser.data.visibleEditProducts, item => item.id), ['s1', 's2']);
+  assert.equal(purchaser.data.visibleEditProducts.length, 2);
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  assert.equal(markup.includes('adjustFundingProducts'), false);
+  assert.ok(markup.includes('供应商结算方式'));
+  const editorMarkup = markup.slice(markup.indexOf('<view class="request-catalog"'), markup.indexOf('<view class="sheet-mask"'));
+  for (const fragment of ['confirmationFunds', 'funds-adjust-guide', '资金参考', '金额限制', 'funding-supplier-row']) assert.equal(editorMarkup.includes(fragment), false);
+  assert.ok(editorMarkup.includes('saveRequestDraft'));
+  assert.ok(editorMarkup.includes('confirmRequestEdit'));
+});
+
+test('purchaser editor retains all settlement modes and unknown suppliers', () => {
+  const purchaser = page('purchaser', undefined, {}, { pageScrollTo() {} });
+  purchaser.data.editingRequest = true;
+  purchaser.data.selectedRequest = { version: 1, items: [] };
+  purchaser.data.fundingGroups = [{ supplierId: 'credit', mode: 'CREDIT' }, { supplierId: 'stored', mode: 'STORED_VALUE' }];
+  purchaser.data.editCatalog = { items: ['credit', 'stored', 'unknown'].map(id => ({ product: { id, name: id }, suppliers: [{ supplierId: id, salesPrice: '10' }] })) };
+  purchaser.data.editItems = ['credit', 'stored', 'unknown'].map(id => ({ productId: id, quantity: '1', supplierIndex: 0 }));
+  purchaser.refreshEditCatalog();
+  assert.deepEqual(Array.from(purchaser.data.visibleEditProducts, row => row.id), ['credit', 'stored', 'unknown']);
+  assert.equal(purchaser.data.visibleEditProducts[0].settlementLabel, '挂账支付');
+  assert.equal(purchaser.data.visibleEditProducts.length, 3);
+});
+
+test('purchaser can preview funding without saving or providing a reason', async () => {
+  const calls = [];
+  const purchaser = page('purchaser', async (path, options) => {
+    calls.push({ path, options });
+    return { funding: { canConfirm: false, stored: { shortfall: '0.00' }, credit: { shortfall: '300.00' } }, settlementGroups: [{ supplierId: 's', mode: 'CREDIT' }] };
+  });
+  purchaser.data.editingRequest = true; purchaser.data.requestId = 'r';
+  purchaser.data.selectedRequest = { version: 1, items: [] };
+  purchaser.data.editItems = [{ productId: 'p', supplierId: 's', quantity: '1' }];
+  purchaser.data.assignmentGroups = [{ supplierId: 's' }];
+  await purchaser.refreshConfirmationFunding();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].path, '/purchase-requests/r/items-preview');
+  assert.equal(purchaser.data.editReason, '');
+  assert.equal(purchaser.data.fundingView.credit.shortfall, '300.00');
+  assert.equal(purchaser.data.assignmentGroups[0].settlementLabel, '挂账支付');
+  assert.throws(() => purchaser.requestEditBody(), /修改原因/);
+  purchaser.markRequestEditChanged();
+  assert.equal(purchaser.data.fundingView, null);
+});
+
 test('store editing entry is locked after procurement confirmation including returned requests', () => {
   const urls = [];
   const store = page('store', undefined, {}, { navigateTo: value => urls.push(value.url) });
@@ -1960,6 +2013,15 @@ test('purchaser blocks adjusted confirmation on shortage and generates orders af
   assert.equal(markup.includes('核对调整'), false);
   for (const handler of ['chooseEditPrimaryCategory', 'stepEditProduct', 'setEditProductQuantity', 'changeEditSupplier']) assert.ok(markup.includes(`bindtap="${handler}"`) || markup.includes(`bindblur="${handler}"`) || markup.includes(`bindchange="${handler}"`));
   assert.equal(markup.includes('>编辑商品</button>'), false);
+});
+
+test('purchaser navigation does not show a combined cached todo badge', () => {
+  const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
+  const navigation = markup.split('\n').find(line => line.includes('class="business-nav"'));
+  assert.ok(navigation);
+  assert.ok(navigation.includes('>待办</view>'));
+  assert.equal(navigation.includes('nav-badge'), false);
+  assert.equal(navigation.includes('procurementTasks.length'), false);
 });
 
 test('purchaser rejection requires a reason and cancels the whole request through the command endpoint', async () => {

@@ -66,6 +66,11 @@ test('procurement confirmation gates funding and atomically generates orders wit
     assert.equal(preview.data.funding.stored.shortfall, '10.00');
     assert.equal(preview.data.funding.credit.shortfall, '20.00');
     assert.equal(preview.data.funding.canConfirm, false);
+    const adjustmentPreview = await call(`/purchase-requests/${id}/items-preview`, tokens.PURCHASER!, { expectedVersion: current.version, reason: '资金调整预览', items: products });
+    assert.equal(adjustmentPreview.status, 201);
+    assert.equal(adjustmentPreview.data.settlementGroups.length, 4);
+    assert.equal(adjustmentPreview.data.settlementGroups.find((group: { mode: string }) => group.mode === 'CREDIT').amount, '20.00');
+    assert.equal((await detail()).version, current.version);
     const blocked = await call(`/purchase-requests/${id}/confirm`, tokens.PURCHASER!, body(current.version));
     assert.equal(blocked.status, 409);
     assert.equal(await db.supplierOrder.count({ where: { requestId: id } }), 0);

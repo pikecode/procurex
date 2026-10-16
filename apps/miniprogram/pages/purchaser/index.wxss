@@ -241,5 +241,12 @@
 .funds-gap > view > text:last-child { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
 .funds-next-step { display: block; margin-top: 12rpx; font-size: 23rpx; line-height: 1.6; color: var(--ink-3); }
 .funds-ready { margin-top: 16rpx; font-size: 24rpx; color: var(--brand); }
+.funding-suppliers { margin-top: 18rpx; }
+.funding-suppliers-title { font-size: 24rpx; font-weight: 600; color: var(--ink-2); }
+.funding-supplier-row { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; padding: 14rpx 0; border-bottom: 1rpx solid var(--line-soft); }
+.funding-supplier-row > view { min-width: 0; flex: 1; }
+.funding-supplier-name { display: block; font-size: 25rpx; overflow-wrap: anywhere; }
+.funding-supplier-meta { display: block; margin-top: 6rpx; font-size: 22rpx; color: var(--ink-3); }
+.assignment-settlement { display: flex; justify-content: space-between; gap: 12rpx; padding: 12rpx 0; font-size: 23rpx; color: var(--ink-3); }
 .page .confirmation-actions > button { padding: 0 10rpx; font-size: 24rpx; white-space: nowrap; }
 .page .confirmation-actions .action-secondary { flex: 0 0 132rpx; }
