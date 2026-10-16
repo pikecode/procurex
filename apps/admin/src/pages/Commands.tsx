@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Button, Descriptions, Form, Input, Modal, Select, Tag, Tooltip } from 'antd';
 import { Eye } from 'lucide-react';
 import { ListPage } from '../components/ListPage';
+import { modalWidth } from '../lib/theme';
 import { hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { adminCommandPath, useWorkflowCommand } from '../lib/useWorkflowCommand';
@@ -28,7 +29,7 @@ export default function Commands({ user }: { user: User }) {
         { title: '提交时间', dataIndex: 'startedAt', width: 180, render: workflowTime }, { title: '资源类型', dataIndex: 'resourceType', width: 160 },
         { title: '错误代码', dataIndex: 'errorCode', width: 220 }, { title: '操作', align: 'right' as const, width: 88, render: (_, row) => <RowActions ariaLabel={row.id} actions={[{ key: 'view', label: '查看', icon: <Eye size={15} />, onClick: () => { setDetail(row); setOperation(''); setError(''); } }]} /> },
       ]} />
-    <Modal title="命令详情" open={Boolean(detail)} onCancel={() => { if (!checking && !command.busy) setDetail(null); }} footer={null} width={680}>
+    <Modal title="命令详情" open={Boolean(detail)} onCancel={() => { if (!checking && !command.busy) setDetail(null); }} footer={null} width={modalWidth.standard}>
       {detail && <>
         <Descriptions size="small" column={1} items={[
           { key: 'id', label: '命令ID', children: detail.id }, { key: 'action', label: '操作', children: detail.action },

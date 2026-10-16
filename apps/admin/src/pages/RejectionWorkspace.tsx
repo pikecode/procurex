@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, App, Button, Descriptions, Form, Grid, Input, Modal, Popconfirm, Segmented, Select, Spin, Table, Tooltip } from 'antd';
 import { Check, RotateCcw } from 'lucide-react';
+import { modalWidth } from '../lib/theme';
 import { ListPage } from '../components/ListPage';
 import { request } from '../lib/api';
 import type { CatalogProduct, CatalogSupplier, TemplateDetail } from '../lib/catalogTypes';
@@ -65,7 +66,7 @@ export function RejectionEditor({ requestId, orderId, command, canRecover, onClo
     if (!context || choices.length !== context.items.length || !reason.trim() || reason.trim().length > 300) throw new Error('请填写处理原因，最多300字。');
     if (choices.some(row => !row.cancel && !options(context.items.find(item => item.id === row.requestItemId)!).some(option => option.value === row.supplierId))) throw new Error('每项商品请选择可用供应商，或选择取消商品。');
   }
-  return <Modal open zIndex={1200} title="拒单重分配" width={960} maskClosable={false} closable={!command.busy} onCancel={() => { if (!command.busy) onClose(); }} footer={<div className="actions workflow-actions">
+  return <Modal open zIndex={1200} title="拒单重分配" width={modalWidth.wide} maskClosable={false} closable={!command.busy} onCancel={() => { if (!command.busy) onClose(); }} footer={<div className="actions workflow-actions">
     <Button disabled={command.busy} onClick={onClose}>关闭</Button>
     <Tooltip title="重新读取拒单"><Button aria-label="重新读取拒单" icon={<RotateCcw size={16} />} disabled={loading || command.blocked} onClick={() => { command.clearError(); setRevision(value => value + 1); }} /></Tooltip>
     <Button disabled={loading || command.blocked || !context} onClick={() => { try { validate(); setReviewed(true); setError(''); } catch (failure) { setError((failure as Error).message); } }}>核对处理清单</Button>

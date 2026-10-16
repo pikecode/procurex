@@ -1,6 +1,23 @@
+<template name="confirmationFunds">
+  <view class="confirmation-funds">
+    <view class="funds-heading"><text>资金核验</text><button class="funds-refresh" size="mini" bindtap="refreshConfirmationFunding" disabled="{{fundingLoading || savingRequest || confirming}}">{{fundingLoading ? '核验中' : '重新核验'}}</button></view>
+    <block wx:if="{{fundingView}}">
+      <view class="funds-grid funds-table-heading"><text>支付方式</text><text>本单所需</text><text>本单可用</text></view>
+      <view class="funds-grid funds-table-row"><text>储值</text><text>¥{{fundingView.stored.required}}</text><text>¥{{fundingView.stored.available}}</text></view>
+      <view class="funds-grid funds-table-row"><text>挂账</text><text>¥{{fundingView.credit.required}}</text><text>¥{{fundingView.credit.available}}</text></view>
+      <view class="funds-gap" wx:if="{{!fundingView.canConfirm}}">
+        <view wx:if="{{fundingView.stored.shortfall !== '0.00'}}"><text>待充值金额</text><text>¥{{fundingView.stored.shortfall}}</text></view>
+        <view wx:if="{{fundingView.credit.shortfall !== '0.00'}}"><text>待补挂账额度</text><text>¥{{fundingView.credit.shortfall}}</text></view>
+        <text class="funds-next-step">请联系财务补足后重新核验，暂不能生成订单。</text>
+      </view>
+      <view class="funds-ready" wx:else>资金充足，可确认生成订单</view>
+    </block>
+    <text class="funds-next-step" wx:else>尚未核验，请重新核验资金。</text>
+  </view>
+</template>
 <test-context wx:if="{{activeView === 'mine'}}" />
 <wxs src="../../utils/labels.wxs" module="labels" />
-<view class="page {{workspaceTabbarVisible ? 'has-workspace-tabbar' : ''}}{{user.testWorkbenchEnabled && !user.testIdentity ? 'has-test-workbench-root' : ''}} {{requestId && selectedRequest && (activeView === 'rejections' || selectedRequest.status === 'PENDING_PROCUREMENT' || selectedRequest.status === 'PENDING_FUNDS') || activeView === 'freight' && selectedFreight.status === 'PENDING' ? 'has-action-bar' : ''}}">
+<view class="page {{workspaceTabbarVisible ? 'has-workspace-tabbar' : ''}}{{user.testWorkbenchEnabled && !user.testIdentity ? 'has-test-workbench-root' : ''}} {{requestId && selectedRequest && (activeView === 'rejections' || selectedRequest.status === 'PENDING_PROCUREMENT' || selectedRequest.status === 'PENDING_FUNDS' || selectedRequest.status === 'PENDING_FINANCE') || activeView === 'freight' && selectedFreight.status === 'PENDING' ? 'has-action-bar' : ''}}">
   <view class="business-heading" wx:if="{{!requestId && !selectedFreight}}"><view><text class="business-title">采购管理</text><text class="muted">{{user.displayName}}</text></view><view class="heading-actions" wx:if="{{!requestId && activeView !== 'reports' && (activeView !== 'orders' || recordType === 'requests')}}"><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{loading}}">刷新</button></view></view>
   <view class="workspace-loading" wx:if="{{loading}}">正在更新采购信息</view>
   <view wx:if="{{error && !detailError}}" class="error-banner"><text>{{error}}</text><button class="ghost" bindtap="loadWork" disabled="{{loading || confirming || reallocating || freightReviewing}}">刷新数据</button></view>
@@ -78,21 +95,24 @@
   <view class="card" wx:if="{{(activeView === 'orders' || activeView === 'rejections') && requestId && !editingRequest}}">
     <view class="task-detail-toolbar"><text class="back-link" bindtap="backToList">‹ {{sourceOrderReturn ? '返回订单详情' : taskOrigin ? '返回待办' : '返回列表'}}</text><text>{{activeView === 'rejections' && rejectedOrderId ? '拒单改派' : selectedRequest.supplierOrders.length ? '采购确认结果' : '下货单确认'}}</text></view>
     <block wx:if="{{selectedRequest}}">
-    <view class="task-detail-identity"><text class="request-store">{{selectedRequest.storeName || '门店下货单'}}</text><text class="status {{selectedRequest.paymentStatus === 'SHORTFALL' ? 'tone-warn' : selectedRequest.status === 'CONFIRMED' ? 'tone-brand' : ''}}">{{labels.status(selectedRequest.status)}}</text></view>
+    <view class="document-kind-label">门店下货单</view>
+    <view class="task-detail-identity"><text class="request-store">{{selectedRequest.storeName || '门店'}}</text><text class="status {{selectedRequest.paymentStatus === 'SHORTFALL' ? 'tone-warn' : selectedRequest.status === 'CONFIRMED' ? 'tone-brand' : ''}}">{{labels.status(selectedRequest.status)}}</text></view>
     <view class="task-detail-metric"><text>订货金额</text><text>¥{{labels.money(selectedRequest.salesGoodsAmount)}}</text></view>
     <view class="task-detail-facts"><view><text>下货单号</text><document-no value="{{selectedRequest.requestNo}}" /></view><view><text>资金状态</text><text>{{labels.status(selectedRequest.paymentStatus)}}</text></view></view>
     <view class="task-rejection-note" wx:if="{{activeView === 'rejections' && rejectedOrderId}}"><text>供应商拒单</text><text>{{rejectionContext.supplierName}}</text><text>{{rejectionContext.reason || '未填写拒单原因'}}</text></view>
     </block>
     <view id="supplier-order-summary" class="supplier-order-summary" wx:if="{{selectedRequest.supplierOrders.length}}">
-      <view class="section-head"><text class="card-title">{{activeView === 'rejections' && rejectedOrderId ? '被拒订单' : '供应商订单'}}</text><text class="order-count" wx:if="{{!rejectedOrderId}}">已生成 {{selectedRequest.supplierOrders.length}} 张</text></view>
+      <view class="generated-orders-heading">
+        <view class="generated-orders-title"><text class="card-title">{{activeView === 'rejections' && rejectedOrderId ? '被拒的供应商订单' : '采购确认后生成的供应商订单'}}</text><text class="generated-orders-caption">下货单按供应商拆分，每张订单单独跟进</text></view>
+        <text class="order-count" wx:if="{{!rejectedOrderId}}">{{selectedRequest.supplierOrders.length}} 张</text>
+      </view>
       <view class="price-details-control"><text>供应商价格明细</text><switch aria-label="显示供应商价格明细" checked="{{showPriceDetails}}" bindchange="togglePriceDetails" color="#167e5a" /></view>
-      <view wx:for="{{selectedRequest.supplierOrders}}" wx:key="id" class="row" wx:if="{{activeView !== 'rejections' || !rejectedOrderId || item.id === rejectedOrderId}}">
-        <button class="secondary" data-id="{{item.id}}" bindtap="openGeneratedOrder">跟进此订单 ›</button>
+      <view wx:for="{{selectedRequest.supplierOrders}}" wx:key="id" class="generated-order-card" wx:if="{{activeView !== 'rejections' || !rejectedOrderId || item.id === rejectedOrderId}}">
         <view class="supplier-order-toggle pressable" data-id="{{item.id}}" bindtap="toggleSupplierOrder">
-        <view class="row-title"><text>{{item.supplierName || '供应商订单'}}</text><text class="status {{item.status === 'REJECTED' ? 'tone-danger' : item.status === 'COMPLETED' ? 'tone-brand' : 'tone-warn'}}">{{labels.status(item.status)}}</text></view>
-        <view class="muted">订单号 <document-no value="{{item.supplierOrderNo}}" /></view>
-        <view class="muted">履约 {{labels.status(item.fulfillmentStatus)}}</view>
-        <view class="supplier-order-overview"><text>{{item.itemsError ? '商品清单待加载' : item.items.length + ' 种商品'}} · ¥{{labels.money(item.salesGoodsAmount)}}</text><text class="supplier-order-fold">{{expandedOrders[item.id] ? '收起商品 ∧' : '查看商品 ›'}}</text></view>
+          <view class="generated-order-top"><view class="generated-order-heading"><text class="generated-order-supplier">{{item.supplierName || '供应商'}}</text><text class="status {{item.status === 'REJECTED' ? 'tone-danger' : item.status === 'COMPLETED' ? 'tone-brand' : 'tone-warn'}}">{{labels.status(item.status)}}</text></view><button class="generated-order-follow" data-id="{{item.id}}" catchtap="openGeneratedOrder">跟进订单 ›</button></view>
+          <view class="generated-order-no"><text>供应商订单号</text><document-no value="{{item.supplierOrderNo}}" /></view>
+          <view class="generated-order-overview"><text>履约 {{labels.status(item.fulfillmentStatus)}}</text><text>{{item.itemsError ? '商品清单待加载' : item.items.length + ' 种商品'}} · ¥{{labels.money(item.salesGoodsAmount)}}</text></view>
+          <view class="supplier-order-fold">{{expandedOrders[item.id] ? '收起商品 ∧' : '查看商品明细 ﹀'}}</view>
         </view>
         <view class="generated-order-products" wx:if="{{expandedOrders[item.id]}}">
           <view wx:for="{{item.items}}" wx:for-item="product" wx:key="id" class="generated-order-product-block">
@@ -104,7 +124,7 @@
           <view class="error-banner" wx:if="{{item.itemsError}}"><text>{{item.itemsError}}</text><button class="ghost" bindtap="loadRequestDetail" disabled="{{detailing || confirming || reallocating || recovering || pendingCommand}}">重试</button></view>
         </view>
       </view>
-      <view class="original-request-toggle" bindtap="toggleOriginalRequest"><text>{{showOriginalRequest ? '收起原下货单' : '查看原下货单'}}</text><text>{{showOriginalRequest ? '∧' : '›'}}</text></view>
+      <view class="original-request-toggle" bindtap="toggleOriginalRequest"><text>{{showOriginalRequest ? '收起下货商品明细' : '查看下货商品明细'}}</text><text>{{showOriginalRequest ? '∧' : '›'}}</text></view>
     </view>
     <view class="task-decision-section" wx:if="{{activeView === 'rejections' && canReallocate && rejectedOrderId && selectedRequest}}">
       <text class="card-title">重新分配</text>
@@ -113,16 +133,17 @@
     </view>
     <view class="muted" wx:if="{{detailing}}">正在更新明细</view>
     <view class="error-banner" wx:if="{{detailError}}"><text>{{detailError}}</text><button class="ghost" bindtap="loadRequestDetail" disabled="{{detailing || confirming || reallocating || recovering || pendingCommand}}">重试</button></view>
-    <view class="funding-shortfall" wx:if="{{selectedRequest.status === 'PENDING_FUNDS'}}"><text>待补资金 ¥{{labels.money(selectedRequest.shortfallAmount)}}</text></view>
+    <view class="funding-shortfall" wx:if="{{selectedRequest.financeReturnedReason}}">财务退回：{{selectedRequest.financeReturnedReason}}</view>
     <view class="request-decision-panel" wx:if="{{activeView === 'orders' && rejectingRequest}}">
       <text class="card-title">采购拒单</text>
       <text class="muted">拒单后整张下货单取消，并释放尚未扣除的资金占用。</text>
       <view class="field"><text class="field-label">拒单原因</text><textarea value="{{rejectReason}}" data-field="rejectReason" bindinput="editInput" maxlength="500" placeholder="必填，请说明拒单原因" auto-height disabled="{{confirming}}" /></view>
     </view>
-    <view class="button-row action-bar" wx:if="{{activeView === 'orders' && (selectedRequest.status === 'PENDING_PROCUREMENT' || selectedRequest.status === 'PENDING_FUNDS') && !selectedRequest.supplierOrders.length && !editingRequest && !rejectingRequest}}">
-      <button wx:if="{{canReallocate}}" class="secondary action-secondary" disabled="{{confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" bindtap="startRequestEdit">调整下货单</button>
+    <template is="confirmationFunds" data="{{fundingView, fundingLoading, savingRequest, confirming}}" wx:if="{{activeView === 'orders' && !selectedRequest.supplierOrders.length && !editingRequest && (selectedRequest.status === 'PENDING_PROCUREMENT' || selectedRequest.status === 'PENDING_FUNDS' || selectedRequest.status === 'PENDING_FINANCE')}}" />
+    <view class="button-row action-bar confirmation-actions" wx:if="{{activeView === 'orders' && (selectedRequest.status === 'PENDING_PROCUREMENT' || selectedRequest.status === 'PENDING_FUNDS' || selectedRequest.status === 'PENDING_FINANCE') && !selectedRequest.supplierOrders.length && !editingRequest && !rejectingRequest}}">
+      <button wx:if="{{canReallocate}}" class="secondary action-secondary" disabled="{{confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" bindtap="startRequestEdit">调整商品</button>
       <button class="danger action-secondary" disabled="{{confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" bindtap="startRequestReject">拒单</button>
-      <button class="primary" disabled="{{selectedRequest.status === 'PENDING_FUNDS' || confirming || detailing || reallocating || recovering || pendingCommand || detailError}}" loading="{{confirming}}" bindtap="confirmRequest">确认并生成订单</button>
+      <button class="primary" disabled="{{confirming || detailing || reallocating || recovering || pendingCommand || detailError || fundingLoading || !fundingView || !fundingView.canConfirm}}" loading="{{confirming}}" bindtap="confirmRequest">确认并生成订单</button>
     </view>
     <view class="button-row action-bar" wx:if="{{activeView === 'orders' && rejectingRequest}}">
       <button class="secondary action-secondary" disabled="{{confirming}}" bindtap="cancelRequestReject">取消</button>
@@ -163,9 +184,11 @@
     <view class="request-edit-summary"><view bindtap="toggleEditCart"><text>已选 {{editItems.length}} 种 ›</text><text>预估 ¥{{labels.money(editEstimatedAmount)}}</text></view><text>提交时自动校验数量、价格、供应商和资金</text></view>
   </view>
 
+  <view wx:if="{{activeView === 'orders' && editingRequest}}" class="section-band"><input value="{{editReason}}" data-field="editReason" bindinput="editInput" maxlength="300" placeholder="调整原因（必填）" /><template is="confirmationFunds" data="{{fundingView, fundingLoading, savingRequest, confirming}}" /></view>
   <view class="button-row action-bar" wx:if="{{activeView === 'orders' && editingRequest}}">
     <button class="secondary action-secondary" disabled="{{savingRequest}}" bindtap="cancelRequestEdit">取消调整</button>
-    <button class="primary" loading="{{savingRequest}}" disabled="{{savingRequest || !editItems.length}}" bindtap="confirmRequestEdit">确认并生成订单</button>
+    <button class="secondary" disabled="{{savingRequest || pendingCommand}}" bindtap="saveRequestDraft">保存调整</button>
+    <button class="primary" loading="{{savingRequest}}" disabled="{{savingRequest || !editItems.length || (fundingView && !fundingView.canConfirm)}}" bindtap="confirmRequestEdit">确认并生成订单</button>
   </view>
 
   <view class="sheet-mask" wx:if="{{editingRequest && editCartOpen}}" bindtap="toggleEditCart"><view class="request-cart-sheet" catchtap="keepEditCartOpen"><view class="section-head"><text class="card-title">下货清单 · {{editItems.length}} 种</text><button class="ghost" bindtap="toggleEditCart">关闭</button></view><scroll-view scroll-y><view class="request-cart-line" wx:for="{{editItems}}" wx:key="productId"><view><text>{{item.productName}}</text><text class="muted">{{item.quantity}} {{item.unitName}} · {{item.supplierIndex >= 0 ? item.suppliers[item.supplierIndex].supplierName : '请选择有效供应商'}}</text></view><button class="ghost" data-id="{{item.productId}}" bindtap="removeEditCartItem">移除</button></view></scroll-view><view class="request-cart-total">预估 ¥{{labels.money(editEstimatedAmount)}}</view></view></view>
@@ -210,7 +233,7 @@
     <view id="order-list-controls" class="order-list-controls sticky-bar">
     <input class="business-search" value="{{search}}" bindinput="onSearch" confirm-type="search" placeholder="搜索门店或下货单号" />
     <scroll-view scroll-x show-scrollbar="{{false}}" class="order-status-scroll">
-    <view class="status-filters"><text class="{{statusFilter === 'all' ? 'selected' : ''}}" data-filter="all" bindtap="filterStatus">全部</text><text class="{{statusFilter === 'PENDING_PROCUREMENT' ? 'selected' : ''}}" data-filter="PENDING_PROCUREMENT" bindtap="filterStatus">待确认</text><text class="{{statusFilter === 'PENDING_FUNDS' ? 'selected' : ''}}" data-filter="PENDING_FUNDS" bindtap="filterStatus">待补款</text><text class="{{statusFilter === 'CONFIRMED' ? 'selected' : ''}}" data-filter="CONFIRMED" bindtap="filterStatus">已生成订单</text></view>
+    <view class="status-filters"><text class="{{statusFilter === 'all' ? 'selected' : ''}}" data-filter="all" bindtap="filterStatus">全部</text><text class="{{statusFilter === 'PENDING_PROCUREMENT' ? 'selected' : ''}}" data-filter="PENDING_PROCUREMENT" bindtap="filterStatus">待确认</text><text class="{{statusFilter === 'PENDING_FUNDS' ? 'selected' : ''}}" data-filter="PENDING_FUNDS" bindtap="filterStatus">待补款</text><text class="{{statusFilter === 'PENDING_FINANCE' ? 'selected' : ''}}" data-filter="PENDING_FINANCE" bindtap="filterStatus">待采购处理</text><text class="{{statusFilter === 'CONFIRMED' ? 'selected' : ''}}" data-filter="CONFIRMED" bindtap="filterStatus">已生成订单</text></view>
     </scroll-view>
     </view>
     <view class="list">
@@ -227,15 +250,19 @@
 
   <view class="card" wx:if="{{activeView === 'reports'}}">
     <view class="back-link" data-view="mine" bindtap="changeView">‹ 返回我的</view>
-    <view class="section-head">
-      <text class="card-title">统计概览</text>
-      <button class="ghost" loading="{{reportsLoading}}" disabled="{{reportsLoading}}" bindtap="loadReports">刷新</button>
+    <view class="report-page-heading"><text>采购统计</text><text>按供应商订单的完成情况汇总</text></view>
+    <view class="report-filter-panel">
+      <view class="report-filter-heading"><text>统计筛选</text><text>最多查询三个月</text></view>
+      <view class="report-filter-label">选择日期范围</view>
+      <view class="report-presets"><view class="{{reportPreset === 'today' ? 'selected' : ''}}" data-preset="today" bindtap="chooseReportPreset">今日</view><view class="{{reportPreset === 'week' ? 'selected' : ''}}" data-preset="week" bindtap="chooseReportPreset">本周</view><view class="{{reportPreset === 'month' ? 'selected' : ''}}" data-preset="month" bindtap="chooseReportPreset">本月</view><view class="{{reportPreset === 'lastMonth' ? 'selected' : ''}}" data-preset="lastMonth" bindtap="chooseReportPreset">上月</view><view class="{{reportPreset === 'custom' ? 'selected' : ''}}" data-preset="custom" bindtap="chooseReportPreset">自定义</view></view>
+      <view class="report-selected-range" wx:if="{{reportPreset !== 'custom'}}">{{reportDraft.from}} 至 {{reportDraft.to}}</view>
+      <view class="report-date-range" wx:if="{{reportPreset === 'custom'}}"><picker mode="date" value="{{reportDraft.from}}" data-field="from" bindchange="changeReportDate"><view><text class="report-date-label">开始日期</text><text>{{reportDraft.from}} <text class="picker-caret">⌄</text></text></view></picker><text class="report-date-separator">至</text><picker mode="date" value="{{reportDraft.to}}" data-field="to" bindchange="changeReportDate"><view><text class="report-date-label">结束日期</text><text>{{reportDraft.to}} <text class="picker-caret">⌄</text></text></view></picker></view>
+      <view class="report-filter-label report-filter-label-spaced">业务范围</view>
+      <view class="report-entity-filters"><picker range="{{reportStoreOptions}}" range-key="name" value="{{reportStoreIndex}}" data-field="storeId" bindchange="chooseReportFilter"><view><text class="report-date-label">门店</text><text>{{reportStoreOptions[reportStoreIndex].name}} <text class="picker-caret">⌄</text></text></view></picker><picker range="{{reportSupplierOptions}}" range-key="name" value="{{reportSupplierIndex}}" data-field="supplierId" bindchange="chooseReportFilter"><view><text class="report-date-label">供应商</text><text>{{reportSupplierOptions[reportSupplierIndex].name}} <text class="picker-caret">⌄</text></text></view></picker></view>
+      <button class="primary report-query-button" loading="{{reportsLoading}}" disabled="{{reportsLoading}}" bindtap="applyReportRange">查询统计</button>
     </view>
-    <view class="report-presets"><view class="{{reportPreset === 'today' ? 'selected' : ''}}" data-preset="today" bindtap="chooseReportPreset">今日</view><view class="{{reportPreset === 'week' ? 'selected' : ''}}" data-preset="week" bindtap="chooseReportPreset">本周</view><view class="{{reportPreset === 'month' ? 'selected' : ''}}" data-preset="month" bindtap="chooseReportPreset">本月</view><view class="{{reportPreset === 'lastMonth' ? 'selected' : ''}}" data-preset="lastMonth" bindtap="chooseReportPreset">上月</view></view>
-    <view class="report-date-range"><picker mode="date" value="{{reportDraft.from}}" data-field="from" bindchange="changeReportDate"><view><text class="report-date-label">开始日期</text><text>{{reportDraft.from}} ▾</text></view></picker><text>至</text><picker mode="date" value="{{reportDraft.to}}" data-field="to" bindchange="changeReportDate"><view><text class="report-date-label">结束日期</text><text>{{reportDraft.to}} ▾</text></view></picker></view>
-    <view class="report-entity-filters"><picker range="{{reportStoreOptions}}" range-key="name" value="{{reportStoreIndex}}" data-field="storeId" bindchange="chooseReportFilter"><view><text class="report-date-label">门店</text><text>{{reportStoreOptions[reportStoreIndex].name}} ▾</text></view></picker><picker range="{{reportSupplierOptions}}" range-key="name" value="{{reportSupplierIndex}}" data-field="supplierId" bindchange="chooseReportFilter"><view><text class="report-date-label">供应商</text><text>{{reportSupplierOptions[reportSupplierIndex].name}} ▾</text></view></picker></view>
-    <view class="report-query-row"><text>自定义区间最多三个月</text><button class="secondary" bindtap="applyReportRange" disabled="{{reportsLoading}}">查询</button></view>
-    <view class="report-scope">按订单完成日期 · {{reportRange.from}} 至 {{reportRange.to}}</view>
+    <view class="report-scope">统计口径：订单完成日期 · {{reportRange.from}} 至 {{reportRange.to}}</view>
+    <view class="report-results">
     <view class="workspace-loading" wx:if="{{reportsLoading}}">正在查询统计</view>
     <view class="error-banner" wx:if="{{reportsError}}">{{reportsError}}</view>
     <view class="metric-grid procurement-report-metrics" wx:if="{{reportSummary}}">
@@ -263,9 +290,10 @@
     </view>
     <button class="secondary" wx:if="{{moreReportDetails}}" bindtap="nextReportDetails">加载更多供应商</button>
     <view class="empty-state" wx:if="{{reportSummary && !reportSummary.count}}">该区间暂无已完成订单</view>
+    </view>
   </view>
 
-  <view class="card" wx:if="{{result}}">
+  <view class="card" wx:if="{{result && !selectedRequest}}">
     <text class="card-title">处理结果</text>
     <view class="row"><view class="row-title"><text>{{result.title}}</text><text class="status tone-brand">{{labels.status(result.status)}}</text></view><view class="muted">{{result.detail}}</view></view>
   </view>

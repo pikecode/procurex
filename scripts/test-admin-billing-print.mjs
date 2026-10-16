@@ -12,7 +12,7 @@ after(() => vite.close());
 const { billingAccess, billingRowInScope } = await vite.ssrLoadModule('/src/lib/billingAccess.ts');
 const { createCommandId } = await vite.ssrLoadModule('/src/lib/commandId.ts');
 const { canAccessPage } = await vite.ssrLoadModule('/src/lib/access.ts');
-const { default: Billing } = await vite.ssrLoadModule('/src/pages/Billing.tsx');
+const { default: Billing, statementCanRegisterPayment } = await vite.ssrLoadModule('/src/pages/Billing.tsx');
 const { PurchasePrintSheet } = await vite.ssrLoadModule('/src/components/PurchasePrint.tsx');
 test('command IDs remain secure on HTTP IP addresses', () => {
   assert.equal(createCommandId({ randomUUID: () => 'native-id' }), 'native-id');
@@ -54,6 +54,12 @@ test('billing separates purchaser, company finance, store finance and supplier o
   assert.equal(billingAccess(supplier).readonly, false);
   assert.equal(billingRowInScope(supplier, { supplierId: 'T' }), false);
   assert.equal(billingRowInScope(supplier, { supplierId: 'S', direction: 'STORE_TO_COMPANY' }), false);
+});
+
+test('supplier bill with no remaining payable cannot start another payment registration', () => {
+  assert.equal(statementCanRegisterPayment({ payableAmount: '0.00' }), false);
+  assert.equal(statementCanRegisterPayment({ payableAmount: '300.00' }), true);
+  assert.equal(statementCanRegisterPayment(undefined), false);
 });
 
 test('missing assignments and unknown roles cannot open billing', () => {

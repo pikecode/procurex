@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Spin, Table, Tooltip, Upload } from 'antd';
 import { Check, Eye, RotateCcw, Trash2, Upload as UploadIcon } from 'lucide-react';
 import { PrivateEvidence, type EvidenceFile } from '../components/PrivateEvidence';
+import { modalWidth } from '../lib/theme';
 import { getSession, request } from '../lib/api';
 import { decimalRule } from '../lib/catalogTypes';
+import { useUnsavedGuard } from '../lib/useUnsavedGuard';
 import type { useWorkflowCommand } from '../lib/useWorkflowCommand';
 
 export type ShipmentDetail = { id: string; shipmentNo: string; supplierOrderId: string; supplierOrderNo: string; supplierOrderVersion: number; currentReceiptRevision: number; evidenceFiles?: EvidenceFile[]; items: { id: string; productName: string; unitName: string | null; shippedQuantity: string; currentReceivedQuantity: string | null; receiptLocked: boolean }[] };
@@ -12,13 +14,14 @@ export function ReceiptEditor({ shipmentId, command, onClose, onSaved }: { shipm
   const [shipment, setShipment] = useState<ShipmentDetail | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [revision, setRevision] = useState(0);
   const [files, setFiles] = useState<EvidenceFile[]>([]); const [uploading, setUploading] = useState(false); const uploadLock = useRef(false); const [review, setReview] = useState<ReceiptInput | null>(null);
   const [form] = Form.useForm<{ items: ReceiptInput['items'] }>(); const { message } = App.useApp();
+  const guard = useUnsavedGuard(form);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setShipment(null); setError(''); setReview(null); form.resetFields();
     request<ShipmentDetail>(`/shipments/${shipmentId}`, { signal: controller.signal }).then(value => {
       if (controller.signal.aborted) return;
       if (value.id !== shipmentId || !Number.isInteger(value.supplierOrderVersion) || !Number.isInteger(value.currentReceiptRevision) || !value.items?.length || new Set(value.items.map(item => item.id)).size !== value.items.length) throw new Error('发货明细不完整，请重新读取。');
       if (value.currentReceiptRevision > 0 && value.items.every(item => item.receiptLocked)) throw new Error('本发货单的收货数量已全部锁定，不能再修订。');
-      setShipment(value); form.setFieldsValue({ items: value.items.map(item => ({ shipmentItemId: item.id, receivedQuantity: item.currentReceivedQuantity ?? '' })) });
+      setShipment(value); form.setFieldsValue({ items: value.items.map(item => ({ shipmentItemId: item.id, receivedQuantity: item.currentReceivedQuantity ?? '' })) }); guard.snapshot();
     }).catch(failure => { if (!controller.signal.aborted) setError(failure.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [shipmentId, revision, form]);
@@ -28,8 +31,9 @@ export function ReceiptEditor({ shipmentId, command, onClose, onSaved }: { shipm
     return { expectedOrderVersion: shipment.supplierOrderVersion, expectedReceiptRevision: shipment.currentReceiptRevision, items: values.items, ...(files.length ? { evidenceFileIds: files.map(file => file.id) } : {}) };
   }
   const locked = uploading || command.blocked;
-  return <Modal open zIndex={1400} title={shipment?.currentReceiptRevision ? '修订收货' : '登记收货'} width={800} maskClosable={false} keyboard={!uploading && !command.busy} closable={!uploading && !command.busy} onCancel={() => { if (!uploading && !command.busy) onClose(); }} footer={<div className="actions workflow-actions">
-    <Button disabled={uploading || command.busy} onClick={onClose}>取消</Button><Tooltip title="重新读取收货明细"><Button aria-label="重新读取收货明细" icon={<RotateCcw size={16} />} disabled={locked} onClick={() => { command.clearError(); setRevision(value => value + 1); }} /></Tooltip>
+  const requestClose = () => { if (uploading || command.busy) return; void guard.confirmDiscard().then(ok => { if (ok) onClose(); }); };
+  return <Modal open zIndex={1400} title={shipment?.currentReceiptRevision ? '修订收货' : '登记收货'} width={modalWidth.wide} maskClosable={false} keyboard={!uploading && !command.busy} closable={!uploading && !command.busy} onCancel={requestClose} footer={<div className="actions workflow-actions">
+    <Button disabled={uploading || command.busy} onClick={requestClose}>取消</Button><Tooltip title="重新读取收货明细"><Button aria-label="重新读取收货明细" icon={<RotateCcw size={16} />} disabled={locked} onClick={() => { command.clearError(); setRevision(value => value + 1); }} /></Tooltip>
     <Button icon={<Eye size={16} />} disabled={locked || !shipment || loading} onClick={async () => { try { setReview(await draft()); setError(''); } catch (failure) { if (!('errorFields' in (failure as object))) setError((failure as Error).message); } }}>核对收货</Button>
     <Popconfirm key={revision} zIndex={1600} title="确认收货？金额及储值扣款由服务端按实际收货核定。" disabled={!review || locked} onConfirm={async () => {
       if (locked) return;

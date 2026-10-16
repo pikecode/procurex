@@ -423,7 +423,7 @@ export class StoresService {
 
       for (const request of pendingRequests) {
         await lockFundingRequest(tx, storeId, request.id);
-        const funding = await synchronizeRequestFunding(tx, request.id, { sourceId: recharge.id });
+        const funding = await synchronizeRequestFunding(tx, request.id, { sourceId: recharge.id, deferCreditShortfall: true });
         await tx.purchaseRequest.update({
           where: { id: request.id },
           data: {

@@ -1,5 +1,9 @@
 # 数据库详细设计
 
+2026-10-16 最终资金拦截口径：不再启用独立财务审核。已应用迁移保留 PENDING_FINANCE 及 financeReviewedAt/financeReturnedReason 兼容历史记录，不删除或伪造数据；历史待审核单由采购接续。新下货单由 PENDING_PROCUREMENT/PENDING_FUNDS 在采购确认资金充足后直接成为 CONFIRMED，同时写入 procurementConfirmedAt 和 confirmedAt。资金及订单生成在一个事务内，AuditLog 记录采购操作。
+
+2026-10-15 物流公司：迁移 `20261014120000_add_logistics_companies` 新增 `LogisticsCompany`（唯一名称、启用状态、版本）；`Shipment` 增加可空 `carrierId` 和 `carrierName`，前者关联配置并在停用时保留关系，后者快照发货时的名称。迁移 `20261015090000_seed_default_logistics_companies` 幂等补齐常用选项，不覆盖已有配置。历史发货不回填物流公司。
+
 2026-10-06储值冻结：第65个迁移20261006190000_stored_value_reservations新增StoreAccount.reservedBalance和FundingAllocation.reservedAmount（numeric(20,2)，默认0、非负CHECK），PurchaseRequest.storedValueOnReceipt（默认false保留旧单；业务创建接口显式true）。没有回填或重算旧余额/扣款流水。新请求下单冻结，账户账面余额不变，执行单收货完成才把冻结转入netPaid并记真实DEBIT；变更/取消按冻结净差调整，旧单继续原扣款/退款策略。账户行锁与请求/执行单锁串行化，金额计算继续Decimal。reservedBalance为全店占用汇总，reservedAmount为请求供应商资金分配占用；冻结不写现金流水，资金和业务命令/审计在同一事务中完成。
 
 2026-10-06收款账户配置：64个迁移，20261006170000_collection_accounts新增CollectionAccount（UUID主键、唯一name、bankName、accountName、accountNo、StoreStatus启停、version、创建更新时间）。无预置真实账户，无业务删除入口。RechargeDocument原collectionAccountId保留，不给历史自由文本强加外键；新外部充值在事务中校验启用账户，配置变更与充值共用锁。新店首次额度配置在资金事务中创建StoreAccount，无账户GET仍返回零值不写库。
@@ -153,7 +157,7 @@ erDiagram
 
 | 表 | 字段 | 约束 |
 |---|---|---|
-| `shipments` | `document_id ID`、`supplier_order_id ID`、`sequence int`、`kind INITIAL/REPLENISHMENT`、`shipped_at T`、`delivery_method_snapshot`、`tracking_no varchar(100)?`、`freight M=0`、`freight_confirmation_id ID?` | order+sequence 唯一；每执行单仅一个 INITIAL；补发不另建订单 |
+| `shipments` | `document_id ID`、`supplier_order_id ID`、`sequence int`、`kind INITIAL/REPLENISHMENT`、`shipped_at T`、`delivery_method_snapshot`、`carrier_id ID?`、`carrier_name varchar(120)?`（名称快照）、`tracking_no varchar(100)?`、`freight M=0`、`freight_confirmation_id ID?` | order+sequence 唯一；每执行单仅一个 INITIAL；补发不另建订单 |
 | `shipment_items` | `shipment_id ID`、`order_item_id ID`、`quantity Q`、`sales_price_snapshot Q`、`supply_price_snapshot Q`、`valuation_revision int` | shipment+order_item 唯一；正数；所属执行单必须一致 |
 | `receipts` | `document_id ID`、`shipment_id ID`、`revision int`、`supersedes_id ID?`、`is_current bool`、`submitted_at T` | shipment+revision 唯一；每批次一个 current 版本 |
 | `receipt_items` | `receipt_id ID`、`shipment_item_id ID`、`received_quantity Q` | receipt+shipment_item 唯一；0 至本次发货量；禁止跨批次 |

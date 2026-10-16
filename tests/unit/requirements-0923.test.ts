@@ -16,9 +16,10 @@ test('shipment delivery defaults to supplier and rejects self-delivery tracking'
   const service = new SupplierOrdersService({ client: { supplierOrder: { findUnique: async () => ({
     id: 'order', version: 1, status: 'PUSHED', supplier: { deliveryMode: 'LOGISTICS' },
     items: [{ id: 'item', productId: 'product', quantity: '1', shippedQuantity: '0', receivedQuantity: '0', salesUnitPrice: '2', supplyUnitPrice: '1', shipmentItems: [] }],
-  }) } } } as never);
+  }) }, logisticsCompany: { findFirst: async () => ({ id: 'carrier' }) } } } as never);
   const input = { freight: '0', items: [{ orderItemId: 'item', shipQuantity: '1', permanentlyReduceQuantity: '0' }] };
-  assert.equal((await service.shipmentPreview('order', 1, input)).deliveryMode, 'LOGISTICS');
+  await assert.rejects(service.shipmentPreview('order', 1, input), HttpException);
+  assert.equal((await service.shipmentPreview('order', 1, { ...input, carrierId: 'carrier' })).deliveryMode, 'LOGISTICS');
   assert.equal((await service.shipmentPreview('order', 1, { ...input, deliveryMode: 'SELF' })).deliveryMode, 'SELF');
   await assert.rejects(service.shipmentPreview('order', 1, { ...input, deliveryMode: 'SELF', trackingNo: '123' }), HttpException);
 });

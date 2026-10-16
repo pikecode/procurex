@@ -22,6 +22,79 @@ function page(role, request = async () => ({}), apiOverrides = {}, wxOverrides =
 }
 
 const tap = (id, extra = {}) => ({ currentTarget: { dataset: { id, ...extra } } });
+test('store editing entry is locked after procurement confirmation including returned requests', () => {
+  const urls = [];
+  const store = page('store', undefined, {}, { navigateTo: value => urls.push(value.url) });
+  store.data.selectedRequest = { id: 'r', status: 'PENDING_PROCUREMENT', supplierOrders: [] };
+  store.editRequest(); assert.equal(urls.length, 1);
+  store.data.selectedRequest.procurementConfirmedAt = '2026-10-16';
+  store.editRequest(); assert.equal(urls.length, 1);
+  store.data.selectedRequest = { id: 'r', status: 'PENDING_FINANCE', supplierOrders: [] };
+  store.editRequest(); assert.equal(urls.length, 1);
+});
+
+test('store editor saves quantities without sending supplier or price overrides', async () => {
+  const calls = [];
+  const editor = page('store-request-edit', async (path, options) => { calls.push({ path, options }); }, {}, {
+    showModal: options => options.success({ confirm: true }), setStorageSync() {}, removeStorageSync() {}, showToast() {}, navigateBack() {},
+  });
+  editor.id = 'r'; editor.storageKey = 'edit';
+  editor.data.editable = true; editor.data.detail = { version: 3, templateId: 't' };
+  editor.data.rows = [{ id: 'p', name: '商品', quantity: '2', available: true, salesPrice: '10', supplierId: 's' }, { id: 'p2', quantity: '0' }];
+  await editor.save();
+  assert.equal(calls.length, 1); assert.equal(calls[0].options.method, 'PATCH');
+  assert.equal(calls[0].options.data.expectedVersion, 3);
+  assert.equal(calls[0].options.data.items.length, 1);
+  assert.equal(calls[0].options.data.items[0].quantity, '2');
+  assert.equal(calls[0].options.data.items[0].supplierId, undefined);
+  assert.equal(editor.data.pending, null);
+});
+
+test('store editor keeps original idempotency key after uncertain save and blocks another save', async () => {
+  const calls = [];
+  const editor = page('store-request-edit', async (path, options) => { calls.push(options); throw Object.assign(new Error('网络中断'), { uncertain: true }); });
+  editor.id = 'r'; editor.data.editable = true;
+  editor.data.pending = { key: 'same-key', body: { expectedVersion: 1, items: [] } };
+  await editor.submitPending(); await editor.save(); await editor.submitPending();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].header['idempotency-key'], calls[1].header['idempotency-key']);
+  assert.equal(editor.data.pending.key, 'same-key');
+});
+
+test('finance review blocks shortage and blank return reason without posting commands', async () => {
+  const calls = [];
+  const review = page('finance-review', async (...args) => calls.push(args));
+  review.data.selected = { id: 'r', version: 2, funding: { canConfirm: false } };
+  await review.decide(tap('r', { action: 'approve' }));
+  assert.match(review.data.error, /资金不足/);
+  await review.decide(tap('r', { action: 'return' }));
+  assert.match(review.data.error, /退回原因/);
+  assert.equal(calls.length, 0);
+});
+test('finance review approves the displayed version once and returns to the queue', async () => {
+  const calls = [];
+  const review = page('finance-review', async (path, options) => { calls.push({ path, options }); return { supplierOrderIds: ['o'] }; },
+    { roleCommandState: () => ({ pending: null }) }, { showModal: options => options.success({ confirm: true }), showToast() {} });
+  review.data.selected = { id: 'r', version: 4, funding: { canConfirm: true } };
+  await review.decide(tap('r', { action: 'approve' }));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].path, '/purchase-requests/r/finance-approve');
+  assert.deepEqual(plain(calls[0].options.data), { expectedVersion: 4 });
+  assert.equal(review.data.selected, null);
+  assert.equal(review.data.reviewing, false);
+});
+test('finance review retains failed detail and protects uncertain submissions', async () => {
+  let calls = 0;
+  const review = page('finance-review', async () => { calls++; throw new Error('资金已变化'); },
+    { roleCommandState: () => ({ pending: { path: '/purchase-requests/r/finance-approve' } }) }, { showModal: options => options.success({ confirm: true }) });
+  review.data.selected = { id: 'r', version: 4, funding: { canConfirm: true } };
+  await review.decide(tap('r', { action: 'approve' }));
+  assert.equal(review.data.selected.id, 'r');
+  assert.equal(review.data.error, '资金已变化');
+  await review.decide(tap('r', { action: 'approve' }));
+  assert.equal(calls, 1);
+});
+
 test('supplier report quantities remove trailing zeroes without rounding fractional units', () => {
   const labels = { exports: {} };
   vm.runInNewContext(readFileSync('apps/miniprogram/utils/labels.wxs', 'utf8'), { module: labels });
@@ -56,6 +129,52 @@ test('freight refresh exposes only approved unused fees without resetting shipme
   assert.equal(supplier.data.freightChoices.length, 2); assert.equal(supplier.data.freightChoices[1].id, 'approved');
   assert.equal(supplier.data.shipmentItems[0].shipQuantity, '3'); assert.equal(supplier.data.selectedOrder.version, 2);
 });
+test('company finance registers supplier payments only after server preview and attaches evidence', async () => {
+  const calls = [];
+  const preview = { direction: 'COMPANY_TO_SUPPLIER', totalPayableAmount: '30.00', blockedItems: [], items: [
+    { settlementItemId: 'item-a', supplierOrderNo: 'SO-A', sourceVersion: 4, payableAmount: '30.00' }
+  ] };
+  const finance = page('finance', async (path, options) => {
+    calls.push({ path, options });
+    if (path === '/payment-records/preview') return preview;
+    return { id: 'payment-1', paymentNo: 'PAY-1', direction: 'COMPANY_TO_SUPPLIER', amount: '30.00', status: 'PENDING' };
+  }, { currentUser: () => ({ id: 'finance-1' }), roleCommand: async (role, path, options) => {
+    calls.push({ role, path, options });
+    return { id: 'payment-1', paymentNo: 'PAY-1', direction: 'COMPANY_TO_SUPPLIER', amount: '30.00', status: 'PENDING' };
+  } });
+  finance.data.user = { id: 'finance-1', roles: ['HQ_FINANCE'] };
+  finance.data.selectedKind = 'supplier'; finance.data.selected = { id: 'bill-1', payableAmount: '30.00' };
+  finance.data.paymentSelection = ['item-a']; finance.data.paymentDate = '2026-10-15';
+  await finance.prepareSupplierPayment();
+  assert.equal(calls[0].path, '/payment-records/preview');
+  assert.equal(finance.data.paymentPreview.totalPayableAmount, '30.00');
+  finance.data.paymentEvidence = [{ id: 'proof-1' }];
+  await finance.submitSupplierPayment();
+  const submitted = calls.find(call => call.path === '/payment-records');
+  assert.equal(submitted.role, 'finance');
+  assert.equal(submitted.options.data.direction, 'COMPANY_TO_SUPPLIER');
+  assert.deepEqual(Array.from(submitted.options.data.items, item => [item.settlementItemId, item.expectedVersion, item.expectedAmount]), [['item-a', 4, '30.00']]);
+  assert.deepEqual(Array.from(submitted.options.data.evidenceFileIds), ['proof-1']);
+  assert.match(submitted.options.header['idempotency-key'], /^mini-company-payment-/);
+  assert.equal(finance.data.selectedKind, 'payment');
+  assert.equal(finance.data.selected.paymentNo, 'PAY-1');
+  const markup = readFileSync('apps/miniprogram/pages/finance/index.wxml', 'utf8');
+  assert.ok(markup.includes('登记公司付款'));
+  assert.ok(markup.includes('核对可付金额'));
+  assert.ok(markup.includes('确认登记付款'));
+});
+test('company finance labels a fully reserved supplier bill as awaiting supplier confirmation', async () => {
+  const finance = page('finance', async path => {
+    if (path === '/supplier-statements') return [{ id: 'bill', supplierId: 's1', periodKey: '2026-10', settlementStatus: 'OPEN', payableAmount: '0.00', pendingPaymentAmount: '30.00' }];
+    if (path === '/stores' || path === '/suppliers' || path === '/payment-records' || path === '/store-statements') return [];
+    return {};
+  });
+  await finance.originalLoadWork();
+  assert.equal(finance.data.supplierStatements[0].status, 'PENDING_SETTLEMENT_CONFIRMATION');
+  const labels = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/labels.wxs', 'utf8'), { module: labels });
+  assert.equal(labels.exports.status(finance.data.supplierStatements[0].status), '待供应商确认收款');
+});
 test('shipping navigation, clickable recipient phone and account statement labels avoid ambiguous duplicate controls', () => {
   const supplier = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
   assert.ok(supplier.includes("!statementReturnId && orderMode === 'detail'"));
@@ -65,6 +184,33 @@ test('shipping navigation, clickable recipient phone and account statement label
   assert.ok(store.includes('返回我的')); assert.ok(store.includes('暂无公司账期账单'));
   const finance = readFileSync('apps/miniprogram/pages/finance/index.wxml', 'utf8');
   assert.ok(finance.includes("=== 'OPEN' ? '待结清'"));
+});
+test('supplier exception history is compact, hidden when empty, and guarded against empty navigation', () => {
+  const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
+  assert.ok(markup.includes('class="supplier-exception-empty"'));
+  assert.ok(markup.includes('wx:if="{{discrepancies.length > 0 && !loading && !error}}"'));
+  assert.equal((markup.match(/查看全部收货异常/g) || []).length, 1);
+  let toast = '';
+  const supplier = page('supplier', undefined, {}, { showToast: options => { toast = options.title; } });
+  supplier.data.discrepancies = [];
+  supplier.changeView(tap('', { view: 'differences' }));
+  assert.equal(supplier.data.activeView, 'tasks');
+  assert.equal(toast, '暂无收货异常记录');
+  supplier.data.discrepancies = [{ id: 'd1' }];
+  supplier.changeView(tap('', { view: 'differences' }));
+  assert.equal(supplier.data.activeView, 'differences');
+});
+test('supplier reconciliation highlights bill balance and payment amounts with separate scannable rows', () => {
+  const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
+  const styles = readFileSync('apps/miniprogram/pages/supplier/index.wxss', 'utf8');
+  assert.ok(markup.includes('class="supplier-bill-item pressable"'));
+  assert.ok(markup.includes('class="supplier-bill-payable"'));
+  assert.ok(markup.includes('class="supplier-bill-breakdown"'));
+  assert.ok(markup.includes('class="supplier-payment-item pressable"'));
+  assert.ok(markup.includes('class="supplier-payment-amount"'));
+  assert.equal(markup.includes('reconcile-guide'), false);
+  assert.ok(styles.includes('supplier-bill-item, .supplier-payment-item'));
+  assert.ok(styles.includes('supplier-bill-payable text:last-child'));
 });
 test('store and purchaser default to formal orders and retain a separate source record view', async () => {
   for (const role of ['store', 'purchaser']) {
@@ -693,6 +839,38 @@ test('supplier starts with actionable orders and separates completed from awaiti
   workspace.filterStatus(tap('', { filter: 'all' }));
   workspace.onSearch({ detail: { value: '珍珠' } });
   assert.deepEqual(plain(workspace.data.visibleOrders.map(item => item.id)), ['new']);
+});
+
+test('supplier orders prioritize workflow state and sort active work oldest first', async () => {
+  const workspace = page('supplier', async () => [
+    { id: 'done-new', status: 'COMPLETED', fulfillmentStatus: 'COMPLETED', createdAt: '2026-10-10T10:00:00Z' },
+    { id: 'shipped-old', status: 'SHIPPED', createdAt: '2026-10-01T10:00:00Z' },
+    { id: 'pending-new', status: 'PUSHED', createdAt: '2026-10-09T10:00:00Z' },
+    { id: 'rejected', status: 'REJECTED', createdAt: '2026-10-15T10:00:00Z' },
+    { id: 'partial-old', status: 'PARTIAL_SHIPPED', createdAt: '2026-10-02T10:00:00Z' },
+    { id: 'pending-old', status: 'ACCEPTED', createdAt: '2026-10-03T10:00:00Z' },
+    { id: 'done-old', status: 'COMPLETED', fulfillmentStatus: 'COMPLETED', createdAt: '2026-10-05T10:00:00Z' },
+  ]);
+  await workspace.loadOrders();
+  assert.deepEqual(plain(workspace.data.visibleOrders.map(item => item.id)), [
+    'pending-old', 'pending-new', 'partial-old', 'shipped-old', 'done-new', 'done-old', 'rejected'
+  ]);
+  assert.deepEqual(plain(workspace.data.shippingTasks.map(item => item.id)), [
+    'partial-old', 'pending-old', 'pending-new'
+  ]);
+  const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
+  assert.ok(markup.includes('待处理订单优先 · 处理中按下单时间从早到晚'));
+});
+
+test('supplier order list separates each order and presents store, status, items and amount in clear hierarchy', () => {
+  const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
+  const styles = readFileSync('apps/miniprogram/pages/supplier/index.wxss', 'utf8');
+  assert.ok(markup.includes('class="list supplier-orders-list"'));
+  assert.ok(markup.includes('class="row supplier-order-list-item pressable"'));
+  for (const label of ['supplier-order-store', 'supplier-order-meta', 'supplier-order-products-heading', 'supplier-order-total', '查看详情']) assert.ok(markup.includes(label));
+  assert.ok(styles.includes('border: 1rpx solid var(--line)'));
+  assert.ok(styles.includes('gap: 14rpx'));
+  assert.ok(styles.includes('-webkit-line-clamp: 2'));
 });
 
 test('supplier enters shipping or rejection only when permitted and cannot switch during submission', () => {
@@ -1659,6 +1837,20 @@ test('store confirmed request groups items by supplier', async () => {
   assert.equal(store.data.selectedRequest.supplierOrders[0].open, true);
 });
 
+test('store request detail distinguishes the master request from generated supplier orders', () => {
+  const template = readFileSync('apps/miniprogram/pages/store/index.wxml', 'utf8');
+  const styles = readFileSync('apps/miniprogram/pages/store/index.wxss', 'utf8');
+  assert.ok(template.includes('class="section-band request-master-summary"'));
+  assert.ok(template.includes('门店下货单'));
+  assert.ok(template.includes('采购确认后生成的供应商订单'));
+  assert.ok(template.includes('class="section-band request-supplier-group"'));
+  assert.ok(template.includes('bindtap="toggleRequestGroup"'));
+  assert.ok(template.includes('bindtap="selectShipment"'));
+  assert.ok(template.includes('门店提交的商品'));
+  assert.match(styles, /\.request-master-summary\s*\{/);
+  assert.match(styles, /\.request-supplier-group\s*\{[^}]*border-radius/s);
+});
+
 test('pending store requests do not expose tentative supplier groups', async () => {
   const store = page('store', async () => ({ status: 'PENDING_PROCUREMENT', items: [{ id: 'i', supplierId: 's', supplierName: '暂定供应商', productName: '大米' }], supplierOrders: [] }));
   await store.selectRequest(tap('request'));
@@ -1668,6 +1860,42 @@ test('pending store requests do not expose tentative supplier groups', async () 
   const confirmation = template.slice(template.indexOf('wx:if="{{activeView === \'order\' && orderStep === \'confirm\'}}"'), template.indexOf('wx:if="{{activeView === \'orders\''));
   assert.ok(!confirmation.includes('order.supplierName'));
   assert.ok(!confirmation.includes('order.deliveryContactPhone'));
+});
+
+test('store request detail loads images for source items and generated supplier orders', async () => {
+  const loaded = [];
+  const store = page('store', async () => ({ items: [
+    { id: 'line-1', productId: 'p1', supplierId: 's1', productName: '商品1', imageFile: { id: 'image-1' }, salesLineAmount: '10.00' },
+    { id: 'line-2', productId: 'p2', productName: '商品2', imageFile: null, salesLineAmount: '20.00' },
+  ], supplierOrders: [{ id: 'o1', supplierId: 's1', supplierName: '供应商1', shipments: [] }] }), {
+    imagePath: async file => { loaded.push(file.id); return `/tmp/${file.id}.jpg`; },
+  });
+  await store.selectRequest(tap('r1'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(loaded, ['image-1']);
+  assert.equal(store.data.selectedRequest.items[0].imageUrl, '/tmp/image-1.jpg');
+  assert.equal(store.data.selectedRequest.supplierOrders[0].items[0].imageUrl, '/tmp/image-1.jpg');
+  store.data.selectedRequest.items[0].imageFailed = true;
+  await store.retryRequestImage({ detail: { productId: 'p1' } });
+  assert.equal(store.data.selectedRequest.items[0].imageFailed, false);
+  const markup = readFileSync('apps/miniprogram/pages/store/index.wxml', 'utf8');
+  assert.ok(markup.includes('bind:retryimage="retryRequestImage"'));
+  assert.ok(markup.includes('查看门店原始下货清单'));
+  assert.ok(markup.includes('采购确认前可修改商品和数量'));
+});
+
+test('store request image downloads cannot update a different opened request', async () => {
+  let resolveImage;
+  const store = page('store', async () => ({ items: [{ id: 'line', productId: 'p1', imageFile: { id: 'image' } }], supplierOrders: [] }), {
+    imagePath: () => new Promise(resolve => { resolveImage = resolve; }),
+  });
+  const opening = store.selectRequest(tap('r1'));
+  await new Promise(resolve => setImmediate(resolve));
+  store.data.selectedRequestId = 'r2';
+  store.requestImageSequence += 1;
+  resolveImage('/tmp/old.jpg');
+  await opening;
+  assert.notEqual(store.data.selectedRequest?.items[0]?.imageUrl, '/tmp/old.jpg');
 });
 
 test('purchaser replaces one product supplier only after valid price preview and confirmation', async () => {
@@ -1690,14 +1918,14 @@ test('purchaser replaces one product supplier only after valid price preview and
   assert.equal(purchaser.data.reallocating, false);
 });
 
-test('purchaser validates and generates orders directly from the adjustment page', async () => {
+test('purchaser blocks adjusted confirmation on shortage and generates orders after funds are sufficient', async () => {
   const calls = [];
   const preview = { items: [{ productId: 'p1', priceVersionId: 'sale-1', supplyPriceVersionId: 'supply-1' }],
-    totals: { salesGoodsAmount: '12.00', supplyGoodsAmount: '10.00' }, funding: { canConfirm: true } };
+    totals: { salesGoodsAmount: '12.00', supplyGoodsAmount: '10.00' }, funding: { canConfirm: false } };
   const purchaser = page('purchaser', async (path, options) => {
     calls.push({ path, options });
     if (path.endsWith('/items-preview')) return preview;
-    if (path.endsWith('/confirm-adjusted')) return { requestId: 'request', status: 'CONFIRMED', supplierOrderIds: ['order-1'] };
+    if (path.endsWith('/confirm-adjusted')) return { requestId: 'request', status: 'CONFIRMED', supplierOrderIds: ['order'] };
     return { id: 'request' };
   });
   purchaser.data.requestId = 'request';
@@ -1713,6 +1941,12 @@ test('purchaser validates and generates orders directly from the adjustment page
   assert.match(purchaser.data.error, /不能超过门店原下单数量 5 斤/);
   assert.equal(purchaser.data.editItems[0].quantity, '4');
   await purchaser.confirmRequestEdit();
+  assert.equal(calls.length, 1);
+  assert.match(purchaser.data.error, /资金不足/);
+  assert.equal(purchaser.data.editingRequest, true);
+  preview.funding.canConfirm = true;
+  calls.length = 0;
+  await purchaser.confirmRequestEdit();
   assert.equal(calls[0].path, '/purchase-requests/request/items-preview');
   assert.equal(calls[0].options.data.items[0].quantity, '4');
   assert.equal(calls[1].path, '/purchase-requests/request/confirm-adjusted');
@@ -1721,7 +1955,8 @@ test('purchaser validates and generates orders directly from the adjustment page
   assert.equal(calls.length, 2);
   assert.equal(purchaser.data.editingRequest, false);
   const markup = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
-  for (const label of ['调整下货单', '取消调整', '确认并生成订单', '供应商价格', '门店原下单量']) assert.ok(markup.includes(label));
+  assert.equal(purchaser.data.result.status, 'CONFIRMED');
+  for (const label of ['调整下货单', '取消调整', '确认并生成订单', '供应商价格', '门店原下单量', '待充值金额', '待补挂账额度', '保存调整']) assert.ok(markup.includes(label));
   assert.equal(markup.includes('核对调整'), false);
   for (const handler of ['chooseEditPrimaryCategory', 'stepEditProduct', 'setEditProductQuantity', 'changeEditSupplier']) assert.ok(markup.includes(`bindtap="${handler}"`) || markup.includes(`bindblur="${handler}"`) || markup.includes(`bindchange="${handler}"`));
   assert.equal(markup.includes('>编辑商品</button>'), false);
@@ -1820,7 +2055,8 @@ test('purchaser detail retries failures and blocks commands until refreshed', as
   assert.ok(!markup.includes('class="field-label">供货供应商'));
   assert.ok(!markup.includes('item.options[item.supplierIndex].supplierName'));
   assert.ok(markup.includes('供应商：{{item.supplierName}}'));
-  assert.ok(markup.includes('待补资金 ¥'));
+  assert.ok(markup.includes('待充值金额'));
+  assert.ok(markup.includes('待补挂账额度'));
 });
 
 test('purchaser detail refreshes when returning to the page, but not during a write', () => {
@@ -1836,25 +2072,21 @@ test('purchaser detail refreshes when returning to the page, but not during a wr
   assert.equal(reads, 1);
 });
 
-test('purchaser confirmation exposes generated orders and scrolls to their summary', async () => {
+test('purchaser confirmation generates and shows supplier orders without finance review', async () => {
   const scrolls = [];
-  const detail = { id: 'r', requestNo: 'PR-001', version: 2, status: 'CONFIRMED', supplierOrders: [
-    { id: 'o1', supplierName: '粮油供应商', supplierOrderNo: 'SO-001' },
-    { id: 'o2', supplierName: '蔬菜供应商', supplierOrderNo: 'SO-002' }
-  ] };
-  const purchaser = page('purchaser', async path => path.endsWith('/confirm') ? { status: 'CONFIRMED', supplierOrderIds: ['o1', 'o2'] }
+  const detail = { id: 'r', requestNo: 'PR-001', version: 2, status: 'CONFIRMED', supplierOrders: [{ id: 'o' }] };
+  const purchaser = page('purchaser', async path => path.endsWith('/confirmation-preview') ? { funding: { canConfirm: true } } : path.endsWith('/confirm') ? { status: 'CONFIRMED', supplierOrderIds: ['o'] }
     : path.startsWith('/supplier-orders/') ? { items: [{ id: path, productName: '订单商品', quantity: '3', unitName: '袋' }] } : detail,
     {}, { pageScrollTo: options => scrolls.push(options) });
   purchaser.data.requestId = 'r'; purchaser.data.selectedRequest = { ...detail, status: 'PENDING_PROCUREMENT', supplierOrders: [] };
   await purchaser.confirmRequest();
   assert.equal(purchaser.data.error, '');
   assert.equal(purchaser.data.result.title, '采购确认成功');
-  assert.equal(purchaser.data.result.detail, '已生成 2 张供应商订单');
-  assert.equal(purchaser.data.selectedRequest.supplierOrders.length, 2);
-  assert.equal(purchaser.data.selectedRequest.supplierOrders[0].items[0].productName, '订单商品');
-  assert.equal(scrolls[0].selector, '#supplier-order-summary');
+  assert.equal(purchaser.data.result.detail, '已生成 1 张供应商订单');
+  assert.equal(purchaser.data.selectedRequest.supplierOrders.length, 1);
+  assert.equal(scrolls.length, 1);
   const template = readFileSync('apps/miniprogram/pages/purchaser/index.wxml', 'utf8');
-  assert.ok(template.includes('已生成 {{selectedRequest.supplierOrders.length}} 张'));
+  assert.ok(template.includes('class="order-count" wx:if="{{!rejectedOrderId}}">{{selectedRequest.supplierOrders.length}} 张</text>'));
   assert.ok(template.includes('wx:for="{{item.items}}"'));
   for (const field of ['salesUnitPrice', 'salesLineAmount', 'supplyUnitPrice', 'supplyLineAmount']) {
     assert.ok(template.includes(`labels.money(product.${field})`));
@@ -2047,12 +2279,18 @@ test('uncertain order submission retains the same key and body while cart change
   assert.equal(store.data.activeView, 'orders');
 });
 
-test('credit shortfall blocks checkout without sending a create command', async () => {
+test('credit shortfall permits a request submission and retains the funding shortage', async () => {
   let writes = 0;
   const preview = { ...orderPreview(), funding: { ...orderPreview().funding, credit: { required: '24', available: '10', shortfall: '14.00' } } };
-  const store = page('store', async path => { if (path.endsWith('/preview')) return preview; writes++; return {}; });
+  const store = page('store', async (path, options) => {
+    if (path.endsWith('/preview')) return preview;
+    if (path === '/purchase-requests' && options?.method === 'POST') { writes++; return { id: 'pending', status: 'PENDING_FUNDS' }; }
+    if (path === '/purchase-requests/pending') return { items: [], supplierOrders: [], status: 'PENDING_FUNDS' };
+    return [];
+  });
   prepareCart(store); await store.previewOrder(); await store.submitOrder();
-  assert.equal(writes, 0); assert.match(store.data.error, /挂账额度不足/);
+  assert.equal(writes, 1); assert.equal(store.data.created.status, 'PENDING_FUNDS');
+  assert.equal(store.data.pendingOrder, null);
 });
 
 test('order filters use aggregate completion rather than procurement CONFIRMED status', async () => {

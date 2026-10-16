@@ -1,0 +1,4 @@
+{
+  "navigationBarTitleText": "修改下货单",
+  "usingComponents": { "product-card": "../../components/product-card/index", "document-no": "../../components/document-no/index" }
+}

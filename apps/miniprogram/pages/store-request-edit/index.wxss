@@ -1,0 +1,14 @@
+@import '../../styles/workspace.wxss';
+.editor { padding: 24rpx 24rpx 190rpx; background: #fff; }
+.editor-heading, .row-heading, .quantity-row, .edit-footer { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.editor-heading button, .quantity-row button { margin: 0; flex-shrink: 0; }
+.search { background: #f3f5f4; padding: 20rpx; margin: 20rpx 0; border-radius: 8rpx; }
+.edit-row { border-bottom: 1rpx solid #e5e9e7; padding: 20rpx 0; }
+.row-heading { align-items: flex-start; font-weight: 600; }
+.row-heading text:first-child { flex: 1; min-width: 0; }
+.row-heading text:last-child { flex-shrink: 0; }
+.quantity-row { margin-top: 16rpx; }
+.quantity-row input { width: 110rpx; height: 60rpx; text-align: center; border: 1rpx solid #dce3df; border-radius: 6rpx; }
+.edit-footer { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1rpx solid #dce3df; padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom)); }
+.edit-footer > view { display: flex; flex-direction: column; }
+.edit-footer button { margin: 0; min-width: 240rpx; }

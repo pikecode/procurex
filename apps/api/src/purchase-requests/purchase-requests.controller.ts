@@ -1,6 +1,6 @@
 import { StorePricePrivacyInterceptor } from '../common/store-price-privacy.interceptor.js';
 import { UseInterceptors } from '@nestjs/common';
-import { Body, ConflictException, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { Prisma } from '../../../../packages/backend/generated/prisma/client.js';
@@ -129,7 +129,7 @@ export class PurchaseRequestsController {
   async editCatalog(@Param('id') id: string) {
     throwIfInvalid(validateUuid('id', id));
     const detail = await this.purchaseRequestsService.get(id);
-    if (!['PENDING_PROCUREMENT', 'PENDING_FUNDS'].includes(detail.status) || detail.supplierOrders.length) {
+    if (!['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE'].includes(detail.status) || detail.supplierOrders.length) {
       throw new ConflictException({ code: 'PURCHASE_REQUEST_ITEMS_NOT_EDITABLE', message: 'Purchase request items cannot be edited in its current status' });
     }
     return this.catalog.readTemplateCatalog(detail.storeId, detail.templateId);
@@ -200,6 +200,26 @@ export class PurchaseRequestsController {
     const input = parsePatchItemsBody(id, body);
     return this.editCommand(request, auth, 'purchase-request.items.replace', id, body,
       tx => this.purchaseRequestsService.replaceItems(input.id, input.expectedVersion, input.items, tx));
+  }
+
+  @Patch(':id/store-items')
+  @RequireRoles('STORE')
+  async replaceStoreItems(@Param('id') id: string, @Body() body: PreviewBody & { expectedVersion?: unknown },
+    @Req() request: AuthenticatedRequest, @CurrentAuth() auth: AuthenticatedSession) {
+    throwIfInvalid(validateUuid('id', id));
+    const scope = storeScope(request);
+    if (!scope?.storeId) throw new ForbiddenException({ code: 'SCOPE_REQUIRED', message: '请先绑定门店' });
+    const detail = await this.purchaseRequestsService.get(id, scope);
+    const input = parsePreviewBody({ ...body, storeId: detail.storeId });
+    if (!Number.isInteger(body.expectedVersion) || Number(body.expectedVersion) < 1) {
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: '请刷新下货单后重试' });
+    }
+    requireIdempotencyKey(request.headers);
+    return this.editCommand(request, auth, 'purchase-request.store-items.replace', id, body,
+      async tx => {
+        await this.purchaseRequestsService.get(id, scope, tx);
+        return this.purchaseRequestsService.replaceStoreItems(id, Number(body.expectedVersion), input, tx!);
+      });
   }
 
   @Post(':id/items-preview')
@@ -326,6 +346,60 @@ export class PurchaseRequestsController {
         },
       }, tx);
 
+      return result;
+    });
+  }
+
+  @Get(':id/finance-review')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'REGION_FINANCE')
+  financeReview(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    throwIfInvalid(validateUuid('id', id));
+    return this.purchaseRequestsService.financeReview(id, isCompanyUser(request.auth!.user) ? undefined : request.auth!.user.scope);
+  }
+
+  @Get(':id/confirmation-preview')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'PURCHASE_FOLLOWER')
+  confirmationPreview(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    throwIfInvalid(validateUuid('id', id));
+    return this.purchaseRequestsService.financeReview(id, isCompanyUser(request.auth!.user) ? undefined : request.auth!.user.scope);
+  }
+
+  @Post(':id/finance-approve')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'REGION_FINANCE')
+  approveFinance(@Req() request: AuthenticatedRequest, @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string, @Body() body: ConfirmBody) {
+    const input = parseConfirmBody(id, body);
+    return this.financeCommand(request, auth, input.id, body, 'approve', input.expectedVersion);
+  }
+
+  @Post(':id/finance-return')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'HQ_FINANCE', 'REGION_FINANCE')
+  returnFinance(@Req() request: AuthenticatedRequest, @CurrentAuth() auth: AuthenticatedSession,
+    @Param('id') id: string, @Body() body: RejectBody) {
+    const input = parseRejectBody(id, body);
+    return this.financeCommand(request, auth, input.id, body, 'return', input.expectedVersion, input.reason);
+  }
+
+  private async financeCommand(request: AuthenticatedRequest, auth: AuthenticatedSession, id: string,
+    body: object, decision: 'approve' | 'return', expectedVersion: number, reason?: string) {
+    if (!isCompanyUser(auth.user)) await this.purchaseRequestsService.get(id, auth.user.scope);
+    const traceId = getOrCreateTraceId(request);
+    const action = `purchase-request.finance-${decision}`;
+    const command = await this.commandsService.begin({ actorUserId: auth.user.actorUserId ?? auth.user.id,
+      action, idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, ...body } as never, traceId });
+    if (command.state === 'replay') return command.command.responseBody as ConfirmPurchaseRequestResult;
+    return this.commandsService.performAtomic(command, async tx => {
+      if (!isCompanyUser(auth.user)) await this.purchaseRequestsService.get(id, auth.user.scope, tx);
+      const result = decision === 'approve'
+        ? await this.purchaseRequestsService.approveFinance(id, expectedVersion, tx)
+        : await this.purchaseRequestsService.returnFinance(id, expectedVersion, reason!, tx);
+      await this.commandsService.succeed({ commandId: command.command.id, resourceType: 'PurchaseRequest', resourceId: id, responseBody: result as never }, tx);
+      await this.audit.record({ actorUserId: auth.user.actorUserId ?? auth.user.id, activeScope: auditScope(auth),
+        action, entityType: 'PurchaseRequest', entityId: id, traceId, reason, after: result }, tx);
       return result;
     });
   }
@@ -638,6 +712,7 @@ function requiredReason(value: unknown, issues: ValidationIssue[]): string | und
 
 function optionalPurchaseRequestStatus(value: unknown, issues: ValidationIssue[]): PurchaseRequestStatus | undefined {
   if (
+    value === PurchaseRequestStatus.PENDING_FINANCE ||
     value === PurchaseRequestStatus.PENDING_FUNDS ||
     value === PurchaseRequestStatus.PENDING_PROCUREMENT ||
     value === PurchaseRequestStatus.CONFIRMED ||

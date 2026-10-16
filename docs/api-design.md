@@ -1,5 +1,19 @@
 # 接口详细设计
 
+## 2026-10-16 门店修改下货单
+
+新增 `PATCH /purchase-requests/:id/store-items`，仅 STORE 且必须属于当前门店；必填 expectedVersion、items、幂等键。商品与供应商按当前有效模板校验，价格由服务端计算；采购首次确认后（含财务退回）不允许门店修改。并发保存/采购确认由版本与事务锁保护。
+
+## 2026-10-16 采购确认资金拦截（最终口径）
+
+门店资金不足仍可提交和修改下货单；采购确认时实时核验储值和挂账额度，任一不足不得确认或生成任何订单。确认页分别显示所需、本单可用（包含本单已有占用）、待充值金额和待补挂账额度。采购可保存调整，财务负责充值/调额，补足后采购重新核验并确认生成供应商订单，不再经过独立财务审核。储值实际扣款仍在收货时进行。
+
+`GET /purchase-requests/:id/confirmation-preview` 提供资金统计，仅采购经理/采购跟单授权范围及管理员可读；`confirm` / `confirm-adjusted` 成功直接返回 CONFIRMED 和生成订单 ID。服务端加锁事务校验，防重复生成及重复占用。历史 PENDING_FINANCE 单据由采购待办接续处理，不迁移或重建历史订单；原 finance-approve 不再允许生成订单。详见 [确认资金规则](./purchase-request-finance-review.md)。
+
+## 2026-10-15 物流公司配置与发货
+
+`GET /logistics-companies` 返回物流公司及启停状态，供应商用于选择启用项；仅 ADMIN/PURCHASER 可通过 `POST` 新增、`PATCH` 改名或启停。发货预览和提交都提交 `carrierId`；物流配送必须选启用公司，服务端在发货事务内重新校验并在 Shipment 保存 `carrierId` 和 `carrierName` 快照。`trackingNo` 仍选填。自配送携带物流字段返回校验错误。发货与补发各自保留承运方快照。
+
 `POST /supplier-orders/{id}/shipments` 支持 `note`（最多500字）及 `evidenceFileIds`（最多6张 SHIPMENT_ADJUSTMENT 图片）。累计未满足订购数量时两者至少一项，否则返回 `SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED`。凭证归属、用途、就绪状态及未使用状态在发货事务内校验；材料保存于首版 ShipmentRevision，并随订单发货记录返回。
 
 ## 2026-10-14 门店删除
@@ -231,6 +245,7 @@ RequestItem/OrderItem新增可空JSON unitSnapshot，记录salesUnitId/name、pu
 | M03 | `GET/POST /products`、`GET/PATCH /products/{id}`、`POST /products/{id}/archive` | 商品字段、默认价、起订量、倍数、图片、单位换算 | 写 PURCHASER/ADMIN；供应商只读自己商品；门店走可订目录 |
 | M04 | `GET/POST /categories`、`PATCH/DELETE /categories/{id}` | name、parentId、expectedVersion | PURCHASER/ADMIN；二级限制；存在商品阻止删除 |
 | M05 | `GET/POST /brands`、`PATCH/DELETE /brands/{id}`；单位同路径规则 `/units` | name、expectedVersion | PURCHASER/ADMIN；使用中不可删除 |
+| M06 | `GET /logistics-companies`、`POST /logistics-companies`、`PATCH /logistics-companies/{id}` | 名称、expectedVersion、isActive | SUPPLIER 可读取；PURCHASER/ADMIN 可维护。停用而不删除，只有启用项可用于新发货 |
 | M06 | `GET/PUT /suppliers/{id}/products` | 产品 ID 列表、expectedVersion；逐条检查 | PURCHASER/ADMIN；调整当前关系不删除历史 |
 | M06a | `GET /suppliers/{id}/managed-products` | 自身关联商品，包括已下架；商品资料、supplyPrice、productActive、supplyEnabled、version | ADMIN/PURCHASER/SUPPLIER；供应商限定自身范围 |
 | M06b | `PATCH /suppliers/{id}/managed-products/{productId}` | supplyEnabled 布尔值、expectedVersion；返回更新行 | ADMIN/PURCHASER/SUPPLIER；只切换已有关联的供货状态 |
@@ -285,7 +300,7 @@ RequestItem/OrderItem新增可空JSON unitSnapshot，记录salesUnitId/name、pu
 | O10 | `POST /purchase-requests/{id}/reallocate` | PURCHASER/ADMIN | expectedVersion、rejectedOrderId、assignments[{requestItemId,supplierId? ,cancel}]、reason；未通过资金则保留待处理，不推送 |
 | O11 | `POST /supplier-orders/{id}/reconcile-funding` | PURCHASER/ADMIN | expectedVersion；充值或清账后重新校验已确认订单的资金差额、补扣/占用并解除阻断 |
 
-O01 的价格预览发生变化时，O02 返回 `QUOTE_CHANGED` 和有权查看的新预览，用户重新确认后提交。O02 储值不足仍返回 201 成功，不是下单失败；挂账超额返回 409 且整单回滚。O07 余额不足返回 409、当前 funding 和 version，不创建执行单。
+O01 的价格预览发生变化时，O02 返回 `QUOTE_CHANGED` 和有权查看的新预览，用户重新确认后提交。O02 储值不足或挂账超额均返回 201，保存 `PENDING_FUNDS` 下货单与缺口，不透支账户；不足的资金组不新增部分占用。O07 生成订单前在账户锁内校验资金，储值不足返回 `PURCHASE_REQUEST_FUNDING_SHORTFALL`、挂账不足返回 `CREDIT_LIMIT_EXCEEDED`（409），整个事务回滚且不创建任何供应商订单。确认前保存商品调整允许保留缺口，充值重新核对待补下货单也不能因挂账缺口失败；补足不自动确认或推送。
 
 O10 只处理拒单留下的待重分配商品；同次订货中目标供应商已经首次发货时返回 `TARGET_SUPPLIER_ALREADY_SHIPPED`。O11 不确认原始待采购订单、不发送新拆单；待采购单充值后必须使用 O07。已发货待补差额可以由 O11 处理，收货无需等待其成功。
 
@@ -342,7 +357,7 @@ O10 只处理拒单留下的待重分配商品；同次订货中目标供应商�
 |---|---|---|---|
 | F01 | `GET /supplier-orders`、`GET /supplier-orders/{id}` | 各角色对应范围 | state、storeId、supplierId、资金阻断、待补标记及日期；按角色返回投影 |
 | F01a | `GET /supplier-orders/{id}` 收货信息 | SUPPLIER/ADMIN 对应范围 | destination.name/address/contactName/contactPhone 为当前门店资料，空值不伪造；列表 storeName。不是历史收货地址快照，原 supplier scope 校验保持 |
-| F02 | `POST /supplier-orders/{id}/shipment-preview` | SUPPLIER/ADMIN | expectedVersion、items、freight、trackingNo、freightConfirmationId?；返回本次量/剩余待补/永久减量和资金阻断 |
+| F02 | `POST /supplier-orders/{id}/shipment-preview` | SUPPLIER/ADMIN | expectedVersion、items、freight、carrierId（物流配送必填）、trackingNo?、freightConfirmationId?；返回本次量/剩余待补/永久减量和资金阻断 |
 | F03 | `POST /supplier-orders/{id}/shipments` | SUPPLIER/ADMIN | 同 F02；服务端记录实际 shippedAt，不接受客户端回填首次发货日期 |
 | F04 | `GET /shipments/{id}`、`POST /shipments/{id}/receipts` | STORE/ADMIN | 读取发货单明细、supplierOrderVersion、currentReceiptRevision 后提交 expectedOrderVersion、expectedReceiptRevision（首次 0）、items[{shipmentItemId,receivedQuantity}]、evidenceFileIds；整批完整提交 |
 | F05 | `GET /discrepancies/{id}`、`POST /discrepancies/{id}/resolve` | SUPPLIER/ADMIN | 读取差异详情和版本；处理时提交 expectedVersion、action REPLENISH/RETURN/ACCEPT、reason?；REPLENISH 产生待补资格，不伪造已发货 |
@@ -352,7 +367,7 @@ O10 只处理拒单留下的待重分配商品；同次订货中目标供应商�
 
 发货 items 结构：`{orderItemId, shipQuantity, permanentlyReduceQuantity, gapAllocations:[{gapId,quantity}]}`。数量不得为负；本次发货与永久减量不能超出当前可处理量。首次未发余量默认待补，界面必须明确展示；补发必须指向既有 gap，不能擅自增加目标数量。
 
-F03 自动采用供应商唯一配送方式并保存快照；物流号只在物流配送填写。运费开关关闭时金额必须 0；补发非零运费必须有匹配且未使用的确认记录。首次发货重新取有效价；补发用原单有效价。资金不足返回 409 且无成功发货批次；供应商不能通过重复提交绕过。
+F03 自动采用供应商唯一配送方式并保存快照；物流配送必须选择启用的 `carrierId`，服务端保存当时 `carrierName` 快照，物流单号选填；自配送提交物流字段返回 409。运费开关关闭时金额必须 0；补发非零运费必须有匹配且未使用的确认记录。首次发货重新取有效价；补发用原单有效价。资金不足返回 409 且无成功发货批次；供应商不能通过重复提交绕过。
 
 F04 首次收货实收默认发货量；重确认读取 `currentReceivedQuantity` 与 `receiptLocked`。退回核对行可修改，已经同意少收或进入补发的行只能原样提交。允许 0 到本次发货量，至少一张有效凭证；少收进入差异，不直接替供应商同意。新 receiptRevision 替代旧有效版本，旧记录保留，累计数量只增加新旧有效版本的差量。RETURN 的动作记录虽为 RESOLVED，但待门店核对的差异仍阻止履约完成，不能当作 ACCEPT。
 

@@ -52,11 +52,13 @@ assert.deepEqual(appJson.pages, [
   'pages/login/index',
   'pages/test-workbench/index',
   'pages/store/index',
+  'pages/store-request-edit/index',
   'pages/supplier/index',
   'pages/purchaser/index',
   'pages/profile/index',
   'pages/supplier-products/index',
   'pages/finance/index',
+  'pages/finance-review/index',
   'pages/region/index',
   'pages/finance-accounts/index',
 ], 'mini-program must expose login, store, supplier, and purchaser pages');
@@ -225,11 +227,12 @@ assert.ok(!purchaserWxml.includes('bindchange="changeItemSupplier"'), 'original 
 assertIncludes(purchaserWxml, '重试', 'purchaser request detail failure recovery');
 assert.ok(!purchaserWxml.includes('刷新明细'), 'purchaser detail must not expose redundant refresh action');
 assertIncludes(purchaserWxml, '下货单确认', 'purchaser request detail screen');
-assertIncludes(purchaserWxml, '待补资金', 'purchaser shortfall signal');
+assertIncludes(purchaserWxml, '待充值金额', 'purchaser stored shortfall signal');
+assertIncludes(purchaserWxml, '待补挂账额度', 'purchaser credit shortfall signal');
 assertIncludes(purchaserWxml, '拒单通知', 'purchaser rejection notification screen');
 assertIncludes(purchaserWxml, '改派原因', 'purchaser reallocation reason screen');
 assertIncludes(purchaserWxml, '确认改派', 'purchaser reallocation screen');
-assertIncludes(purchaserWxml, '统计概览', 'purchaser statistics screen');
+assertIncludes(purchaserWxml, '采购统计', 'purchaser statistics screen');
 assert.ok(!purchaserWxml.includes('毛利') && !purchaserWxml.includes('reports.profit'), 'procurement mini-program must not render profit analysis');
 
 const miniFlowCheck = await read('scripts/check-miniprogram-flow.mjs');

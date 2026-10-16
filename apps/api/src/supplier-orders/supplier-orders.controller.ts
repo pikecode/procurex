@@ -60,6 +60,7 @@ type ShipmentPreviewBody = {
   freight?: unknown;
   freightConfirmationId?: unknown;
   trackingNo?: unknown;
+  carrierId?: unknown;
 };
 
 type ShipmentRevisionBody = {
@@ -168,6 +169,7 @@ export class SupplierOrdersController {
           shipmentNo: result.shipmentNo,
           deliveryMode: result.deliveryModeSnapshot,
           trackingNo: result.trackingNo,
+          carrierName: result.carrierName,
           kind: result.kind,
           itemCount: result.items.length,
           freight: result.freight,
@@ -490,6 +492,7 @@ function parseShipmentPreviewBody(
     issues.push(...validateUuid('freightConfirmationId', body.freightConfirmationId));
   }
   const trackingNo = optionalTrimmedString('trackingNo', body.trackingNo, issues);
+  const carrierId = body.carrierId === undefined ? undefined : (issues.push(...validateUuid('carrierId', body.carrierId)), typeof body.carrierId === 'string' ? body.carrierId : undefined);
   let note: string | undefined;
   if (body.note !== undefined) {
     if (typeof body.note !== 'string' || body.note.trim().length > 500) issues.push({ field: 'note', code: 'INVALID_SHIPMENT_NOTE', message: '说明最多500字' });
@@ -518,6 +521,7 @@ function parseShipmentPreviewBody(
       freight: freight as string,
       freightConfirmationId: typeof body.freightConfirmationId === 'string' ? body.freightConfirmationId : undefined,
       trackingNo,
+      carrierId,
       note,
       evidenceFileIds,
     },

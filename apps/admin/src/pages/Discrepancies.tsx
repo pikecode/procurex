@@ -4,6 +4,7 @@ import { Alert, App, Button, Descriptions, Form, Input, Modal, Popconfirm, Resul
 import { Check, Eye, RotateCcw } from 'lucide-react';
 import { ListPage } from '../components/ListPage';
 import { PrivateEvidence, type EvidenceFile } from '../components/PrivateEvidence';
+import { modalWidth } from '../lib/theme';
 import { hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { canRecoverWorkflow, useWorkflowCommand } from '../lib/useWorkflowCommand';
@@ -45,7 +46,7 @@ function Workspace({ user }: { user: User }) {
   return <>
     {!id && recovery}{!id && (error || command.error) && <Alert type="error" showIcon title={error || command.error} />}
     <ListPage title="收货差异" {...rows} rows={rows.rows.map(row => ({ ...row, name: row.productName || row.supplierOrderNo || row.id }))} reload={reload} filters={[{ key: 'status', label: '差异状态', options: ['OPEN', 'REPLENISH_PENDING'].map(value => ({ value, label: statusName(value) })) }]} columns={[{ title: '商品', dataIndex: 'productName', width: 210 }, { title: '供应商订单', dataIndex: 'supplierOrderNo', width: 220 }, { title: '短缺数量', dataIndex: 'missingQuantity', width: 110 }, { title: '状态', dataIndex: 'status', render: statusName, width: 100 }, { title: '操作', align: 'right' as const, width: 88, fixed: 'right', render: (_, row) => <RowActions ariaLabel={row.id} actions={[{ key: 'view', label: '查看', icon: <Eye size={15} />, onClick: () => setParams({ discrepancy: row.id }) }]} /> }]} />
-    <Modal title="收货差异" width={650} open={Boolean(id)} footer={null} maskClosable={!command.busy} closable={!command.busy} onCancel={() => { if (!command.busy) setParams({}); }}>
+    <Modal title="收货差异" width={modalWidth.standard} open={Boolean(id)} footer={null} maskClosable={!command.busy} closable={!command.busy} onCancel={() => { if (!command.busy) setParams({}); }}>
       {recovery}{(error || command.error) && <Alert type="error" showIcon title={error || command.error} />}
       {loading ? <Spin /> : detail && <>
         <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[{ key: 'product', label: '商品', children: detail.productName }, { key: 'status', label: '状态', children: statusName(detail.status) }, { key: 'shipment', label: '发货单', children: detail.shipmentNo }, { key: 'shipped', label: '发货数量', children: detail.shippedQuantity }, { key: 'received', label: '收货数量', children: detail.receivedQuantity }, { key: 'missing', label: '短缺数量', children: detail.missingQuantity }, ...(detail.replenishmentGap ? [{ key: 'gap', label: '待补发数量', children: detail.replenishmentGap.remainingQuantity }] : [])]} />

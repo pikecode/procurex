@@ -1,0 +1,4 @@
+{
+  "navigationBarTitleText": "下货单审核",
+  "usingComponents": { "document-no": "/components/document-no/index" }
+}

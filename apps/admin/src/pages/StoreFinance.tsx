@@ -4,6 +4,7 @@ import { Check, FileText, History, Pencil, Receipt, Settings2, Wallet } from 'lu
 import { useSearchParams } from 'react-router-dom';
 import { ListPage } from '../components/ListPage';
 import { PrivateEvidence } from '../components/PrivateEvidence';
+import { modalWidth } from '../lib/theme';
 import { hasRole, request, type User } from '../lib/api';
 import { type AccountDocument, type CreditItem, type FinanceStore, type Ledger, type StoreAccount } from '../lib/financeTypes';
 import { useWorkflowCommand } from '../lib/useWorkflowCommand';
@@ -122,8 +123,8 @@ export default function StoreFinance({ user }: { user: User }) {
      ]} />
      : <RowActions ariaLabel={row.name} actions={[{ key: 'history', label: '账户历史', icon: <History size={15} />, onClick: () => openAccount(row.id, 'history') }]} /> },
     ]} /></div></div>}
-    {scoped ? <section className="list-page"><div className="page-heading"><h1>门店账户</h1><Button onClick={refresh}>刷新</Button></div>{accountContent}</section> : <Modal open={Boolean(storeId) && !directMode} title={`${rows.find(row => row.id === storeId)?.name || '门店'} · ${clearingWorkspace ? '门店销账' : '账户'}`} width={1050} footer={null} maskClosable={false} closable={!mode && !documentTarget && !command.busy} onCancel={() => { if (!mode && !documentTarget && !command.busy) openAccount(); }}>{accountContent}</Modal>}
-    <Modal open={Boolean(documentTarget)} zIndex={1600} title="账户单据" width={650} footer={null} onCancel={() => setDocumentTarget(null)}>{documentError && <Alert type="error" title={documentError} />}{documentLoading ? <Spin /> : document && <><Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[['no', '单据号', document.documentNo], ['amount', '金额', document.amount], ['date', '业务日期', document.businessDate], ['operator', '操作人', document.operatorName || '-'], ['remark', '备注', document.remark || '-']].map(([key, label, children]) => ({ key, label, children }))} /><PrivateEvidence files={document.evidenceFiles || []} /></>}</Modal>
+    {scoped ? <section className="list-page"><div className="page-heading"><h1>门店账户</h1><Button onClick={refresh}>刷新</Button></div>{accountContent}</section> : <Modal open={Boolean(storeId) && !directMode} title={`${rows.find(row => row.id === storeId)?.name || '门店'} · ${clearingWorkspace ? '门店销账' : '账户'}`} width={modalWidth.full} footer={null} maskClosable={false} closable={!mode && !documentTarget && !command.busy} onCancel={() => { if (!mode && !documentTarget && !command.busy) openAccount(); }}>{accountContent}</Modal>}
+    <Modal open={Boolean(documentTarget)} zIndex={1600} title="账户单据" width={modalWidth.standard} footer={null} onCancel={() => setDocumentTarget(null)}>{documentError && <Alert type="error" title={documentError} />}{documentLoading ? <Spin /> : document && <><Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[['no', '单据号', document.documentNo], ['amount', '金额', document.amount], ['date', '业务日期', document.businessDate], ['operator', '操作人', document.operatorName || '-'], ['remark', '备注', document.remark || '-']].map(([key, label, children]) => ({ key, label, children }))} /><PrivateEvidence files={document.evidenceFiles || []} /></>}</Modal>
     {(directMode || mode) && storeId && writable && <StoreFinanceEditor storeId={storeId} storeName={rows.find(row => row.id === storeId)?.name} creditItems={credit} mode={(directMode || mode)!} ids={ids} command={command} onClose={() => { setMode(null); if (directMode) openAccount(); }} onSaved={() => { setMode(null); if (directMode) openAccount(); refresh(); }} />}
   </>;
 }

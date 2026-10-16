@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Descriptions, Form, Input, Modal, Result, Select, Table, Tabs, Tooltip } from 'antd';
 import { Eye, Check, Plus } from 'lucide-react';
+import { modalWidth } from '../lib/theme';
 import { request, type User } from '../lib/api';
 import { billingAccess, billingRowInScope } from '../lib/billingAccess';
 import { useRows } from '../lib/useRows';
@@ -13,9 +14,12 @@ type Line = { settlementItemId: string; supplierOrderNo?: string; supplierOrderI
 type Statement = { id: string; supplierId?: string; storeId?: string; storeName?: string; periodKey: string; periodStart: string; periodEndExclusive: string; settlementStatus: string; totalAmount: string; payableAmount: string; pendingPaymentAmount: string; confirmedPaidAmount: string; lines?: Line[]; adjustmentItems?: Line[] };
 type Payment = { id: string; supplierId?: string | null; storeId?: string | null; paymentNo: string; status: string; direction: string; channel: string; amount: string; businessDate: string; version: number; remark?: string; rejectedReason?: string; cancelledReason?: string; allocations: { id: string; supplierOrderNo?: string; supplierOrderId: string; amount: string; state: string }[]; evidenceFiles?: EvidenceFile[] };
 type Preview = { direction: string; channel: string; storeId: string | null; supplierId: string | null; totalPayableAmount: string; blockedItems: { settlementItemId: string; code: string }[]; items: { settlementItemId: string; storeId?: string; supplierOrderNo: string; sourceVersion: number; payableAmount: string; pendingPaymentAmount: string; confirmedPaidAmount: string }[] };
-const states: Record<string, string> = { OPEN: '未结清', SETTLED: '已结清', PENDING: '待确认', CONFIRMED: '已确认', REJECTED: '已驳回', CANCELLED: '已撤销', ACTIVE: '有效', RELEASED: '已释放' };
+const states: Record<string, string> = { OPEN: '未结清', SETTLED: '已结清', PENDING: '待确认', PENDING_SETTLEMENT_CONFIRMATION: '待收款确认', CONFIRMED: '已确认', REJECTED: '已驳回', CANCELLED: '已撤销', ACTIVE: '有效', RELEASED: '已释放' };
 const directions: Record<string, string> = { STORE_TO_COMPANY: '门店向公司', COMPANY_TO_SUPPLIER: '公司向供应商', STORE_TO_SUPPLIER: '门店向供应商' };
 function signature(p: Preview) { return JSON.stringify([p.direction, p.channel, p.storeId, p.supplierId, p.totalPayableAmount, p.blockedItems.map(i => [i.settlementItemId, i.code]).sort(), p.items.map(i => [i.settlementItemId, i.sourceVersion, i.payableAmount, i.pendingPaymentAmount, i.confirmedPaidAmount]).sort()]); }
+export function statementCanRegisterPayment(statement?: Pick<Statement, 'payableAmount'>) {
+  return Number(statement?.payableAmount || 0) > 0;
+}
 export default function Billing({ user }: { user: User }) {
   const access = billingAccess(user);
   if (!access.allowed) return <Result status="403" title="无权访问账单或尚未分配业务范围" />;
@@ -36,6 +40,8 @@ function BillingWorkspace({ user, scoped, supplier }: { user: User; scoped: bool
   const seq = useRef(0); const lock = useRef(false); const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; seq.current++; }; }, []);
   const blocked = command.blocked || uploading || checking;
+  const statementHasPayable = statementCanRegisterPayment(statement);
+  const statementAwaitingConfirmation = Boolean(statement && !statementHasPayable && Number(statement.pendingPaymentAmount || 0) > 0);
   async function open(id: string) { const n = ++seq.current; setError(''); setChecking(true);
     try { const value = await request<Statement | Payment>(`${basePath}/${encodeURIComponent(id)}`); if (!mounted.current || n !== seq.current) return;
       if (value.id !== id || !inScope(value)) throw new Error(supplier ? '读取的单据不匹配或不在当前供应商范围' : '读取的单据不匹配或不在当前门店范围');
@@ -46,7 +52,7 @@ function BillingWorkspace({ user, scoped, supplier }: { user: User; scoped: bool
     if (scoped && (p.storeId !== user.scope?.storeId || !['STORE_TO_COMPANY', 'STORE_TO_SUPPLIER'].includes(p.direction) || p.items.some(i => i.storeId !== user.scope?.storeId))) throw new Error('付款预览不在当前门店范围');
     if (p.blockedItems.length || p.items.length !== ids.length || new Set(p.items.map(i => i.settlementItemId)).size !== ids.length || p.items.some(i => !ids.includes(i.settlementItemId) || !Number.isInteger(i.sourceVersion) || !/^\d+\.\d{2}$/.test(i.payableAmount) || !/[1-9]/.test(i.payableAmount))) throw new Error('所选结算项不可登记付款，请刷新账单后重新选择'); return p;
   }
-  async function prepare() { if (readonly || supplier || lock.current || blocked || !ids.length) return; lock.current = true; setChecking(true); setError('');
+  async function prepare() { if (readonly || supplier || lock.current || blocked || !statementHasPayable || !ids.length) return; lock.current = true; setChecking(true); setError('');
     try { const p = await readPreview(); setPreview(p); setFiles([]); form.resetFields(); form.setFieldsValue({ businessDate: new Date().toLocaleDateString('sv-SE') }); } catch (e) { setError((e as Error).message); } finally { lock.current = false; setChecking(false); }
   }
   function saved() { setPreview(undefined); setPayment(undefined); setStatement(undefined); setDecision(undefined); setIds([]); list.reload(); }
@@ -77,15 +83,16 @@ function BillingWorkspace({ user, scoped, supplier }: { user: User; scoped: bool
   return <>
     <Tabs activeKey={tab} onChange={value => { if (!access.tabs.includes(value)) return; seq.current++; setChecking(false); setError(''); setStatement(undefined); setPayment(undefined); setPreview(undefined); setIds([]); setTab(value); }} items={access.tabs.map(key => ({ key, label: ({ supplier: '供应商账单', 'supplier-store': '供应商门店账单', store: '门店账单', direct: '直付账单', payments: '付款记录' } as Record<string, string>)[key] }))} />
     {!statement && !payment && notice}
-    <ListPage key={tab} title={tab === 'payments' ? '付款记录' : '账单查询'} rows={list.rows.filter(inScope).map(row => ({ ...row, name: 'paymentNo' in row ? row.paymentNo : `${row.storeName ? `${row.storeName} · ` : ''}${row.periodKey}`, status: 'status' in row ? row.status : row.settlementStatus }))} loading={list.loading || checking} error={list.error} reload={list.reload}
-      filters={[{ key: 'status', label: '结算状态', options: (tab === 'payments' ? ['PENDING', 'CONFIRMED', 'REJECTED', 'CANCELLED'] : ['OPEN', 'SETTLED']).map(value => ({ value, label: states[value] })) }]}
+    <ListPage key={tab} title={tab === 'payments' ? '付款记录' : '账单查询'} rows={list.rows.filter(inScope).map(row => ({ ...row, name: 'paymentNo' in row ? row.paymentNo : `${row.storeName ? `${row.storeName} · ` : ''}${row.periodKey}`, status: 'status' in row ? row.status : row.settlementStatus === 'OPEN' && Number(row.payableAmount) === 0 && Number(row.pendingPaymentAmount) > 0 ? 'PENDING_SETTLEMENT_CONFIRMATION' : row.settlementStatus }))} loading={list.loading || checking} error={list.error} reload={list.reload}
+      filters={[{ key: 'status', label: '结算状态', options: (tab === 'payments' ? ['PENDING', 'CONFIRMED', 'REJECTED', 'CANCELLED'] : ['OPEN', 'PENDING_SETTLEMENT_CONFIRMATION', 'SETTLED']).map(value => ({ value, label: states[value] })) }]}
       columns={tab === 'payments' ? [{ title: '付款编号', dataIndex: 'name' }, { title: '方向', dataIndex: 'direction', render: value => directions[value] || value }, { title: '日期', dataIndex: 'businessDate' }, { title: '金额', dataIndex: 'amount' }, { title: '状态', dataIndex: 'status', render: value => states[value] || value }, { title: '操作', align: 'right' as const, width: 112, render: (_, row) => <RowActions actions={[{ key: 'view', label: '付款详情', icon: <Eye size={15} />, onClick: () => open(row.id) }]} /> }] : [{ title: '账期', dataIndex: 'name' }, { title: '总额', dataIndex: 'totalAmount' }, { title: '待付', dataIndex: 'payableAmount' }, { title: '待确认', dataIndex: 'pendingPaymentAmount' }, { title: '已付', dataIndex: 'confirmedPaidAmount' }, { title: '状态', dataIndex: 'status', render: value => states[value] || value }, { title: '操作', align: 'right' as const, width: 112, render: (_, row) => <RowActions actions={[{ key: 'view', label: '账单详情', icon: <Eye size={15} />, onClick: () => open(row.id) }]} /> }]} />
-    <Modal title="账单明细" open={Boolean(statement)} width={1000} footer={null} closable={!blocked} keyboard={!blocked} maskClosable={false} onCancel={() => { setStatement(undefined); setIds([]); }}>
+    <Modal title="账单明细" open={Boolean(statement)} width={modalWidth.full} footer={null} closable={!blocked} keyboard={!blocked} maskClosable={false} onCancel={() => { setStatement(undefined); setIds([]); }}>
       {!preview && notice}<Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[{ key: 'period', label: '账期', children: statement?.periodKey }, { key: 'amount', label: '待付金额', children: statement?.payableAmount }, { key: 'pending', label: '待确认付款', children: statement?.pendingPaymentAmount }, { key: 'paid', label: '已确认付款', children: statement?.confirmedPaidAmount }]} />
-      {!readonly && !supplier && <div className="actions workflow-actions"><Button type="primary" icon={<Plus size={16} />} disabled={blocked || !ids.length} onClick={prepare}>登记付款（{ids.length}）</Button></div>}
-      <Table rowKey="settlementItemId" size="small" scroll={{ x: 600 }} dataSource={lines} rowSelection={readonly || supplier ? undefined : { selectedRowKeys: ids, onChange: keys => setIds(keys.map(String)), getCheckboxProps: () => ({ disabled: blocked || Boolean(preview) }) }} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }} columns={[{ title: '订单', render: (_, row) => row.supplierOrderNo || row.supplierOrderId || '价格调整' }, { title: '商品金额', dataIndex: 'goodsAmount' }, { title: '运费', dataIndex: 'freightAmount' }, { title: '结算金额', render: (_, row) => row.totalAmount || row.amount }]} />
+      {statementAwaitingConfirmation && <Alert type="info" showIcon title="付款已登记，等待供应商确认收款。确认前不能重复登记；如款项未实际支付，请到付款记录中处理或撤销该笔登记。" />}
+      {!readonly && !supplier && <div className="actions workflow-actions"><Button type="primary" icon={<Plus size={16} />} disabled={blocked || !ids.length || !statementHasPayable} onClick={prepare}>登记付款（{ids.length}）</Button></div>}
+      <Table rowKey="settlementItemId" size="small" scroll={{ x: 600 }} dataSource={lines} rowSelection={readonly || supplier ? undefined : { selectedRowKeys: ids, onChange: keys => setIds(keys.map(String)), getCheckboxProps: () => ({ disabled: blocked || Boolean(preview) || !statementHasPayable }) }} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }} columns={[{ title: '订单', render: (_, row) => row.supplierOrderNo || row.supplierOrderId || '价格调整' }, { title: '商品金额', dataIndex: 'goodsAmount' }, { title: '运费', dataIndex: 'freightAmount' }, { title: '结算金额', render: (_, row) => row.totalAmount || row.amount }]} />
     </Modal>
-    <Modal title="付款登记" open={Boolean(preview)} width={720} zIndex={1400} footer={null} closable={!blocked} keyboard={!blocked} maskClosable={false} onCancel={() => setPreview(undefined)}>
+    <Modal title="付款登记" open={Boolean(preview)} width={modalWidth.standard} zIndex={1400} footer={null} closable={!blocked} keyboard={!blocked} maskClosable={false} onCancel={() => setPreview(undefined)}>
       {notice}<Descriptions size="small" items={[{ key: 'direction', label: '方向', children: directions[preview?.direction || ''] }, { key: 'amount', label: '本次付款', children: preview?.totalPayableAmount }]} />
       <Table rowKey="settlementItemId" size="small" dataSource={preview?.items || []} pagination={false} columns={[{ title: '订单', dataIndex: 'supplierOrderNo' }, { title: '本次金额', dataIndex: 'payableAmount' }]} />
       <Form form={form} layout="vertical" className="compact-form finance-form" disabled={blocked} onFinish={register}>
@@ -93,7 +100,7 @@ function BillingWorkspace({ user, scoped, supplier }: { user: User; scoped: bool
       </Form><AccountEvidenceUpload purpose="PAYMENT" files={files} onChange={setFiles} uploading={uploading} onUploading={setUploading} disabled={blocked} onError={setError} />
       <div className="actions workflow-actions"><Button disabled={blocked} onClick={() => setPreview(undefined)}>取消</Button><Button type="primary" icon={<Check size={16} />} disabled={blocked || !files.length} loading={checking || command.busy} onClick={register}>确认登记</Button></div>
     </Modal>
-    <Modal title="付款详情" open={Boolean(payment)} width={850} footer={null} closable={!blocked} keyboard={!blocked} maskClosable={false} onCancel={() => { setPayment(undefined); setDecision(undefined); }}>
+    <Modal title="付款详情" open={Boolean(payment)} width={modalWidth.wide} footer={null} closable={!blocked} keyboard={!blocked} maskClosable={false} onCancel={() => { setPayment(undefined); setDecision(undefined); }}>
       {notice}<Descriptions size="small" column={2} items={[{ key: 'no', label: '编号', children: payment?.paymentNo }, { key: 'state', label: '状态', children: states[payment?.status || ''] }, { key: 'amount', label: '金额', children: payment?.amount }, { key: 'direction', label: '方向', children: directions[payment?.direction || ''] }, { key: 'date', label: '日期', children: payment?.businessDate }, { key: 'note', label: '备注 / 原因', children: payment?.rejectedReason || payment?.cancelledReason || payment?.remark || '-' }]} />
       <PrivateEvidence files={payment?.evidenceFiles || []} /><Table rowKey="id" size="small" scroll={{ x: 500 }} dataSource={payment?.allocations || []} pagination={{ defaultPageSize: 10 }} columns={[{ title: '订单', render: (_, row) => row.supplierOrderNo || row.supplierOrderId }, { title: '登记金额', dataIndex: 'amount' }, { title: '分配状态', dataIndex: 'state', render: value => states[value] || value }]} />
       {!readonly && payment?.status === 'PENDING' && <Form form={actionForm} layout="vertical" disabled={blocked} onFinish={process}>

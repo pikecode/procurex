@@ -38,7 +38,7 @@ export async function requireRequestVersion(tx: Prisma.TransactionClient, id: st
   if (request.version !== expectedVersion) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Purchase request changed during funding update' });
 }
 
-export type RequestFundingResult = { canConfirm: boolean; paidAmount: Decimal; shortfallAmount: Decimal; storedRequired: Decimal; storedPaid: Decimal; storedReserved: Decimal; available: Decimal };
+export type RequestFundingResult = { canConfirm: boolean; paidAmount: Decimal; shortfallAmount: Decimal; storedRequired: Decimal; storedPaid: Decimal; storedReserved: Decimal; storedShortfall: Decimal; available: Decimal; creditRequired: Decimal; creditAvailable: Decimal; creditShortfall: Decimal };
 
 export function requestFundingWhere(requestId: string): Prisma.FundingAllocationWhereInput {
   return { AND: [
@@ -174,9 +174,10 @@ export async function synchronizeRequestFunding(tx: Prisma.TransactionClient, re
   const priorReserved = allocations.reduce((sum, allocation) => sum.plus(allocation.reservedAmount), new Decimal(0));
   const priorCredit = allocations.reduce((sum, allocation) => sum.plus(allocation.creditOutstanding), new Decimal(0));
   const available = new Decimal(account.balance).minus(account.reservedBalance).plus(priorStored).plus(priorReserved);
-  let shortfallAmount = Decimal.max(0, storedRequired.minus(available));
+  const storedShortfall = Decimal.max(0, storedRequired.minus(available));
+  let shortfallAmount = storedShortfall;
   let canConfirm = shortfallAmount.isZero();
-  if (options.requireFull && !canConfirm) throw new ConflictException({ code: 'PURCHASE_REQUEST_FUNDING_SHORTFALL', message: 'Available stored value does not cover the request', details: { required: storedRequired.toFixed(2), available: available.toFixed(2), shortfall: shortfallAmount.toFixed(2) } });
+  if (options.requireFull && !canConfirm) throw new ConflictException({ code: 'PURCHASE_REQUEST_FUNDING_SHORTFALL', message: `储值不足，待充值 ¥${shortfallAmount.toFixed(2)}，不能生成订单`, details: { required: storedRequired.toFixed(2), available: available.toFixed(2), shortfall: shortfallAmount.toFixed(2) } });
   let storedBudget = canConfirm ? storedRequired : Decimal.min(storedRequired, priorStored.plus(priorReserved));
   let creditNeeded = new Decimal(0);
   for (const [supplierId, target] of targets) {
@@ -225,7 +226,7 @@ export async function synchronizeRequestFunding(tx: Prisma.TransactionClient, re
   let nextCreditUsed = new Decimal(account.creditUsed).minus(priorCredit).plus(creditNeeded);
   if (nextCreditUsed.lt(0)) throw new ConflictException({ code: 'FUNDING_ALLOCATION_RECONCILIATION_REQUIRED', message: 'Account credit usage disagrees with its funding allocations' });
   const creditShortfall = Decimal.max(0, nextCreditUsed.minus(account.creditLimit));
-  if (creditShortfall.gt(0) && !options.deferCreditShortfall) throw new ConflictException({ code: 'CREDIT_LIMIT_EXCEEDED', message: 'Available credit limit does not cover the request', details: { required: creditNeeded.toFixed(2), available: new Decimal(account.creditLimit).minus(account.creditUsed).plus(priorCredit).toFixed(2) } });
+  if (creditShortfall.gt(0) && !options.deferCreditShortfall) throw new ConflictException({ code: 'CREDIT_LIMIT_EXCEEDED', message: `挂账额度不足，待补额度 ¥${creditShortfall.toFixed(2)}，不能生成订单`, details: { required: creditNeeded.toFixed(2), available: new Decimal(account.creditLimit).minus(account.creditUsed).plus(priorCredit).toFixed(2) } });
   let creditBudget = creditNeeded;
   if (creditShortfall.gt(0)) {
     creditBudget = Decimal.min(creditNeeded, priorCredit);
@@ -279,7 +280,9 @@ export async function synchronizeRequestFunding(tx: Prisma.TransactionClient, re
   await tx.purchaseRequest.update({ where: { id: requestId }, data: {
     paidAmount, shortfallAmount, paymentStatus: paidAmount.gte(new Decimal(executionSalesGoodsAmount).plus(totalFreight)) ? 'PAID' : 'UNPAID',
   } });
-  return { canConfirm, paidAmount, shortfallAmount, storedRequired, storedPaid, storedReserved, available: new Decimal(updatedAccount.balance).minus(updatedAccount.reservedBalance) };
+  return { canConfirm, paidAmount, shortfallAmount, storedRequired, storedPaid, storedReserved, storedShortfall,
+    available: new Decimal(updatedAccount.balance).minus(updatedAccount.reservedBalance), creditRequired: creditNeeded,
+    creditAvailable: new Decimal(account.creditLimit).minus(account.creditUsed).plus(priorCredit), creditShortfall };
 }
 
 function effectivePriceAdjustmentQuantity(source: { salesDelta: Decimal | Prisma.Decimal; previousSalesPrice: Decimal | Prisma.Decimal; newSalesPrice: Decimal | Prisma.Decimal }): Decimal | null {

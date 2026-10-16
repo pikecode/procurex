@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Alert, App, Button, Form, Grid, Input, InputNumber, Modal, Popconfirm, Select, Switch, Table, Tabs, Tag, Tooltip, Tree } from 'antd';
 import { EyeOff, Link2, PackageCheck, Pencil, Save, Trash2 } from 'lucide-react';
 import { ListPage } from '../components/ListPage';
+import { modalWidth } from '../lib/theme';
 import { hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { statusOptions } from './Stores';
@@ -127,7 +128,7 @@ export default function Suppliers({ user }: { user: User }) {
        } },
    ]} /> },
     ]} />
-    <Modal title={`管理商品 · ${linking?.name || ''}`} open={Boolean(linking)} width={1100} className="supplier-products-modal" maskClosable={false} closable={!saving} keyboard={!saving} onCancel={() => { if (!saving) leaveLinks(); }} footer={<div className="supplier-products-footer"><span>已供 {selected.length} 件{dirty && ` · 待新增 ${selected.filter(id => !links?.productIds.includes(id)).length} 件 · 待移除 ${links?.productIds.filter(id => !selected.includes(id)).length || 0} 件`}</span><div className="actions"><Button disabled={saving} onClick={leaveLinks}>取消</Button>{writable && <Button type="primary" icon={<Save size={16} />} loading={saving} disabled={!dirty || !links || products.loading || Boolean(products.error)} onClick={saveLinks}>保存修改</Button>}</div></div>}>
+    <Modal title={`管理商品 · ${linking?.name || ''}`} open={Boolean(linking)} width={modalWidth.full} className="supplier-products-modal" maskClosable={false} closable={!saving} keyboard={!saving} onCancel={() => { if (!saving) leaveLinks(); }} footer={<div className="supplier-products-footer"><span>已供 {selected.length} 件{dirty && ` · 待新增 ${selected.filter(id => !links?.productIds.includes(id)).length} 件 · 待移除 ${links?.productIds.filter(id => !selected.includes(id)).length || 0} 件`}</span><div className="actions"><Button disabled={saving} onClick={leaveLinks}>取消</Button>{writable && <Button type="primary" icon={<Save size={16} />} loading={saving} disabled={!dirty || !links || products.loading || Boolean(products.error)} onClick={saveLinks}>保存修改</Button>}</div></div>}>
       {(error || products.error || categories.error || units.error) && <Alert type="error" showIcon title={error || products.error || categories.error || units.error} action={<Button disabled={saving} onClick={() => { products.reload(); categories.reload(); units.reload(); if (!links && linking) void openLinks(linking); }}>重试</Button>} />}
       <Tabs className="supplier-products-views" activeKey={adding ? 'available' : 'linked'} onChange={key => { setAdding(key === 'available'); setCategory(undefined); setProductSearch(''); setRemovals([]); }} items={[{ key: 'linked', label: `已供商品 (${selected.length})` }, ...(writable ? [{ key: 'available', label: `待添加商品 (${products.rows.filter(row => availableProduct(row)).length})` }] : [])]} />
       <div className="supplier-products-layout">
@@ -149,7 +150,7 @@ export default function Suppliers({ user }: { user: User }) {
         </div>
       </div>
     </Modal>
-    <Modal title={`${writable ? editing ? '编辑' : '新增' : '查看'}供应商`} open={editing !== undefined} width={720} onOk={save} okText="保存" cancelText="取消"
+    <Modal title={`${writable ? editing ? '编辑' : '新增' : '查看'}供应商`} open={editing !== undefined} width={modalWidth.standard} onOk={save} okText="保存" cancelText="取消"
       footer={!writable ? null : undefined} confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving} onCancel={() => { if (!saving) setEditing(undefined); }}>
       {error && <Alert type="error" title={error} showIcon />}
       <Form form={form} layout="vertical" disabled={!writable || saving} className="compact-form"><div className="form-grid">

@@ -4,6 +4,7 @@ import { ChevronRight, Pencil, ImageOff, Image as ImageIcon, LoaderCircle, Plus,
 import './Products.css';
 import { ProductImageUpload } from '../components/ProductImageUpload';
 import { PurchaseUnitFields } from '../components/PurchaseUnitFields';
+import { modalWidth } from '../lib/theme';
 import { getSession, hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { positiveIntegerRule } from '../lib/catalogTypes';
@@ -179,7 +180,7 @@ const useNarrow = () => { const [narrow, setNarrow] = useState(() => typeof wind
           ]} />
       </div>
     </section>
-    <Modal className="product-editor" title={`${writable ? editing ? '编辑' : '新增' : '查看'}商品`} open={editing !== undefined} width={840} style={{ top: 24 }} onOk={() => save()} okText="保存" cancelText="取消" footer={!writable ? null : undefined}
+    <Modal className="product-editor" title={`${writable ? editing ? '编辑' : '新增' : '查看'}商品`} open={editing !== undefined} width={modalWidth.wide} style={{ top: 24 }} onOk={() => save()} okText="保存" cancelText="取消" footer={!writable ? null : undefined}
       confirmLoading={saving} okButtonProps={{ disabled: uploading || Boolean(referencesError) || categories.loading || units.loading || brands.loading }} closable={!saving && !uploading} maskClosable={!saving && !uploading} keyboard={!saving && !uploading} onCancel={() => { if (!saving && !uploading) setEditing(undefined); }}>
       {(error || referencesError) && <Alert type="error" title={error || referencesError} showIcon />}
       {writable && <Alert type="info" showIcon message="供应商关联、供货价与上下架请在“供应商管理 > 管理商品”中维护。" />}

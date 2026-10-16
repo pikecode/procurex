@@ -3,6 +3,7 @@ import { Alert, App, Button, Cascader, Checkbox, Descriptions, Divider, Form, In
 import { Eye, Folders, Pencil, Trash2 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ListPage } from '../components/ListPage';
+import { modalWidth } from '../lib/theme';
 import { hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { composeAddress, regionOptions, splitAddress } from '../lib/regions';
@@ -123,7 +124,7 @@ export default function Stores({ user }: { user: User }) {
       <Form layout="vertical" className="compact-form"><Form.Item label="目标分组"><Select aria-label="目标分组" showSearch optionFilterProp="label" disabled={moveBusy} value={target} onChange={setTarget} style={{ width: '100%' }} options={[{ value: 'ungrouped', label: '未分组' }, ...groups.rows.filter(group => group.status === 'ACTIVE').map(group => ({ value: group.id, label: group.name }))]} /></Form.Item></Form>
     </Modal>
     <Modal title={editing ? '编辑门店' : '新增门店'} open={editing !== undefined} onCancel={() => { if (!saving) setEditing(undefined); }} onOk={save}
-      okText="保存" cancelText="取消" confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving} width={680}>
+      okText="保存" cancelText="取消" confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving} width={modalWidth.standard}>
       {error && <Alert type="error" showIcon title={error} />}
       <Form form={form} layout="vertical" disabled={saving} className="compact-form">
         <div className="form-grid">

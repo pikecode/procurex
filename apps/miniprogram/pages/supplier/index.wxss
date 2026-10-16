@@ -14,19 +14,31 @@
   border-bottom: 4rpx solid transparent;
 }
 .reconcile-tabs .selected { color: var(--brand); font-weight: 700; border-bottom-color: var(--brand); }
-.reconcile-guide {
-  margin: var(--space-section-y) var(--space-page-x) 0;
-  padding: 20rpx 22rpx;
-  border-left: 5rpx solid var(--brand);
-  border-radius: 12rpx;
-  background: var(--brand-soft);
-  color: var(--ink-3);
-  font-size: 23rpx;
-  line-height: 1.55;
-}
-.reconcile-guide text { display: block; }
-.reconcile-guide-title { margin-bottom: 4rpx; color: var(--brand-ink); font-size: 26rpx; font-weight: 700; }
 .supplier-mine-menu { margin-top: var(--space-section-y); }
+.reconcile-count { color: var(--ink-4); font-size: 22rpx; }
+.supplier-bill-list, .supplier-payment-list { display: flex; flex-direction: column; gap: 14rpx; }
+.supplier-bill-item, .supplier-payment-item {
+  padding: 20rpx;
+  border: 1rpx solid var(--line);
+  border-radius: 14rpx;
+  background: var(--surface);
+}
+.supplier-finance-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14rpx; }
+.supplier-finance-item-head > view { min-width: 0; display: flex; flex-direction: column; gap: 5rpx; }
+.supplier-finance-title { color: var(--ink-1); font-size: 27rpx; font-weight: 700; }
+.supplier-finance-period { color: var(--ink-4); font-size: 21rpx; overflow-wrap: anywhere; }
+.supplier-bill-payable { display: flex; align-items: baseline; justify-content: space-between; gap: 12rpx; margin-top: 18rpx; padding: 14rpx 16rpx; border-radius: 10rpx; background: var(--sunken); }
+.supplier-bill-payable text:first-child { color: var(--ink-3); font-size: 22rpx; }
+.supplier-bill-payable text:last-child { color: var(--ink-1); font-size: 31rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
+.supplier-bill-breakdown { display: flex; gap: 20rpx; margin-top: 14rpx; }
+.supplier-bill-breakdown view { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4rpx; }
+.supplier-bill-breakdown text:first-child { color: var(--ink-4); font-size: 20rpx; }
+.supplier-bill-breakdown text:last-child { color: var(--ink-2); font-size: 23rpx; font-variant-numeric: tabular-nums; }
+.supplier-payment-amount { display: flex; align-items: baseline; justify-content: space-between; gap: 12rpx; margin-top: 16rpx; }
+.supplier-payment-amount text:first-child { color: var(--ink-1); font-size: 31rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
+.supplier-payment-amount text:last-child { flex-shrink: 0; color: var(--ink-4); font-size: 21rpx; }
+.supplier-finance-open { margin-top: 14rpx; padding-top: 12rpx; border-top: 1rpx solid var(--line-soft); color: var(--brand); font-size: 22rpx; text-align: right; }
+.finance-empty { padding: 28rpx 0; color: var(--ink-4); font-size: 24rpx; text-align: center; }
 
 .source-return {
   padding: 22rpx var(--space-content-x);
@@ -92,6 +104,11 @@
 .supplier-task-meta text:first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .supplier-task-meta text:last-child { flex-shrink: 0; }
 .supplier-task-chevron { display: flex; align-items: center; color: var(--ink-faint); font-size: 36rpx; }
+.supplier-exception-heading { margin-top: 20rpx; }
+.supplier-exception-card { padding-top: 0 !important; padding-bottom: 0 !important; }
+.supplier-exception-empty { padding: 18rpx 0; color: var(--ink-4); font-size: 24rpx; }
+.supplier-history-link { display: flex; align-items: center; justify-content: space-between; min-height: 76rpx; border-top: 1rpx solid var(--line-soft); color: var(--brand); font-size: 24rpx; }
+.supplier-history-link text:last-child { color: var(--ink-3); }
 
 /* ---------- 订单详情 ---------- */
 
@@ -115,19 +132,41 @@
 .shipment-history-row { padding: 20rpx 0; }
 .shipment-products { margin-top: 8rpx; color: var(--ink-2); font-size: 24rpx; }
 
-.supplier-order-list-item { padding: 24rpx 0; }
+.supplier-orders-list { display: flex; flex-direction: column; gap: 14rpx; }
+.page .supplier-order-list-item {
+  display: block;
+  margin: 0;
+  padding: 20rpx;
+  border: 1rpx solid var(--line);
+  border-radius: 14rpx;
+  background: var(--surface);
+}
+.supplier-order-topline { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.supplier-order-store { min-width: 0; color: var(--ink-1); font-size: 29rpx; font-weight: 700; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.supplier-order-topline .status { flex-shrink: 0; }
+.supplier-order-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4rpx 8rpx; margin-top: 10rpx; color: var(--ink-3); font-size: 21rpx; }
+.supplier-order-no-label { flex-shrink: 0; color: var(--ink-4); }
+.supplier-order-meta document-no { min-width: 0; color: var(--ink-2); }
+.supplier-order-date { margin-left: auto; flex-shrink: 0; color: var(--ink-4); }
+.supplier-order-list-item .supplier-order-products { display: block; margin-top: 14rpx; padding: 12rpx 14rpx; border-radius: 10rpx; background: var(--sunken); color: var(--ink-2); font-size: 23rpx; line-height: 1.5; }
+.supplier-order-products-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4rpx; color: var(--ink-3); font-size: 21rpx; }
+.supplier-order-preview { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.supplier-order-more { display: block; margin-top: 4rpx; color: var(--ink-4); font-size: 21rpx; }
 .order-list-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
-  margin-top: 18rpx;
-  padding-top: 16rpx;
+  margin-top: 14rpx;
+  padding-top: 12rpx;
   border-top: 1rpx solid var(--line-soft);
 }
-.order-list-footer .list-amount { margin-top: 0; }
+.supplier-order-total { display: flex; align-items: baseline; gap: 10rpx; min-width: 0; }
+.supplier-order-total text:first-child { color: var(--ink-3); font-size: 22rpx; }
+.supplier-order-total text:last-child { color: var(--ink-1); font-size: 29rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
 .order-open { flex-shrink: 0; color: var(--brand); font-size: 24rpx; font-weight: 600; }
 .order-empty { padding: 64rpx 0; text-align: center; color: var(--ink-3); font-size: 27rpx; }
+.supplier-order-sort-hint { padding: 0 0 12rpx; color: var(--ink-4); font-size: 21rpx; }
 
 .supplier-shipment-item { padding: 22rpx 0; }
 .supplier-product-heading {

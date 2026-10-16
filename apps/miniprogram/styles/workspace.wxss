@@ -142,6 +142,7 @@
   font-size: 25rpx;
 }
 .task-detail-toolbar .back-link { padding: 0; }
+.document-kind-label { margin: -4rpx 0 8rpx; color: var(--brand); font-size: 22rpx; font-weight: 700; }
 .task-detail-identity {
   display: flex;
   align-items: flex-start;
@@ -401,8 +402,20 @@
 
 /* ---------- 供应商订单分组 ---------- */
 
-.supplier-order-summary { margin-top: 24rpx; padding-top: 24rpx; border-top: 1rpx solid var(--line); }
+.supplier-order-summary { margin: 28rpx -4rpx 0; padding: 24rpx 4rpx 0; border-top: 1rpx solid var(--line); }
+.generated-orders-heading { display: flex; align-items: center; justify-content: space-between; gap: 14rpx; }
+.generated-orders-title { min-width: 0; flex: 1; }
+.generated-orders-title .card-title { display: block; line-height: 1.4; }
+.generated-orders-caption { display: block; margin-top: 6rpx; color: var(--ink-3); font-size: 21rpx; line-height: 1.45; }
 .generated-order-products { margin-top: 12rpx; }
+.generated-order-card { margin-top: 14rpx; padding: 18rpx; border: 1rpx solid var(--line); border-left: 5rpx solid var(--brand); border-radius: 12rpx; background: var(--surface); }
+.generated-order-top { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; }
+.generated-order-heading { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8rpx 12rpx; }
+.generated-order-supplier { color: var(--ink-1); font-size: 27rpx; font-weight: 700; overflow-wrap: anywhere; }
+.generated-order-follow { flex-shrink: 0; width: auto; min-height: 56rpx; margin: 0; padding: 0 12rpx; border: 1rpx solid var(--line); border-radius: 8rpx; background: var(--surface); color: var(--brand); font-size: 22rpx; line-height: 54rpx; }
+.generated-order-no { display: flex; align-items: flex-start; justify-content: space-between; gap: 12rpx; margin-top: 12rpx; color: var(--ink-3); font-size: 21rpx; }
+.generated-order-no document-no { min-width: 0; text-align: right; overflow-wrap: anywhere; }
+.generated-order-overview { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8rpx 16rpx; margin-top: 12rpx; color: var(--ink-2); font-size: 23rpx; }
 .generated-order-product-block { padding: 10rpx 0 14rpx; border-bottom: 1rpx solid var(--line-soft); }
 .generated-order-product-block:last-child { border-bottom: 0; }
 .generated-order-product {
@@ -424,16 +437,8 @@
   font-size: 24rpx;
 }
 .order-count { flex-shrink: 0; color: var(--brand); font-size: 25rpx; font-weight: 600; }
-.supplier-order-toggle { padding: 8rpx 0; }
-.supplier-order-overview {
-  display: flex;
-  justify-content: space-between;
-  gap: 16rpx;
-  margin-top: 16rpx;
-  color: var(--ink-2);
-  font-size: 24rpx;
-}
-.supplier-order-fold { flex-shrink: 0; color: var(--brand); font-weight: 600; }
+.supplier-order-toggle { padding: 0; }
+.supplier-order-fold { display: block; margin-top: 12rpx; color: var(--brand); font-size: 22rpx; font-weight: 600; text-align: right; }
 .original-request-toggle {
   display: flex;
   justify-content: space-between;

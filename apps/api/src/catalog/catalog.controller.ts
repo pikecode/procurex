@@ -50,6 +50,29 @@ export class CatalogController {
   @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE')
   listBrands() { return this.registries.listBrands(); }
 
+  @Get('logistics-companies')
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'SUPPLIER')
+  listLogisticsCompanies() { return this.registries.listLogisticsCompanies(); }
+
+  @Post('logistics-companies')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  createLogisticsCompany(@Body() body: { name?: unknown }, @Req() request: AuthenticatedRequest) {
+    const issues: ValidationIssue[] = [];
+    const name = profileText('name', body.name, 120, true, false, issues);
+    throwIfInvalid(issues);
+    return this.registries.createLogisticsCompany(name!, masterDataAuditContext(request));
+  }
+
+  @Patch('logistics-companies/:id')
+  @RequireRoles('ADMIN', 'PURCHASER')
+  updateLogisticsCompany(@Param('id') id: string, @Body() body: { expectedVersion?: unknown; name?: unknown; isActive?: unknown }, @Req() request: AuthenticatedRequest) {
+    const issues: ValidationIssue[] = [...validateUuid('id', id), ...validateExpectedVersion('expectedVersion', body.expectedVersion)];
+    const name = body.name === undefined ? undefined : profileText('name', body.name, 120, false, false, issues) ?? undefined;
+    if (body.isActive !== undefined && typeof body.isActive !== 'boolean') issues.push({ field: 'isActive', code: 'INVALID_BOOLEAN', message: 'isActive must be a boolean' });
+    throwIfInvalid(issues);
+    return this.registries.updateLogisticsCompany(id, body.expectedVersion as number, { ...(name ? { name } : {}), ...(typeof body.isActive === 'boolean' ? { isActive: body.isActive } : {}) }, masterDataAuditContext(request));
+  }
+
   @Post('brands')
   @RequireRoles('ADMIN', 'PURCHASER')
   createBrand(@Body() body: { name?: unknown }, @Req() request: AuthenticatedRequest) {

@@ -32,7 +32,7 @@ export function ProductImageUpload({ disabled, onUpload, onBusy }: { disabled: b
       current.current = URL.createObjectURL(file); setName(file.name); setSource(current.current); setCrop({ x: 0, y: 0 }); setZoom(1); setArea(undefined); setError(''); onBusy(true); return false;
     }}><Button icon={<UploadIcon size={16} />} disabled={disabled}>上传图片</Button></Upload>
     {!source && error && <Alert type="error" title={error} />}
-    <Modal title="裁切商品图片" open={Boolean(source)} width={520} transitionName="" okText="确认上传" cancelText="取消" confirmLoading={busy} okButtonProps={{ disabled: !area }} closable={!busy} maskClosable={!busy} keyboard={!busy} onCancel={close} onOk={async () => {
+    <Modal title="裁切商品图片" open={Boolean(source)} width={modalWidth.form} transitionName="" okText="确认上传" cancelText="取消" confirmLoading={busy} okButtonProps={{ disabled: !area }} closable={!busy} maskClosable={!busy} keyboard={!busy} onCancel={close} onOk={async () => {
       if (!area || busy) return; setBusy(true); setError('');
       try { const file = await cropProductImage(source, area, name); await onUpload(file); close(); }
       catch (failure) { setError((failure as Error).message); } finally { setBusy(false); }
@@ -45,3 +45,4 @@ export function ProductImageUpload({ disabled, onUpload, onBusy }: { disabled: b
     </Modal>
   </>;
 }
+import { modalWidth } from '../lib/theme';

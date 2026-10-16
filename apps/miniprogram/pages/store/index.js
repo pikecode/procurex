@@ -132,6 +132,10 @@ Page({
     if (receipt && receipt.key && receipt.shipmentId && receipt.body) this.setData({ pendingReceipt: receipt, activeView: 'receive' });
     this.refreshCatalogView();
     this.loadWork();
+    if (this.requestToRefresh) {
+      const id = this.requestToRefresh; this.requestToRefresh = '';
+      this.selectRequest({ currentTarget: { dataset: { id } } });
+    }
   },
 
   changeView(event) {
@@ -237,6 +241,7 @@ Page({
   openProfile() { if (!this.data.submitting && !this.data.receiving) wx.navigateTo({ url: '/pages/profile/index?kind=store' }); },
   backToCatalog() { if (!this.data.submitting && !this.data.pendingOrder) this.setData({ orderStep: 'catalog', error: '' }); },
   closeRequest() {
+    this.requestImageSequence = (this.requestImageSequence || 0) + 1;
     const orderId = this.sourceOrderId;
     this.sourceOrderId = '';
     this.setData({ selectedRequest: null, selectedRequestId: '', requestLoading: false, sourceOrderReturn: false, ...(orderId ? { recordType: 'orders' } : {}) });
@@ -490,15 +495,20 @@ Page({
 
   async selectRequest(event) {
     const id = event.currentTarget.dataset.id;
+    const imageSequence = this.requestImageSequence = (this.requestImageSequence || 0) + 1;
     this.setData({ recordType: 'requests', selectedRequest: null, selectedRequestId: id, requestLoading: true, error: '' });
     try {
       const detail = await api.request(`/purchase-requests/${id}`);
       if (this.data.selectedRequestId !== id) return;
       const names = new Map(this.data.products.map(product => [product.id, product.name]));
-      const items = detail.items.map(item => ({ ...item, productName: item.productName || names.get(item.productId) || '商品' }));
+      const items = detail.items.map(item => {
+        const productName = item.productName || names.get(item.productId) || '商品';
+        const cardProduct = { ...item, id: item.productId, name: productName, imageFileId: item.imageFile?.id || '', imageUrl: '', imageLoading: Boolean(item.imageFile?.id), imageFailed: false };
+        return { ...item, productName, imageFileId: cardProduct.imageFileId, imageUrl: '', imageLoading: cardProduct.imageLoading, imageFailed: false, cardProduct };
+      });
       const supplierOrders = detail.supplierOrders || [];
       const itemGroups = storeView.requestGroups(items, supplierOrders);
-      this.setData({ selectedRequest: { ...detail, stage: storeView.orderStage(detail), stageTone: storeView.orderStageTone(detail), submittedDate: storeView.dateText(detail.submittedAt),
+      this.setData({ selectedRequest: { ...detail, originalItemsOpen: false, stage: storeView.orderStage(detail), stageTone: storeView.orderStageTone(detail), submittedDate: storeView.dateText(detail.submittedAt),
         items, supplierOrders: supplierOrders.map(order => {
           const group = itemGroups.find(itemGroup => itemGroup.supplierId === order.supplierId);
           return { ...order, open: group ? group.open : true, items: group ? group.items : [], itemCount: group ? group.itemCount : 0,
@@ -508,11 +518,49 @@ Page({
             shipments: (order.shipments || []).map(shipment => ({ ...shipment,
               shippedDate: storeView.dateText(shipment.shippedAt), receivedDate: storeView.dateText(shipment.receivedAt) })) };
         }) } });
+      this.loadRequestImages(id, items, imageSequence);
     } catch (error) {
       if (this.data.selectedRequestId === id) this.setData({ error: error.message });
     } finally {
       if (this.data.selectedRequestId === id) this.setData({ requestLoading: false });
     }
+  },
+
+  editRequest() {
+    const detail = this.data.selectedRequest;
+    if (!this.data.canWrite || !detail || detail.procurementConfirmedAt || !['PENDING_PROCUREMENT', 'PENDING_FUNDS'].includes(detail.status) || detail.supplierOrders.length) return;
+    this.requestToRefresh = detail.id;
+    wx.navigateTo({ url: `/pages/store-request-edit/index?id=${detail.id}` });
+  },
+
+  async loadRequestImages(requestId, items, sequence = this.requestImageSequence) {
+    const images = items.filter(item => item.imageFile);
+    for (let index = 0; index < images.length && sequence === this.requestImageSequence && this.data.selectedRequestId === requestId; index += 4) {
+      await Promise.all(images.slice(index, index + 4).map(item => this.loadRequestImage(requestId, item, sequence)));
+    }
+  },
+
+  async loadRequestImage(requestId, item, sequence = this.requestImageSequence) {
+    if (!item.imageFile) return;
+    let imageUrl = '', imageFailed = false;
+    try { imageUrl = await api.imagePath(item.imageFile); } catch { imageFailed = true; }
+    if (sequence !== this.requestImageSequence || this.data.selectedRequestId !== requestId || !this.data.selectedRequest) return;
+    const updateItems = rows => rows.map(row => row.productId === item.productId ? { ...row, imageUrl, imageLoading: false, imageFailed,
+      cardProduct: { ...row.cardProduct, imageUrl, imageLoading: false, imageFailed } } : row);
+    const selectedRequest = this.data.selectedRequest;
+    this.setData({ selectedRequest: { ...selectedRequest, items: updateItems(selectedRequest.items),
+      supplierOrders: selectedRequest.supplierOrders.map(order => ({ ...order, items: updateItems(order.items) })) } });
+  },
+
+  retryRequestImage(event) {
+    const productId = event.detail.productId;
+    const item = this.data.selectedRequest?.items.find(row => row.productId === productId);
+    if (item) return this.loadRequestImage(this.data.selectedRequestId, item);
+  },
+
+  toggleOriginalRequestItems() {
+    const selectedRequest = this.data.selectedRequest;
+    if (selectedRequest) this.setData({ selectedRequest: { ...selectedRequest, originalItemsOpen: !selectedRequest.originalItemsOpen } });
   },
 
   async loadWork() {
@@ -535,7 +583,7 @@ Page({
       const requests = await api.request('/purchase-requests');
       this.setData({ requests: Array.isArray(requests) ? requests.map(order => ({ ...order, submittedDate: storeView.dateText(order.submittedAt),
         stage: storeView.orderStage(order), stageTone: storeView.orderStageTone(order), progressText: order.status === 'PENDING_FUNDS' ? '等待补足资金 · 采购尚未确认' :
-          order.rejectedSupplierCount ? '供应商异常处理中 · 等待采购调整' : order.supplierCount ? `已拆分 ${order.supplierCount} 家供应商履约 · ${order.completedSupplierCount || 0} 家完成` : '等待采购确认' })) : [] });
+          order.status === 'PENDING_FINANCE' ? '等待采购确认 · 尚未生成供应商订单' : order.rejectedSupplierCount ? '供应商异常处理中 · 等待采购调整' : order.supplierCount ? `已拆分 ${order.supplierCount} 家供应商履约 · ${order.completedSupplierCount || 0} 家完成` : '等待采购确认' })) : [] });
       this.refreshOrders();
     } catch (error) {
       this.setData({ error: error.message });
@@ -678,7 +726,6 @@ Page({
           this.setData({ preview: latest, checkoutFunding: storeView.checkoutFunding(latest), previewGroups: storeView.previewGroups(latest, this.data.products, this.data.expandedSupplierId), error: '报价或资金状态已变化，请重新核对后提交' });
           return;
         }
-        if (latest.funding.credit && Number(latest.funding.credit.shortfall) > 0) throw new Error('挂账额度不足，请联系财务调整额度后重试');
         const pendingOrder = { key: `mini-store-order-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, body: this.orderInput() };
         this.setData({ pendingOrder }); this.savePending('order', pendingOrder);
       }

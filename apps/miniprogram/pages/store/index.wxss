@@ -369,6 +369,27 @@
 .total-row { padding-bottom: 24rpx; margin-bottom: 8rpx; border-bottom: 1rpx solid var(--line); font-size: 28rpx; font-weight: 700; }
 .total-row > text:last-child { font-size: 32rpx; }
 .shortfall-row > text:first-child, .shortfall-row > text:last-child { color: var(--warn); font-weight: 700; }
+.request-master-summary { border-top: 4rpx solid var(--brand); }
+.request-master-label { margin-bottom: 14rpx; color: var(--brand); font-size: 23rpx; font-weight: 700; }
+.request-original-heading { display: flex; flex-direction: column; gap: 6rpx; padding: 24rpx var(--space-content-x) 8rpx; }
+.request-original-heading .section-title { color: var(--ink-1); font-size: 28rpx; }
+.request-product-row { padding: 20rpx 0; border-bottom: 1rpx solid var(--line-soft); }
+.request-product-row:last-child { border-bottom: 0; }
+.request-product-content { min-width: 0; }
+.request-product-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 16rpx; margin-bottom: 8rpx; color: var(--ink-1); font-weight: 600; line-height: 1.4; }
+.request-product-title > text:first-child { min-width: 0; overflow-wrap: anywhere; }
+.request-product-content .secondary-text { display: block; font-size: 23rpx; line-height: 1.5; }
+.request-edit-hint { margin-top: 14rpx; padding-top: 16rpx; border-top: 1rpx solid var(--line-soft); color: var(--ink-3); font-size: 23rpx; line-height: 1.5; }
+.request-original-toggle { display: flex; align-items: center; justify-content: space-between; margin: 16rpx var(--space-page-x) 0; padding: 24rpx var(--space-content-x); border: 1rpx solid var(--line); border-radius: 12rpx; background: var(--surface); color: var(--brand); font-size: 25rpx; font-weight: 600; }
+.request-original-list { margin-top: 12rpx; }
+.request-funding-summary { padding-top: 8rpx; border-top: 1rpx solid var(--line-soft); }
+.request-funding-summary .amount-row { padding: 12rpx 0; }
+.request-generated-orders-caption { align-items: flex-start; padding: 28rpx var(--space-page-x) 8rpx; }
+.request-generated-orders-caption > view { min-width: 0; }
+.request-generated-title, .request-generated-hint { display: block; }
+.request-generated-title { color: var(--ink-1); font-size: 28rpx; font-weight: 700; }
+.request-generated-hint { margin-top: 6rpx; color: var(--ink-3); font-size: 22rpx; line-height: 1.5; }
+.request-generated-count { flex-shrink: 0; color: var(--brand); font-size: 24rpx; font-weight: 700; }
 
 /* ---------- 订货单列表 ---------- */
 
@@ -451,7 +472,12 @@
 .group-toggle { display: flex; align-items: center; gap: 12rpx; flex: 1; min-width: 0; }
 .group-toggle .section-title { flex: 0 1 auto; }
 .group-summary { flex-shrink: 0; color: var(--ink-3); font-size: 23rpx; font-variant-numeric: tabular-nums; }
-.request-supplier-group { padding: 24rpx var(--space-content-x); }
+.request-supplier-group {
+  margin: 16rpx var(--space-page-x) 0;
+  padding: 24rpx var(--space-content-x);
+  border: 1rpx solid var(--line);
+  border-radius: 14rpx;
+}
 .request-supplier-group .section-title { flex: 1; min-width: 0; }
 .supplier-group-heading { padding: 4rpx 0; }
 .supplier-group-name { display: flex; align-items: center; gap: 12rpx; }

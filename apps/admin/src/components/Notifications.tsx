@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Badge, Button, Drawer, List, Modal, Tag, Tooltip } from 'antd';
 import { Bell, Check, CheckCheck, RotateCcw } from 'lucide-react';
+import { modalWidth } from '../lib/theme';
 import { request } from '../lib/api';
 import { workflowTime } from '../lib/workflowTypes';
 
@@ -33,7 +34,7 @@ export function Notifications({ userId }: { userId: string }) {
   }
   return <>
     <Tooltip title="通知"><Badge count={inbox.unreadCount} size="small"><Button type="text" aria-label="通知" icon={<Bell size={17} />} onClick={() => setOpen(true)} /></Badge></Tooltip>
-    <Drawer title="通知" open={open} onClose={() => setOpen(false)} width={480} extra={<div className="actions">
+    <Drawer title="通知" open={open} onClose={() => setOpen(false)} width={modalWidth.form} extra={<div className="actions">
       <Tooltip title="全部已读"><Button aria-label="全部已读" icon={<CheckCheck size={16} />} disabled={loading || saving || !inbox.unreadCount} onClick={() => read()} /></Tooltip>
       <Tooltip title="刷新通知"><Button aria-label="刷新通知" icon={<RotateCcw size={16} />} loading={loading} disabled={saving} onClick={() => setRevision(value => value + 1)} /></Tooltip>
     </div>}>

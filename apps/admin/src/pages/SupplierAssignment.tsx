@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Modal, Select, Table } from 'antd';
+import { Alert, App, Button, Modal, Select, Table } from 'antd';
+import { modalWidth } from '../lib/theme';
 import { request } from '../lib/api';
 import type { Catalog, Purchase } from '../lib/workflowTypes';
 import type { useWorkflowCommand } from '../lib/useWorkflowCommand';
+import { useUnsavedGuard } from '../lib/useUnsavedGuard';
 
 type PreviewItem = { requestItemId: string; eligible: boolean; reason?: string; salesLineAmount: string; supplyLineAmount: string; priceVersionId: string; supplyPriceVersionId: string };
 type Preview = { requestId: string; supplierId: string; items: PreviewItem[] };
@@ -11,6 +13,14 @@ export function SupplierAssignment({ purchase, command, onClose, onSaved }: { pu
   const [ids, setIds] = useState<string[]>([]); const [supplierId, setSupplierId] = useState<string>();
   const [preview, setPreview] = useState<Preview | null>(null); const [error, setError] = useState('');
   const [busy, setBusy] = useState(false); const lock = useRef(false);
+  const { modal } = App.useApp();
+  const changed = Boolean(ids.length || supplierId);
+  const requestClose = () => {
+    if (busy || command.busy) return;
+    if (!changed) { onClose(); return; }
+    modal.confirm({ title: '放弃未保存的调整？', content: '已选择的商品与供应商尚未提交，关闭后将丢失。',
+      okText: '放弃调整', cancelText: '继续编辑', okButtonProps: { danger: true }, onOk: onClose });
+  };
   useEffect(() => {
     const controller = new AbortController();
     request<Catalog>(`/purchase-requests/${purchase.id}/edit-catalog`, { signal: controller.signal }).then(value => { if (!controller.signal.aborted) setCatalog(value); })
@@ -30,8 +40,8 @@ export function SupplierAssignment({ purchase, command, onClose, onSaved }: { pu
     finally { lock.current = false; setBusy(false); }
   }
   const valid = preview && preview.items.every(item => item.eligible);
-  return <Modal open zIndex={1200} title="调整供应商" width={820} maskClosable={false} closable={!busy && !command.busy} onCancel={onClose} footer={<div className="actions workflow-actions">
-    <Button disabled={busy || command.busy} onClick={onClose}>取消</Button>
+  return <Modal open zIndex={1200} title="调整供应商" width={modalWidth.wide} maskClosable={false} closable={!busy && !command.busy} onCancel={requestClose} footer={<div className="actions workflow-actions">
+    <Button disabled={busy || command.busy} onClick={requestClose}>取消</Button>
     <Button loading={busy} disabled={command.blocked || !supplierId || !ids.length} onClick={readPreview}>预览调整</Button>
     <Button type="primary" loading={command.busy} disabled={busy || command.blocked || !valid} onClick={async () => {
       if (!valid || busy || command.blocked) return;

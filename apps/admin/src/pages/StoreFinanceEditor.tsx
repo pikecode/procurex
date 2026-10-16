@@ -3,8 +3,10 @@ import { Alert, App, Button, Descriptions, Form, Input, InputNumber, Modal, Popc
 import { Check, Eye } from 'lucide-react';
 import { AccountEvidenceUpload } from '../components/AccountEvidenceUpload';
 import type { EvidenceFile } from '../components/PrivateEvidence';
+import { modalWidth } from '../lib/theme';
 import { request } from '../lib/api';
 import { clearingSignature, moneyRule, type ClearingPreview, type CreditItem, type StoreAccount } from '../lib/financeTypes';
+import { useUnsavedGuard } from '../lib/useUnsavedGuard';
 import type { useWorkflowCommand } from '../lib/useWorkflowCommand';
 
 export function StoreFinanceEditor({ storeId, storeName, creditItems = [], mode, ids, command, onClose, onSaved }: {
@@ -12,6 +14,8 @@ export function StoreFinanceEditor({ storeId, storeName, creditItems = [], mode,
   storeId: string; mode: 'recharge' | 'credit' | 'clearing'; ids: string[]; command: ReturnType<typeof useWorkflowCommand>; onClose: () => void; onSaved: () => void;
 }) {
   const [form] = Form.useForm(); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const guard = useUnsavedGuard(form);
+  const requestClose = () => { if (command.busy || checking || uploading) return; void guard.confirmDiscard().then(ok => { if (ok) onClose(); }); };
   const [account, setAccount] = useState<StoreAccount | null>(null); const [accounts, setAccounts] = useState<{ id: string; name: string; bankName: string; accountNo: string; status: string }[]>([]);
   const [preview, setPreview] = useState<ClearingPreview | null>(null); const [review, setReview] = useState(''); const [checking, setChecking] = useState(false); const lock = useRef(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -23,7 +27,7 @@ export function StoreFinanceEditor({ storeId, storeName, creditItems = [], mode,
       if (mode === 'recharge') { const result = await request<typeof accounts>('/collection-accounts', { signal: controller.signal }); if (!controller.signal.aborted) setAccounts(result.filter(row => row.status === 'ACTIVE')); }
       if (mode === 'clearing') { const result = await request<ClearingPreview>(`/stores/${storeId}/clearings/preview`, { method: 'POST', body: { fundingAllocationIds: ids }, signal: controller.signal }); validatePreview(result); if (!controller.signal.aborted) setPreview(result); }
     };
-    load().catch(failure => { if (!controller.signal.aborted) setError(failure.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    load().catch(failure => { if (!controller.signal.aborted) setError(failure.message); }).finally(() => { if (!controller.signal.aborted) { setLoading(false); guard.snapshot(); } });
     return () => controller.abort();
   }, [storeId, mode, ids, form]);
   function validatePreview(value: ClearingPreview) {
@@ -59,8 +63,8 @@ export function StoreFinanceEditor({ storeId, storeName, creditItems = [], mode,
     } catch (failure) { if (!('errorFields' in (failure as object))) setError((failure as Error).message); }
     finally { setReview(''); lock.current = false; setChecking(false); }
   }
-  return <Modal open zIndex={1400} title={label} width={700} maskClosable={false} closable={!command.busy && !checking && !uploading} keyboard={!command.busy && !checking && !uploading} onCancel={() => { if (!command.busy && !checking && !uploading) onClose(); }} footer={<div className="actions workflow-actions">
-    <Button disabled={command.busy || checking || uploading} onClick={onClose}>取消</Button>
+  return <Modal open zIndex={1400} title={label} width={modalWidth.standard} maskClosable={false} closable={!command.busy && !checking && !uploading} keyboard={!command.busy && !checking && !uploading} onCancel={requestClose} footer={<div className="actions workflow-actions">
+    <Button disabled={command.busy || checking || uploading} onClick={requestClose}>取消</Button>
     {mode === 'credit' ? <Button type="primary" icon={<Check size={16} />} disabled={disabled || !ready} loading={checking || command.busy} onClick={reviewCredit}>保存</Button> : <>
     <Button icon={<Eye size={16} />} disabled={disabled || !ready} loading={checking} onClick={async () => { if (lock.current) return; lock.current = true; setChecking(true); setReview(''); setError(''); try { setReview(JSON.stringify(await draft())); } catch (failure) { if (!('errorFields' in (failure as object))) setError((failure as Error).message); } finally { lock.current = false; setChecking(false); } }}>核对提交</Button>
     <Popconfirm key={review} getPopupContainer={node => node.parentElement!} zIndex={1600} open={confirmOpen && !disabled && Boolean(review)} onOpenChange={setConfirmOpen} title={mode === 'recharge' ? '确认增加门店储值余额？' : mode === 'clearing' ? '确认还款销账并释放挂账额度？不会扣减储值。' : '确认调整挂账额度？'} disabled={disabled || !review} onConfirm={async () => {
@@ -86,7 +90,7 @@ export function StoreFinanceEditor({ storeId, storeName, creditItems = [], mode,
       </Form>
       {mode !== 'credit' && <AccountEvidenceUpload purpose={mode === 'recharge' ? 'RECHARGE' : 'CLEARING'} files={files} onChange={value => { setFiles(value); setReview(''); }} uploading={uploading} onUploading={value => { setUploading(value); setReview(''); }} disabled={command.blocked || checking} onError={setError} />}
       {mode !== 'credit' && review && <section className="price-band"><h2>提交核对</h2><Descriptions size="small" column={1} items={Object.entries(JSON.parse(review)).filter(([key]) => !['items', 'evidenceFileIds', 'expectedVersion'].includes(key)).map(([key, value]) => ({ key, label: ({ amount: '充值金额', limit: '挂账额度', reason: '调整原因', businessDate: '业务日期', remark: '备注', collectionAccountId: '收款账户' } as Record<string, string>)[key] || key, children: key === 'collectionAccountId' ? accounts.find(row => row.id === value)?.name : String(value) }))} /></section>}
-      {mode === 'credit' && <Modal open={confirmOpen && Boolean(creditReview)} title="确认调整挂账额度" zIndex={1600} width={460} maskClosable={false} okText="确认保存" cancelText="返回修改" confirmLoading={command.busy || checking} okButtonProps={{ disabled: disabled || !creditReview }} onOk={saveCredit} onCancel={() => { if (!command.busy && !checking) { setConfirmOpen(false); setReview(''); } }}><Descriptions size="small" column={1} items={[{ key: 'before', label: '原挂账额度', children: account?.creditLimit }, { key: 'after', label: '新挂账额度', children: creditReview?.limit }, { key: 'reason', label: '调整原因', children: creditReview?.reason }]} /></Modal>}
+      {mode === 'credit' && <Modal open={confirmOpen && Boolean(creditReview)} title="确认调整挂账额度" zIndex={1600} width={modalWidth.form} maskClosable={false} okText="确认保存" cancelText="返回修改" confirmLoading={command.busy || checking} okButtonProps={{ disabled: disabled || !creditReview }} onOk={saveCredit} onCancel={() => { if (!command.busy && !checking) { setConfirmOpen(false); setReview(''); } }}><Descriptions size="small" column={1} items={[{ key: 'before', label: '原挂账额度', children: account?.creditLimit }, { key: 'after', label: '新挂账额度', children: creditReview?.limit }, { key: 'reason', label: '调整原因', children: creditReview?.reason }]} /></Modal>}
     </>}
   </Modal>;
 }

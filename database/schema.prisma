@@ -109,6 +109,7 @@ enum FulfillmentStatus {
 }
 
 enum PurchaseRequestStatus {
+  PENDING_FINANCE
   PENDING_FUNDS
   PENDING_PROCUREMENT
   CONFIRMED
@@ -743,6 +744,9 @@ model AdjustmentDocumentItem {
 }
 
 model PurchaseRequest {
+  procurementConfirmedAt DateTime? @db.Timestamptz(6)
+  financeReviewedAt DateTime? @db.Timestamptz(6)
+  financeReturnedReason String? @db.VarChar(300)
   id                String                @id @default(uuid()) @db.Uuid
   requestNo         String                @unique @db.VarChar(80)
   storeId           String                @db.Uuid
@@ -879,11 +883,14 @@ model Shipment {
   kind                  ShipmentKind
   shippedAt             DateTime             @default(now()) @db.Timestamptz(6)
   trackingNo            String?              @db.VarChar(100)
+  carrierId             String?              @db.Uuid
+  carrierName           String?              @db.VarChar(120)
   deliveryModeSnapshot  DeliveryMode?
   freight               Decimal              @default(0) @db.Decimal(20, 2)
   freightConfirmationId String?              @unique @db.Uuid
   createdAt             DateTime             @default(now()) @db.Timestamptz(6)
   supplierOrder         SupplierOrder        @relation(fields: [supplierOrderId], references: [id])
+  carrier               LogisticsCompany?    @relation(fields: [carrierId], references: [id], onDelete: SetNull)
   freightConfirmation   FreightConfirmation? @relation(fields: [freightConfirmationId], references: [id])
   items                 ShipmentItem[]
   receipts              Receipt[]
@@ -891,6 +898,16 @@ model Shipment {
 
   @@unique([supplierOrderId, sequence])
   @@index([supplierOrderId, shippedAt])
+}
+
+model LogisticsCompany {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(120)
+  isActive  Boolean  @default(true)
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  shipments Shipment[]
 }
 
 model ShipmentItem {

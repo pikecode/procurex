@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Select, Spin, Table } from 'antd';
 import { Check, Eye, RotateCcw } from 'lucide-react';
+import { modalWidth } from '../lib/theme';
 import { request } from '../lib/api';
 import { decimalRule } from '../lib/catalogTypes';
+import { useUnsavedGuard } from '../lib/useUnsavedGuard';
 import type { useWorkflowCommand } from '../lib/useWorkflowCommand';
 import type { ShippingOrder, ShipmentInput, ShipmentPreview } from '../lib/workflowTypes';
 
@@ -12,6 +14,7 @@ export function ShipmentEditor({ orderId, supplierId, onRecover, command, onClos
   const [order, setOrder] = useState<ShippingOrder | null>(null); const [revision, setRevision] = useState(0); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const [preview, setPreview] = useState<ShipmentPreview | null>(null); const [signature, setSignature] = useState(''); const [busy, setBusy] = useState(false); const lock = useRef(false);
   const [form] = Form.useForm<Draft>(); const { message } = App.useApp(); const invalidate = () => { setPreview(null); setSignature(''); };
+  const guard = useUnsavedGuard(form);
   const drafts = Form.useWatch('items', form) as Draft['items'] | undefined;
   const deliveryMode = Form.useWatch('deliveryMode', form);
   useEffect(() => {
@@ -20,7 +23,7 @@ export function ShipmentEditor({ orderId, supplierId, onRecover, command, onClos
       if (controller.signal.aborted) return;
       if (supplierId && value.supplierId !== supplierId) throw new Error('订单不属于当前供应商。');
       if (value.id !== orderId || !['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED', 'SHIPPED'].includes(value.status)) throw new Error('订单当前状态不能发货，请返回刷新。');
-      setOrder(value); form.setFieldsValue({ deliveryMode: value.defaultDeliveryMode, items: value.items.map(item => ({ orderItemId: item.id, shipQuantity: '0', permanentlyReduceQuantity: '0', gapAllocations: (item.replenishmentGaps || []).filter(gap => ['PENDING', 'PARTIAL_FILLED'].includes(gap.status)).map(gap => ({ gapId: gap.id, quantity: '0' })) })) });
+      setOrder(value); form.setFieldsValue({ deliveryMode: value.defaultDeliveryMode, items: value.items.map(item => ({ orderItemId: item.id, shipQuantity: '0', permanentlyReduceQuantity: '0', gapAllocations: (item.replenishmentGaps || []).filter(gap => ['PENDING', 'PARTIAL_FILLED'].includes(gap.status)).map(gap => ({ gapId: gap.id, quantity: '0' })) })) }); guard.snapshot();
     }).catch(failure => { if (!controller.signal.aborted) setError(failure.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [orderId, supplierId, revision, form]);
@@ -43,8 +46,9 @@ export function ShipmentEditor({ orderId, supplierId, onRecover, command, onClos
     } catch (failure) { if (!('errorFields' in (failure as object))) setError((failure as Error).message); }
     finally { lock.current = false; setBusy(false); }
   }
-  return <Modal open zIndex={1200} title="发货与补发" width={960} maskClosable={false} closable={!busy && !command.busy} onCancel={() => { if (!busy && !command.busy) onClose(); }} footer={<div className="actions workflow-actions">
-    <Button onClick={onClose} disabled={busy || command.busy}>取消</Button><Button aria-label="重新读取发货订单" icon={<RotateCcw size={16} />} disabled={busy || command.blocked} onClick={() => { command.clearError(); setRevision(value => value + 1); }} />
+  const requestClose = () => { if (busy || command.busy) return; void guard.confirmDiscard().then(ok => { if (ok) onClose(); }); };
+  return <Modal open zIndex={1200} title="发货与补发" width={modalWidth.wide} maskClosable={false} closable={!busy && !command.busy} onCancel={requestClose} footer={<div className="actions workflow-actions">
+    <Button onClick={requestClose} disabled={busy || command.busy}>取消</Button><Button aria-label="重新读取发货订单" icon={<RotateCcw size={16} />} disabled={busy || command.blocked} onClick={() => { command.clearError(); setRevision(value => value + 1); }} />
     <Button icon={<Eye size={16} />} loading={busy} disabled={!order || loading || command.blocked} onClick={readPreview}>预览发货</Button>
     <Popconfirm key={revision} zIndex={1400} title="确认发货？永久减量将取消对应数量，不再补发。" disabled={!preview || busy || command.blocked} onConfirm={async () => {
       if (busy || command.blocked) return;

@@ -38,7 +38,7 @@ function orderStage(order) {
   if (order.rejectedSupplierCount > 0) return 'pending';
   if (order.status === 'COMPLETED' || (order.supplierCount > 0 && order.completedSupplierCount + (order.canceledSupplierCount || 0) === order.supplierCount && order.completedSupplierCount > 0)) return 'completed';
   if (order.supplierCount > 0 && order.canceledSupplierCount === order.supplierCount) return 'pending';
-  return ['PENDING_FUNDS', 'PENDING_PROCUREMENT', 'DRAFT'].includes(order.status) ? 'pending' : 'receive';
+  return ['PENDING_FUNDS', 'PENDING_PROCUREMENT', 'PENDING_FINANCE', 'DRAFT'].includes(order.status) ? 'pending' : 'receive';
 }
 
 // Tones mirror labels.wxs: green for settled, amber for in flight, red for blocked, grey for inactive.
@@ -51,7 +51,7 @@ const STATUS_TONES = {
   COMPLETED: 'done', SUCCEEDED: 'done', RECEIVED: 'done', PAID: 'done', SETTLED: 'done',
   CANCELED: 'muted', CANCELLED: 'muted', DRAFT: 'muted',
   REJECTED: 'fail', FAILED: 'fail', SHORT_RECEIVED: 'fail', UNPAID: 'fail', SHORTFALL: 'fail', PENDING_FUNDS: 'fail',
-  PENDING_PROCUREMENT: 'progress', PROCESSING: 'progress', PUSHED: 'progress',
+  PENDING_FINANCE: 'progress', PENDING_PROCUREMENT: 'progress', PROCESSING: 'progress', PUSHED: 'progress',
   PARTIAL_PUSHED: 'progress', PARTIAL_SHIPPED: 'progress', PARTIAL_PAID: 'progress', OPEN: 'progress',
 };
 function statusTone(value) { return STATUS_TONES[value] || 'muted'; }

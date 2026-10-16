@@ -43,6 +43,28 @@ export class CatalogRegistriesService {
     return rows.map(row => ({ ...row, createdAt: row.createdAt.toISOString() }));
   }
 
+  async listLogisticsCompanies() {
+    return this.database.client.logisticsCompany.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }] });
+  }
+
+  async createLogisticsCompany(name: string, context?: MasterDataAuditContext) {
+    return auditedMasterDataTransaction(this.database, this.audit, context, 'logistics-company.create', 'LogisticsCompany', async tx => {
+      await lockCatalog(tx);
+      if (await tx.logisticsCompany.findUnique({ where: { name } })) throw new ConflictException({ code: 'LOGISTICS_COMPANY_NAME_EXISTS', message: '物流公司名称已存在' });
+      return tx.logisticsCompany.create({ data: { name } });
+    });
+  }
+
+  async updateLogisticsCompany(id: string, expectedVersion: number, input: { name?: string; isActive?: boolean }, context?: MasterDataAuditContext) {
+    return auditedMasterDataTransaction(this.database, this.audit, context, 'logistics-company.update', 'LogisticsCompany', async tx => {
+      await lockCatalog(tx);
+      const row = await tx.logisticsCompany.findUnique({ where: { id } });
+      assertRegistryVersion(row, expectedVersion);
+      if (input.name && await tx.logisticsCompany.findFirst({ where: { name: input.name, id: { not: id } } })) throw new ConflictException({ code: 'LOGISTICS_COMPANY_NAME_EXISTS', message: '物流公司名称已存在' });
+      return tx.logisticsCompany.update({ where: { id }, data: { ...input, version: { increment: 1 } } });
+    });
+  }
+
   async createBrand(name: string, context?: MasterDataAuditContext) {
     return auditedMasterDataTransaction(this.database, this.audit, context, 'brand.create', 'Brand', async tx => {
       await lockCatalog(tx);

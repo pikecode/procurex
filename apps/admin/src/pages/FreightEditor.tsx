@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Alert, App, Button, Form, Input, InputNumber, Modal, Popconfirm, Spin } from 'antd';
 import { Check } from 'lucide-react';
+import { modalWidth } from '../lib/theme';
 import { request } from '../lib/api';
+import { useUnsavedGuard } from '../lib/useUnsavedGuard';
 import type { useWorkflowCommand } from '../lib/useWorkflowCommand';
 import type { FreightConfirmation, ShippingOrder } from '../lib/workflowTypes';
 
 export function FreightEditor({ orderId, supplierId, onRecover, review, command, onClose, onSaved }: { orderId: string; supplierId?: string; onRecover?: () => Promise<void>; review?: { id: string; action: 'confirm' | 'reject' }; command: ReturnType<typeof useWorkflowCommand>; onClose: () => void; onSaved: () => void }) {
   const [order, setOrder] = useState<ShippingOrder | null>(null); const [confirmation, setConfirmation] = useState<FreightConfirmation>(); const [error, setError] = useState(''); const [loading, setLoading] = useState(true);
   const [form] = Form.useForm<{ amount: string; reason: string }>(); const { message } = App.useApp();
+  const guard = useUnsavedGuard(form);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError('');
     request<ShippingOrder>(`/supplier-orders/${orderId}`, { signal: controller.signal }).then(value => {
@@ -17,12 +20,13 @@ export function FreightEditor({ orderId, supplierId, onRecover, review, command,
       if (!review && value.requiresFreightSnapshot === false) throw new Error('此订单不允许申请运费。');
       const current = value.freightConfirmations?.find(row => row.id === review?.id);
       if (review && (!current || current.status !== 'PENDING')) throw new Error('运费申请状态已变更，请关闭后刷新。');
-      setOrder(value); setConfirmation(current); form.setFieldsValue({ amount: current?.amount || '0.00', reason: '' });
+      setOrder(value); setConfirmation(current); form.setFieldsValue({ amount: current?.amount || '0.00', reason: '' }); guard.snapshot();
     }).catch(failure => { if (!controller.signal.aborted) setError(failure.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [orderId, supplierId, review?.id, form]);
   const title = !review ? '申请运费' : review.action === 'confirm' ? '确认运费' : '驳回运费';
-  return <Modal open zIndex={1200} title={title} width={520} maskClosable={false} closable={!command.busy} onCancel={() => { if (!command.busy) onClose(); }} footer={<div className="actions workflow-actions"><Button disabled={command.busy} onClick={onClose}>取消</Button>
+  const requestClose = () => { if (command.busy) return; void guard.confirmDiscard().then(ok => { if (ok) onClose(); }); };
+  return <Modal open zIndex={1200} title={title} width={modalWidth.form} maskClosable={false} closable={!command.busy} onCancel={requestClose} footer={<div className="actions workflow-actions"><Button disabled={command.busy} onClick={requestClose}>取消</Button>
     <Popconfirm zIndex={1400} title={`确认${title}？`} disabled={loading || !order || command.blocked} onConfirm={async () => {
       try {
         const values = await form.validateFields(); if (!order || command.blocked) return;

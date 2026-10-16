@@ -1,3 +1,4 @@
+import { modalWidth } from '../lib/theme';
 import { money } from '../lib/money';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -15,6 +16,7 @@ import { accountFundingName, workflowName, workflowTime, type Catalog, type Orde
 
 type Draft = { storeId: string; reason?: string; items: { productId: string; supplierId?: string; unitId: string; quantity: string }[] };
 type Store = { id: string; name: string; status: string };
+type ConfirmationFunds = { canConfirm: boolean; stored: { required: string; available: string; shortfall: string }; credit: { required: string; available: string; shortfall: string } };
 export default function PurchaseWorkspace({ user }: { user: User }) {
   const list = useRows<Purchase>('/purchase-requests'); const stores = useRows<Store>('/stores');
   const canWrite = hasRole(user, 'ADMIN', 'PURCHASER'); const canConfirm = canWrite || hasRole(user, 'PURCHASE_FOLLOWER'); const command = useWorkflowCommand(user.id); const { message } = App.useApp();
@@ -24,6 +26,16 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
   const closeRejection = () => { if (!command.busy) setParams(selected ? { request: selected } : {}); };
   const [detail, setDetail] = useState<Purchase | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [revision, setRevision] = useState(0);
   const [assigning, setAssigning] = useState(false);
+  const [funds, setFunds] = useState<ConfirmationFunds | null>(null);
+  const [fundsError, setFundsError] = useState('');
+  useEffect(() => {
+    const controller = new AbortController(); setFunds(null); setFundsError('');
+    if (!selected || !canConfirm || !detail || !['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE'].includes(detail.status)) return;
+    request<{ funding: ConfirmationFunds }>(`/purchase-requests/${selected}/confirmation-preview`, { signal: controller.signal })
+      .then(value => { if (!controller.signal.aborted) setFunds(value.funding); })
+      .catch(error => { if (!controller.signal.aborted) setFundsError(error.message); });
+    return () => controller.abort();
+  }, [selected, detail, canConfirm, revision]);
   const [printing, setPrinting] = useState(false);
   useEffect(() => { setPrinting(false); }, [selected]);
   const [mode, setMode] = useState<'create' | 'edit' | 'reject' | null>(null); const [catalog, setCatalog] = useState<Catalog | null>(null); const [catalogError, setCatalogError] = useState('');
@@ -102,21 +114,21 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
     { title: '销售单价', dataIndex: 'salesUnitPrice', width: 110, render: money }, { title: '供货单价', dataIndex: 'supplyUnitPrice', width: 110, render: money },
     { title: '销售金额', dataIndex: 'salesLineAmount', width: 110 }, { title: '供货金额', dataIndex: 'supplyLineAmount', width: 110 },
   ];
-  const editable = detail && ['PENDING_FUNDS', 'PENDING_PROCUREMENT'].includes(detail.status) && !detail.supplierOrders.length;
+  const editable = detail && ['PENDING_FUNDS', 'PENDING_PROCUREMENT', 'PENDING_FINANCE'].includes(detail.status) && !detail.supplierOrders.length;
   const recoveryNotice = command.pending && <Alert type="warning" showIcon title={`存在待确认提交：${command.pending.label}`} action={<Button disabled={!canRecoverWorkflow(user, command.pending.path)} loading={command.busy} onClick={async () => { if (await command.recover()) { close(); refresh(); message.success('原提交已确认'); } }}>恢复原提交</Button>} />;
   return <>
     {!selected && !mode && command.error && <Alert type="error" showIcon title={command.error} />}
     {!selected && !mode && recoveryNotice}
     <ListPage title="下货单" rows={list.rows.map(row => ({ ...row, name: row.requestNo, storeName: stores.rows.find(store => store.id === row.storeId)?.name || row.storeId }))}
       loading={list.loading} error={list.error || stores.error} reload={refresh} create={canWrite && !command.blocked ? () => open('create') : undefined}
-      filters={[{ key: 'status', label: '申请状态', options: ['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'CONFIRMED', 'PARTIAL_PUSHED', 'COMPLETED', 'CANCELED'].map(value => ({ value, label: workflowName(value) })) }, { key: 'storeId', label: '门店', options: stores.rows.map(store => ({ value: store.id, label: store.name })) }]}
+      filters={[{ key: 'status', label: '申请状态', options: ['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE', 'CONFIRMED', 'PARTIAL_PUSHED', 'COMPLETED', 'CANCELED'].map(value => ({ value, label: workflowName(value) })) }, { key: 'storeId', label: '门店', options: stores.rows.map(store => ({ value: store.id, label: store.name })) }]}
       columns={[{ title: '申请编号', dataIndex: 'requestNo', width: 205 }, { title: '门店', dataIndex: 'storeName', width: 170 },
         { title: '状态', dataIndex: 'status', width: 125, render: value => <Tag>{workflowName(value)}</Tag> }, { title: '储值/挂账入账', dataIndex: 'paymentStatus', width: 130, render: accountFundingName },
         { title: '销售金额', dataIndex: 'salesGoodsAmount', width: 110 }, { title: '资金缺口', dataIndex: 'shortfallAmount', width: 110 },
         { title: '提交时间', dataIndex: 'submittedAt', width: 165, render: workflowTime }, { title: '操作', align: 'right' as const, width: 88, fixed: 'right', render: (_, row) => <RowActions ariaLabel={row.requestNo} actions={[{ key: 'view', label: '查看', icon: <Eye size={15} />, onClick: () => setParams({ request: row.id }) }]} /> }]} />
     {canWrite && <RejectionTodos revision={revision} onOpen={openRejection} />}
     {canWrite && selected && rejectedOrder && <RejectionEditor key={`${selected}:${rejectedOrder}`} requestId={selected} orderId={rejectedOrder} command={command} canRecover={canRecoverWorkflow(user, command.pending?.path)} onClose={closeRejection} onSaved={() => { setParams({ request: selected }); refresh(); }} />}
-    <Modal title={detail?.requestNo || '下货单详情'} open={Boolean(selected) && !(canWrite && rejectedOrder)} onCancel={() => { if (!command.busy && !mode && !assigning) setParams({}); }} footer={null} width={1000} closable={!mode && !assigning && !command.busy}>
+    <Modal title={detail?.requestNo || '下货单详情'} open={Boolean(selected) && !(canWrite && rejectedOrder)} onCancel={() => { if (!command.busy && !mode && !assigning) setParams({}); }} footer={null} width={modalWidth.full} closable={!mode && !assigning && !command.busy}>
       {!mode && !assigning && recoveryNotice}
       {!mode && !assigning && command.error && <Alert type="error" showIcon title={command.error} />}
       {loading ? <Spin /> : error && !mode ? <Alert type="error" title={error} action={<Button onClick={() => setRevision(value => value + 1)}>重试</Button>} /> : detail && <>
@@ -124,14 +136,22 @@ export default function PurchaseWorkspace({ user }: { user: User }) {
           { key: 'store', label: '门店', children: stores.rows.find(store => store.id === detail.storeId)?.name || detail.storeId },
           { key: 'status', label: '状态', children: workflowName(detail.status) }, { key: 'payment', label: '储值/挂账入账', children: accountFundingName(detail.paymentStatus) },
           { key: 'sales', label: '销售金额', children: detail.salesGoodsAmount }, { key: 'supply', label: '供货金额', children: detail.supplyGoodsAmount }, { key: 'reserved', label: '储值占用', children: detail.storedReservedAmount ?? '-' },
-          { key: 'shortfall', label: '资金缺口', children: detail.shortfallAmount }, { key: 'reason', label: '取消原因', children: detail.rejectedReason || '-' },
+          { key: 'financeReturn', label: '财务退回原因', children: (detail as Purchase & { financeReturnedReason?: string }).financeReturnedReason || '-' }, { key: 'shortfall', label: '资金缺口', children: detail.shortfallAmount }, { key: 'reason', label: '取消原因', children: detail.rejectedReason || '-' },
         ]} />
         <div className="actions workflow-actions"><Button icon={<Printer size={16} />} disabled={Boolean(mode) || assigning || command.busy} onClick={() => setPrinting(true)}>打印订单</Button></div>
         {canConfirm && editable && <>
-          {canWrite && <Alert className="workflow-inline-alert" type="info" showIcon title="确认前可调整商品和数量；保存后会重新核对金额，再生成供应商订单。" />}
+          <div className="actions"><Button onClick={refresh} disabled={command.busy}>重新核验资金</Button></div>
+          {fundsError && <Alert type="error" title={fundsError} />}
+          {funds && <Table size="small" pagination={false} rowKey="name" dataSource={[{ name: '储值', ...funds.stored }, { name: '挂账', ...funds.credit }]} columns={[
+            { title: '资金类型', dataIndex: 'name' }, { title: '本单所需', dataIndex: 'required', render: money },
+            { title: '本单可用（含已占用）', dataIndex: 'available', render: money },
+            { title: '待充值金额 / 待补额度', dataIndex: 'shortfall', render: money }]} />}
+          {funds && !funds.canConfirm && <Alert type="warning" showIcon title={`资金不足：待充值 ¥${funds.stored.shortfall}，待补挂账额度 ¥${funds.credit.shortfall}。补足后重新核验，暂不生成订单。`} />}
+
+          {canWrite && <Alert className="workflow-inline-alert" type="info" showIcon title="确认前可保存商品和数量调整；资金充足才能生成订单。" />}
           <div className="actions workflow-actions">{canWrite && <Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => open('edit')}>调整商品/数量</Button>}
           {canWrite && <Button icon={<Pencil size={16} />} disabled={command.blocked} onClick={() => { command.clearError(); setAssigning(true); }}>调整供应商</Button>}
-          <Popconfirm title="确认下货单并按最终供应商生成订单？" onConfirm={async () => { if (await command.submit({ path: `/purchase-requests/${detail.id}/confirm`, method: 'POST', label: '确认采购', body: { expectedVersion: detail.version } })) { refresh(); message.success('采购已确认'); } }} disabled={command.blocked}><Button type="primary" icon={<Check size={16} />} disabled={command.blocked}>确认并生成订单</Button></Popconfirm>
+          <Popconfirm title="确认下货单并生成供应商订单？" onConfirm={async () => { if (await command.submit({ path: `/purchase-requests/${detail.id}/confirm`, method: 'POST', label: '确认采购', body: { expectedVersion: detail.version } })) { refresh(); message.success('已生成供应商订单'); } }} disabled={command.blocked}><Button type="primary" icon={<Check size={16} />} disabled={command.blocked || !funds?.canConfirm}>确认并生成订单</Button></Popconfirm>
           <Button danger icon={<X size={16} />} disabled={command.blocked} onClick={() => open('reject')}>取消申请</Button></div>
         </>}
         <Table rowKey="id" size="small" columns={itemColumns} dataSource={detail.items} scroll={{ x: 850 }} pagination={{ defaultPageSize: 10, showSizeChanger: true }} />

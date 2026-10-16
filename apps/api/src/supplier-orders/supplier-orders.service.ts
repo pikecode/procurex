@@ -129,6 +129,7 @@ export type ShipmentPreviewInput = {
   freight: string;
   freightConfirmationId?: string;
   trackingNo?: string;
+  carrierId?: string;
 };
 
 export type ShipmentPreviewItemInput = {
@@ -168,6 +169,7 @@ export type ShipmentView = {
   kind: ShipmentKind;
   shippedAt: string;
   trackingNo: string | null;
+  carrierName: string | null;
   freight: string;
   freightConfirmationId: string | null;
   revision?: number;
@@ -448,7 +450,13 @@ export class SupplierOrdersService {
 
     const deliveryMode = input.deliveryMode ?? order.supplier.deliveryMode;
     if (![DeliveryMode.SELF, DeliveryMode.LOGISTICS].includes(deliveryMode)) throw new ConflictException({ code: 'INVALID_DELIVERY_MODE', message: '请选择自配送或物流' });
+    if (deliveryMode === DeliveryMode.LOGISTICS && !input.carrierId) throw new ConflictException({ code: 'CARRIER_REQUIRED', message: '物流配送请选择物流公司' });
+    if (input.carrierId && deliveryMode !== DeliveryMode.LOGISTICS) throw new ConflictException({ code: 'INVALID_CARRIER', message: '自配送不能选择物流公司' });
     if (input.trackingNo && (deliveryMode !== DeliveryMode.LOGISTICS || input.trackingNo.length > 100)) throw new ConflictException({ code: 'INVALID_TRACKING_NO', message: '物流单号仅适用于物流配送，最多100字' });
+    if (input.carrierId) {
+      const carrier = await this.database.client.logisticsCompany.findFirst({ where: { id: input.carrierId, isActive: true }, select: { id: true } });
+      if (!carrier) throw new ConflictException({ code: 'CARRIER_UNAVAILABLE', message: '所选物流公司已停用或不存在，请刷新后重选' });
+    }
     return {
       deliveryMode,
       supplierOrderId: order.id,
@@ -494,6 +502,8 @@ export class SupplierOrdersService {
           throw new ConflictException({ code: 'FREIGHT_CONFIRMATION_NOT_AVAILABLE', message: 'Freight confirmation changed before shipment submission' });
         }
       }
+      const carrier = input.carrierId ? await tx.logisticsCompany.findFirst({ where: { id: input.carrierId, isActive: true } }) : null;
+      if (input.carrierId && !carrier) throw new ConflictException({ code: 'CARRIER_UNAVAILABLE', message: '所选物流公司已停用或不存在，请刷新后重选' });
       const hasReduction = preview.items.some(item => new Decimal(item.permanentlyReduceQuantity).gt(0));
       const firstShippedAt = current.firstShippedAt ?? new Date();
       if (!current.firstShippedAt) {
@@ -508,6 +518,8 @@ export class SupplierOrdersService {
           sequence,
           kind,
           trackingNo: input.trackingNo,
+          carrierId: carrier?.id,
+          carrierName: carrier?.name,
           deliveryModeSnapshot: preview.deliveryMode,
           freight: preview.totals.freight,
           freightConfirmationId: preview.freightConfirmationId,
@@ -1061,6 +1073,7 @@ function toShipmentView(
     shippedAt: shipment.shippedAt.toISOString(),
     deliveryModeSnapshot: shipment.deliveryModeSnapshot,
     trackingNo: shipment.trackingNo,
+    carrierName: shipment.carrierName,
     freight: shipment.freight.toFixed(2),
     freightConfirmationId: shipment.freightConfirmationId,
     items: shipment.items.map((item) => ({

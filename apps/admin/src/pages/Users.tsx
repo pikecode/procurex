@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, App, Button, Form, Input, Modal, Select, Table, Tag, Tooltip } from 'antd';
 import { History, KeyRound, LogOut, Pencil } from 'lucide-react';
+import { modalWidth } from '../lib/theme';
 import { getSession, request } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { ListPage } from '../components/ListPage';
@@ -16,7 +17,7 @@ function snapshotText(value?: AccountSnapshot) {
 function AccountHistory({ row, close }: { row: Row; close: () => void }) {
   const data = useRows<UserAudit>(`/audit-logs?entityType=User&entityId=${row.id}&limit=100`);
   const names: Record<string, string> = { 'user.create': '创建账号', 'user.update': '修改账号', 'user.password-reset': '重置密码', 'user.password-change': '修改密码', 'user.sessions-revoke': '强制退出登录' };
-  return <Modal title={`操作记录 · ${row.username}`} open onCancel={close} footer={null} width={720}>
+  return <Modal title={`操作记录 · ${row.username}`} open onCancel={close} footer={null} width={modalWidth.standard}>
     {data.error && <Alert type="error" title={data.error} action={<Button onClick={data.reload}>重试</Button>} />}
     <Table<UserAudit> size="small" rowKey="id" loading={data.loading} dataSource={data.rows} expandable={{ rowExpandable: entry => !!entry.before?.roles, expandedRowRender: entry => <div><p>修改前：{snapshotText(entry.before)}</p><p>修改后：{snapshotText(entry.after)}</p></div> }} columns={[{ title: '操作', render: (_, entry) => names[entry.action] || entry.action }, { title: '操作人', dataIndex: 'actorName' }, { title: '时间', render: (_, entry) => new Date(entry.createdAt).toLocaleString('zh-CN', { hour12: false }) }]} pagination={{ pageSize: 10 }} scroll={{ x: 600 }} />
   </Modal>;
@@ -72,7 +73,7 @@ export default function Users() {
      { key: 'password', label: '重置密码', icon: <KeyRound size={15} />, onClick: () => { setPasswordUser(row); setPasswordError(''); passwordForm.resetFields(); } },
      { key: 'revoke', label: '强制退出', icon: <LogOut size={15} />, danger: true, onClick: () => revoke(row) },
    ]} /> },
-  ]} /><Modal title={editing ? '编辑用户' : '新增用户'} open={open} width={560} onCancel={() => !saving && setOpen(false)} onOk={save} confirmLoading={saving} okText="保存" cancelText="取消" maskClosable={!saving}>
+  ]} /><Modal title={editing ? '编辑用户' : '新增用户'} open={open} width={modalWidth.standard} onCancel={() => !saving && setOpen(false)} onOk={save} confirmLoading={saving} okText="保存" cancelText="取消" maskClosable={!saving}>
     {error && <Alert type="error" title={error} showIcon />}
     {editing && <Alert type="info" title={`账号：${editing.username} · 当前角色：${editing.roles.map(code => roles.find(item => item.value === code)?.label || code).join('、')}`} />}
     {editing && <Alert type="warning" title="调整角色或所属、停用账号后，旧登录会话将退出。" />}

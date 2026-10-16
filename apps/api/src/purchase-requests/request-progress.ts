@@ -15,7 +15,7 @@ export function requestProgress(request: RequestProgressInput) {
   };
   const fulfillmentStage = request.status === 'CANCELED' || (!request.items.length && request.supplierOrders.length > 0) || (counts.supplierCount > 0 && counts.canceledSupplierCount === counts.supplierCount) ? 'canceled'
     : request.status === 'COMPLETED' ? 'completed'
-    : counts.rejectedSupplierCount > 0 || ['PENDING_FUNDS', 'PENDING_PROCUREMENT', 'DRAFT'].includes(request.status) ? 'pending'
+    : counts.rejectedSupplierCount > 0 || ['PENDING_FUNDS', 'PENDING_PROCUREMENT', 'PENDING_FINANCE', 'DRAFT'].includes(request.status) ? 'pending'
     : counts.supplierCount > 0 && counts.completedSupplierCount + counts.canceledSupplierCount === counts.supplierCount ? 'completed'
     : 'receive';
   return { ...counts, fulfillmentStage };

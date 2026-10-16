@@ -318,7 +318,7 @@ Page({
       if (this.data.user.id !== actorId) return;
       const names = new Map((Array.isArray(stores) ? stores : []).map(item => [item.id, item.name]));
       const rows = Array.isArray(requests) ? requests.map(item => ({ ...item, storeName: item.storeName || names.get(item.storeId) || '', submittedText: view.dateText(item.submittedAt) })) : [];
-      this.setData({ requests: rows, procurementTasks: rows.filter(item => ['PENDING_PROCUREMENT', 'PENDING_FUNDS'].includes(item.status)), reportStoreOptions: [{ id: '', name: '全部门店' }, ...(Array.isArray(stores) ? stores : []).map(row => ({ id: row.id, name: row.name }))] });
+      this.setData({ requests: rows, procurementTasks: rows.filter(item => ['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE'].includes(item.status)), reportStoreOptions: [{ id: '', name: '全部门店' }, ...(Array.isArray(stores) ? stores : []).map(row => ({ id: row.id, name: row.name }))] });
       this.refreshList();
     } catch (error) {
       this.setData({ error: error.message });
@@ -389,7 +389,7 @@ Page({
     }
 
     const sequence = this.detailRequestSequence = (this.detailRequestSequence || 0) + 1;
-    this.setData({ detailing: true, detailError: '', error: '' });
+    this.setData({ detailing: true, detailError: '', error: '', fundingView: null });
     try {
       const selectedRequest = await api.request(`/purchase-requests/${id}`);
       selectedRequest.storeName = selectedRequest.storeName || (this.data.requests || []).find(row => row.id === id)?.storeName || '';
@@ -405,7 +405,7 @@ Page({
       const sameRequest = this.data.selectedRequest?.id === selectedRequest.id;
       this.setData({ selectedRequest, assignmentItems: [], assignmentGroups: [], editCatalog: null,
         ...(!sameRequest ? { expandedOrders: this.data.rejectedOrderId ? { [this.data.rejectedOrderId]: true } : {}, showOriginalRequest: false } : {}) });
-      if (['PENDING_PROCUREMENT', 'PENDING_FUNDS'].includes(selectedRequest.status) && !(selectedRequest.supplierOrders || []).length) {
+      if (['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE'].includes(selectedRequest.status) && !(selectedRequest.supplierOrders || []).length) {
         const catalog = await api.request(`/purchase-requests/${id}/edit-catalog`);
         if (this.data.requestId !== id || sequence !== this.detailRequestSequence) return;
         const assignmentItems = (selectedRequest.items || []).map(item => {
@@ -415,6 +415,7 @@ Page({
         this.setData({ editCatalog: catalog, assignmentItems, assignmentGroups: groupAssignments(assignmentItems) });
       }
       this.loadProductImages(selectedRequest, sequence);
+      if (!selectedRequest.supplierOrders.length && ['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE'].includes(selectedRequest.status)) await this.refreshConfirmationFunding();
     } catch (error) {
       if (this.data.requestId === id && sequence === this.detailRequestSequence) this.setData({ detailError: error.message, error: error.message });
     } finally {
@@ -463,10 +464,10 @@ Page({
 
   chooseReportPreset(event) {
     const preset = event.currentTarget.dataset.preset;
+    if (preset === 'custom') { this.setData({ reportPreset: 'custom' }); return; }
     if (!['today', 'week', 'month', 'lastMonth'].includes(preset)) return;
     const range = view.reportPreset(preset);
-    this.setData({ reportPreset: preset, reportDraft: range, reportRange: range, reportFilters: { ...this.data.reportFilterDraft } });
-    return this.loadReports();
+    this.setData({ reportPreset: preset, reportDraft: range });
   },
 
   changeReportDate(event) {
@@ -582,6 +583,9 @@ Page({
     try {
       const detail = this.data.selectedRequest || await api.request(`/purchase-requests/${this.data.requestId}`);
       this.setData({ selectedRequest: detail });
+      const review = await api.request(`/purchase-requests/${this.data.requestId}/confirmation-preview`);
+      this.setData({ fundingView: review.funding });
+      if (!review.funding?.canConfirm) throw new Error('资金不足，补足储值或挂账额度后才能生成订单');
       const confirmed = await this.submitCommand(`/purchase-requests/${this.data.requestId}/confirm`, {
         method: 'POST',
         data: { expectedVersion: detail.version },
@@ -605,6 +609,33 @@ Page({
     } finally {
       this.setData({ confirming: false });
     }
+  },
+
+  async refreshConfirmationFunding() {
+    const id = this.data.requestId;
+    const revision = this.data.editRevision;
+    this.setData({ fundingLoading: true });
+    try {
+      const review = this.data.editingRequest
+        ? await api.request(`/purchase-requests/${id}/items-preview`, { method: 'POST', data: this.requestEditBody() })
+        : await api.request(`/purchase-requests/${id}/confirmation-preview`);
+      if (id === this.data.requestId && revision === this.data.editRevision) this.setData({ fundingView: review.funding, error: '' });
+    } catch (error) { if (id === this.data.requestId && revision === this.data.editRevision) this.setData({ fundingView: null, error: error.message }); }
+    finally { this.setData({ fundingLoading: false }); }
+  },
+
+  async saveRequestDraft() {
+    if (this.data.savingRequest || this.data.pendingCommand) return;
+    this.setData({ savingRequest: true, error: '' });
+    try {
+      const body = this.requestEditBody();
+      await this.submitCommand(`/purchase-requests/${this.data.requestId}/items`, { method: 'PATCH', data: body,
+        header: { 'idempotency-key': `procurement-save-${Date.now()}` } });
+      this.setData({ editingRequest: false });
+      await this.loadRequestDetail(); await this.loadWork();
+      wx.showToast({ title: '调整已保存', icon: 'success' });
+    } catch (error) { this.setData({ error: error.message }); }
+    finally { this.setData({ savingRequest: false }); }
   },
 
   refreshAddableProducts(editItems = this.data.editItems) {
@@ -777,7 +808,7 @@ Page({
   },
 
   markRequestEditChanged() {
-    this.setData({ editRevision: this.data.editRevision + 1 });
+    this.setData({ editRevision: this.data.editRevision + 1, fundingView: null });
   },
 
   changeEditQuantity(event) {
@@ -864,7 +895,8 @@ Page({
     try {
       const preview = await api.request(`/purchase-requests/${requestId}/items-preview`, { method: 'POST', data: body });
       if (requestId !== this.data.requestId || revision !== this.data.editRevision) return;
-      if (!preview.funding?.canConfirm) throw new Error('调整后资金不足，暂时无法生成订单');
+      this.setData({ fundingView: preview.funding });
+      if (!preview.funding?.canConfirm) throw new Error('资金不足，暂不能生成订单；可先保存调整，再联系财务补足');
       const prices = new Map((preview.items || []).map(item => [item.productId, item]));
       body.items = body.items.map(item => {
         const priced = prices.get(item.productId);

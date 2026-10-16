@@ -1,5 +1,5 @@
 .store-workspace{display:grid;grid-template-columns:210px minmax(0,1fr);gap:20px}
-.store-group-panel{border-right:1px solid #e1e6eb;padding-right:16px;min-width:0}
+.store-group-panel{border-right:1px solid var(--line);padding-right:16px;min-width:0}
 .store-group-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;height:34px}
 .store-group-panel .ant-tree{background:transparent;margin-top:12px}
 .store-group-panel .ant-tree-switcher{display:none}

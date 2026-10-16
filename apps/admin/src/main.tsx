@@ -6,10 +6,12 @@ import zhCN from 'antd/locale/zh_CN';
 import { BarChart3, Building2, ChevronDown, ChevronLeft, Folders, Landmark, Menu as MenuIcon, Package, Settings, ShoppingCart, SlidersHorizontal, Store as StoreIcon } from 'lucide-react';
 import { clearSession, getSession, hasRole, login, logout, onExpired, restore, type User } from './lib/api';
 import './styles.css';
+
 import { Notifications } from './components/Notifications';
 import { ChangePassword } from './components/ChangePassword';
 import { allowedPages, canAccessPage } from './lib/access';
 import { billingAccess } from './lib/billingAccess';
+import { tokenCssVars, tokens } from './lib/theme';
 import { avatarColor, identitySummary, initialOf } from './lib/identity';
 
 const Stores = lazy(() => import('./pages/Stores'));
@@ -46,7 +48,7 @@ function Login({ authenticated }: { authenticated: (user: User) => void }) {
     </Form>
   </section></main>;
 }
-const labels: Record<string, string> = { '/stores': '门店管理', '/store-groups': '门店分组', '/collection-accounts': '收款账户', '/categories': '商品分类', '/brands': '品牌管理', '/units': '单位管理', '/products': '商品管理', '/suppliers': '供应商管理', '/templates': '订货模板', '/purchase-requests': '采购申请', '/supplier-orders': '供应商订单', '/discrepancies': '收货差异' };
+const labels: Record<string, string> = { '/stores': '门店管理', '/store-groups': '门店分组', '/collection-accounts': '收款账户', '/categories': '商品分类', '/brands': '品牌管理', '/units': '单位管理', '/products': '商品管理', '/suppliers': '供应商管理', '/logistics-companies': '物流公司', '/templates': '订货模板', '/purchase-requests': '采购申请', '/supplier-orders': '供应商订单', '/discrepancies': '收货差异' };
 labels['/reports'] = '业务报表'; labels['/settlement-differences'] = '结算差异';
 labels['/commands'] = '命令诊断';
 labels['/users'] = '用户管理';
@@ -63,6 +65,7 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
       { key: '/stores', label: '门店管理', icon: <StoreIcon size={16} /> },
       { key: '/store-groups', label: '门店分组', icon: <Folders size={16} /> },
       { key: '/suppliers', label: '供应商管理', icon: <Building2 size={16} /> },
+      { key: '/logistics-companies', label: '物流公司', icon: <Building2 size={16} /> },
     ] },
     { key: 'catalog', label: '商品资料', icon: <Package size={17} />, children: ['products', 'categories', 'brands', 'units'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) },
     ...(hasRole(user, 'ADMIN', 'PURCHASER') ? [{ key: 'ordering', label: '订货配置', icon: <SlidersHorizontal size={17} />, children: ['templates'].map(kind => ({ key: `/${kind}`, label: labels[`/${kind}`], icon: <Folders size={16} /> })) }] : []),
@@ -70,6 +73,7 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
     ...(central || multiStore || hasRole(user, 'PURCHASER') ? [{ key: 'finance', label: '财务结算', icon: <Landmark size={17} />, children: [{ key: '/store-finance', label: '门店财务', icon: <Landmark size={16} /> }, { key: '/finance', label: billingLabel, icon: <Landmark size={16} /> }, { key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> }, { key: '/collection-accounts', label: '收款账户', icon: <Landmark size={16} /> }] }] : []),
   ];
   if (storeRole) items.push({ key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> });
+
   if (supplierRole) items.splice(0, items.length, { key: '/supplier-orders', label: '供应商工作台', icon: <Folders size={16} /> }, { key: '/discrepancies', label: '收货差异', icon: <Folders size={16} /> }, { key: 'finance', label: '财务管理', icon: <Landmark size={17} />, children: [{ key: '/finance', label: '账单与收款', icon: <Landmark size={16} /> }, { key: '/settlement-differences', label: '结算差异', icon: <Landmark size={16} /> }] }, { key: '/reports', label: '业务报表', icon: <Folders size={16} /> });
   else if (storeRole) items.push({ key: '/reports', label: '业务报表', icon: <BarChart3 size={16} /> });
   else items.push({ key: 'statistics', label: '统计报表', icon: <BarChart3 size={17} />, children: [{ key: '/reports', label: '业务报表', icon: <BarChart3 size={16} /> }] });
@@ -103,7 +107,7 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
   return <><ChangePassword open={passwordOpen} onClose={() => setPasswordOpen(false)} signedOut={signedOut} />
   <div className={`admin-shell ${collapsed ? 'is-collapsed' : ''}`}>
     <aside className="sidebar"><Link className="brand" to={home}><Building2 size={24} /><span>ProcureX<small>采购协同</small></span></Link>{navigation}</aside>
-    <Drawer title="ProcureX" placement="left" open={mobileOpen} onClose={() => setMobileOpen(false)} width={250}><Menu mode="inline" selectedKeys={[location.pathname]} openKeys={openKeys} onOpenChange={setOpenKeys} items={items} onClick={({ key }) => { navigate(key); setMobileOpen(false); }} /></Drawer>
+    <Drawer title="ProcureX" placement="left" open={mobileOpen} onClose={() => setMobileOpen(false)} width={modalWidth.form}><Menu mode="inline" selectedKeys={[location.pathname]} openKeys={openKeys} onOpenChange={setOpenKeys} items={items} onClick={({ key }) => { navigate(key); setMobileOpen(false); }} /></Drawer>
     <div className="main-column"><header className="topbar"><div className="actions">
       <Tooltip title={collapsed ? '展开菜单' : '收起菜单'}><Button className="desktop-menu" type="text" aria-label={collapsed ? '展开菜单' : '收起菜单'} icon={<ChevronLeft size={18} style={{ transform: collapsed ? 'rotate(180deg)' : undefined }} />} onClick={() => setCollapsed(!collapsed)} /></Tooltip>
       <Button className="mobile-menu" type="text" aria-label="打开菜单" icon={<MenuIcon size={18} />} onClick={() => setMobileOpen(true)} />
@@ -124,10 +128,12 @@ function Shell({ user, signedOut }: { user: User; signedOut: () => void }) {
       <Route path="/store-orders" element={<StoreOrders user={user} />} />
       <Route path="/store-finance" element={<StoreFinance user={user} />} />
       <Route path="/finance" element={<Billing user={user} />} />
+      <Route path="/finance-review" element={<Navigate to="/purchase-requests" replace />} />
       <Route path="/settlement-differences" element={<SettlementDifferences user={user} />} />
       <Route path="/reports" element={<Reports user={user} />} />
       <Route path="/products" element={<Products user={user} />} />
       <Route path="/suppliers" element={<Suppliers user={user} />} />
+      <Route path="/logistics-companies" element={<CatalogRegistries key="logistics-companies" kind="logistics-companies" user={user} />} />
       <Route path="/templates" element={<Templates />} />
       <Route path="/prices" element={<Navigate to="/products" replace />} />
       <Route path="/purchase-requests" element={<PurchaseWorkspace user={user} />} />
@@ -157,8 +163,16 @@ function Application() {
   if (restoreError) return <Result status="warning" title={restoreError} extra={<div className="actions"><Button onClick={() => setAttempt(value => value + 1)}>重试</Button><Button onClick={signedOut}>重新登录</Button></div>} />;
   return user ? <Shell user={user} signedOut={signedOut} /> : <Login authenticated={setUser} />;
 }
-createRoot(document.getElementById('root')!).render(<StrictMode><ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} theme={{ token: {
-  colorPrimary: '#147d64', colorInfo: '#147d64', colorText: '#26333c', colorBgLayout: '#f4f6f8', borderRadius: 4, fontSize: 13, controlHeight: 34,
-}, components: { Table: { cellPaddingBlockSM: 10, cellPaddingInlineSM: 12, headerBg: '#eef2f5' }, Menu: { itemHeight: 38, itemBorderRadius: 4 } } }}>
+createRoot(document.getElementById('root')!).render(<StrictMode>
+  {/* 令牌由 theme.ts 单点定义，同时驱动 antd 主题和 :root 自定义属性 */}
+  <style>{tokenCssVars}</style>
+  <ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} theme={{ token: {
+  colorPrimary: tokens.brand, colorInfo: tokens.brand, colorText: tokens.ink1, colorTextSecondary: tokens.ink3,
+  colorTextTertiary: tokens.ink4, colorBgLayout: tokens.canvas, colorBgContainer: tokens.surface,
+  colorBorder: tokens.line, colorBorderSecondary: tokens.lineSoft, colorError: tokens.danger,
+  borderRadius: tokens.radius, fontSize: tokens.fontSize, controlHeight: tokens.controlHeight,
+}, components: { Table: { cellPaddingBlockSM: 10, cellPaddingInlineSM: 12, headerBg: tokens.sunken },
+  Menu: { itemHeight: 38, itemBorderRadius: tokens.radius } } }}>
   <AntApp><BrowserRouter><Application /></BrowserRouter></AntApp>
 </ConfigProvider></StrictMode>);
+import { modalWidth } from './lib/theme';

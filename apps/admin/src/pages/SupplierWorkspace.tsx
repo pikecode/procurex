@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alert, App, Button, Descriptions, Input, Modal, Popconfirm, Result, Table, Tabs, Tag } from 'antd';
 import { Eye, EyeOff, PackageCheck, Truck, X, Coins } from 'lucide-react';
+import { modalWidth } from '../lib/theme';
 import { request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { useWorkflowCommand } from '../lib/useWorkflowCommand';
@@ -54,7 +55,7 @@ function Workspace({ user, supplierId }: { user: User; supplierId: string }) {
       filters={[{ key: 'status', label: '订单状态', options: ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED', 'SHIPPED', 'REJECTED', 'CANCELED'].map(value => ({ value, label: workflowName(value) })) }]}
       columns={[{ title: '订单编号', dataIndex: 'supplierOrderNo' }, { title: '门店', dataIndex: 'storeName' }, { title: '订单状态', dataIndex: 'status', render: workflowName }, { title: '履约状态', dataIndex: 'fulfillmentStatus', render: workflowName }, { title: '供货金额', dataIndex: 'supplyGoodsAmount' }, { title: '创建时间', dataIndex: 'createdAt', render: workflowTime }, { title: '操作', fixed: 'right', align: 'right' as const, width: 88, render: (_, row) => <RowActions ariaLabel={row.supplierOrderNo} actions={[{ key: 'view', label: '查看', icon: <Eye size={15} />, onClick: () => open(row.id) }]} /> }]} />}
     {view === 'products' && <ManagedProducts supplierId={supplierId} />}
-    <Modal open={Boolean(order)} title={order?.supplierOrderNo} width={920} footer={null} maskClosable={false} closable={!command.busy && !editor} onCancel={() => setOrder(undefined)}>
+    <Modal open={Boolean(order)} title={order?.supplierOrderNo} width={modalWidth.wide} footer={null} maskClosable={false} closable={!command.busy && !editor} onCancel={() => setOrder(undefined)}>
       {order && <>
         <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[{ key: 'status', label: '订单状态', children: workflowName(order.status) }, { key: 'amount', label: '供货金额', children: order.supplyGoodsAmount }, { key: 'address', label: '收货地址', children: order.destination?.address || '-' }, { key: 'contact', label: '收货联系人', children: `${order.destination?.contactName || '-'} ${order.destination?.contactPhone || ''}` }]} />
         <div className="actions workflow-actions">

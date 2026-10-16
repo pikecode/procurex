@@ -1,3 +1,4 @@
+import { modalWidth } from '../lib/theme';
 import { money } from '../lib/money';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Descriptions, Form, InputNumber, Modal, Popconfirm, Select, Spin, Table, Tag, Tooltip } from 'antd';
@@ -5,6 +6,7 @@ import { Check, Eye, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { request } from '../lib/api';
 import { decimalRule } from '../lib/catalogTypes';
 import type { Catalog, PurchasePreview } from '../lib/workflowTypes';
+import { useUnsavedGuard } from '../lib/useUnsavedGuard';
 import type { useWorkflowCommand } from '../lib/useWorkflowCommand';
 
 type Draft = { items: { productId: string; unitId: string; quantity: string }[] };
@@ -14,6 +16,8 @@ export function StoreOrderEditor({ storeId, command, onClose, onSaved }: { store
   const [error, setError] = useState(''); const [preview, setPreview] = useState<PurchasePreview | null>(null); const [signature, setSignature] = useState('');
   const [previewing, setPreviewing] = useState(false); const lock = useRef(false); const [form] = Form.useForm<Draft>();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const guard = useUnsavedGuard(form);
+  const requestClose = () => { if (command.busy || previewing) return; void guard.confirmDiscard().then(ok => { if (ok) onClose(); }); };
   const items = Form.useWatch('items', form) as Draft['items'] | undefined; const { message } = App.useApp();
   const invalidate = () => { setPreview(null); setSignature(''); };
   useEffect(() => {
@@ -22,7 +26,7 @@ export function StoreOrderEditor({ storeId, command, onClose, onSaved }: { store
       if (controller.signal.aborted) return;
       if (value.storeId !== storeId || !value.templateId || !Array.isArray(value.items) || new Set(value.items.map(row => row.product.id)).size !== value.items.length) throw new Error('订货目录范围或模板不完整，请重新读取。');
       setCatalog(value);
-    }).catch(failure => { if (!controller.signal.aborted) setError(failure.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    }).catch(failure => { if (!controller.signal.aborted) setError(failure.message); }).finally(() => { if (!controller.signal.aborted) { setLoading(false); guard.snapshot(); } });
     return () => controller.abort();
   }, [storeId, revision]);
   async function draft() {
@@ -36,8 +40,8 @@ export function StoreOrderEditor({ storeId, command, onClose, onSaved }: { store
     }) };
   }
   const disabled = command.blocked || previewing;
-  return <Modal open zIndex={1200} title="门店订货" width={900} maskClosable={false} keyboard={!command.busy && !previewing} closable={!command.busy && !previewing} onCancel={() => { if (!command.busy && !previewing) onClose(); }} footer={<div className="actions workflow-actions">
-    <Button onClick={onClose} disabled={command.busy || previewing}>取消</Button>
+  return <Modal open zIndex={1200} title="门店订货" width={modalWidth.wide} maskClosable={false} keyboard={!command.busy && !previewing} closable={!command.busy && !previewing} onCancel={requestClose} footer={<div className="actions workflow-actions">
+    <Button onClick={requestClose} disabled={command.busy || previewing}>取消</Button>
     <Tooltip title="重新读取目录"><Button aria-label="重新读取目录" icon={<RotateCcw size={16} />} disabled={disabled || loading} onClick={() => { invalidate(); setRevision(value => value + 1); }} /></Tooltip>
     <Button icon={<Eye size={16} />} loading={previewing} disabled={disabled || loading || !catalog?.items.length} onClick={async () => {
       if (lock.current || command.blocked) return; lock.current = true; setPreviewing(true); setError(''); invalidate();

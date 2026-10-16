@@ -1,0 +1,16 @@
+<wxs src="../../utils/labels.wxs" module="labels" />
+<view class="editor">
+  <view class="editor-heading"><document-no value="{{detail.requestNo}}" /><button size="mini" disabled="{{submitting || pending}}" bindtap="load">刷新</button></view>
+  <view class="notice notice-error" wx:if="{{error}}">{{error}}</view>
+  <view class="notice" wx:if="{{pending}}">上次提交结果待确认<button size="mini" loading="{{submitting}}" bindtap="submitPending">核对保存结果</button></view>
+  <input class="search" placeholder="搜索模板商品" value="{{search}}" bindinput="onSearch" />
+  <view class="loading-state" wx:if="{{loading}}">加载中</view>
+  <view class="edit-row" wx:for="{{visibleRows}}" wx:key="id">
+    <product-card product="{{item}}" variant="compact"><view class="row-heading"><text>{{item.name}}</text><text>¥{{labels.money(item.salesPrice)}}</text></view>
+      <text class="secondary-text">{{item.unitName}}<text wx:if="{{!item.available}}"> · 已不可订</text></text>
+      <view class="quantity-row"><text>数量</text><input type="digit" value="{{item.quantity}}" data-id="{{item.id}}" bindinput="changeQuantity" disabled="{{!editable || submitting || pending || !item.available}}" /><button size="mini" data-id="{{item.id}}" bindtap="removeItem" disabled="{{!editable || submitting || pending}}">移除</button></view>
+    </product-card>
+  </view>
+  <view class="empty-state" wx:if="{{!loading && !visibleRows.length}}">暂无商品</view>
+</view>
+<view class="edit-footer"><view><text>{{count}} 种商品</text><text class="money">¥{{total}}</text></view><button class="primary" loading="{{submitting}}" disabled="{{!editable || loading || submitting || pending || !count}}" bindtap="save">保存修改</button></view>

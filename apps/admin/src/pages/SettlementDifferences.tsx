@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Descriptions, Form, Input, Modal, Result, Select, Table, Tooltip } from 'antd';
 import { Check, Eye, Plus } from 'lucide-react';
+import { modalWidth } from '../lib/theme';
 import { hasRole, request, type User } from '../lib/api';
 import { useRows } from '../lib/useRows';
 import { useWorkflowCommand } from '../lib/useWorkflowCommand';
@@ -65,7 +66,7 @@ function Workspace({ user, scoped, supplier }: { user: User; scoped: boolean; su
       { title: '原账期 / 记账账期', render: (_, row) => <>{row.originalPeriodKey}<small>{row.actualPeriodKey}</small></> }, { title: '差额', dataIndex: 'adjustmentAmount', align: 'right' }, { title: '待返还 / 抵扣', dataIndex: 'pendingReturnOrOffsetAmount', align: 'right' }, { title: '状态', dataIndex: 'processingStatus', render: value => names[value] || value },
       { title: '操作', fixed: 'right', align: 'right' as const, width: 88, render: (_, row) => <RowActions ariaLabel={row.id} actions={[{ key: 'view', label: '查看', icon: <Eye size={15} />, disabled: checking, onClick: () => open(row.id) }]} /> },
     ]} />
-    <Modal open={Boolean(detail)} title="结算差异明细" width={780} onCancel={() => { if (!checking && !command.busy) { sequence.current++; setDetail(undefined); setDisposal(undefined); } }} maskClosable={false} closable={!checking && !command.busy} keyboard={!checking && !command.busy} footer={detail && <div className="actions workflow-actions">
+    <Modal open={Boolean(detail)} title="结算差异明细" width={modalWidth.wide} onCancel={() => { if (!checking && !command.busy) { sequence.current++; setDetail(undefined); setDisposal(undefined); } }} maskClosable={false} closable={!checking && !command.busy} keyboard={!checking && !command.busy} footer={detail && <div className="actions workflow-actions">
       {canCreate(detail) && <Button type="primary" icon={<Plus size={16} />} disabled={blocked} onClick={() => { setError(''); form.resetFields(); form.setFieldsValue({ method: 'OFFLINE_RETURN', businessDate: new Date().toLocaleDateString('sv-SE') }); setEditing(true); }}>登记处置</Button>}
       {disposal && canConfirm(disposal) && <Button type="primary" icon={<Check size={16} />} disabled={blocked} onClick={confirm}>确认返还</Button>}
     </div>}>
@@ -74,7 +75,7 @@ function Workspace({ user, scoped, supplier }: { user: User; scoped: boolean; su
         {disposal && <section className="price-band"><h2>差额处置单</h2><Descriptions size="small" column={1} items={[{ key: 'no', label: '单号', children: disposal.disposalNo }, { key: 'method', label: '方式', children: names[disposal.method] }, { key: 'direction', label: '方向', children: names[disposal.direction] }, { key: 'status', label: '状态', children: names[disposal.status] }, { key: 'amount', label: '金额', children: disposal.amount }, { key: 'date', label: '业务日期', children: disposal.businessDate.slice(0, 10) }, { key: 'reason', label: '原因', children: disposal.reason || '-' }]} /><Table size="small" rowKey="id" pagination={false} dataSource={disposal.items} columns={[{ title: '抵扣订单', dataIndex: 'targetSupplierOrderNo', render: value => value || '-' }, { title: '金额', dataIndex: 'amount' }]} /></section>}
       </>}
     </Modal>
-    <Modal open={editing} zIndex={1400} title="登记差额处置" width={520} maskClosable={false} keyboard={!checking && !command.busy} closable={!checking && !command.busy} onCancel={() => { if (!checking && !command.busy) setEditing(false); }} footer={<Button type="primary" icon={<Check size={16} />} loading={checking || command.busy} disabled={blocked} onClick={submit}>确认登记</Button>}>
+    <Modal open={editing} zIndex={1400} title="登记差额处置" width={modalWidth.form} maskClosable={false} keyboard={!checking && !command.busy} closable={!checking && !command.busy} onCancel={() => { if (!checking && !command.busy) setEditing(false); }} footer={<Button type="primary" icon={<Check size={16} />} loading={checking || command.busy} disabled={blocked} onClick={submit}>确认登记</Button>}>
       {error && <Alert type="error" title={error} />}
       <Descriptions size="small" items={[{ key: 'amount', label: '核定金额', children: detail?.pendingReturnOrOffsetAmount }]} />
       <Form form={form} layout="vertical" className="compact-form" disabled={blocked}>

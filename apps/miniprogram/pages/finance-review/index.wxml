@@ -1,0 +1,33 @@
+<wxs src="../../utils/labels.wxs" module="labels" />
+<view class="audit-page">
+  <view class="audit-heading"><text class="card-title">下货单财务审核</text><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{loading || reviewing}}">刷新</button></view>
+  <view class="error-banner" wx:if="{{error}}">{{error}}</view>
+  <view class="card" wx:if="{{pendingCommand}}"><text>上次操作结果待确认</text><button bindtap="recoverCommand" disabled="{{reviewing}}">核对提交结果</button></view>
+  <view wx:if="{{detailLoading}}" class="empty-state">正在读取审核明细</view>
+  <block wx:if="{{!selected && !detailLoading}}">
+    <input class="business-search" placeholder="搜索门店或下货单号" value="{{search}}" bindinput="onSearch" />
+    <view class="card pressable" wx:for="{{visibleRows}}" wx:key="id" data-id="{{item.id}}" bindtap="openRecord">
+      <view class="row-title"><text>{{item.storeName}}</text><text>¥{{labels.money(item.salesGoodsAmount)}}</text></view>
+      <document-no value="{{item.requestNo}}" /><view class="muted">采购确认 {{item.dateText}}</view><text class="status tone-warn">待财务审核 ›</text>
+    </view>
+    <view class="empty-state" wx:if="{{!visibleRows.length && !loading && !error}}">暂无待审核下货单</view>
+  </block>
+  <view class="card" wx:if="{{selected && !detailLoading}}">
+    <view class="back-link" bindtap="backToList">‹ 返回待审核列表</view>
+    <view class="row-title"><text>{{selected.storeName}}</text><text class="status tone-warn">{{labels.status(selected.status)}}</text></view>
+    <document-no value="{{selected.requestNo}}" />
+    <view class="row-title"><text>销售金额</text><text>¥{{labels.money(selected.salesGoodsAmount)}}</text></view>
+    <view class="audit-funds"><text class="card-title">储值</text><view class="detail-line"><text>本单所需</text><text>¥{{selected.funding.stored.required}}</text></view><view class="detail-line"><text>本单可用（含已占用）</text><text>¥{{selected.funding.stored.available}}</text></view><view class="detail-line audit-shortfall"><text>资金缺口</text><text>¥{{selected.funding.stored.shortfall}}</text></view></view>
+    <view class="audit-funds"><text class="card-title">挂账</text><view class="detail-line"><text>本单所需</text><text>¥{{selected.funding.credit.required}}</text></view><view class="detail-line"><text>本单可用（含已占用）</text><text>¥{{selected.funding.credit.available}}</text></view><view class="detail-line audit-shortfall"><text>额度缺口</text><text>¥{{selected.funding.credit.shortfall}}</text></view></view>
+    <view wx:if="{{!selected.funding.canConfirm}}" class="funding-shortfall">资金不足，补足后可审核通过<button wx:if="{{canManageAccounts}}" class="ghost" bindtap="openAccounts">门店账户管理 ›</button><text wx:else>请联系总部财务充值或调整额度</text></view>
+    <text class="audit-section-title">供应商结算</text>
+    <view class="row" wx:for="{{selected.settlementGroups}}" wx:key="supplierId"><view class="row-title"><text>{{item.supplierName}}</text><text>¥{{item.amount}}</text></view><view class="muted">{{item.modeName}} · {{item.cycleName}}</view></view>
+    <text class="audit-section-title">商品明细</text>
+    <view class="row" wx:for="{{selected.items}}" wx:key="id"><view class="row-title"><text>{{item.productName}}</text><text>¥{{labels.money(item.salesLineAmount)}}</text></view><text class="muted">{{item.quantityText}} {{item.unitName}} × ¥{{labels.money(item.salesUnitPrice)}}</text></view>
+    <block wx:if="{{selected.status === 'PENDING_FINANCE'}}">
+      <textarea wx:if="{{returning}}" class="audit-reason" placeholder="退回原因（必填）" maxlength="300" value="{{reason}}" bindinput="onReason" disabled="{{reviewing}}" auto-height />
+      <view class="audit-actions" wx:if="{{returning}}"><button class="secondary" bindtap="cancelReturn" disabled="{{reviewing}}">取消</button><button class="danger" data-action="return" bindtap="decide" disabled="{{reviewing || pendingCommand || !reason}}">确认退回采购</button></view>
+      <view class="audit-actions" wx:else><button class="secondary" bindtap="startReturn" disabled="{{reviewing || pendingCommand}}">退回采购</button><button class="primary" data-action="approve" bindtap="decide" loading="{{reviewing}}" disabled="{{reviewing || pendingCommand || !selected.funding.canConfirm}}">通过并生成订单</button></view>
+    </block>
+  </view>
+</view>

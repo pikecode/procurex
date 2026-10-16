@@ -1,6 +1,7 @@
+import { modalWidth } from '../lib/theme';
 import { money } from '../lib/money';
 import { useEffect, useState } from 'react';
-import { Alert, Button, Descriptions, Modal, Result, Spin, Table, Tag } from 'antd';
+import { Alert, Button, Descriptions, Drawer, Modal, Result, Spin, Table, Tag } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { ListPage } from '../components/ListPage';
@@ -65,20 +66,27 @@ export default function StoreOrders({ user }: { user: User }) {
       columns={[{ title: '订单编号', dataIndex: 'requestNo', render: (value, row) => <Button type="link" onClick={() => { setShipmentId(null); setParams({ order: row.id }); }}>{value}</Button> },
         { title: '订单状态', dataIndex: 'status', render: value => <Tag>{workflowName(value)}</Tag> }, { title: '储值/挂账入账', dataIndex: 'paymentStatus', render: accountFundingName },
         { title: '货款', dataIndex: 'salesGoodsAmount' }, { title: '账户入账金额', dataIndex: 'paidAmount' }, { title: '资金缺口', dataIndex: 'shortfallAmount' }, { title: '下单时间', dataIndex: 'submittedAt', render: workflowTime }]} />
-    <Modal open={Boolean(orderId)} title="门店订单详情" width={960} footer={null} maskClosable={false} closable={!shipmentId} onCancel={() => { if (!shipmentId) setParams({}); }}>
-      {!shipmentId && !receiving && recovery}
-      {detailError && <Alert type="error" title={detailError} action={<Button onClick={() => setRevision(value => value + 1)}>重试</Button>} />}
-      {detailLoading ? <Spin /> : detail && <>
-        <Descriptions size="small" column={{ xs: 1, sm: 3 }} items={[{ key: 'no', label: '订单编号', children: detail.requestNo }, { key: 'status', label: '状态', children: workflowName(detail.status) }, { key: 'amount', label: '货款', children: detail.salesGoodsAmount }, { key: 'reserved', label: '储值预占', children: detail.storedReservedAmount || '0' }, { key: 'payment', label: '储值/挂账入账', children: accountFundingName(detail.paymentStatus) }]} />
-        {detail.rejectedReason && <Alert type="warning" title={`拒单原因：${detail.rejectedReason}`} />}
-        <Descriptions size="small" column={1} items={detail.supplierOrders.filter(order => order.deliveryContactPhone).map(order => ({ key: order.id, label: `${order.supplierName || '供应商'}配送联系`, children: <a href={`tel:${order.deliveryContactPhone}`}>{order.deliveryContactPhone}</a> }))} />
-        <Table rowKey="id" size="small" pagination={false} scroll={{ x: 550 }} dataSource={detail.items} columns={[{ title: '商品', dataIndex: 'productName' }, { title: '数量', dataIndex: 'quantity' }, { title: '单位', render: (_, row) => row.unitName || row.unitSnapshot?.salesUnitName || '-' }, { title: '单价', dataIndex: 'salesUnitPrice', render: money }, { title: '货款', dataIndex: 'salesLineAmount' }]} />
-        <section className="price-band"><h2>发货进度</h2><Table rowKey="id" size="small" pagination={false} scroll={{ x: 550 }} dataSource={detail.supplierOrders.flatMap(order => (order.shipments || []).map(row => ({ ...row, supplierName: order.supplierName })))} columns={[{ title: '发货单', dataIndex: 'shipmentNo', render: (value, row) => <Button type="link" onClick={() => setShipmentId(row.id)}>{value}</Button> }, { title: '供应商', dataIndex: 'supplierName' }, { title: '物流单号', dataIndex: 'trackingNo' }, { title: '发货时间', dataIndex: 'shippedAt', render: workflowTime }, { title: '收货时间', dataIndex: 'receivedAt', render: workflowTime }]} /></section>
+    <Drawer open={Boolean(orderId)} placement="right" width={modalWidth.wide} className="order-drawer"
+      title={shipmentId ? '发货明细' : '门店订单详情'} closable={!receiving}
+      onClose={() => { if (receiving) return; if (shipmentId) { setShipmentId(null); return; } setParams({}); }}
+      extra={!receiving && shipmentId ? <Button type="link" onClick={() => setShipmentId(null)}>‹ 返回订单详情</Button> : null}
+      footer={shipmentId && writable && shipment && (!shipment.currentReceiptRevision || shipment.items.some(row => !row.receiptLocked))
+        ? <Button type="primary" disabled={command.blocked} onClick={() => setReceiving(true)}>{shipment.currentReceiptRevision ? '修订收货' : '登记收货'}</Button> : null}>
+      {shipmentId ? <>
+        {shipmentError && <Alert type="error" title={shipmentError} />}
+        {shipmentLoading ? <Spin /> : shipment && <><Descriptions size="small" items={[{ key: 'no', label: '发货单', children: shipment.shipmentNo }]} /><Table rowKey="id" size="small" pagination={false} scroll={{ x: 450 }} dataSource={shipment.items} columns={[{ title: '商品', dataIndex: 'productName' }, { title: '单位', dataIndex: 'unitName' }, { title: '发货', dataIndex: 'shippedQuantity' }, { title: '已登记收货', dataIndex: 'currentReceivedQuantity', render: value => value ?? '-' }, { title: '收货状态', render: (_, row) => row.receiptLocked ? '已锁定' : '可登记' }]} /><PrivateEvidence files={shipment.evidenceFiles || []} /></>}
+      </> : <>
+        {!receiving && recovery}
+        {detailError && <Alert type="error" title={detailError} action={<Button onClick={() => setRevision(value => value + 1)}>重试</Button>} />}
+        {detailLoading ? <Spin /> : detail && <>
+          <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[{ key: 'no', label: '订单编号', children: detail.requestNo }, { key: 'status', label: '状态', children: workflowName(detail.status) }, { key: 'amount', label: '货款', children: detail.salesGoodsAmount }, { key: 'reserved', label: '储值预占', children: detail.storedReservedAmount || '0' }, { key: 'payment', label: '储值/挂账入账', children: accountFundingName(detail.paymentStatus) }]} />
+          {detail.rejectedReason && <Alert type="warning" title={`拒单原因：${detail.rejectedReason}`} />}
+          <Descriptions size="small" column={1} items={detail.supplierOrders.filter(order => order.deliveryContactPhone).map(order => ({ key: order.id, label: `${order.supplierName || '供应商'}配送联系`, children: <a href={`tel:${order.deliveryContactPhone}`}>{order.deliveryContactPhone}</a> }))} />
+          <Table rowKey="id" size="small" pagination={false} scroll={{ x: 550 }} dataSource={detail.items} columns={[{ title: '商品', dataIndex: 'productName' }, { title: '数量', dataIndex: 'quantity' }, { title: '单位', render: (_, row) => row.unitName || row.unitSnapshot?.salesUnitName || '-' }, { title: '单价', dataIndex: 'salesUnitPrice', render: money }, { title: '货款', dataIndex: 'salesLineAmount' }]} />
+          <section className="price-band"><h2>发货进度</h2><Table rowKey="id" size="small" pagination={false} scroll={{ x: 550 }} dataSource={detail.supplierOrders.flatMap(order => (order.shipments || []).map(row => ({ ...row, supplierName: order.supplierName })))} columns={[{ title: '发货单', dataIndex: 'shipmentNo', render: (value, row) => <Button type="link" onClick={() => setShipmentId(row.id)}>{value}</Button> }, { title: '供应商', dataIndex: 'supplierName' }, { title: '物流单号', dataIndex: 'trackingNo' }, { title: '发货时间', dataIndex: 'shippedAt', render: workflowTime }, { title: '收货时间', dataIndex: 'receivedAt', render: workflowTime }]} /></section>
+        </>}
       </>}
-    </Modal>
-    <Modal open={Boolean(shipmentId)} zIndex={1200} title="发货明细" width={760} maskClosable={false} closable={!receiving} onCancel={() => { if (!receiving) setShipmentId(null); }} footer={writable && shipment && (!shipment.currentReceiptRevision || shipment.items.some(row => !row.receiptLocked)) ? <Button type="primary" disabled={command.blocked} onClick={() => setReceiving(true)}>{shipment.currentReceiptRevision ? '修订收货' : '登记收货'}</Button> : null}>
-      {shipmentError && <Alert type="error" title={shipmentError} />}{shipmentLoading ? <Spin /> : shipment && <><Descriptions size="small" items={[{ key: 'no', label: '发货单', children: shipment.shipmentNo }]} /><Table rowKey="id" size="small" pagination={false} scroll={{ x: 450 }} dataSource={shipment.items} columns={[{ title: '商品', dataIndex: 'productName' }, { title: '单位', dataIndex: 'unitName' }, { title: '发货', dataIndex: 'shippedQuantity' }, { title: '已登记收货', dataIndex: 'currentReceivedQuantity', render: value => value ?? '-' }, { title: '收货状态', render: (_, row) => row.receiptLocked ? '已锁定' : '可登记' }]} /><PrivateEvidence files={shipment.evidenceFiles || []} /></>}
-    </Modal>
+    </Drawer>
     {receiving && shipmentId && writable && <ReceiptEditor shipmentId={shipmentId} command={command} onClose={() => setReceiving(false)} onSaved={saved} />}
     {ordering && writable && <StoreOrderEditor storeId={storeId!} command={command} onClose={() => setOrdering(false)} onSaved={saved} />}
   </>;

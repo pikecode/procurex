@@ -35,6 +35,9 @@ export type PurchaseRequestView = PurchaseRequestPreview & {
 };
 
 export type PurchaseRequestSummaryView = {
+  procurementConfirmedAt: string | null;
+  financeReviewedAt: string | null;
+  financeReturnedReason: string | null;
   storedValueOnReceipt: boolean;
   storedReservedAmount?: string;
   id: string;
@@ -192,7 +195,7 @@ export class PurchaseRequestsService {
     });
     return { ...toPurchaseRequestDetailView(request), storedReservedAmount: reservations._sum.reservedAmount?.toFixed(2) ?? '0.00', ...requestProgress(request), items: request.items.map(item => ({ ...toPurchaseRequestItemView(item), ...transactionUnitView(item.unitSnapshot, item.salesUnitPrice.toString(), item.supplyUnitPrice.toString(), names), productName: item.product.name, imageFile: item.product.imageFile, supplierName: item.supplier.name, deliveryContactPhone: item.supplier.deliveryContactPhone, supplierContactName: item.supplier.contactName, supplierContactPhone: item.supplier.contactPhone, supplierAddress: item.supplier.address })),
       supplierOrders: request.supplierOrders.map(order => ({ ...toSupplierOrderSummaryView(order), supplierName: order.supplier.name, deliveryContactPhone: order.supplier.deliveryContactPhone, rejectionHandled: isHistoricalRejection(request, order),
-        shipments: order.shipments.map(shipment => ({ id: shipment.id, shipmentNo: shipment.shipmentNo, kind: shipment.kind, shippedAt: shipment.shippedAt.toISOString(), trackingNo: shipment.trackingNo, deliveryModeSnapshot: shipment.deliveryModeSnapshot,
+        shipments: order.shipments.map(shipment => ({ id: shipment.id, shipmentNo: shipment.shipmentNo, kind: shipment.kind, shippedAt: shipment.shippedAt.toISOString(), trackingNo: shipment.trackingNo, carrierName: shipment.carrierName, deliveryModeSnapshot: shipment.deliveryModeSnapshot,
           receivedAt: shipment.receipts[0]?.submittedAt.toISOString() ?? null, receiptRevision: shipment.receipts[0]?.revision ?? 0 })) })) };
   }
 
@@ -256,7 +259,7 @@ export class PurchaseRequestsService {
         })),
       });
 
-      const funding = await synchronizeRequestFunding(tx, created.id, { initial: true, sourceId: created.id });
+      const funding = await synchronizeRequestFunding(tx, created.id, { initial: true, sourceId: created.id, deferCreditShortfall: true });
       const request = await tx.purchaseRequest.update({ where: { id: created.id }, data: {
         status: funding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS,
       } });
@@ -267,8 +270,8 @@ export class PurchaseRequestsService {
     return {
       ...preview,
       funding: { ...preview.funding, canConfirm: funding.canConfirm, stored: {
-        required: funding.storedRequired.toFixed(2), paid: funding.storedPaid.toFixed(2), reserved: funding.storedReserved.toFixed(2), available: funding.available.toFixed(2), shortfall: funding.shortfallAmount.toFixed(2),
-      } },
+        required: funding.storedRequired.toFixed(2), paid: funding.storedPaid.toFixed(2), reserved: funding.storedReserved.toFixed(2), available: funding.available.toFixed(2), shortfall: funding.storedShortfall.toFixed(2),
+      }, ...(funding.creditRequired.isZero() ? {} : { credit: { required: funding.creditRequired.toFixed(2), available: funding.creditAvailable.toFixed(2), shortfall: funding.creditShortfall.toFixed(2) } }) },
       id: request.id,
       requestNo: request.requestNo,
       status: request.status,
@@ -289,13 +292,28 @@ export class PurchaseRequestsService {
   }
 
   async previewReplacement(id: string, expectedVersion: number, items: ReplacePurchaseRequestItemInput[]) {
-    const { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding } = await this.prepareReplacement(id, expectedVersion, items);
+    const { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding, fundingDetail } = await this.prepareReplacement(id, expectedVersion, items);
     return { requestId: request.id, templateId: request.templateId, version: request.version, items: pricedItems,
       totals: { salesGoodsAmount: salesGoodsAmount.toFixed(2), supplyGoodsAmount: supplyGoodsAmount.toFixed(2) },
-      funding: { canConfirm: funding.canConfirm } };
+      funding: { canConfirm: funding.canConfirm, ...fundingDetail } };
   }
 
-  private async prepareReplacement(id: string, expectedVersion: number, items: ReplacePurchaseRequestItemInput[]) {
+  async replaceStoreItems(id: string, expectedVersion: number, input: PurchaseRequestPreviewInput, transaction: Prisma.TransactionClient) {
+    await lockPricePublication(transaction);
+    await lockCatalog(transaction, true);
+    const request = await transaction.purchaseRequest.findUniqueOrThrow({ where: { id } });
+    if (request.procurementConfirmedAt || !['PENDING_PROCUREMENT', 'PENDING_FUNDS'].includes(request.status)) {
+      throw new ConflictException({ code: 'PURCHASE_REQUEST_ITEMS_NOT_EDITABLE', message: '采购已确认，门店不能再修改该下货单' });
+    }
+    const preview = await this.previewService.preview(input, transaction);
+    if (preview.templateId !== request.templateId) throw new ConflictException({ code: 'STORE_TEMPLATE_CHANGED', message: '门店订货模板已变更，请联系采购处理原下货单' });
+    const prepared = await this.prepareReplacement(id, expectedVersion, preview.items.map(item => ({
+      productId: item.productId, supplierId: item.supplierId, quantity: item.quantity,
+    })), true);
+    return this.saveReplacement(prepared.request, expectedVersion, prepared.pricedItems, prepared.salesGoodsAmount, prepared.supplyGoodsAmount, prepared.funding, transaction);
+  }
+
+  private async prepareReplacement(id: string, expectedVersion: number, items: ReplacePurchaseRequestItemInput[], storeEdit = false) {
     const request = await this.database.client.purchaseRequest.findUnique({
       where: { id },
       include: { supplierOrders: true, items: { select: { productId: true, quantity: true, unitSnapshot: true } } },
@@ -315,7 +333,7 @@ export class PurchaseRequestsService {
       });
     }
 
-    if ((request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS) || request.supplierOrders.length > 0) {
+    if ((request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS && request.status !== PurchaseRequestStatus.PENDING_FINANCE) || request.supplierOrders.length > 0) {
       throw new ConflictException({
         code: 'PURCHASE_REQUEST_ITEMS_NOT_EDITABLE',
         message: 'Purchase request items cannot be edited in its current status',
@@ -383,7 +401,7 @@ export class PurchaseRequestsService {
         const originalItem = request.items.find(original => original.productId === item.productId);
         const originalSnapshot = readUnitSnapshot(originalItem?.unitSnapshot);
         const originalRequestedQuantity = new Decimal(originalSnapshot?.originalRequestedQuantity ?? originalItem?.quantity ?? quantity);
-        if (originalItem && quantity.gt(originalRequestedQuantity)) {
+        if (!storeEdit && originalItem && quantity.gt(originalRequestedQuantity)) {
           throw new ConflictException({
             code: 'PURCHASE_REQUEST_QUANTITY_EXCEEDS_ORIGINAL',
             message: '采购调整数量不能超过门店原下单数量',
@@ -401,7 +419,7 @@ export class PurchaseRequestsService {
           throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Approved price changed; preview again' });
         }
         return {
-          unitSnapshot: originalItem ? {
+          unitSnapshot: originalItem && !storeEdit ? {
             ...units.unitSnapshot,
             originalRequestedQuantity: originalRequestedQuantity.toString(),
             originalInputQuantity: originalSnapshot?.originalInputQuantity ?? originalSnapshot?.inputQuantity,
@@ -445,7 +463,9 @@ export class PurchaseRequestsService {
     const creditShortfall = Decimal.max(0, creditRequired.minus(creditAvailable));
     const funding = { ...storedFunding, canConfirm: storedFunding.canConfirm && creditShortfall.isZero(),
       shortfallAmount: storedFunding.shortfallAmount.plus(creditShortfall) };
-    return { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding };
+    const funds = (required: Decimal, available: Decimal) => ({ required: required.toFixed(2), available: available.toFixed(2), shortfall: Decimal.max(0, required.minus(available)).toFixed(2) });
+    return { request, pricedItems, salesGoodsAmount, supplyGoodsAmount, funding,
+      fundingDetail: { stored: funds(storedRequired, storedAvailable), credit: funds(creditRequired, creditAvailable) } };
   }
 
   private async saveReplacement(request: PurchaseRequest, expectedVersion: number,
@@ -494,7 +514,7 @@ export class PurchaseRequestsService {
           version: { increment: 1 },
         },
       });
-      const actualFunding = await synchronizeRequestFunding(tx, request.id);
+      const actualFunding = await synchronizeRequestFunding(tx, request.id, { deferCreditShortfall: true });
       await tx.purchaseRequest.update({ where: { id: request.id }, data: { status: actualFunding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS } });
 
       return this.get(request.id, undefined, tx);
@@ -593,7 +613,7 @@ export class PurchaseRequestsService {
         },
       });
 
-      const actualFunding = await synchronizeRequestFunding(tx, request.id);
+      const actualFunding = await synchronizeRequestFunding(tx, request.id, { deferCreditShortfall: true });
       await tx.purchaseRequest.update({ where: { id: request.id }, data: { status: actualFunding.canConfirm ? PurchaseRequestStatus.PENDING_PROCUREMENT : PurchaseRequestStatus.PENDING_FUNDS } });
 
       return this.get(request.id, undefined, tx);
@@ -898,7 +918,7 @@ export class PurchaseRequestsService {
       });
     }
 
-    if ((request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS) || request.supplierOrders.length > 0) {
+    if ((request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS && request.status !== PurchaseRequestStatus.PENDING_FINANCE) || request.supplierOrders.length > 0) {
       throw new ConflictException({
         code: 'PURCHASE_REQUEST_ITEMS_NOT_EDITABLE',
         message: 'Purchase request items cannot be edited in its current status',
@@ -976,11 +996,52 @@ export class PurchaseRequestsService {
 
   async confirmAdjusted(id: string, expectedVersion: number, items: ReplacePurchaseRequestItemInput[], transaction?: Prisma.TransactionClient): Promise<ConfirmPurchaseRequestResult> {
     const prepared = await this.prepareReplacement(id, expectedVersion, items);
-    return this.confirm(id, expectedVersion, transaction, prepared.pricedItems);
+    const execute = async (tx: Prisma.TransactionClient) => {
+      const saved = await this.saveReplacement(prepared.request, expectedVersion, prepared.pricedItems,
+        prepared.salesGoodsAmount, prepared.supplyGoodsAmount, prepared.funding, tx);
+      return this.confirm(id, saved.version, tx);
+    };
+    return transaction ? execute(transaction) : this.database.client.$transaction(execute);
   }
 
-  async confirm(id: string, expectedVersion: number, transaction?: Prisma.TransactionClient,
-    adjustedItems?: Awaited<ReturnType<PurchaseRequestsService['prepareReplacement']>>['pricedItems']): Promise<ConfirmPurchaseRequestResult> {
+  async confirm(id: string, expectedVersion: number, transaction?: Prisma.TransactionClient): Promise<ConfirmPurchaseRequestResult> {
+    return this.generateOrders(id, expectedVersion, transaction);
+  }
+  async returnFinance(id: string, expectedVersion: number, reason: string, transaction: Prisma.TransactionClient): Promise<ConfirmPurchaseRequestResult> {
+    throw new ConflictException({ code: 'PROCUREMENT_CONFIRMATION_REQUIRED', message: '独立财务审核已取消，请由采购处理下货单' });
+  }
+
+  async financeReview(id: string, scope?: BusinessScope) {
+    const detail = await this.get(id, scope);
+    const [account, allocations, items] = await Promise.all([
+      this.database.client.storeAccount.findUnique({ where: { storeId: detail.storeId } }),
+      this.database.client.fundingAllocation.findMany({ where: { requestId: id, active: true } }),
+      this.database.client.requestItem.findMany({ where: { requestId: id }, include: { supplier: true } }),
+    ]);
+    const terms = await resolveSettlementTerms(this.database.client, detail.templateId, [...new Set(items.map(item => item.supplierId))], detail.storeId);
+    const groups = new Map<string, { supplierId: string; supplierName: string; mode: string; cycle: string; amount: Decimal }>();
+    for (const item of items) {
+      const term = terms.get(item.supplierId)!;
+      const group = groups.get(item.supplierId) ?? { supplierId: item.supplierId, supplierName: item.supplier.name,
+        mode: item.settlementModeSnapshot ?? term.mode, cycle: item.settlementCycleSnapshot ?? term.cycle, amount: new Decimal(0) };
+      group.amount = group.amount.plus(item.salesLineAmount);
+      groups.set(item.supplierId, group);
+    }
+    const total = (mode: string) => [...groups.values()].filter(group => group.mode === mode).reduce((sum, group) => sum.plus(group.amount), new Decimal(0));
+    const ownStored = allocations.filter(row => row.method === 'STORED_VALUE').reduce((sum, row) => sum.plus(row.netPaid).plus(row.reservedAmount), new Decimal(0));
+    const ownCredit = allocations.filter(row => row.method === 'CREDIT').reduce((sum, row) => sum.plus(row.creditOutstanding).plus(row.netPaid), new Decimal(0));
+    const amountView = (required: Decimal, available: Decimal) => ({ required: required.toFixed(2), available: available.toFixed(2), shortfall: Decimal.max(0, required.minus(available)).toFixed(2) });
+    const stored = amountView(total('STORED_VALUE'), new Decimal(account?.balance ?? 0).minus(account?.reservedBalance ?? 0).plus(ownStored));
+    const credit = amountView(total('CREDIT'), new Decimal(account?.creditLimit ?? 0).minus(account?.creditUsed ?? 0).plus(ownCredit));
+    return { ...detail, funding: { stored, credit, canConfirm: stored.shortfall === '0.00' && credit.shortfall === '0.00' },
+      settlementGroups: [...groups.values()].map(group => ({ ...group, amount: group.amount.toFixed(2) })) };
+  }
+
+  async approveFinance(id: string, expectedVersion: number, transaction?: Prisma.TransactionClient): Promise<ConfirmPurchaseRequestResult> {
+    throw new ConflictException({ code: 'PROCUREMENT_CONFIRMATION_REQUIRED', message: '已改为采购确认生成订单，请由采购处理下货单' });
+  }
+
+  private async generateOrders(id: string, expectedVersion: number, transaction?: Prisma.TransactionClient): Promise<ConfirmPurchaseRequestResult> {
     const client = transaction ?? (this.database.client as Prisma.TransactionClient);
     const request = await client.purchaseRequest.findUnique({
       where: { id },
@@ -1001,15 +1062,7 @@ export class PurchaseRequestsService {
       });
     }
 
-    if (request.status === PurchaseRequestStatus.CONFIRMED || request.supplierOrders.length > 0) {
-      return {
-        requestId: request.id,
-        status: request.status,
-        supplierOrderIds: request.supplierOrders.map((order) => order.id).sort(),
-      };
-    }
-
-    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS) {
+    if (!['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE'].includes(request.status) || request.supplierOrders.length > 0) {
       throw new ConflictException({
         code: 'PURCHASE_REQUEST_NOT_CONFIRMABLE',
         message: 'Purchase request cannot be confirmed in its current status',
@@ -1017,7 +1070,7 @@ export class PurchaseRequestsService {
       });
     }
 
-    const effectiveItems = adjustedItems ?? request.items;
+    const effectiveItems = request.items;
     const supplierGroups = new Map<string, Array<(typeof effectiveItems)[number]>>();
     for (const item of effectiveItems) {
       const group = supplierGroups.get(item.supplierId) ?? [];
@@ -1028,24 +1081,15 @@ export class PurchaseRequestsService {
     const suppliersById = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
 
     const execute = async (tx: Prisma.TransactionClient) => {
-      if (adjustedItems) {
-        await lockPricePublication(tx);
-        await lockCatalog(tx, true);
-        for (const item of adjustedItems) {
-          await requireTransactionUnitsUnchanged(tx, item.productId, item.unitSnapshot);
-          const allowed = await tx.templateItem.findFirst({ where: { templateId: request.templateId, productId: item.productId, isEnabled: true,
-            product: { isActive: true }, suppliers: { some: { supplierId: item.supplierId, supplier: { status: 'ACTIVE', isArchived: false } } } } });
-          const enabled = await tx.supplierProduct.findUnique({ where: { supplierId_productId: { supplierId: item.supplierId, productId: item.productId } }, select: { supplyEnabled: true } });
-          if (!allowed || !enabled?.supplyEnabled) throw new ConflictException({ code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT', message: 'Supplier eligibility changed; preview again' });
-          const price = await effectivePriceVersion(tx, item.productId, item.supplierId, new Date(), request.templateId);
-          if (price?.id !== item.priceVersionId || price?.supplyVersionId !== item.supplyPriceVersionId) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Effective price changed; preview again' });
-        }
+      await lockCatalog(tx, true);
+      for (const item of effectiveItems) {
+        const available = await tx.supplierProduct.findFirst({ where: { supplierId: item.supplierId, productId: item.productId,
+          supplyEnabled: true, product: { isActive: true }, supplier: { status: 'ACTIVE', isArchived: false } } });
+        if (!available) throw new ConflictException({ code: 'SUPPLIER_NOT_ALLOWED_FOR_PRODUCT', message: '商品或供应商已停用，请退回采购调整' });
       }
       await lockFundingRequest(tx, request.storeId, request.id);
       await requireRequestVersion(tx, request.id, expectedVersion);
-      const effectiveSalesGoodsAmount = effectiveItems.reduce((sum, item) => sum.plus(item.salesLineAmount), new Decimal(0));
-      await synchronizeRequestFunding(tx, request.id, { requireFull: true,
-        ...(adjustedItems ? { effectiveItems, effectiveSalesGoodsAmount } : {}) });
+      await synchronizeRequestFunding(tx, request.id, { requireFull: true });
       const snapshotItems = await tx.requestItem.findMany({ where: { requestId: request.id } });
       const createdOrderIds: string[] = [];
 
@@ -1058,9 +1102,9 @@ export class PurchaseRequestsService {
             requestId: request.id,
             storeId: request.storeId,
             supplierId,
-            settlementMode: adjustedItems ? suppliersById.get(supplierId)!.defaultSettlementMode : snapshotItems.find(item => item.supplierId === supplierId)?.settlementModeSnapshot ?? suppliersById.get(supplierId)!.defaultSettlementMode,
+            settlementMode: snapshotItems.find(item => item.supplierId === supplierId)?.settlementModeSnapshot ?? suppliersById.get(supplierId)!.defaultSettlementMode,
             requiresFreightSnapshot: suppliersById.get(supplierId)!.requiresFreight,
-            settlementCycleSnapshot: adjustedItems ? (await resolveSettlementTerms(tx, request.templateId, [supplierId], request.storeId)).get(supplierId)!.cycle : snapshotItems.find(item => item.supplierId === supplierId)?.settlementCycleSnapshot ?? (await resolveSettlementTerms(tx, request.templateId, [supplierId], request.storeId)).get(supplierId)!.cycle,
+            settlementCycleSnapshot: snapshotItems.find(item => item.supplierId === supplierId)?.settlementCycleSnapshot ?? (await resolveSettlementTerms(tx, request.templateId, [supplierId], request.storeId)).get(supplierId)!.cycle,
             status: SupplierOrderStatus.PUSHED,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             pushedAt: new Date(),
@@ -1092,6 +1136,8 @@ export class PurchaseRequestsService {
         data: {
           status: PurchaseRequestStatus.CONFIRMED,
           confirmedAt: new Date(),
+          procurementConfirmedAt: new Date(),
+          financeReturnedReason: null,
           version: { increment: 1 },
         },
       });
@@ -1133,7 +1179,7 @@ export class PurchaseRequestsService {
       };
     }
 
-    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS) {
+    if (request.status !== PurchaseRequestStatus.PENDING_PROCUREMENT && request.status !== PurchaseRequestStatus.PENDING_FUNDS && request.status !== PurchaseRequestStatus.PENDING_FINANCE) {
       throw new ConflictException({
         code: 'PURCHASE_REQUEST_NOT_REJECTABLE',
         message: 'Purchase request cannot be rejected in its current status',
@@ -1173,6 +1219,9 @@ function isStoreScope(type?: string): boolean {
 
 function toPurchaseRequestSummaryView(request: PurchaseRequest): PurchaseRequestSummaryView {
   return {
+    procurementConfirmedAt: request.procurementConfirmedAt?.toISOString() ?? null,
+    financeReviewedAt: request.financeReviewedAt?.toISOString() ?? null,
+    financeReturnedReason: request.financeReturnedReason ?? null,
     storedValueOnReceipt: request.storedValueOnReceipt,
     id: request.id,
     requestNo: request.requestNo,

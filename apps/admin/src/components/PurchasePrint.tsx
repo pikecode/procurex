@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Alert, Button, Modal, Spin } from 'antd';
 import { Printer } from 'lucide-react';
+import { modalWidth } from '../lib/theme';
 import { getSession, request, type User } from '../lib/api';
 import { money } from '../lib/money';
 import { workflowName, workflowTime, type Purchase } from '../lib/workflowTypes';
@@ -46,7 +47,7 @@ export function PurchasePrint({ id, user, onClose }: { id: string; user: User; o
       if (mounted.current && !abort.signal.aborted) { setSheet(undefined); setError((failure as Error).message); }
     } finally { lock.current = false; if (mounted.current) setPrinting(false); }
   }
-  return <Modal title="采购订单打印预览" open getContainer={host} width={850} zIndex={1600} mask={{ closable: false }}
+  return <Modal title="采购订单打印预览" open getContainer={host} width={modalWidth.wide} zIndex={1600} mask={{ closable: false }}
     onCancel={onClose} closable={!printing} keyboard={!printing}
     footer={<><Button disabled={printing} onClick={onClose}>关闭</Button><Button type="primary" icon={<Printer size={16} />} disabled={loading || !sheet} loading={printing} onClick={print}>打印</Button></>}>
     {error && <Alert type="error" showIcon title={error} />}{loading && <Spin />}

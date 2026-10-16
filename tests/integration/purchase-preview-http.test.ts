@@ -3258,6 +3258,15 @@ test('purchase request reject cancels request once per idempotency key', async (
     assert.deepEqual(competing.map(result => result.body.data.funding.stored.reserved).sort(), ['0.00', '120.00']);
     assert.equal(availableStored(await prisma.storeAccount.findUniqueOrThrow({ where: { storeId: store.id } })), '30.00');
     assert.equal(await prisma.accountLedger.count({ where: { requestId: { in: competing.map(result => result.body.data.id) }, direction: 'DEBIT' } }), 0);
+    const pendingStored = competing.find(result => result.body.data.status === 'PENDING_FUNDS')!;
+    const blockedStoredConfirm = await fetch(`${baseUrl}/purchase-requests/${pendingStored.body.data.id}/confirm`, {
+      method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'idempotency-key': 'stored-shortfall-confirm' },
+      body: JSON.stringify({ expectedVersion: pendingStored.body.data.version }),
+    });
+    assert.equal(blockedStoredConfirm.status, 409);
+    assert.equal((await blockedStoredConfirm.json()).code, 'PURCHASE_REQUEST_FUNDING_SHORTFALL');
+    assert.equal(await prisma.supplierOrder.count({ where: { requestId: pendingStored.body.data.id } }), 0);
+    assert.equal(availableStored(await prisma.storeAccount.findUniqueOrThrow({ where: { storeId: store.id } })), '30.00');
 
     await prisma.storeAccount.update({ where: { storeId: store.id }, data: { creditLimit: '300.00' } });
     await prisma.supplier.update({ where: { id: supplier.id }, data: { defaultSettlementMode: 'CREDIT' } });
@@ -3300,9 +3309,19 @@ test('purchase request reject cancels request once per idempotency key', async (
     await prisma.storeAccount.update({ where: { storeId: store.id }, data: { creditLimit: '100.00' } });
     const beforeCreditFailure = await prisma.purchaseRequest.count({ where: { storeId: store.id } });
     const creditFailure = await submit('credit-over-limit');
-    assert.equal(creditFailure.status, 409);
-    assert.equal(creditFailure.body.code, 'CREDIT_LIMIT_EXCEEDED');
-    assert.equal(await prisma.purchaseRequest.count({ where: { storeId: store.id } }), beforeCreditFailure);
+    assert.equal(creditFailure.status, 201);
+    assert.equal(creditFailure.body.data.status, 'PENDING_FUNDS');
+    assert.equal(creditFailure.body.data.funding.stored.shortfall, '0.00');
+    assert.equal(creditFailure.body.data.funding.credit.shortfall, '20.00');
+    assert.equal(await prisma.purchaseRequest.count({ where: { storeId: store.id } }), beforeCreditFailure + 1);
+    const blockedCreditConfirm = await fetch(`${baseUrl}/purchase-requests/${creditFailure.body.data.id}/confirm`, {
+      method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'idempotency-key': 'credit-over-limit-confirm' },
+      body: JSON.stringify({ expectedVersion: creditFailure.body.data.version }),
+    });
+    assert.equal(blockedCreditConfirm.status, 409);
+    assert.equal((await blockedCreditConfirm.json()).code, 'CREDIT_LIMIT_EXCEEDED');
+    assert.equal(await prisma.supplierOrder.count({ where: { requestId: creditFailure.body.data.id } }), 0);
+    assert.equal((await prisma.storeAccount.findUniqueOrThrow({ where: { storeId: store.id } })).creditUsed.toFixed(2), '0.00');
     const mixedSupplier = await prisma.supplier.create({ data: {
       code: `${supplierCode}MIX`, name: 'Mixed Credit Supplier', deliveryMode: DeliveryMode.SELF,
       defaultSettlementMode: SettlementMode.CREDIT, defaultSettlementCycle: 'MONTHLY',
@@ -3329,9 +3348,20 @@ test('purchase request reject cancels request once per idempotency key', async (
       return { status: response.status, body: await response.json() };
     };
     const mixedFailure = await submitMixed('mixed-credit-over-limit');
-    assert.equal(mixedFailure.status, 409);
-    assert.equal(mixedFailure.body.code, 'CREDIT_LIMIT_EXCEEDED');
-    assert.equal(await prisma.purchaseRequest.count({ where: { storeId: store.id } }), beforeCreditFailure);
+    assert.equal(mixedFailure.status, 201);
+    assert.equal(mixedFailure.body.data.status, 'PENDING_FUNDS');
+    assert.equal(await prisma.purchaseRequest.count({ where: { storeId: store.id } }), beforeCreditFailure + 2);
+    const blockedMixedConfirm = await fetch(`${baseUrl}/purchase-requests/${mixedFailure.body.data.id}/confirm`, {
+      method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'idempotency-key': 'mixed-over-limit-confirm' },
+      body: JSON.stringify({ expectedVersion: mixedFailure.body.data.version }),
+    });
+    assert.equal(blockedMixedConfirm.status, 409);
+    assert.equal(await prisma.supplierOrder.count({ where: { requestId: mixedFailure.body.data.id } }), 0);
+    const cancelPendingMixed = await fetch(`${baseUrl}/purchase-requests/${mixedFailure.body.data.id}/reject`, {
+      method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'idempotency-key': 'mixed-pending-cancel' },
+      body: JSON.stringify({ expectedVersion: mixedFailure.body.data.version, reason: 'Cancel pending mixed request' }),
+    });
+    assert.equal(cancelPendingMixed.status, 201);
     assert.equal(availableStored(await prisma.storeAccount.findUniqueOrThrow({ where: { storeId: store.id } })), '150.00');
     await prisma.storeAccount.update({ where: { storeId: store.id }, data: { creditLimit: '300.00' } });
     const mixedSuccess = await submitMixed('mixed-funding-success');
@@ -3357,7 +3387,7 @@ test('purchase request reject cancels request once per idempotency key', async (
       supplierOrderId: freightOrder.id, amount: '35.00', reason: 'Approved integration freight fixture', status: 'CONFIRMED', confirmedAt: new Date(),
     } });
     const shipmentService = new SupplierOrdersService({ client: prisma } as never);
-    const freightInput = { freight: '35.00', freightConfirmationId: approvedFreight.id, items: [
+    const freightInput = { freight: '35.00', freightConfirmationId: approvedFreight.id, note: '本次少发两件，验证运费资金校验', items: [
       { orderItemId: freightItem.id, shipQuantity: '8', permanentlyReduceQuantity: '0' },
     ] };
     await assert.rejects(shipmentService.createShipment(freightOrder.id, freightOrder.version, freightInput),
@@ -3388,7 +3418,7 @@ test('purchase request reject cancels request once per idempotency key', async (
     const creditFreightApproval = await prisma.freightConfirmation.create({ data: {
       supplierOrderId: creditFreightOrder.id, amount: '35.00', reason: 'Approved credit freight fixture', status: 'CONFIRMED', confirmedAt: new Date(),
     } });
-    const creditFreightInput = { freight: '35.00', freightConfirmationId: creditFreightApproval.id, items: [
+    const creditFreightInput = { freight: '35.00', freightConfirmationId: creditFreightApproval.id, note: '本次少发两件，验证挂账资金校验', items: [
       { orderItemId: creditFreightItem.id, shipQuantity: '8', permanentlyReduceQuantity: '2' },
     ] };
     await assert.rejects(shipmentService.createShipment(creditFreightOrder.id, creditFreightOrder.version, creditFreightInput),
@@ -3400,6 +3430,10 @@ test('purchase request reject cancels request once per idempotency key', async (
     const creditFreightAccount = await prisma.storeAccount.findUniqueOrThrow({ where: { storeId: store.id } });
     assert.deepEqual([availableStored(creditFreightAccount), creditFreightAccount.creditUsed.toFixed(2)], ['19.00', '131.00']);
     assert.equal(await prisma.accountLedger.count({ where: { requestId: creditFreightOrder.requestId } }), 0);
+    await prisma.storeAccount.update({ where: { storeId: store.id }, data: { creditLimit: '300.00' } });
+    const recoveredCreditOrder = await confirmTerms(creditFailure, 'credit-funded-confirm');
+    assert.equal(recoveredCreditOrder.requestId, creditFailure.body.data.id);
+    assert.equal((await prisma.storeAccount.findUniqueOrThrow({ where: { storeId: store.id } })).creditUsed.toFixed(2), '251.00');
     const commands = await prisma.commandRecord.findMany({
       where: { actorUserId: user.id, action: 'purchase-request.reject', idempotencyKey: 'reject-request-once' },
     });

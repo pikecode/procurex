@@ -13,7 +13,7 @@ Page({
     const role = user.roles.includes('PURCHASE_FOLLOWER') ? 'PURCHASE_FOLLOWER' : user.roles.includes('REGION_FINANCE') ? 'REGION_FINANCE' : 'REGION_MANAGER';
     if (this.data.user.id !== user.id || JSON.stringify(this.data.user.scope) !== JSON.stringify(user.scope) || JSON.stringify(this.data.user.roles) !== JSON.stringify(user.roles)) this.setData({ stores: [], storeOptions: [], storeIndex: 0, search: '', rows: [], visibleRows: [], tasks: [],
       selected: null, report: null, range: view.monthRange(), book: 'company', activeView: role === 'PURCHASE_FOLLOWER' ? 'tasks' : role === 'REGION_FINANCE' ? 'books' : 'orders' });
-    this.setData({ user, roleText: roles[role], canConfirm: role === 'PURCHASE_FOLLOWER', selected: null, detailing: false });
+    this.setData({ user, roleText: roles[role], canFinanceReview: role === 'REGION_FINANCE', canConfirm: role === 'PURCHASE_FOLLOWER', selected: null, detailing: false });
     this.syncCommand();
     return this.loadWork();
   },
@@ -49,6 +49,7 @@ Page({
     return this.loadWork();
   },
   onSearch(event) { this.setData({ search: event.detail.value }); this.filterRows(); },
+  openFinanceReview() { if (!this.busy()) wx.navigateTo({ url: '/pages/finance-review/index' }); },
   onDate(event) {
     const field = event.currentTarget.dataset.field;
     if (!this.busy() && ['from', 'to'].includes(field)) { this.invalidate(); this.setData({ range: { ...this.data.range, [field]: event.detail.value }, report: null, loading: false }); }
@@ -59,9 +60,9 @@ Page({
   },
   filterRows(limit = 10) {
     const search = this.data.search.trim().toLowerCase();
-    const source = this.data.activeView === 'tasks' ? this.data.rows.filter(row => row.status === 'PENDING_PROCUREMENT') : this.data.rows;
+    const source = this.data.activeView === 'tasks' ? this.data.rows.filter(row => ['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE'].includes(row.status)) : this.data.rows;
     const rows = source.filter(row => [row.title, row.subtitle, row.requestNo].some(value => String(value || '').toLowerCase().includes(search)));
-    this.setData({ visibleRows: rows.slice(0, limit), rowLimit: limit, moreRows: rows.length > limit, tasks: this.data.rows.filter(row => row.status === 'PENDING_PROCUREMENT') });
+    this.setData({ visibleRows: rows.slice(0, limit), rowLimit: limit, moreRows: rows.length > limit, tasks: this.data.rows.filter(row => ['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE'].includes(row.status)) });
   },
   nextRows() { this.filterRows((this.data.rowLimit || 10) + 10); },
   async loadWork() {
@@ -112,8 +113,10 @@ Page({
     this.setData({ selected: null, selectedKind: kind, detailing: true, error: '' });
     try {
       const result = await api.request(`/${kind === 'order' ? 'purchase-requests' : books[kind]}/${encodeURIComponent(row.id)}`);
+      const confirmationFunding = kind === 'order' && this.data.canConfirm && ['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE'].includes(result.status)
+        ? (await api.request(`/purchase-requests/${row.id}/confirmation-preview`)).funding : null;
       if (sequence !== this.detailSequence || api.currentUser()?.id !== actor) return;
-      this.setData({ selected: { ...result, title: row.title, subtitle: row.subtitle, dateText: row.dateText,
+      this.setData({ confirmationFunding, selected: { ...result, title: row.title, subtitle: row.subtitle, dateText: row.dateText,
         lines: (result.lines || []).map(line => ({ ...line, dateText: view.dateText(line.firstShippedAt) })) } });
     } catch (error) { if (sequence === this.detailSequence && api.currentUser()?.id === actor) this.setData({ error: error.message }); }
     finally { if (sequence === this.detailSequence && api.currentUser()?.id === actor) this.setData({ detailing: false }); }
@@ -121,20 +124,25 @@ Page({
   backToList() { if (!this.busy()) { this.detailSequence = (this.detailSequence || 0) + 1; this.setData({ selected: null, detailing: false, error: '' }); } },
   async submitDecision(event) {
     const action = event.currentTarget.dataset.action, item = this.data.selected;
-    if (this.busy() || !this.data.canConfirm || this.data.selectedKind !== 'order' || item?.status !== 'PENDING_PROCUREMENT' || this.data.pendingCommand || this.data.blockedCommand || !['confirm', 'reject'].includes(action)) return;
+    if (this.busy() || !this.data.canConfirm || this.data.selectedKind !== 'order' || !['PENDING_PROCUREMENT', 'PENDING_FUNDS', 'PENDING_FINANCE'].includes(item?.status) || this.data.pendingCommand || this.data.blockedCommand || !['confirm', 'reject'].includes(action)) return;
     const actor = this.data.user.id, sequence = this.sequence;
     this.setData({ saving: true, error: '' });
     try {
-      const decision = await new Promise(resolve => wx.showModal({ title: action === 'confirm' ? '确认并推送订货' : '取消订货申请',
+      const decision = await new Promise(resolve => wx.showModal({ title: action === 'confirm' ? '确认并生成订单' : '取消订货申请',
         content: action === 'confirm' ? `${item.title} · ${item.requestNo}` : '', editable: action === 'reject', placeholderText: '填写取消原因',
         success: resolve, fail: () => resolve({ confirm: false }) }));
       if (!decision.confirm || !this.active(sequence, actor)) return;
+      if (action === 'confirm') {
+        const review = await api.request(`/purchase-requests/${item.id}/confirmation-preview`);
+        this.setData({ confirmationFunding: review.funding });
+        if (!review.funding?.canConfirm) throw new Error(`资金不足：待充值 ¥${review.funding?.stored?.shortfall || '0.00'}，待补挂账额度 ¥${review.funding?.credit?.shortfall || '0.00'}`);
+      }
       const reason = String(decision.content || '').trim();
       if (action === 'reject' && !reason) throw new Error('请填写取消原因');
       await api.roleCommand('purchaser', `/purchase-requests/${item.id}/${action}`, { data: { expectedVersion: item.version, ...(reason ? { reason } : {}) }, header: { 'idempotency-key': `mini-follower-${action}-${Date.now()}` } });
       if (!this.active(sequence, actor)) return;
       this.setData({ selected: null });
-      wx.showToast({ title: action === 'confirm' ? '已确认订货' : '已取消订货', icon: 'success' });
+      wx.showToast({ title: action === 'confirm' ? '已生成供应商订单' : '已取消订货', icon: 'success' });
     } catch (error) { if (this.active(sequence, actor)) this.setData({ error: error.message }); }
     finally { this.setData({ saving: false }); if (this.active(sequence, actor)) this.syncCommand(); }
     if (this.active(sequence, actor) && !this.data.error) return this.loadWork();

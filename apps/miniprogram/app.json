@@ -3,11 +3,13 @@
     "pages/login/index",
     "pages/test-workbench/index",
     "pages/store/index",
+    "pages/store-request-edit/index",
     "pages/supplier/index",
     "pages/purchaser/index",
     "pages/profile/index",
     "pages/supplier-products/index",
     "pages/finance/index",
+    "pages/finance-review/index",
     "pages/region/index",
     "pages/finance-accounts/index"
   ],
