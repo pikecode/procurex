@@ -30,6 +30,11 @@ Page({
     activeView: 'order',
     recordType: 'orders',
     sourceOrderReturn: false,
+    formalOrderOpen: false,
+    receiptOrigin: null,
+    receiptBackText: '‹ 返回待收货批次',
+    receiptException: false,
+    receiptNote: '',
     orderRevision: 0,
     orderStep: 'catalog',
     store: {},
@@ -84,6 +89,8 @@ Page({
     shortReceivedQuantity: '0',
     shipmentTodos: [],
     discrepancies: [],
+    visibleReceiptDifferences: [],
+    receiptDifferencesOnly: false,
     resolvingDiscrepancy: false,
     reportRange: {
       from: '2026-09-01',
@@ -111,6 +118,7 @@ Page({
     const scopedStoreId = user.scope && user.scope.storeId;
     if (this.data.user.id !== user.id || this.data.storeId !== scopedStoreId) {
       this.sourceOrderId = '';
+      this.setData({ formalOrderOpen: false, receiptOrigin: null, receiptException: false, discrepancies: [], visibleReceiptDifferences: [], receiptDifferencesOnly: false });
       this.setData({ recordType: 'orders', sourceOrderReturn: false });
       this.catalogRequestSequence = (this.catalogRequestSequence || 0) + 1;
       this.receiptUploadSequence = (this.receiptUploadSequence || 0) + 1;
@@ -129,7 +137,8 @@ Page({
     const saved = wx.getStorageSync && wx.getStorageSync(`procurex-order-${user.id}-${scopedStoreId}`);
     if (saved && saved.key && saved.body && saved.body.storeId === scopedStoreId) this.setData({ pendingOrder: saved, orderStep: 'confirm' });
     const receipt = wx.getStorageSync && wx.getStorageSync(`procurex-receipt-${user.id}-${scopedStoreId}`);
-    if (receipt && receipt.key && receipt.shipmentId && receipt.body) this.setData({ pendingReceipt: receipt, activeView: 'receive' });
+    if (receipt && receipt.key && receipt.shipmentId && receipt.body) this.setData({ pendingReceipt: receipt, activeView: 'receive',
+      receiptOrigin: receipt.origin || null, receiptBackText: receipt.origin?.kind === 'order' ? '‹ 返回订单详情' : receipt.origin?.kind === 'request' ? '‹ 返回下货单详情' : '‹ 返回待收货批次' });
     this.refreshCatalogView();
     this.loadWork();
     if (this.requestToRefresh) {
@@ -148,7 +157,7 @@ Page({
       this.sourceOrderId = '';
       this.statementSequence = (this.statementSequence || 0) + 1;
       this.setData({ selectedRequest: null, selectedRequestId: '', selectedShipment: null, shipmentId: '',
-        receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false, selectedStatement: null, statementLoading: false });
+        receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false, receiptOrigin: null, receiptResult: null, receiptDifferencesOnly: false, visibleReceiptDifferences: this.data.discrepancies, selectedStatement: null, statementLoading: false });
     }
     this.setData({ activeView: view, error: '', sourceOrderReturn: false });
   },
@@ -171,7 +180,24 @@ Page({
     this.setData({ recordType: 'requests', sourceOrderReturn: true });
     this.selectRequest({ currentTarget: { dataset: { id: event.detail.id } } });
   },
-  openOrderReceipt(event) { this.selectShipment({ currentTarget: { dataset: { id: event.detail.id } } }); },
+  orderDetailChanged(event) { const open = Boolean(event.detail.open); if (open !== this.data.formalOrderOpen) this.setData({ formalOrderOpen: open, ...(!open ? { receiptResult: null } : {}) }); },
+  openOrderDifferences(event) {
+    if (!this.data.canWrite) return;
+    const orderId = event.detail.orderId;
+    this.setData({ activeView: 'receive', receiptOrigin: { kind: 'order', orderId }, receiptBackText: '‹ 返回订单详情',
+      receiptDifferencesOnly: true, visibleReceiptDifferences: this.data.discrepancies.filter(item => item.supplierOrderId === orderId), selectedShipment: null, receiptResult: null, error: '' });
+    if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+  },
+  openOrderReceipt(event) { return this.selectShipment({ currentTarget: { dataset: { id: event.detail.id, orderId: event.detail.orderId, origin: 'order' } } }); },
+  openReceiptOrder() {
+    if (this.data.receiving || this.data.receiptUploading || this.data.pendingReceipt) return;
+    const id = this.data.selectedShipment?.supplierOrderId || this.data.receiptResult?.supplierOrderId || this.data.receiptOrigin?.orderId;
+    if (!id) return;
+    this.setData({ activeView: 'orders', recordType: 'orders', selectedRequest: null, selectedRequestId: '', sourceOrderReturn: false,
+      selectedShipment: null, shipmentId: '', receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false, receiptOrigin: null, receiptDifferencesOnly: false, error: '' });
+    const open = () => this.selectComponent?.('#formal-orders')?.open({ currentTarget: { dataset: { id } } });
+    if (wx.nextTick) wx.nextTick(open); else open();
+  },
   async loadStoreProfile() {
     const storeId = this.data.storeId;
     if (!storeId) return;
@@ -250,7 +276,18 @@ Page({
       if (wx.nextTick) wx.nextTick(open); else open();
     }
   },
-  closeShipment() { if (!this.data.receiving && !this.data.pendingReceipt && !this.data.receiptUploading) this.setData({ selectedShipment: null, shipmentId: '', receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false }); },
+  closeShipment() {
+    if (this.data.receiving || this.data.pendingReceipt || this.data.receiptUploading) return;
+    const origin = this.data.receiptOrigin;
+    if (origin?.kind === 'order') { this.openReceiptOrder(); return; }
+    const refreshRequest = origin?.kind === 'request' && this.data.receiptResult;
+    const hadDetail = Boolean(this.data.selectedShipment || this.data.shipmentLoading || this.data.receiptResult);
+    this.setData({ selectedShipment: null, shipmentId: '', shipmentLoading: false, receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false, receiptResult: null, receiptException: false, receiptOrigin: null, error: '' });
+    if (origin?.kind === 'request') this.setData({ activeView: 'orders', recordType: 'requests' });
+    else if (!hadDetail) this.changeView({ currentTarget: { dataset: { view: 'orders' } } });
+    if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+    if (refreshRequest && origin.requestId) return this.selectRequest({ currentTarget: { dataset: { id: origin.requestId } } });
+  },
 
   updateCart(product, value) {
     if (!this.data.canWrite || this.data.templateMissing || this.data.submitting || this.data.previewing || this.data.pendingOrder) return;
@@ -313,14 +350,22 @@ Page({
   async selectShipment(event) {
     if (this.data.receiving || this.data.pendingReceipt || this.data.receiptUploading) return;
     const shipmentId = event.currentTarget.dataset.id;
+    const source = event.currentTarget.dataset;
+    const origin = source.origin === 'order' ? { kind: 'order', orderId: source.orderId }
+      : this.data.activeView === 'orders' && this.data.selectedRequest ? { kind: 'request', requestId: this.data.selectedRequest.id }
+        : { kind: 'reminders' };
     this.receiptUploadSequence = (this.receiptUploadSequence || 0) + 1;
-    this.setData({ shipmentId, selectedShipment: null, receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false, shipmentLoading: true, error: '' });
+    this.setData({ activeView: 'receive', shipmentId, selectedShipment: null, receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false,
+      receiptOrigin: origin, receiptBackText: origin.kind === 'order' ? '‹ 返回订单详情' : origin.kind === 'request' ? '‹ 返回下货单详情' : '‹ 返回待收货批次',
+      receiptResult: null, receiptException: false, receiptNote: '', receiptDifferencesOnly: false, shipmentLoading: true, error: '' });
     try {
       const selectedShipment = await api.request(`/shipments/${this.data.shipmentId}`);
       if (this.data.shipmentId !== shipmentId) return;
-      this.setData({ activeView: 'receive', selectedShipment: { ...selectedShipment, shippedDate: storeView.dateText(selectedShipment.shippedAt), canReceive: selectedShipment.items.some(item => !item.receiptLocked) },
+      this.setData({ activeView: 'receive', selectedShipment: { ...selectedShipment, shippedDate: storeView.dateText(selectedShipment.shippedAt), canReceive: !selectedShipment.receiptExceptionStatus && selectedShipment.items.some(item => !item.receiptLocked) },
         receiptItems: selectedShipment.items.map(item => ({ ...item, receivedQuantity: item.currentReceivedQuantity == null ? item.shippedQuantity : item.currentReceivedQuantity })) });
+      if (origin.kind === 'order') this.setData({ receiptOrigin: { ...origin, orderId: selectedShipment.supplierOrderId || origin.orderId } });
       this.refreshReceiptSummary();
+      if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 0 });
     } catch (error) {
       if (this.data.shipmentId === shipmentId) this.setData({ error: error.message });
     } finally {
@@ -404,6 +449,7 @@ Page({
     });
     const invalid = receiptItems.some(item => !item.receiptLocked && item.quantityError);
     this.setData({ receiptItems,
+      receiptException: this.data.receiptException || receiptItems.some(item => !item.receiptLocked && Number(item.missingQuantity) > 0),
       receiptDifferenceCount: receiptItems.filter(item => !item.receiptLocked && !item.quantityError && Number(item.missingQuantity) > 0).length,
       receiptQuantityInvalid: invalid,
       receiptHasDifference: receiptItems.some(item => !item.receiptLocked && Number(item.receivedQuantity) !== Number(item.shippedQuantity)),
@@ -412,8 +458,13 @@ Page({
 
   fillReceipt() {
     if (this.data.receiving || this.data.pendingReceipt) return;
-    this.setData({ receiptItems: this.data.receiptItems.map(item => item.receiptLocked ? item : { ...item, receivedQuantity: item.shippedQuantity }) });
+    this.setData({ receiptException: false, receiptItems: this.data.receiptItems.map(item => item.receiptLocked ? item : { ...item, receivedQuantity: item.shippedQuantity }) });
     this.refreshReceiptSummary();
+  },
+
+  markReceiptException() {
+    if (!this.data.canWrite || this.data.receiving || this.data.pendingReceipt || !this.data.selectedShipment?.canReceive) return;
+    this.setData({ receiptException: true, error: '' });
   },
 
   addToCart() {
@@ -595,25 +646,12 @@ Page({
   async loadShipments(toggleLoading = true) {
     if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
-      const data = await api.request('/notifications');
-      const notifications = data.notifications || [];
-      const shipmentTodos = notifications
-        .filter((item) => item.payload && item.payload.shipmentId && (item.payload.type === 'SHIPMENT_CREATED' || (item.payload.type === 'DISCREPANCY_RESOLVED' && item.payload.action === 'RETURN')))
-        .map((item) => ({
-          id: item.payload.shipmentId,
-          shipmentNo: item.payload.shipmentNo || item.payload.shipmentId,
-          supplierOrderId: item.payload.supplierOrderId,
-          returned: item.payload.type === 'DISCREPANCY_RESOLVED',
-          title: item.title,
-          label: `${item.payload.shipmentNo || '发货单'} · ${item.title}`,
-          createdAt: item.createdAt, createdDate: storeView.dateText(item.createdAt)
-        }))
-        .filter((item, index, items) => items.findIndex(value => value.id === item.id) === index).slice(0, 20);
-      const current = await Promise.all(shipmentTodos.map(async item => {
-        const shipment = await api.request(`/shipments/${item.id}`);
-        return !shipment.currentReceiptRevision || (item.returned && shipment.items.some(line => !line.receiptLocked)) ? item : null;
-      }));
-      this.setData({ shipmentTodos: current.filter(Boolean) });
+      const actor = this.data.user.id, storeId = this.data.storeId;
+      const rows = await api.request('/shipments/pending-receipts');
+      if (actor !== this.data.user.id || storeId !== this.data.storeId) return;
+      this.setData({ shipmentTodos: (Array.isArray(rows) ? rows : []).map(item => ({ ...item,
+        title: `${item.supplierName || '配送供应商'} · ${item.returned ? '重新核对收货' : '待核对收货'}`,
+        createdDate: storeView.dateText(item.shippedAt) })) });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -623,10 +661,14 @@ Page({
 
   async loadDiscrepancies(toggleLoading = true) {
     if (!this.data.canWrite) return;
+    const actor = this.data.user.id, storeId = this.data.storeId;
     if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
       const rows = await api.request('/discrepancies');
-      this.setData({ discrepancies: Array.isArray(rows) ? rows : [] });
+      if (actor !== this.data.user.id || storeId !== this.data.storeId) return;
+      const discrepancies = Array.isArray(rows) ? rows : [];
+      this.setData({ discrepancies, visibleReceiptDifferences: this.data.receiptDifferencesOnly
+        ? discrepancies.filter(item => item.supplierOrderId === this.data.receiptOrigin?.orderId) : discrepancies });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -757,6 +799,7 @@ Page({
       return;
     }
 
+    let openCompletedOrder = false;
     this.setData({ receiving: true, error: '', receiptResult: null });
     try {
       const shipment = this.data.selectedShipment;
@@ -764,14 +807,17 @@ Page({
         shipmentItemId: item.id,
         receivedQuantity: mode === 'FULL' && !item.receiptLocked ? item.shippedQuantity : quantity.validate(item.receivedQuantity, { allowZero: true, max: item.shippedQuantity })
       }));
+      if (!this.data.pendingReceipt && mode === 'SHORT' && !this.data.receiptNote.trim()) throw new Error('请填写异常收货备注');
       if (!this.data.pendingReceipt && shipment.currentReceiptRevision > 0 && this.data.receiptItems.every(item => {
         const next = items.find(line => line.shipmentItemId === item.id);
         return item.currentReceivedQuantity != null && Number(next.receivedQuantity) === Number(item.currentReceivedQuantity);
       })) throw new Error('收货数量未变化，无需重复提交');
       if (!this.data.pendingReceipt) {
-        if (!this.data.receiptEvidence.length || this.data.receiptEvidence.some(file => file.status !== 'READY' || !file.id)) throw new Error('请先完成收货凭证上传');
+        if (mode === 'SHORT' && !this.data.receiptEvidence.length) throw new Error('异常收货请上传收货凭证');
+        if (this.data.receiptEvidence.some(file => file.status !== 'READY' || !file.id)) throw new Error('请先完成收货凭证上传');
         const pendingReceipt = { key: `mini-store-receipt-${mode}-${Date.now()}`, mode, shipmentId: this.data.shipmentId, shipmentNo: shipment.shipmentNo,
-          body: { expectedOrderVersion: shipment.supplierOrderVersion, expectedReceiptRevision: shipment.currentReceiptRevision, items, evidenceFileIds: this.data.receiptEvidence.map(file => file.id) } };
+          supplierOrderId: shipment.supplierOrderId, deliveryState: shipment.deliveryState, origin: this.data.receiptOrigin,
+          body: { expectedOrderVersion: shipment.supplierOrderVersion, expectedReceiptRevision: shipment.currentReceiptRevision, items, ...(mode === 'SHORT' ? { hasException: true, note: this.data.receiptNote.trim() } : {}), ...(this.data.receiptEvidence.length ? { evidenceFileIds: this.data.receiptEvidence.map(file => file.id) } : {}) } };
         this.setData({ pendingReceipt }); this.savePending('receipt', pendingReceipt);
       }
       const pending = this.data.pendingReceipt;
@@ -785,17 +831,22 @@ Page({
       this.setData({
         shipmentId: '', selectedShipment: null, receiptItems: [], receiptEvidence: [], receiptEvidenceReady: false, pendingReceipt: null,
         receiptResult: {
+          supplierOrderId: pending.supplierOrderId, deliveryState: pending.deliveryState,
           title: receipt.receiptNo || receipt.id,
           status: mode === 'SHORT' ? 'SHORT_RECEIVED' : 'RECEIVED',
-          detail: `发货单 ${pending.shipmentNo} 已提交第 ${receipt.revision} 版收货`
+          detail: pending.deliveryState
+            ? mode === 'SHORT' ? '异常收货已提交，等待供应商处理。' : '本批实收已登记，请核对整单收货进度。'
+            : `发货单 ${pending.shipmentNo} 已提交第 ${receipt.revision} 版收货`
         }
       });
       await this.loadWork();
+      openCompletedOrder = Boolean(pending.supplierOrderId);
     } catch (error) {
       if (!error.uncertain) { this.savePending('receipt', null); this.setData({ pendingReceipt: null }); }
       this.setData({ error: error.uncertain ? '收货结果尚未确认，请核对提交结果，勿重复提交' : error.message });
     } finally {
       this.setData({ receiving: false });
     }
+    if (openCompletedOrder) this.openReceiptOrder();
   }
 });

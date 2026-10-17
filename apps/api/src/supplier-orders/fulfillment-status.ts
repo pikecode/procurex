@@ -6,6 +6,7 @@ import {
 } from '../../../../packages/backend/generated/prisma/enums.js';
 
 export type FulfillmentStatusItem = {
+  closedQuantity?: Decimal.Value;
   quantity: Decimal;
   shippedQuantity: Decimal;
   receivedQuantity: Decimal;
@@ -18,7 +19,8 @@ export type FulfillmentStatusItem = {
   }>;
 };
 
-export function resolveSupplierOrderFulfillmentStatus(items: FulfillmentStatusItem[]): FulfillmentStatus {
+export function resolveSupplierOrderFulfillmentStatus(items: FulfillmentStatusItem[], deliveryState?: string | null): FulfillmentStatus {
+  if (deliveryState && deliveryState !== 'COMPLETED') return deliveryState === 'IN_PROGRESS' || deliveryState === 'REPLENISHING' ? FulfillmentStatus.PARTIAL_SHIPPED : FulfillmentStatus.SHIPPED;
   const allComplete = items.every((item) => {
     const permanentlyReduced = item.shipmentItems.reduce((sum, shipmentItem) => sum.plus(shipmentItem.permanentlyReduced), new Decimal(0));
     const acceptedMissing = item.discrepancies
@@ -38,7 +40,7 @@ export function resolveSupplierOrderFulfillmentStatus(items: FulfillmentStatusIt
         new Decimal(discrepancy.replenishmentGap.remainingQuantity).gt(0)
       );
     });
-    const effectiveTarget = Decimal.max(new Decimal(0), new Decimal(item.quantity).minus(permanentlyReduced).minus(acceptedMissing));
+    const effectiveTarget = Decimal.max(new Decimal(0), new Decimal(item.quantity).minus(permanentlyReduced).minus(acceptedMissing).minus(item.closedQuantity ?? 0));
 
     return !hasBlockingDiscrepancy && new Decimal(item.receivedQuantity).gte(effectiveTarget);
   });
@@ -51,11 +53,11 @@ export function resolveSupplierOrderFulfillmentStatus(items: FulfillmentStatusIt
   return anyShipped ? FulfillmentStatus.PARTIAL_SHIPPED : FulfillmentStatus.PENDING;
 }
 
-export function effectiveOrderItemQuantity(item: Pick<FulfillmentStatusItem, 'quantity' | 'shipmentItems' | 'discrepancies'>): Decimal {
+export function effectiveOrderItemQuantity(item: Pick<FulfillmentStatusItem, 'quantity' | 'shipmentItems' | 'discrepancies' | 'closedQuantity'>): Decimal {
   const reduced = item.shipmentItems.reduce((sum, shipment) => sum.plus(shipment.permanentlyReduced), new Decimal(0));
   const accepted = item.discrepancies.filter(discrepancy => discrepancy.status === DiscrepancyStatus.RESOLVED && !discrepancy.returnRecord)
     .reduce((sum, discrepancy) => sum.plus(discrepancy.missingQuantity), new Decimal(0));
-  return Decimal.max(0, new Decimal(item.quantity).minus(reduced).minus(accepted));
+  return Decimal.max(0, new Decimal(item.quantity).minus(reduced).minus(accepted).minus(item.closedQuantity ?? 0));
 }
 
 export function remainingNormalShipmentQuantity(item: {

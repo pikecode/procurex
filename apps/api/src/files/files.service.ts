@@ -15,8 +15,8 @@ export class FilesService {
 
   async create(ownerId: string, input: { filename: string; mimeType: string; sizeBytes: number; purpose: string }, roles?: string[]) {
     if (roles && ['RECHARGE', 'CLEARING'].includes(input.purpose) && !roles.some(role => ['ADMIN', 'HQ_FINANCE'].includes(role))) throw new ForbiddenException({ code: 'FILE_PURPOSE_FORBIDDEN', message: 'Account document evidence requires central finance' });
-    if (roles && !(input.purpose === 'PRODUCT' ? roles.some(role => ['ADMIN', 'PURCHASER'].includes(role)) : input.purpose === 'SHIPMENT_ADJUSTMENT' ? roles.some(role => ['ADMIN', 'SUPPLIER'].includes(role)) : roles.some(role => ['ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE'].includes(role)))) throw new ForbiddenException({ code: 'FILE_PURPOSE_FORBIDDEN', message: 'File purpose is not allowed for the current role' });
-    if (!['PAYMENT', 'RECEIPT', 'PRODUCT', 'RECHARGE', 'CLEARING', 'SHIPMENT_ADJUSTMENT'].includes(input.purpose) || typeof input.filename !== 'string' || !input.filename.trim() || !mimeTypes.has(input.mimeType) || (['RECEIPT', 'PRODUCT', 'RECHARGE', 'CLEARING', 'SHIPMENT_ADJUSTMENT'].includes(input.purpose) && !input.mimeType.startsWith('image/')) || !Number.isInteger(input.sizeBytes) || input.sizeBytes < 1 || input.sizeBytes > (input.purpose === 'PRODUCT' ? 2 * 1024 * 1024 : MAX_BYTES) || input.filename.length > 255) {
+    if (roles && !(input.purpose === 'PRODUCT' ? roles.some(role => ['ADMIN', 'PURCHASER'].includes(role)) : ['SHIPMENT_ADJUSTMENT', 'RECEIPT_EXCEPTION_REPLY'].includes(input.purpose) ? roles.some(role => ['ADMIN', 'SUPPLIER'].includes(role)) : roles.some(role => ['ADMIN', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE'].includes(role)))) throw new ForbiddenException({ code: 'FILE_PURPOSE_FORBIDDEN', message: 'File purpose is not allowed for the current role' });
+    if (!['PAYMENT', 'RECEIPT', 'PRODUCT', 'RECHARGE', 'CLEARING', 'SHIPMENT_ADJUSTMENT', 'RECEIPT_EXCEPTION_REPLY'].includes(input.purpose) || typeof input.filename !== 'string' || !input.filename.trim() || !mimeTypes.has(input.mimeType) || (['RECEIPT', 'PRODUCT', 'RECHARGE', 'CLEARING', 'SHIPMENT_ADJUSTMENT', 'RECEIPT_EXCEPTION_REPLY'].includes(input.purpose) && !input.mimeType.startsWith('image/')) || !Number.isInteger(input.sizeBytes) || input.sizeBytes < 1 || input.sizeBytes > (input.purpose === 'PRODUCT' ? 2 * 1024 * 1024 : MAX_BYTES) || input.filename.length > 255) {
       throw new ConflictException({ code: 'FILE_METADATA_INVALID', message: 'Evidence must be a supported file no larger than 10 MiB; receipt evidence requires JPEG or PNG' });
     }
     await this.removeExpiredUploads();
@@ -64,10 +64,10 @@ export class FilesService {
 
   async download(ownerId: string, id: string, scope?: BusinessScope, roles: string[] = []) {
     const storeIds = isCompanyUser({ roles }) ? undefined : assignedStoreIds(scope);
-    const file = await this.database.client.fileObject.findFirst({ where: { id, status: 'READY' }, include: { payment: { select: { storeId: true, supplierId: true, direction: true } }, receipt: { select: { shipment: { select: { supplierOrder: { select: { storeId: true, supplierId: true } } } } } }, shipmentRevision: { select: { shipment: { select: { supplierOrder: { select: { storeId: true, supplierId: true } } } } } }, recharge: { select: { storeId: true } }, clearing: { select: { storeId: true } } } });
+    const file = await this.database.client.fileObject.findFirst({ where: { id, status: 'READY' }, include: { receiptExceptionReply: { select: { receipt: { select: { shipment: { select: { supplierOrder: { select: { storeId: true, supplierId: true } } } } } } } }, payment: { select: { storeId: true, supplierId: true, direction: true } }, receipt: { select: { shipment: { select: { supplierOrder: { select: { storeId: true, supplierId: true } } } } } }, shipmentRevision: { select: { shipment: { select: { supplierOrder: { select: { storeId: true, supplierId: true } } } } } }, recharge: { select: { storeId: true } }, clearing: { select: { storeId: true } } } });
     if (!file) throw new NotFoundException();
     const accountDocument = file.recharge ?? file.clearing;
-    const document = file.payment ?? file.receipt?.shipment.supplierOrder ?? file.shipmentRevision?.shipment.supplierOrder;
+    const document = file.payment ?? file.receipt?.shipment.supplierOrder ?? file.shipmentRevision?.shipment.supplierOrder ?? file.receiptExceptionReply?.receipt.shipment.supplierOrder;
     if (storeIds) {
       const documentStoreId = document?.storeId ?? accountDocument?.storeId;
       const permitted = !!documentStoreId && storeIds.includes(documentStoreId);
@@ -86,10 +86,10 @@ export class FilesService {
   }
 
   private async removeExpiredUploads() {
-    const expired = await this.database.client.fileObject.findMany({ where: { status: 'UPLOADING', createdAt: { lte: new Date(Date.now() - 86_400_000) }, paymentId: null, receiptId: null }, take: 100 });
+    const expired = await this.database.client.fileObject.findMany({ where: { status: 'UPLOADING', createdAt: { lte: new Date(Date.now() - 86_400_000) }, paymentId: null, receiptId: null, receiptExceptionReplyId: null }, take: 100 });
     // Preserve records belonging to an unavailable storage backend for later cleanup.
     const accessible = expired.filter(file => this.storage.canAccess(file.objectKey));
     for (const file of accessible) await this.storage.remove(file.objectKey);
-    if (accessible.length) await this.database.client.fileObject.deleteMany({ where: { id: { in: accessible.map(({ id }) => id) }, status: 'UPLOADING', paymentId: null, receiptId: null } });
+    if (accessible.length) await this.database.client.fileObject.deleteMany({ where: { id: { in: accessible.map(({ id }) => id) }, status: 'UPLOADING', paymentId: null, receiptId: null, receiptExceptionReplyId: null } });
   }
 }

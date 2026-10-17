@@ -664,6 +664,15 @@ async function alternate(f: Awaited<ReturnType<typeof fixture>>, mode: Mode = f.
   return { supplier, shipping: new SupplierOrdersService(database) };
 }
 
+test('purchase quantity editing rejects increases beyond the store request without changing funds', () => withFixture('CREDIT', async f => {
+  const draft = await f.service.create(f.input);
+  const before = await state(f);
+  await assert.rejects(() => f.service.replaceItems(draft.id, draft.version,
+    [{ productId: f.product.id, supplierId: f.supplier.id, quantity: '12' }]),
+  error => error instanceof ConflictException && /不能超过/.test(error.message));
+  assert.deepEqual(await state(f), before);
+}));
+
 for (const mode of ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM'] as const) {
   for (const operation of ['replace', 'assign', 'reallocate', 'cancel'] as const) {
     for (const failure of ['none', 'completion', 'audit', 'connection'] as const) {
@@ -682,7 +691,7 @@ for (const mode of ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM'] a
         inject(f, failure);
         const request = { headers: { 'idempotency-key': `${f.code}-${operation}` }, auth: f.auth } as never;
         const run = () => operation === 'replace'
-          ? f.controller.replaceItems(draft.id, { expectedVersion: current.version, reason: 'Actual quantity edit', items: [{ productId: f.product.id, supplierId: f.supplier.id, quantity: '12' }] }, request, f.auth)
+          ? f.controller.replaceItems(draft.id, { expectedVersion: current.version, reason: 'Actual quantity edit', items: [{ productId: f.product.id, supplierId: f.supplier.id, quantity: '8' }] }, request, f.auth)
           : operation === 'assign'
             ? f.controller.assign(draft.id, { expectedVersion: current.version, supplierId: alt.supplier.id, itemIds: current.items.map(item => item.id) }, request, f.auth)
             : f.controller.reallocate(request, f.auth, draft.id, { expectedVersion: current.version, rejectedOrderId, reason: 'Actual refusal remedy', assignments: current.items.map(item => operation === 'cancel' ? { requestItemId: item.id, cancel: true } : { requestItemId: item.id, supplierId: alt.supplier.id }) });
@@ -691,7 +700,7 @@ for (const mode of ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM'] a
           assert.deepEqual(await run(), result);
           assert.deepEqual(result, await f.service.get(draft.id));
           const after = await state(f);
-          const amount = operation === 'replace' ? '144.00' : operation === 'cancel' ? '0.00' : '130.00';
+          const amount = operation === 'replace' ? '96.00' : operation === 'cancel' ? '0.00' : '130.00';
           assert.equal(result.salesGoodsAmount, amount);
           assert.equal(result.version, current.version + 1);
           assert.equal(result.status, operation === 'reallocate' ? 'CONFIRMED' : operation === 'cancel' ? 'CANCELED' : 'PENDING_PROCUREMENT');
@@ -757,7 +766,7 @@ test('concurrent quantity edit and supplier assignment commit one version and on
   const alt = await alternate(f), draft = await f.service.create(f.input), current = await f.service.get(draft.id);
   const request = (key: string) => ({ headers: { 'idempotency-key': `${f.code}-${key}` }, auth: f.auth }) as never;
   const results = await Promise.allSettled([
-    f.controller.replaceItems(draft.id, { expectedVersion: current.version, reason: 'Concurrent edit', items: [{ productId: f.product.id, supplierId: f.supplier.id, quantity: '12' }] }, request('edit'), f.auth),
+    f.controller.replaceItems(draft.id, { expectedVersion: current.version, reason: 'Concurrent edit', items: [{ productId: f.product.id, supplierId: f.supplier.id, quantity: '8' }] }, request('edit'), f.auth),
     f.controller.assign(draft.id, { expectedVersion: current.version, supplierId: alt.supplier.id, itemIds: current.items.map(item => item.id) }, request('assign'), f.auth),
   ]);
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
@@ -780,7 +789,7 @@ for (const mode of ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM'] a
       inject(f, failure);
       const request = { headers: {}, auth: f.auth } as never;
       const execute = () => operation === 'replace'
-        ? f.controller.replaceItems(draft.id, { expectedVersion: current.version, reason: 'Legacy atomic edit', items: [{ productId: f.product.id, supplierId: f.supplier.id, quantity: '12' }] }, request, f.auth)
+        ? f.controller.replaceItems(draft.id, { expectedVersion: current.version, reason: 'Legacy atomic edit', items: [{ productId: f.product.id, supplierId: f.supplier.id, quantity: '8' }] }, request, f.auth)
         : f.controller.assign(draft.id, { expectedVersion: current.version, supplierId: alt.supplier.id, itemIds: current.items.map(item => item.id) }, request, f.auth);
       if (failure !== 'none') {
         await assert.rejects(execute);
@@ -803,9 +812,9 @@ for (const mode of ['STORED_VALUE', 'CREDIT', 'COMPANY_TERM', 'SUPPLIER_TERM'] a
 test('headerless purchase editing and assignment retain compatibility without claiming command recovery', () => withFixture('CREDIT', async f => {
   const alt = await alternate(f), draft = await f.service.create(f.input);
   const request = { headers: {}, auth: f.auth } as never;
-  const edited = await f.controller.replaceItems(draft.id, { expectedVersion: draft.version, reason: 'Legacy edit', items: [{ productId: f.product.id, supplierId: f.supplier.id, quantity: '12' }] }, request, f.auth);
+  const edited = await f.controller.replaceItems(draft.id, { expectedVersion: draft.version, reason: 'Legacy edit', items: [{ productId: f.product.id, supplierId: f.supplier.id, quantity: '8' }] }, request, f.auth);
   const assigned = await f.controller.assign(draft.id, { expectedVersion: edited.version, supplierId: alt.supplier.id, itemIds: edited.items.map(item => item.id) }, request, f.auth);
-  assert.equal(assigned.salesGoodsAmount, '156.00');
+  assert.equal(assigned.salesGoodsAmount, '104.00');
   assert.equal(await f.db.commandRecord.count({ where: { actorUserId: f.user.id } }), 0);
   assert.equal(await f.db.auditLog.count({ where: { actorUserId: f.user.id } }), 2);
 }));

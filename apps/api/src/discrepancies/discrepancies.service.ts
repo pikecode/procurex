@@ -35,6 +35,7 @@ export type DiscrepancyView = {
   productName?: string;
   supplierOrderId?: string;
   supplierOrderNo?: string;
+  deliveryState?: string | null;
   shipmentNo?: string;
   shippedQuantity?: string;
   receivedQuantity?: string;
@@ -43,7 +44,7 @@ export type DiscrepancyView = {
 
 export type ReplenishmentGapView = {
   id: string;
-  discrepancyId: string;
+  discrepancyId: string | null;
   orderItemId: string;
   quantity: string;
   remainingQuantity: string;
@@ -72,8 +73,9 @@ export class DiscrepanciesService {
         { status: DiscrepancyStatus.OPEN },
         { status: DiscrepancyStatus.REPLENISH_PENDING, replenishmentGap: { remainingQuantity: { gt: 0 } } },
       ],
-        ...(scope?.type === 'SUPPLIER' ? { orderItem: { supplierOrder: { supplierId: scope.supplierId } } } : {}),
-        ...(scope?.type === 'STORE' ? { orderItem: { supplierOrder: { storeId: scope.storeId } } } : {}) },
+        orderItem: { supplierOrder: { deliveryState: null,
+          ...(scope?.type === 'SUPPLIER' ? { supplierId: scope.supplierId } : {}),
+          ...(scope?.type === 'STORE' ? { storeId: scope.storeId } : {}) } } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, status: true, version: true, missingQuantity: true, orderItem: { select: { product: { select: { name: true } }, supplierOrder: { select: { supplierOrderNo: true } } } } },
     });
@@ -88,7 +90,7 @@ export class DiscrepanciesService {
       },
       include: {
         replenishmentGap: true, returnRecord: true,
-        orderItem: { include: { product: { select: { name: true } }, supplierOrder: { select: { id: true, supplierOrderNo: true } } } },
+        orderItem: { include: { product: { select: { name: true } }, supplierOrder: { select: { id: true, supplierOrderNo: true, deliveryState: true } } } },
         receiptItem: { include: { receipt: { include: { evidenceFiles: true } }, shipmentItem: { include: { shipment: { select: { shipmentNo: true } } } } } },
       },
     });
@@ -100,6 +102,7 @@ export class DiscrepanciesService {
     }
 
     return { ...toDiscrepancyView(discrepancy), productName: discrepancy.orderItem.product.name,
+      deliveryState: discrepancy.orderItem.supplierOrder.deliveryState,
       supplierOrderId: discrepancy.orderItem.supplierOrder.id, supplierOrderNo: discrepancy.orderItem.supplierOrder.supplierOrderNo,
       shipmentNo: discrepancy.receiptItem.shipmentItem.shipment.shipmentNo,
       evidenceFiles: discrepancy.receiptItem.receipt.evidenceFiles.map(file => ({ id: file.id, filename: file.filename, mimeType: file.mimeType, sizeBytes: file.sizeBytes.toString() })),
@@ -212,6 +215,8 @@ export class DiscrepanciesService {
           discrepancies: { include: { replenishmentGap: true, returnRecord: true } },
         },
       });
+      const deliveryOrder = await tx.supplierOrder.findUniqueOrThrow({ where: { id: orderItem.supplierOrderId } });
+      if (deliveryOrder.deliveryState) throw new ConflictException({ code: 'ORDER_CONFIRMATION_REQUIRED', message: '请在订单详情处理异常，双方确认后才能完成订单' });
       const nextFulfillmentStatus = resolveSupplierOrderFulfillmentStatus(orderItems);
       if (input.action === DiscrepancyActionType.ACCEPT) await adjustAcceptedShortage(tx, discrepancy.id, discrepancy.orderItemId);
       if (nextFulfillmentStatus === FulfillmentStatus.COMPLETED) {

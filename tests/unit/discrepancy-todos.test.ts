@@ -11,6 +11,6 @@ for (const scope of [undefined, { type: 'STORE', storeId: 'store' }, { type: 'SU
       { status: 'OPEN' },
       { status: 'REPLENISH_PENDING', replenishmentGap: { remainingQuantity: { gt: 0 } } },
     ]);
-    assert.deepEqual(query?.where.orderItem, scope ? { supplierOrder: scope.type === 'STORE' ? { storeId: 'store' } : { supplierId: 'supplier' } } : undefined);
+    assert.deepEqual(query?.where.orderItem, { supplierOrder: { deliveryState: null, ...(scope ? scope.type === 'STORE' ? { storeId: 'store' } : { supplierId: 'supplier' } : {}) } });
   });
 }

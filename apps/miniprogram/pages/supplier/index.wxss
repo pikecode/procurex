@@ -1,5 +1,6 @@
 @import "../../styles/workspace.wxss";
 
+
 /* ---------- 对账标签组 ---------- */
 
 .reconcile-tabs {
@@ -112,6 +113,9 @@
 
 /* ---------- 订单详情 ---------- */
 
+.detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.detail-heading .back-link { margin: 0; }
+.detail-heading .card-title { margin: 0; font-size: 26rpx; color: var(--ink-3); }
 .destination {
   margin-bottom: 20rpx;
   padding: 22rpx var(--space-content-x);
@@ -120,9 +124,13 @@
   overflow-wrap: anywhere;
 }
 .destination-label { display: block; color: var(--ink-3); font-size: 22rpx; font-weight: 600; }
-.supplier-order-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 18rpx; margin: 8rpx 0 22rpx; }
-.supplier-order-summary > view { min-width: 0; flex: 1; }
-.supplier-order-summary .muted { display: block; margin-top: 8rpx; }
+.supplier-order-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 18rpx; margin: 8rpx 0 12rpx; }
+.supplier-order-summary .summary-store { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.supplier-order-summary .status { flex-shrink: 0; }
+.supplier-detail-number, .shipment-record-number { display: flex; align-items: baseline; gap: 12rpx; color: var(--ink-3); font-size: 24rpx; line-height: 1.5; }
+.supplier-detail-number { margin-bottom: 20rpx; }
+.supplier-detail-number > text, .shipment-record-number > text { flex-shrink: 0; }
+.supplier-detail-number document-no, .shipment-record-number document-no { min-width: 0; color: var(--ink-2); }
 .summary-store { display: block; color: var(--ink-1); font-size: 34rpx; font-weight: 700; line-height: 1.35; }
 .operation-title { margin: 22rpx 0 12rpx; color: var(--ink-1); font-size: 30rpx; font-weight: 700; }
 .detail-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-top: 26rpx; padding: 18rpx 0 10rpx; border-top: 1rpx solid var(--line); color: var(--ink-1); font-size: 28rpx; font-weight: 700; }
@@ -130,6 +138,10 @@
 .shipment-history { margin-top: 8rpx; }
 .shipment-history .detail-section-heading { margin-top: 0; }
 .shipment-history-row { padding: 20rpx 0; }
+.shipment-record-heading { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; margin-bottom: 10rpx; font-size: 24rpx; color: var(--ink-2); }
+.shipment-record-heading .status { flex-shrink: 0; }
+.shipment-record-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16rpx; margin-top: 14rpx; }
+.shipment-record-actions button.secondary { flex: none; width: auto; margin: 0; padding: 0 20rpx; }
 .shipment-products { margin-top: 8rpx; color: var(--ink-2); font-size: 24rpx; }
 
 .supplier-orders-list { display: flex; flex-direction: column; gap: 14rpx; }
@@ -254,3 +266,10 @@
 .freight-request { margin-top: 28rpx; padding-top: 24rpx; border-top: 1rpx solid var(--line); }
 /* Phone numbers are the contact action; no separate call-to-contact button. */
 .contact-phone { color: var(--brand, #167e5a); text-decoration: underline; }
+.shipment-selection { display: flex; align-items: center; gap: 12rpx; margin-bottom: 12rpx; font-size: 26rpx; }
+.delivery-finish-option { display: flex; align-items: center; justify-content: space-between; padding: 24rpx 0; border-bottom: 1rpx solid #e6e9e8; }
+.delivery-progress { padding: 24rpx 0; border-top: 1rpx solid #e6e9e8; }
+.delivery-progress > text { display: block; margin-bottom: 12rpx; }
+.exception-reply-form { margin-top: 20rpx; padding: 20rpx 0; border-top: 1rpx solid #dce3df; }
+.exception-reply-form textarea { box-sizing: border-box; width: 100%; height: 160rpx; padding: 18rpx; border: 1rpx solid #dce3df; border-radius: 8rpx; font-size: 28rpx; }
+.exception-reply-history { padding: 18rpx 0; border-bottom: 1rpx dashed #dce3df; }

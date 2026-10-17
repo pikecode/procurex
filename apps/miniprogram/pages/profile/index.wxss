@@ -24,6 +24,10 @@
 }
 .profile-caption { display: block; margin-top: 12rpx; color: rgba(255, 255, 255, .78); font-size: 24rpx; }
 .profile-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.4;
   flex: 0 0 auto;
   margin: 0;
   height: 64rpx;
@@ -31,7 +35,7 @@
   font-weight: 600;
   background: transparent;
   color: #fff;
-  border-color: rgba(255, 255, 255, .45);
+  border: 1rpx solid rgba(255, 255, 255, .45);
 }
 
 .profile-fields {

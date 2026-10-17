@@ -101,7 +101,7 @@ view, text, input, textarea, button, label { box-sizing: border-box; }
 
 .title { display: block; margin-top: 10rpx; color: var(--ink-1); font-size: 40rpx; font-weight: 700; line-height: 1.2; }
 .subtitle { margin-top: 12rpx; color: var(--ink-3); font-size: 26rpx; line-height: 1.55; }
-.eyebrow { color: var(--brand); font-size: 22rpx; font-weight: 700; letter-spacing: 2rpx; }
+.eyebrow { color: var(--brand); font-size: 22rpx; font-weight: 700; letter-spacing: 0; }
 .detail-line { padding-top: 20rpx; color: var(--ink-2); font-size: 26rpx; line-height: 1.5; }
 .file-name { display: block; margin-bottom: 16rpx; font-size: 25rpx; overflow-wrap: anywhere; }
 
@@ -112,7 +112,7 @@ view, text, input, textarea, button, label { box-sizing: border-box; }
   font-size: 30rpx;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: .2rpx;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
 }
 .amount-lg { font-size: 38rpx; line-height: 1.25; }
@@ -253,12 +253,15 @@ textarea {
 .button-row button { width: 100%; margin: 0; }
 
 button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 80rpx;
   margin: 0;
   border-radius: 12rpx;
   font-size: 27rpx;
   font-weight: 600;
-  line-height: 80rpx;
+  line-height: 1.4;
 }
 /* 微信 button 默认带一圈 ::after 描边，这里统一抹掉，使各角色按钮渲染一致。 */
 button::after { border: 0; }
@@ -272,7 +275,7 @@ button[disabled] { opacity: .45; }
   width: auto;
   min-width: 132rpx;
   height: 64rpx;
-  line-height: 64rpx;
+  line-height: 1.4;
   padding: 0 20rpx;
   background: var(--surface);
   color: var(--brand);

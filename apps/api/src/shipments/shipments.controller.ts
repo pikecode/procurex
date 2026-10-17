@@ -21,6 +21,8 @@ import {
 } from '../../../../packages/domain/src/validation.js';
 
 type CreateReceiptBody = {
+  hasException?: unknown;
+  note?: unknown;
   expectedOrderVersion?: unknown;
   expectedReceiptRevision?: unknown;
   items?: unknown;
@@ -36,6 +38,13 @@ export class ShipmentsController {
     private readonly commandsService: CommandsService,
     private readonly audit: AuditService,
   ) {}
+
+  @Get('pending-receipts')
+  @AllowAssignedStores()
+  @RequireRoles('ADMIN', 'PURCHASER', 'HQ_FINANCE', 'STORE', 'STORE_FINANCE', 'REGION_MANAGER', 'REGION_FINANCE', 'PURCHASE_FOLLOWER')
+  pendingReceipts(@Req() request: AuthenticatedRequest) {
+    return this.shipmentsService.pendingReceipts(shipmentScope(request));
+  }
 
   @Get(':id')
   @AllowAssignedStores()
@@ -90,6 +99,8 @@ export class ShipmentsController {
           revision: result.revision,
           itemCount: result.items.length,
           evidenceFileIds: result.evidenceFiles.map(file => file.id),
+          hasException: result.hasException,
+          note: result.note,
         },
       }, tx);
       return result;
@@ -156,6 +167,8 @@ function parseCreateReceiptBody(id: string, body: CreateReceiptBody): { id: stri
     }
   }
 
+  if (body.hasException !== undefined && typeof body.hasException !== 'boolean') issues.push({ field: 'hasException', code: 'INVALID_RECEIPT_EXCEPTION', message: '异常收货标记必须为布尔值' });
+  if (body.note !== undefined && (typeof body.note !== 'string' || body.note.trim().length > 500)) issues.push({ field: 'note', code: 'INVALID_RECEIPT_NOTE', message: '收货备注最多500字' });
   const evidenceFileIds: string[] | undefined = body.evidenceFileIds === undefined ? undefined : [];
   if (body.evidenceFileIds !== undefined) {
     if (!Array.isArray(body.evidenceFileIds) || body.evidenceFileIds.length < 1 || body.evidenceFileIds.length > 6) {
@@ -176,6 +189,8 @@ function parseCreateReceiptBody(id: string, body: CreateReceiptBody): { id: stri
       expectedReceiptRevision: body.expectedReceiptRevision as number,
       items,
       evidenceFileIds,
+      ...(typeof body.hasException === 'boolean' ? { hasException: body.hasException } : {}),
+      ...(typeof body.note === 'string' ? { note: body.note.trim() } : {}),
     },
   };
 }

@@ -41,9 +41,11 @@ test('later shipments cannot reuse permanently reduced quantities', async () => 
   const service = new SupplierOrdersService({ client: { supplierOrder: { findUnique: async () => ({
     id: 'order', version: 3, supplier: { deliveryMode: 'SELF' }, status: 'PARTIAL_SHIPPED', items: [{ id: 'item', productId: 'product', quantity: '10', shippedQuantity: '4', receivedQuantity: '4', salesUnitPrice: '12', supplyUnitPrice: '9', shipmentItems: [{ permanentlyReduced: '2' }] }],
   }) } } } as never);
-  const preview = await service.shipmentPreview('order', 3, { freight: '0', items: [{ orderItemId: 'item', shipQuantity: '3', permanentlyReduceQuantity: '1' }] });
+  const preview = await service.shipmentPreview('order', 3, { freight: '0', items: [{ orderItemId: 'item', shipQuantity: '4', permanentlyReduceQuantity: '0' }] });
   assert.equal(preview.items[0]!.remainingQuantityBefore, '4');
   assert.equal(preview.items[0]!.remainingQuantityAfter, '0');
-  await assert.rejects(service.shipmentPreview('order', 3, { freight: '0', items: [{ orderItemId: 'item', shipQuantity: '4', permanentlyReduceQuantity: '1' }] }),
+  await assert.rejects(service.shipmentPreview('order', 3, { freight: '0', items: [{ orderItemId: 'item', shipQuantity: '5', permanentlyReduceQuantity: '0' }] }),
     (error: any) => error.getResponse().code === 'INVALID_SHIPMENT_QUANTITY');
+  await assert.rejects(service.shipmentPreview('order', 3, { freight: '0', items: [{ orderItemId: 'item', shipQuantity: '3', permanentlyReduceQuantity: '1' }] }),
+    (error: any) => error.getResponse().code === 'ORDER_QUANTITY_IMMUTABLE');
 });

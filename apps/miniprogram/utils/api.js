@@ -102,7 +102,7 @@ function assertTestSwitchSafe() {
   })) throw new Error('请完成或取消当前操作后再切换身份');
   const user = currentUser();
   if (!user?.testWorkbenchEnabled) throw new Error('当前账号未开放测试身份');
-  for (const name of ['purchaser', 'supplier', 'finance']) {
+  for (const name of ['purchaser', 'supplier', 'finance', 'store']) {
     if (roleCommandState(name).pending) throw new Error('请先确认原提交结果，再切换身份');
   }
   if (user.scope?.storeId) {
@@ -127,7 +127,7 @@ function currentUser() {
 const roleFlights = new Set();
 function roleStorage(workspace) {
   const user = currentUser();
-  if (!user || !user.id || !['purchaser', 'supplier', 'finance'].includes(workspace)) throw new Error('请重新登录');
+  if (!user || !user.id || !['purchaser', 'supplier', 'finance', 'store'].includes(workspace)) throw new Error('请重新登录');
   return `procurexRoleCommands:${encodeURIComponent(apiBase())}:${user.id}:${workspace}`;
 }
 function roleCommandState(workspace) {
@@ -267,7 +267,7 @@ async function uploadEvidence(path, purpose) {
     : signature[0] === 137 && signature[1] === 80 && signature[2] === 78 && signature[3] === 71 ? 'image/png' : '';
   const maxBytes = (purpose === 'PRODUCT' ? 2 : 10) * 1024 * 1024;
   if (!mimeType || !bytes.byteLength || bytes.byteLength > maxBytes) throw new Error(purpose === 'PRODUCT' ? '商品图片需为2MB以内的JPEG或PNG' : '请选择10MB以内的JPEG或PNG图片');
-  const prefix = purpose === 'PRODUCT' ? 'product' : purpose === 'SHIPMENT_ADJUSTMENT' ? 'shipment-adjustment' : 'receipt';
+  const prefix = purpose === 'PRODUCT' ? 'product' : purpose === 'SHIPMENT_ADJUSTMENT' ? 'shipment-adjustment' : purpose === 'RECEIPT_EXCEPTION_REPLY' ? 'exception-reply' : 'receipt';
   const filename = `${prefix}-${Date.now()}.${mimeType === 'image/png' ? 'png' : 'jpg'}`;
   const session = await request('/files/upload-sessions', { method: 'POST', data: { purpose, filename, mimeType, sizeBytes: bytes.byteLength } });
   await request(`/files/${session.id}/content`, { method: 'POST', data: bytes,

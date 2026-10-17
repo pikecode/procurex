@@ -11,12 +11,15 @@ import {
 } from '../../../../packages/backend/generated/prisma/enums.js';
 import type { FileObject, Prisma, Receipt, ReceiptItem, Shipment, ShipmentItem, SupplierOrder } from '../../../../packages/backend/generated/prisma/client.js';
 import { DatabaseService } from '../database/database.service.js';
-import { resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
+import { remainingNormalShipmentQuantity, resolveSupplierOrderFulfillmentStatus } from '../supplier-orders/fulfillment-status.js';
 import { lockFundingRequest, synchronizeRequestFunding } from '../purchase-requests/request-funding.js';
 import { applyEffectiveOrderPrices, lockPricePublication } from '../pricing/price-checkpoint.js';
 import { assignedStoreIds, type BusinessScope } from '../auth/store-scope.js';
+import { pendingReceiptKind } from './receipt-progress.js';
 
 export type CreateReceiptInput = {
+  hasException?: boolean;
+  note?: string;
   expectedOrderVersion: number;
   expectedReceiptRevision: number;
   items: ReceiptItemInput[];
@@ -29,6 +32,9 @@ export type ReceiptItemInput = {
 };
 
 export type ReceiptView = {
+  exceptionStatus: string | null;
+  hasException: boolean;
+  note: string | null;
   id: string;
   receiptNo: string;
   shipmentId: string;
@@ -48,6 +54,10 @@ export type ReceiptItemView = {
 };
 
 export type ShipmentDetailView = {
+  receiptExceptionStatus: string | null;
+  receiptHasException: boolean;
+  receiptNote: string | null;
+  deliveryState?: string | null;
   id: string;
   shipmentNo: string;
   supplierOrderId: string;
@@ -80,6 +90,29 @@ export type ShipmentDetailItemView = {
 export class ShipmentsService {
   constructor(private readonly database: DatabaseService) {}
 
+  async pendingReceipts(scope?: BusinessScope) {
+    const storeIds = assignedStoreIds(scope);
+    const supplierOrder: Prisma.SupplierOrderWhereInput = {
+      ...(storeIds ? { storeId: { in: storeIds } } : ['STORE', 'STORE_FINANCE'].includes(scope?.type ?? '') ? { storeId: scope?.storeId ?? '' }
+        : scope?.type === 'SUPPLIER' ? { supplierId: scope.supplierId ?? '' } : {}),
+      status: { notIn: ['COMPLETED', 'REJECTED', 'CANCELED'] },
+    };
+    const batches = await this.database.client.shipment.findMany({
+      where: { supplierOrder, OR: [{ receipts: { none: { isCurrent: true } } },
+        { receipts: { some: { isCurrent: true, items: { some: { discrepancy: { is: { status: 'RESOLVED', returnRecord: { isNot: null } } } } } } } }] },
+      orderBy: [{ shippedAt: 'asc' }, { id: 'asc' }],
+      include: { supplierOrder: { include: { supplier: { select: { name: true } }, store: { select: { name: true } } } },
+        receipts: { where: { isCurrent: true }, include: { items: { include: { discrepancy: { include: { returnRecord: true } } } } } },
+        _count: { select: { items: true } } },
+    });
+    return batches.flatMap(batch => {
+      const kind = pendingReceiptKind(batch.supplierOrder, batch);
+      return kind ? [{ id: batch.id, shipmentNo: batch.shipmentNo, supplierOrderId: batch.supplierOrderId,
+        supplierOrderNo: batch.supplierOrder.supplierOrderNo, supplierName: batch.supplierOrder.supplier.name, storeName: batch.supplierOrder.store.name,
+        shippedAt: batch.shippedAt.toISOString(), itemCount: batch._count.items, returned: kind === 'RETURNED' }] : [];
+    });
+  }
+
   async get(id: string, scope?: BusinessScope): Promise<ShipmentDetailView> {
     const storeIds = assignedStoreIds(scope);
     const shipment = await this.database.client.shipment.findUnique({
@@ -110,6 +143,9 @@ export class ShipmentsService {
   }
 
   async createReceipt(shipmentId: string, input: CreateReceiptInput, scope?: { type: string; storeId?: string }, actorUserId?: string, transaction?: Prisma.TransactionClient): Promise<ReceiptView> {
+    if (input.hasException === true && !input.note?.trim()) throw new ConflictException({ code: 'RECEIPT_NOTE_REQUIRED', message: '请填写异常收货备注' });
+    if (input.hasException === true && !input.evidenceFileIds?.length) throw new ConflictException({ code: 'RECEIPT_EVIDENCE_INVALID', message: '异常收货请上传收货凭证' });
+    if (input.note !== undefined && (typeof input.note !== 'string' || input.note.trim().length > 500)) throw new ConflictException({ code: 'INVALID_RECEIPT_NOTE', message: '收货备注最多500字' });
     const shipment = await this.database.client.shipment.findUnique({
       where: {
         id: shipmentId,
@@ -141,6 +177,7 @@ export class ShipmentsService {
     }
 
     const currentReceipt = shipment.receipts[0];
+    if (currentReceipt?.exceptionStatus) throw new ConflictException({ code: 'RECEIPT_EXCEPTION_OPEN', message: '本批异常已提交，收货记录已锁定，请在订单详情继续处理' });
     const currentRevision = currentReceipt?.revision ?? 0;
     if (input.expectedReceiptRevision !== currentRevision) {
       throw new ConflictException({
@@ -202,10 +239,19 @@ export class ShipmentsService {
       return { shipmentItem, receivedQuantity, receiptLocked };
     });
 
+    const hasException = input.hasException === true || receiptItems.some(item => item.receivedQuantity.lt(item.shipmentItem.quantity));
+    if (hasException && !input.note?.trim()) {
+      throw new ConflictException({ code: 'RECEIPT_NOTE_REQUIRED', message: '请填写异常收货备注' });
+    }
+    if (hasException && !input.evidenceFileIds?.length) throw new ConflictException({ code: 'RECEIPT_EVIDENCE_INVALID', message: '异常收货请上传收货凭证' });
+
     const execute = async (tx: Prisma.TransactionClient) => {
       await lockPricePublication(tx);
       await lockFundingRequest(tx, shipment.supplierOrder.storeId, shipment.supplierOrder.requestId);
       const lockedOrder = await tx.supplierOrder.findUniqueOrThrow({ where: { id: shipment.supplierOrderId } });
+      const reviewDate = (lockedOrder.deliveryReview as { requestedAt?: string } | null)?.requestedAt;
+      if (reviewDate && shipment.shippedAt <= new Date(reviewDate)) throw new ConflictException({ code: 'RECEIPT_ALREADY_REVIEWED', message: '本批实收已用于整单异议，请在订单详情继续处理' });
+      if (['DISPUTED', 'DECLINED', 'COMPLETED'].includes(lockedOrder.deliveryState ?? '')) throw new ConflictException({ code: 'RECEIPT_NOT_EDITABLE', message: '订单正在处理异议或已完成，请在订单详情继续处理' });
       if (lockedOrder.version !== input.expectedOrderVersion) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Supplier order changed before receipt submission' });
       if (input.evidenceFileIds !== undefined) {
         if (!actorUserId || input.evidenceFileIds.length < 1 || input.evidenceFileIds.length > 6 || new Set(input.evidenceFileIds).size !== input.evidenceFileIds.length) {
@@ -233,6 +279,9 @@ export class ShipmentsService {
           receiptNo: makeReceiptNo(),
           shipmentId: shipment.id,
           revision: currentRevision + 1,
+          note: input.note?.trim() || null,
+          hasException,
+          exceptionStatus: hasException ? 'SUBMITTED' : null,
         },
       });
       if (input.evidenceFileIds?.length) {
@@ -277,7 +326,9 @@ export class ShipmentsService {
         where: { supplierOrderId: shipment.supplierOrderId },
         include: { shipmentItems: true, discrepancies: { include: { replenishmentGap: true, returnRecord: true } } },
       });
-      const nextFulfillmentStatus = resolveSupplierOrderFulfillmentStatus(refreshedOrderItems);
+      const deliveryState = lockedOrder.deliveryState || (created.exceptionStatus === 'SUBMITTED' ? refreshedOrderItems.some(item => remainingNormalShipmentQuantity(item).gt(0)) ? 'IN_PROGRESS' : 'FINISHED' : undefined);
+      let nextFulfillmentStatus = resolveSupplierOrderFulfillmentStatus(refreshedOrderItems, deliveryState);
+      if (created.exceptionStatus === 'SUBMITTED' && nextFulfillmentStatus === FulfillmentStatus.COMPLETED) nextFulfillmentStatus = FulfillmentStatus.SHIPPED;
       if (nextFulfillmentStatus === FulfillmentStatus.COMPLETED && lockedOrder.firstShippedAt) {
         const repriced = await applyEffectiveOrderPrices(tx, lockedOrder.id, lockedOrder.firstShippedAt, { deferCreditShortfall: true });
         if (repriced.changed && !repriced.fundingHandled) await synchronizeRequestFunding(tx, lockedOrder.requestId, { sourceId: created.id, deferCreditShortfall: true });
@@ -286,7 +337,8 @@ export class ShipmentsService {
         where: { id: shipment.supplierOrderId },
         data: {
           fulfillmentStatus: nextFulfillmentStatus,
-          status: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : SupplierOrderStatus.PARTIAL_SHIPPED,
+          ...(created.exceptionStatus === 'SUBMITTED' && !lockedOrder.deliveryState ? { deliveryState, deliveryCompletedAt: deliveryState === 'FINISHED' ? new Date() : null } : {}),
+          status: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : nextFulfillmentStatus === FulfillmentStatus.SHIPPED ? SupplierOrderStatus.SHIPPED : SupplierOrderStatus.PARTIAL_SHIPPED,
           completedAt: nextFulfillmentStatus === FulfillmentStatus.COMPLETED ? new Date() : null,
           version: { increment: 1 },
         },
@@ -294,7 +346,7 @@ export class ShipmentsService {
       const fundingRequest = await tx.purchaseRequest.findUniqueOrThrow({ where: { id: lockedOrder.requestId } });
       if (fundingRequest.storedValueOnReceipt) await synchronizeRequestFunding(tx, lockedOrder.requestId, { requireFull: true, sourceId: created.id, deferCreditShortfall: true });
 
-      if (discrepancyIds.length) {
+      if (discrepancyIds.length || created.exceptionStatus === 'SUBMITTED') {
         const recipients = await tx.user.findMany({
           where: {
             status: UserStatus.ACTIVE,
@@ -309,11 +361,10 @@ export class ShipmentsService {
               recipientId: recipient.id,
               eventKey: `RECEIPT_DISCREPANCY:${created.id}`,
               channel: 'IN_APP',
-              title: '收货差异待处理',
+              title: '收货异常待处理',
               body: `供应商订单 ${shipment.supplierOrder.supplierOrderNo} 收货存在差异，请处理。`,
               payload: {
-                type: 'RECEIPT_DISCREPANCY',
-                route: '/main-flow-demo.html',
+                type: created.exceptionStatus === 'SUBMITTED' ? 'ORDER_DELIVERY' : 'RECEIPT_DISCREPANCY',
                 supplierOrderId: shipment.supplierOrderId,
                 shipmentId: shipment.id,
                 receiptId: created.id,
@@ -346,12 +397,16 @@ function toShipmentDetailView(shipment: Shipment & {
     supplierOrderId: shipment.supplierOrderId,
     supplierOrderNo: shipment.supplierOrder.supplierOrderNo,
     supplierOrderVersion: shipment.supplierOrder.version,
+    deliveryState: shipment.supplierOrder.deliveryState,
     kind: shipment.kind,
     shippedAt: shipment.shippedAt.toISOString(),
     trackingNo: shipment.trackingNo,
     carrierName: shipment.carrierName,
     deliveryModeSnapshot: shipment.deliveryModeSnapshot,
     currentReceiptRevision: shipment.receipts[0]?.revision ?? 0,
+    receiptNote: shipment.receipts[0]?.note ?? null,
+    receiptHasException: shipment.receipts[0]?.hasException ?? false,
+    receiptExceptionStatus: shipment.receipts[0]?.exceptionStatus ?? null,
     evidenceFiles: (shipment.receipts[0]?.evidenceFiles ?? []).map(toEvidenceView),
     items: shipment.items.map((item) => ({
       id: item.id,
@@ -361,7 +416,7 @@ function toShipmentDetailView(shipment: Shipment & {
       unitName: displaySalesUnitName(item.orderItem.unitSnapshot, names),
       shippedQuantity: item.quantity.toString(),
       currentReceivedQuantity: shipment.receipts[0]?.items.find(receiptItem => receiptItem.shipmentItemId === item.id)?.receivedQuantity.toString() ?? null,
-      receiptLocked: Boolean(shipment.receipts[0]) && isReceiptItemLocked(item.receiptItems),
+      receiptLocked: Boolean(shipment.receipts[0]?.exceptionStatus) || Boolean((shipment.supplierOrder.deliveryReview as { requestedAt?: string } | null)?.requestedAt && shipment.shippedAt <= new Date((shipment.supplierOrder.deliveryReview as { requestedAt: string }).requestedAt)) || ['DISPUTED', 'DECLINED', 'COMPLETED'].includes(shipment.supplierOrder.deliveryState ?? '') || (Boolean(shipment.receipts[0]) && isReceiptItemLocked(item.receiptItems)),
       salesPriceSnapshot: item.salesPriceSnapshot.toString(),
       supplyPriceSnapshot: item.supplyPriceSnapshot.toString(),
     })),
@@ -386,6 +441,9 @@ function toReceiptView(receipt: Receipt & { items: ReceiptItem[]; evidenceFiles?
     revision: receipt.revision,
     isCurrent: receipt.isCurrent,
     submittedAt: receipt.submittedAt.toISOString(),
+    note: receipt.note ?? null,
+    hasException: receipt.hasException ?? false,
+    exceptionStatus: receipt.exceptionStatus ?? null,
     evidenceFiles: (receipt.evidenceFiles ?? []).map(toEvidenceView),
     items: receipt.items.map((item) => ({
       id: item.id,

@@ -2,14 +2,16 @@
 <wxs src="../../utils/labels.wxs" module="labels" />
 <view class="page {{workspaceTabbarVisible ? 'has-workspace-tabbar' : ''}}{{canConfirm && selectedKind === 'order' && (selected.status === 'PENDING_PROCUREMENT' || selected.status === 'PENDING_FUNDS' || selected.status === 'PENDING_FINANCE') ? 'has-action-bar' : ''}}">
   <view class="business-heading"><view><text class="business-title">{{roleText}}</text><text class="muted">{{user.displayName}}</text></view><button class="ghost" bindtap="loadWork" loading="{{loading}}" disabled="{{saving || loading}}">刷新</button></view>
-  <view class="scope-filter sticky-bar" wx:if="{{activeView !== 'mine'}}"><picker range="{{storeOptions}}" range-key="name" value="{{storeIndex}}" bindchange="chooseStore" disabled="{{saving || loading}}"><view class="picker-value">{{storeOptions[storeIndex].name || '加载门店'}} <text>▾</text></view></picker></view>
+  <view class="scope-controls sticky-bar" wx:if="{{activeView !== 'mine'}}">
+    <view class="scope-filter"><picker range="{{storeOptions}}" range-key="name" value="{{storeIndex}}" bindchange="chooseStore" disabled="{{saving || loading}}"><view class="picker-value">{{storeOptions[storeIndex].name || '加载门店'}} <text>▾</text></view></picker></view>
+    <view class="task-tabs" wx:if="{{activeView === 'books' && !selected && !detailing}}"><view class="{{book === 'company' ? 'selected' : ''}}" data-book="company" bindtap="chooseBook">公司账期</view><view class="{{book === 'direct' ? 'selected' : ''}}" data-book="direct" bindtap="chooseBook">供应商账期</view></view>
+  </view>
   <view class="workspace-loading" wx:if="{{loading}}">正在更新数据</view>
   <view class="error-banner" wx:if="{{error}}"><text>{{error}}</text></view>
   <view class="command-recovery" wx:if="{{pendingCommand}}"><text>采购提交结果待确认</text><button class="secondary" bindtap="recoverCommand" loading="{{saving}}" disabled="{{saving}}">确认原提交结果</button></view>
   <view class="error-banner" wx:if="{{blockedCommand}}">存在当前角色不能恢复的历史提交，请联系管理员核对。</view>
 
   <block wx:if="{{activeView === 'orders' || activeView === 'tasks' || activeView === 'books'}}">
-    <view class="task-tabs sticky-bar" wx:if="{{activeView === 'books' && !selected && !detailing}}"><view class="{{book === 'company' ? 'selected' : ''}}" data-book="company" bindtap="chooseBook">公司账期</view><view class="{{book === 'direct' ? 'selected' : ''}}" data-book="direct" bindtap="chooseBook">供应商账期</view></view>
     <view class="card" wx:if="{{!selected && !detailing}}">
       <input class="business-search" value="{{search}}" bindinput="onSearch" placeholder="搜索门店或单据" />
       <view class="row pressable" wx:for="{{visibleRows}}" wx:key="id" data-id="{{item.id}}" bindtap="openRecord"><view class="row-title"><text>{{item.title}}</text><text class="status {{item.status === 'REJECTED' ? 'tone-danger' : item.status === 'COMPLETED' ? 'tone-brand' : 'tone-warn'}}">{{labels.status(item.status)}}</text></view><text class="muted">{{item.subtitle}}</text><view class="record-footer"><text class="muted">{{item.dateText}}</text><text>¥{{labels.money(item.amount)}} ›</text></view></view>

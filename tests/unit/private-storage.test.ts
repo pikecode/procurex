@@ -62,7 +62,7 @@ test('expired uploads from unavailable storage do not block new upload sessions'
   const result = await new FilesService(database).create('owner', { filename: 'receipt.png', mimeType: 'image/png', sizeBytes: 1, purpose: 'RECEIPT' });
   assert.ok(result.uploadToken);
   assert.deepEqual(removed, [localKey]);
-  assert.deepEqual(deleted, { where: { id: { in: ['local'] }, status: 'UPLOADING', paymentId: null, receiptId: null } });
+  assert.deepEqual(deleted, { where: { id: { in: ['local'] }, status: 'UPLOADING', paymentId: null, receiptId: null, receiptExceptionReplyId: null } });
 });
 
 test('OSS uses only owned keys, private uploads, and propagates storage outages', async (t) => {

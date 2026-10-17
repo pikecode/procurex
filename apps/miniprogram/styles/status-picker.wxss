@@ -1,0 +1,13 @@
+.status-bar { display: flex; align-items: stretch; min-width: 0; }
+.status-scroll { flex: 1; width: 0; min-width: 0; }
+.status-track { display: flex; align-items: stretch; gap: 28rpx; white-space: nowrap; }
+.status-tab { flex: none; display: flex; align-items: center; min-height: 88rpx; padding: 0; border-bottom: 4rpx solid transparent; color: var(--ink-3); font-size: 26rpx; }
+.status-tab.is-selected { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
+button.status-toggle { flex: none; display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 76rpx; height: 88rpx; margin: 0; padding: 0; line-height: 1; border: 0; border-left: 1rpx solid var(--line); border-radius: 0; background: var(--surface); color: var(--ink-3); box-shadow: -10rpx 0 16rpx -12rpx rgba(0, 0, 0, .35); }
+.status-toggle::after { border: 0; }
+.status-chevron { width: 14rpx; height: 14rpx; border-right: 3rpx solid currentColor; border-bottom: 3rpx solid currentColor; transform: translateY(-4rpx) rotate(45deg); transition: transform .15s ease; }
+.status-toggle.is-expanded .status-chevron { transform: translateY(4rpx) rotate(225deg); }
+.status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12rpx; padding: 0 0 20rpx; border-bottom: 1rpx solid var(--line); }
+.status-option { display: flex; align-items: center; justify-content: space-between; gap: 8rpx; min-height: 72rpx; padding: 0 18rpx; border: 1rpx solid var(--line); border-radius: 8rpx; background: var(--sunken); color: var(--ink-3); font-size: 25rpx; white-space: nowrap; }
+.status-option > text:last-child { font-size: 23rpx; font-variant-numeric: tabular-nums; }
+.status-option.is-selected { color: var(--brand); border-color: var(--brand); background: var(--brand-soft); font-weight: 600; }

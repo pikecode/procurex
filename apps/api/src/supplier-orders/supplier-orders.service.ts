@@ -7,6 +7,8 @@ import { lineAmount, toMoney } from '../../../../packages/domain/src/money.js';
 import { effectiveOrderItemQuantity, remainingNormalShipmentQuantity, resolveSupplierOrderFulfillmentStatus } from './fulfillment-status.js';
 import { applyEffectiveOrderPrices, lockPricePublication } from '../pricing/price-checkpoint.js';
 import { createReductionDocuments, createFrozenFreightDocuments } from './reduction-adjustments.js';
+import { readDeliveryReview, transitionDelivery, type DeliveryAction, type DeliveryInput } from './delivery-workflow.js';
+import { unagreedShortages } from './receipt-agreement.js';
 import {
   FreightConfirmationStatus,
   DiscrepancyStatus,
@@ -32,6 +34,7 @@ import type {
 import { DatabaseService } from '../database/database.service.js';
 import { storeDestination } from '../common/master-data-profile.js';
 import { assignedStoreIds, storeFilter, type BusinessScope } from '../auth/store-scope.js';
+import { pendingReceiptKind } from '../shipments/receipt-progress.js';
 import { lockFundingRequest, synchronizeRequestFunding } from '../purchase-requests/request-funding.js';
 import { toFreightConfirmationView, type FreightConfirmationView } from '../freight-confirmations/freight-confirmations.service.js';
 
@@ -43,6 +46,14 @@ export type ListSupplierOrdersInput = {
 };
 
 export type SupplierOrderSummaryView = {
+  openReceiptExceptionCount?: number;
+  pendingSupplierReceiptExceptionCount?: number;
+  pendingReplenishmentCount?: number;
+  pendingReceiptCount?: number;
+  shipmentCount?: number;
+  receiptExceptionCount?: number;
+  deliveryState?: string | null;
+  deliveryCompletedAt?: string | null;
   supplierName?: string;
   storeName?: string;
   productSummary?: string;
@@ -65,6 +76,10 @@ export type SupplierOrderSummaryView = {
 };
 
 export type SupplierOrderDetailView = SupplierOrderSummaryView & {
+  shortageAgreementRequired?: boolean;
+  unagreedShortageItems?: Array<{ orderItemId: string; quantity: string }>;
+  deliveryNote?: string | null;
+  deliveryReview?: ReturnType<typeof readDeliveryReview>;
   supplierContact?: { contactName: string | null; contactPhone: string | null; deliveryContactPhone: string | null; address: string | null };
   defaultDeliveryMode: DeliveryMode;
   requiresFreightSnapshot?: boolean | null;
@@ -122,6 +137,7 @@ export type ReconcileSupplierOrderFundingResult = {
 };
 
 export type ShipmentPreviewInput = {
+  completeDelivery?: boolean;
   note?: string;
   evidenceFileIds?: string[];
   deliveryMode?: DeliveryMode;
@@ -174,6 +190,17 @@ export type ShipmentView = {
   freightConfirmationId: string | null;
   revision?: number;
   currentReceiptRevision?: number;
+  receiptNote?: string | null;
+  receiptId?: string;
+  receiptExceptionStatus?: string | null;
+  canConfirmReceiptException?: boolean;
+  receiptExceptionResponse?: string | null;
+  receiptExceptionDecision?: string | null;
+  receiptExceptionResolution?: string | null;
+  receiptExceptionReplies?: Array<{ id: string; decision: string; note: string; createdAt: string; actorName: string; evidenceFiles: Array<{ id: string; filename: string; mimeType: string; sizeBytes: string }> }>;
+  receiptHasException?: boolean;
+  receiptDifferences?: Array<{ productName: string; shippedQuantity: string; receivedQuantity: string; missingQuantity: string }>;
+  receiptEvidenceFiles?: Array<{ id: string; filename: string; mimeType: string; sizeBytes: string }>;
   canRevise?: boolean;
   items: ShipmentItemView[];
 };
@@ -236,12 +263,19 @@ export class SupplierOrdersService {
         status: input.status,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      include: { request: { select: { requestNo: true } }, supplier: { select: { name: true } }, store: { select: { name: true } }, items: {
-        orderBy: { createdAt: 'asc' }, select: { product: { select: { name: true } } },
+      include: { request: { select: { requestNo: true } }, supplier: { select: { name: true } }, store: { select: { name: true } },
+        shipments: { select: { shippedAt: true, receipts: { where: { isCurrent: true }, select: { exceptionStatus: true, items: { select: { discrepancy: { select: { status: true, returnRecord: { select: { id: true } } } } } } } } } }, items: {
+        orderBy: { createdAt: 'asc' }, select: { product: { select: { name: true } }, replenishmentGaps: { where: { status: { in: ['PENDING', 'PARTIAL_FILLED'] }, remainingQuantity: { gt: 0 } }, select: { id: true } } },
       } },
     });
 
-    return orders.map(order => ({ ...toSupplierOrderSummaryView(order), requestNo: order.request.requestNo, supplierName: order.supplier.name, storeName: order.store.name,
+    return orders.map(order => ({ ...toSupplierOrderSummaryView(order), shipmentCount: order.shipments.length,
+      pendingReplenishmentCount: order.items.reduce((sum, item) => sum + item.replenishmentGaps.length, 0),
+      pendingReceiptCount: order.shipments.filter(shipment => pendingReceiptKind(order, shipment)).length,
+      openReceiptExceptionCount: order.shipments.flatMap(shipment => shipment.receipts).filter(receipt => receipt.exceptionStatus && receipt.exceptionStatus !== 'RESOLVED').length,
+      pendingSupplierReceiptExceptionCount: order.shipments.flatMap(shipment => shipment.receipts).filter(receipt => receipt.exceptionStatus === 'SUBMITTED').length,
+      receiptExceptionCount: order.shipments.reduce((total, shipment) => total + shipment.receipts.reduce((count, receipt) => count + receipt.items.filter(item => item.discrepancy && ['OPEN', 'REPLENISH_PENDING'].includes(item.discrepancy.status)).length, 0), 0),
+      requestNo: order.request.requestNo, supplierName: order.supplier.name, storeName: order.store.name,
       productSummary: order.items.map(item => item.product.name).join('、') }));
   }
 
@@ -254,11 +288,11 @@ export class SupplierOrdersService {
         request: { select: { requestNo: true } },
         supplier: { select: { deliveryMode: true, name: true, contactName: true, contactPhone: true, deliveryContactPhone: true, address: true } },
         store: { select: { name: true, address: true, contactName: true, contactPhone: true, receiptAddress: true, receiptContactName: true, receiptContactPhone: true } },
-        items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true, imageFile: { select: { id: true } } } }, shipmentItems: { select: { permanentlyReduced: true, gapAllocations: { select: { quantity: true } } } }, replenishmentGaps: { orderBy: { createdAt: 'asc' } } } },
+        items: { orderBy: { createdAt: 'asc' }, include: { product: { select: { name: true, imageFile: { select: { id: true } } } }, shipmentItems: { select: { permanentlyReduced: true, gapAllocations: { select: { quantity: true } } } }, discrepancies: { include: { returnRecord: true } }, replenishmentGaps: { orderBy: { createdAt: 'asc' } } } },
         freightConfirmations: { orderBy: { createdAt: 'desc' } },
         shipments: { orderBy: { sequence: 'asc' }, include: {
           items: { include: { orderItem: true, gapAllocations: true } },
-          receipts: { where: { isCurrent: true }, include: { items: { include: { discrepancy: { include: { returnRecord: { select: { id: true } } } } } } } },
+          receipts: { where: { isCurrent: true }, include: { exceptionReplies: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], include: { actor: { select: { displayName: true } }, evidenceFiles: true } }, evidenceFiles: true, items: { include: { discrepancy: { include: { returnRecord: { select: { id: true } } } } } } } },
           revisions: { orderBy: { revision: 'desc' }, take: 1, include: { evidenceFiles: { select: { id: true, filename: true, mimeType: true, sizeBytes: true } } } },
         } },
       },
@@ -271,8 +305,19 @@ export class SupplierOrdersService {
     }
 
     const names = await readUnitDisplayNames(this.database.client as Prisma.TransactionClient, order.items.map(item => item.unitSnapshot));
+    const unagreed = unagreedShortages(order.items, order.shipments, order.deliveryState, readDeliveryReview(order.deliveryReview));
     return {
       ...toSupplierOrderDetailView(order),
+      shortageAgreementRequired: unagreed.length > 0,
+      unagreedShortageItems: unagreed,
+      pendingReplenishmentCount: order.items.reduce((sum, item) => sum + item.replenishmentGaps.filter(gap => ['PENDING', 'PARTIAL_FILLED'].includes(gap.status) && gap.remainingQuantity.gt(0)).length, 0),
+      shipmentCount: order.shipments.length,
+      pendingReceiptCount: order.shipments.filter(shipment => pendingReceiptKind(order, shipment)).length,
+      openReceiptExceptionCount: order.shipments.flatMap(shipment => shipment.receipts).filter(receipt => receipt.exceptionStatus && receipt.exceptionStatus !== 'RESOLVED').length,
+      pendingSupplierReceiptExceptionCount: order.shipments.flatMap(shipment => shipment.receipts).filter(receipt => receipt.exceptionStatus === 'SUBMITTED').length,
+      receiptExceptionCount: order.shipments.reduce((total, shipment) => total + shipment.receipts.reduce((count, receipt) => count + receipt.items.filter(item => item.discrepancy && ['OPEN', 'REPLENISH_PENDING'].includes(item.discrepancy.status)).length, 0), 0),
+      deliveryNote: order.deliveryNote,
+      deliveryReview: readDeliveryReview(order.deliveryReview),
       requestNo: order.request.requestNo,
       defaultDeliveryMode: order.supplier.deliveryMode,
       supplierName: order.supplier.name,
@@ -286,11 +331,29 @@ export class SupplierOrdersService {
       freightConfirmations: order.freightConfirmations.map(toFreightConfirmationView),
       shipments: order.shipments.map(shipment => {
         const currentReceipt = shipment.receipts[0];
-        const canRevise = !currentReceipt || (currentReceipt.items.length > 0 && currentReceipt.items.every(item =>
+        const receiptDifferences = (currentReceipt?.items ?? []).flatMap(line => {
+          const item = shipment.items.find(item => item.id === line.shipmentItemId);
+          if (!item || !line.receivedQuantity.lt(item.quantity)) return [];
+          return [{ productName: order.items.find(product => product.id === item.orderItemId)?.product.name ?? '商品', shippedQuantity: item.quantity.toString(), receivedQuantity: line.receivedQuantity.toString(), missingQuantity: item.quantity.minus(line.receivedQuantity).toString() }];
+        });
+        const review = readDeliveryReview(order.deliveryReview);
+        const canRevise = !currentReceipt?.exceptionStatus && !(review && shipment.shippedAt <= new Date(review.requestedAt)) && !['COMPLETED', 'DISPUTED', 'DECLINED'].includes(order.deliveryState ?? '') && (!currentReceipt || (currentReceipt.items.length > 0 && currentReceipt.items.every(item =>
           item.discrepancy?.status === DiscrepancyStatus.OPEN ||
-          (item.discrepancy?.status === DiscrepancyStatus.RESOLVED && Boolean(item.discrepancy.returnRecord))));
+          (item.discrepancy?.status === DiscrepancyStatus.RESOLVED && Boolean(item.discrepancy.returnRecord)))));
         return { ...toShipmentView(shipment), revision: shipment.revisions[0]?.revision ?? 0,
           note: shipment.revisions[0]?.note ?? null,
+          receiptNote: currentReceipt?.note ?? null,
+          receiptId: currentReceipt?.id,
+          receiptExceptionStatus: currentReceipt?.exceptionStatus ?? null,
+          canConfirmReceiptException: currentReceipt?.exceptionStatus === 'RESPONDED' && (currentReceipt.exceptionDecision !== 'REPLENISH' || !unagreed.some(line => shipment.items.some(item => item.orderItemId === line.orderItemId))),
+          receiptExceptionResponse: currentReceipt?.exceptionResponse ?? null,
+          receiptExceptionDecision: currentReceipt?.exceptionDecision ?? null,
+          receiptExceptionResolution: currentReceipt?.exceptionResolution ?? null,
+          receiptExceptionReplies: (currentReceipt?.exceptionReplies ?? []).map(reply => ({ id: reply.id, decision: reply.decision, note: reply.note, createdAt: reply.createdAt.toISOString(), actorName: reply.actor.displayName,
+            evidenceFiles: reply.evidenceFiles.map(file => ({ id: file.id, filename: file.filename, mimeType: file.mimeType, sizeBytes: file.sizeBytes.toString() })) })),
+          receiptHasException: Boolean(currentReceipt?.hasException || currentReceipt?.exceptionStatus || receiptDifferences.length),
+          receiptDifferences,
+          receiptEvidenceFiles: (currentReceipt?.evidenceFiles ?? []).map(file => ({ id: file.id, filename: file.filename, mimeType: file.mimeType, sizeBytes: file.sizeBytes.toString() })),
           evidenceFiles: (shipment.revisions[0]?.evidenceFiles || []).map(file => ({ ...file, sizeBytes: file.sizeBytes.toString() })),
           currentReceiptRevision: currentReceipt?.revision ?? 0, canRevise };
       }),
@@ -322,6 +385,9 @@ export class SupplierOrdersService {
         details: { expectedVersion, currentVersion: order.version },
       });
     }
+
+    if (order.deliveryState && !['IN_PROGRESS', 'REPLENISHING'].includes(order.deliveryState)) throw new ConflictException({ code: 'DELIVERY_ALREADY_FINISHED', message: '发货已结束，请等待门店确认或处理门店异议后补发' });
+    if (input.items.some(item => new Decimal(item.permanentlyReduceQuantity).gt(0))) throw new ConflictException({ code: 'ORDER_QUANTITY_IMMUTABLE', message: '发货不能直接核减订单数量，请申报实际发货并通过异常协商处理' });
 
     if (
       order.status !== SupplierOrderStatus.PUSHED &&
@@ -360,6 +426,10 @@ export class SupplierOrdersService {
       }
 
       const shipQuantity = new Decimal(inputItem.shipQuantity);
+      if (order.deliveryState === 'REPLENISHING') {
+        const line = readDeliveryReview(order.deliveryReview)?.items.find(line => line.orderItemId === item.id);
+        if (!line || shipQuantity.gt(Decimal.max(0, new Decimal(line.quantity).minus(new Decimal(item.shippedQuantity).minus(line.shippedBefore))))) throw new ConflictException({ code: 'REPLENISHMENT_EXCEEDED', message: '补发商品和数量不能超过门店异议中的待补数量' });
+      }
       const permanentlyReduceQuantity = new Decimal(inputItem.permanentlyReduceQuantity);
       const remainingBefore = remainingNormalShipmentQuantity(item);
       const handledQuantity = shipQuantity.plus(permanentlyReduceQuantity);
@@ -475,19 +545,27 @@ export class SupplierOrdersService {
   }
 
   async createShipment(id: string, expectedVersion: number, input: ShipmentPreviewInput, scope?: { type: string; supplierId?: string }, transaction?: Prisma.TransactionClient, actorUserId?: string): Promise<ShipmentView> {
+    if (input.items.some(item => new Decimal(item.permanentlyReduceQuantity).gt(0))) throw new ConflictException({ code: 'ORDER_QUANTITY_IMMUTABLE', message: '发货不能直接核减订单数量，请申报实际发货并通过异常协商处理' });
     const preview = await this.shipmentPreview(id, expectedVersion, input, scope);
     const order = await this.database.client.supplierOrder.findUniqueOrThrow({
       where: { id, supplierId: scope?.type === 'SUPPLIER' ? scope?.supplierId : undefined },
-      include: { items: true, shipments: true },
+      include: { items: { include: { shipmentItems: { include: { gapAllocations: true } }, replenishmentGaps: true } }, shipments: true },
     });
-    const orderItemsById = new Map(order.items.map((item) => [item.id, item]));
+    const orderItemsById = new Map<string, OrderItem>(order.items.map((item) => [item.id, item]));
     const sequence = order.shipments.length + 1;
-    const kind = sequence === 1 ? ShipmentKind.INITIAL : ShipmentKind.REPLENISHMENT;
-    const hasRemainingAfter = preview.items.some((item) => new Decimal(item.remainingQuantityAfter).gt(0));
+    const kind = order.deliveryState === 'REPLENISHING' || input.items.some(item => item.gapAllocations?.length) ? ShipmentKind.REPLENISHMENT : ShipmentKind.INITIAL;
+    const refreshedRemaining = new Map(preview.items.map(item => [item.orderItemId, item.remainingQuantityAfter]));
+    const allocated = new Map(preview.items.flatMap(item => item.gapAllocations.map(gap => [gap.gapId, new Decimal(gap.quantity)] as const)));
+    const hasRemainingAfter = order.items.some(item => new Decimal(refreshedRemaining.get(item.id) ?? remainingNormalShipmentQuantity(item)).gt(0)
+      || item.replenishmentGaps.some(gap => ['PENDING', 'PARTIAL_FILLED'].includes(gap.status) && gap.remainingQuantity.minus(allocated.get(gap.id) ?? 0).gt(0)));
+    const batchWorkflow = Boolean(order.deliveryState) || input.completeDelivery !== undefined;
     const quantities = new Map(input.items.map(item => [item.orderItemId, new Decimal(item.shipQuantity)]));
-    const shortShipment = order.items.some(item => new Decimal(item.shippedQuantity).plus(quantities.get(item.id) ?? 0).lt(item.quantity));
-    if (shortShipment && !input.note?.trim() && !input.evidenceFileIds?.length) {
-      throw new ConflictException({ code: 'SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED', message: '发货数量少于订购数量，请填写说明或上传凭证' });
+    const review = readDeliveryReview(order.deliveryReview);
+    const shortShipment = order.deliveryState === 'REPLENISHING' && review
+      ? review.items.some(line => new Decimal(line.quantity).gt(new Decimal(orderItemsById.get(line.orderItemId)!.shippedQuantity).minus(line.shippedBefore).plus(quantities.get(line.orderItemId) ?? 0)))
+      : hasRemainingAfter;
+    if (shortShipment && (!batchWorkflow || input.completeDelivery) && (!input.note?.trim() || !input.evidenceFileIds?.length)) {
+      throw new ConflictException({ code: 'SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED', message: '异常发货必须填写备注并上传发货凭证' });
     }
     if (input.note && input.note.trim().length > 500) throw new ConflictException({ code: 'INVALID_SHIPMENT_NOTE', message: '说明最多500字' });
 
@@ -632,6 +710,10 @@ export class SupplierOrdersService {
         data: {
           status: hasRemainingAfter ? SupplierOrderStatus.PARTIAL_SHIPPED : SupplierOrderStatus.SHIPPED,
           fulfillmentStatus: hasRemainingAfter ? FulfillmentStatus.PARTIAL_SHIPPED : FulfillmentStatus.SHIPPED,
+          ...(batchWorkflow ? { deliveryState: input.completeDelivery ? 'FINISHED' : order.deliveryState === 'REPLENISHING' ? 'REPLENISHING' : 'IN_PROGRESS',
+            deliveryCompletedAt: input.completeDelivery ? new Date() : null, deliveryNote: input.completeDelivery ? input.note?.trim() || null : order.deliveryNote,
+            status: input.completeDelivery ? SupplierOrderStatus.SHIPPED : SupplierOrderStatus.PARTIAL_SHIPPED,
+            fulfillmentStatus: input.completeDelivery ? FulfillmentStatus.SHIPPED : FulfillmentStatus.PARTIAL_SHIPPED } : {}),
           firstShippedAt,
           version: { increment: 1 },
         },
@@ -685,6 +767,9 @@ export class SupplierOrdersService {
       },
     });
     if (!shipment) throw new NotFoundException({ code: 'SHIPMENT_NOT_FOUND', message: 'Shipment was not found' });
+    if (shipment.receipts[0]?.exceptionStatus) throw new ConflictException({ code: 'SHIPMENT_ALREADY_RECEIVED', message: '门店异常收货已提交，本批发货数量已锁定，请处理异常或安排补发' });
+    const deliveryReview = readDeliveryReview(shipment.supplierOrder.deliveryReview);
+    if (deliveryReview && shipment.shippedAt <= new Date(deliveryReview.requestedAt)) throw new ConflictException({ code: 'SHIPMENT_ALREADY_REVIEWED', message: '门店已基于本批提出整单异议，本批数量已锁定' });
     if (shipment.supplierOrder.version !== input.expectedOrderVersion) throw new ConflictException({ code: 'VERSION_CONFLICT', message: 'Supplier order version has changed' });
     const currentRevision = shipment.revisions[0]?.revision ?? 0;
     if (input.expectedRevision !== currentRevision) throw new ConflictException({ code: 'SHIPMENT_REVISION_CONFLICT', message: 'Shipment has a newer revision', details: { currentRevision } });
@@ -708,8 +793,10 @@ export class SupplierOrdersService {
       if (isLocked) throw new ConflictException({ code: 'SHIPMENT_ALREADY_RECEIVED', message: 'A shipment with finally confirmed receipt cannot be revised' });
       return { shipmentItem, orderItem, quantity };
     });
-    const needsEvidence = revisedItems.some(item => item.quantity.lt(item.orderItem.quantity));
-    if (needsEvidence && (!input.note?.trim() || !input.evidenceFileIds?.length)) throw new ConflictException({ code: 'SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED', message: '少于门店下单数量时必须上传凭证并填写备注' });
+    const explicitDelivery = Boolean(shipment.supplierOrder.deliveryState);
+    const needsEvidence = revisedItems.some(item => item.quantity.lt(explicitDelivery ? item.shipmentItem.quantity : item.orderItem.quantity));
+    if (needsEvidence && (!input.note?.trim() || !input.evidenceFileIds?.length)) throw new ConflictException({ code: 'SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED', message: '异常发货必须填写备注并上传发货凭证' });
+    if (input.evidenceFileIds?.length && !actorUserId) throw new ConflictException({ code: 'SHIPMENT_EVIDENCE_INVALID', message: '缺少发货凭证上传账号' });
     if (input.note && input.note.trim().length > 500) throw new ConflictException({ code: 'INVALID_SHIPMENT_NOTE', message: '备注最多500字' });
     if (input.evidenceFileIds && (input.evidenceFileIds.length > 6 || new Set(input.evidenceFileIds).size !== input.evidenceFileIds.length)) throw new ConflictException({ code: 'SHIPMENT_EVIDENCE_INVALID', message: '最多上传6张不同凭证' });
 
@@ -728,7 +815,7 @@ export class SupplierOrdersService {
         });
         if (attached.count !== input.evidenceFileIds.length) throw new ConflictException({ code: 'SHIPMENT_EVIDENCE_INVALID', message: '发货凭证无效、未完成上传、已使用或不属于当前账号' });
       }
-      if (needsEvidence && (!actorUserId || !input.evidenceFileIds?.length)) throw new ConflictException({ code: 'SHIPMENT_EVIDENCE_INVALID', message: '缺少发货差异凭证' });
+      if (needsEvidence && !explicitDelivery && (!actorUserId || !input.evidenceFileIds?.length)) throw new ConflictException({ code: 'SHIPMENT_EVIDENCE_INVALID', message: '缺少发货差异凭证' });
       await tx.shipmentRevisionItem.createMany({ data: revisedItems.map(item => ({ shipmentRevisionId: created.id, shipmentItemId: item.shipmentItem.id, quantity: item.quantity.toDecimalPlaces(6).toString() })) });
       for (const item of revisedItems) {
         const delta = item.quantity.minus(item.shipmentItem.quantity);
@@ -748,13 +835,18 @@ export class SupplierOrdersService {
         await tx.discrepancy.updateMany({ where: { receiptItem: { receiptId: receipt.id }, status: DiscrepancyStatus.OPEN }, data: { status: DiscrepancyStatus.SUPERSEDED } });
       }
       const orderItems = await tx.orderItem.findMany({ where: { supplierOrderId: id }, include: { shipmentItems: true, discrepancies: { include: { replenishmentGap: true, returnRecord: true } } } });
-      const status = resolveSupplierOrderFulfillmentStatus(orderItems);
-      await tx.supplierOrder.update({ where: { id }, data: { version: { increment: 1 }, fulfillmentStatus: status, status: status === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : SupplierOrderStatus.PARTIAL_SHIPPED, completedAt: status === FulfillmentStatus.COMPLETED ? new Date() : null } });
+      if (['COMPLETED', 'DISPUTED', 'DECLINED'].includes(currentOrder.deliveryState ?? '')) throw new ConflictException({ code: 'SHIPMENT_REVISION_NOT_ALLOWED', message: '当前订单不允许修改发货数量' });
+      const status = resolveSupplierOrderFulfillmentStatus(orderItems, currentOrder.deliveryState);
+      await tx.supplierOrder.update({ where: { id }, data: { version: { increment: 1 }, fulfillmentStatus: status, status: status === FulfillmentStatus.COMPLETED ? SupplierOrderStatus.COMPLETED : status === FulfillmentStatus.SHIPPED ? SupplierOrderStatus.SHIPPED : SupplierOrderStatus.PARTIAL_SHIPPED, completedAt: status === FulfillmentStatus.COMPLETED ? new Date() : null } });
       const recipients = await tx.user.findMany({ where: { status: UserStatus.ACTIVE, scopes: { some: { scopeType: UserScopeType.STORE, storeId: shipment.supplierOrder.storeId } }, roles: { some: { role: { code: { in: ['STORE', 'STORE_FINANCE'] } } } } }, select: { id: true } });
       if (recipients.length) await tx.notification.createMany({ data: recipients.map(recipient => ({ recipientId: recipient.id, eventKey: `SHIPMENT_REVISED:${created.id}`, channel: 'IN_APP', title: '供应商更新发货数量', body: `供应商订单 ${shipment.supplierOrder.supplierOrderNo} 的发货数量已更新，请重新核对。`, payload: { type: 'SHIPMENT_REVISED', route: '/main-flow-demo.html', supplierOrderId: id, shipmentId, revision: created.revision } })), skipDuplicates: true });
       return { shipmentId, revision: created.revision, supplierOrderVersion: currentOrder.version + 1, items: revisedItems.map(item => ({ shipmentItemId: item.shipmentItem.id, quantity: item.quantity.toDecimalPlaces(6).toString() })), evidenceFileIds: input.evidenceFileIds ?? [], note: created.note };
     };
     return transaction ? execute(transaction) : this.database.client.$transaction(execute);
+  }
+
+  async deliveryAction(id: string, action: DeliveryAction, input: DeliveryInput, tx: Prisma.TransactionClient, scope?: { type: string; storeId?: string; supplierId?: string }, actorUserId?: string) {
+    return transitionDelivery(tx, id, action, input, scope, actorUserId);
   }
 
   async reject(id: string, expectedVersion: number, reason: string, scope?: { type: string; supplierId?: string }, transaction?: Prisma.TransactionClient): Promise<RejectSupplierOrderResult> {
@@ -1009,6 +1101,8 @@ function toReconcileSupplierOrderFundingResult(
 
 function toSupplierOrderSummaryView(order: SupplierOrder): SupplierOrderSummaryView {
   return {
+    deliveryState: order.deliveryState,
+    deliveryCompletedAt: order.deliveryCompletedAt?.toISOString() ?? null,
     id: order.id,
     supplierOrderNo: order.supplierOrderNo,
     requestId: order.requestId,

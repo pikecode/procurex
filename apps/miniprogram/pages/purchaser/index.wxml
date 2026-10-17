@@ -1,6 +1,6 @@
 <template name="confirmationFunds">
   <view class="confirmation-funds">
-    <view class="funds-heading"><text>资金核验</text><button class="funds-refresh" size="mini" bindtap="refreshConfirmationFunding" disabled="{{fundingLoading || savingRequest || confirming}}">{{fundingLoading ? '核验中' : '重新核验'}}</button></view>
+    <view class="funds-heading"><text>资金核验</text><button wx:if="{{!isFailure}}" class="funds-refresh" size="mini" bindtap="refreshConfirmationFunding" disabled="{{fundingLoading || savingRequest || confirming}}">{{fundingLoading ? '核验中' : '重新核验'}}</button></view>
     <block wx:if="{{fundingView}}">
       <view class="funds-grid funds-table-heading"><text>支付方式</text><text>本单所需</text><text>本单可用</text></view>
       <view class="funds-grid funds-table-row"><text>储值</text><text>¥{{fundingView.stored.required}}</text><text>¥{{fundingView.stored.available}}</text></view>
@@ -240,9 +240,11 @@
   <view class="card" wx:if="{{activeView === 'orders' && !requestId && recordType === 'requests'}}">
     <view id="order-list-controls" class="order-list-controls sticky-bar">
     <input class="business-search" value="{{search}}" bindinput="onSearch" confirm-type="search" placeholder="搜索门店或下货单号" />
-    <scroll-view scroll-x show-scrollbar="{{false}}" class="order-status-scroll">
-    <view class="status-filters"><text class="{{statusFilter === 'all' ? 'selected' : ''}}" data-filter="all" bindtap="filterStatus">全部</text><text class="{{statusFilter === 'PENDING_PROCUREMENT' ? 'selected' : ''}}" data-filter="PENDING_PROCUREMENT" bindtap="filterStatus">待确认</text><text class="{{statusFilter === 'PENDING_FUNDS' ? 'selected' : ''}}" data-filter="PENDING_FUNDS" bindtap="filterStatus">待补款</text><text class="{{statusFilter === 'PENDING_FINANCE' ? 'selected' : ''}}" data-filter="PENDING_FINANCE" bindtap="filterStatus">待采购处理</text><text class="{{statusFilter === 'CONFIRMED' ? 'selected' : ''}}" data-filter="CONFIRMED" bindtap="filterStatus">已生成订单</text></view>
-    </scroll-view>
+    <view class="status-bar">
+      <scroll-view class="status-scroll" scroll-x scroll-with-animation scroll-into-view="{{statusScrollTarget}}" show-scrollbar="{{false}}"><view class="status-track"><text wx:for="{{requestStatusTabs}}" wx:key="value" id="request-status-{{item.value}}" class="status-tab {{statusFilter === item.value ? 'is-selected' : ''}}" data-filter="{{item.value}}" bindtap="filterStatus">{{item.label}}</text></view></scroll-view>
+      <button class="status-toggle {{statusExpanded ? 'is-expanded' : ''}}" bindtap="toggleStatusExpanded" aria-label="{{statusExpanded ? '收起状态筛选' : '展开全部状态'}}"><view class="status-chevron" /></button>
+    </view>
+    <view wx:if="{{statusExpanded}}" class="status-grid"><view wx:for="{{requestStatusTabs}}" wx:key="value" class="status-option {{statusFilter === item.value ? 'is-selected' : ''}}" data-filter="{{item.value}}" bindtap="filterStatus"><text>{{item.label}}</text></view></view>
     </view>
     <view class="list">
       <view wx:for="{{visibleRequests}}" wx:key="id" class="row pressable" bindtap="selectRequest" data-id="{{item.id}}">
@@ -306,4 +308,13 @@
     <view class="row"><view class="row-title"><text>{{result.title}}</text><text class="status tone-brand">{{labels.status(result.status)}}</text></view><view class="muted">{{result.detail}}</view></view>
   </view>
   <button class="secondary" wx:if="{{activeView === 'orders' && !selectedRequest && moreOrders}}" bindtap="nextOrders">加载更多</button>
+  <view class="sheet-mask" wx:if="{{fundingFailure}}" bindtap="closeFundingFailure">
+    <view class="funding-failure-sheet" catchtap="keepEditCartOpen">
+      <view class="funding-failure-title">资金不足，暂不能生成订单</view>
+      <scroll-view scroll-y class="funding-failure-content">
+        <template is="confirmationFunds" data="{{fundingView: fundingFailure.funding, fundingSupplierRows: fundingFailure.suppliers, isFailure: true}}" />
+      </scroll-view>
+      <button class="primary" bindtap="closeFundingFailure">{{editingRequest ? '返回调整' : '知道了'}}</button>
+    </view>
+  </view>
 </view>

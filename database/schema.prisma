@@ -213,6 +213,7 @@ model User {
   notifications Notification[]
   files         FileObject[]
   shipmentRevisions ShipmentRevision[]
+  receiptExceptionReplies ReceiptExceptionReply[]
   auditLogs     AuditLog[]
 }
 
@@ -809,6 +810,10 @@ model SupplierOrder {
   requiresFreightSnapshot Boolean?
   status                  SupplierOrderStatus      @default(DRAFT)
   fulfillmentStatus       FulfillmentStatus        @default(PENDING)
+  deliveryState           String?                  @db.VarChar(40)
+  deliveryCompletedAt     DateTime?                @db.Timestamptz(6)
+  deliveryNote            String?                  @db.VarChar(500)
+  deliveryReview          Json?
   completedAt             DateTime?                @db.Timestamptz(6)
   firstShippedAt          DateTime?                @db.Timestamptz(6)
   pushedAt                DateTime?                @db.Timestamptz(6)
@@ -859,6 +864,7 @@ model OrderItem {
   quantity               Decimal                 @db.Decimal(20, 6)
   shippedQuantity        Decimal                 @default(0) @db.Decimal(20, 6)
   receivedQuantity       Decimal                 @default(0) @db.Decimal(20, 6)
+  closedQuantity         Decimal                 @default(0) @db.Decimal(20, 6)
   salesUnitPrice         Decimal                 @db.Decimal(20, 6)
   supplyUnitPrice        Decimal                 @db.Decimal(20, 6)
   salesLineAmount        Decimal                 @db.Decimal(20, 2)
@@ -980,14 +986,35 @@ model Receipt {
   shipmentId  String        @db.Uuid
   revision    Int
   isCurrent   Boolean       @default(true)
+  note        String?       @db.VarChar(500)
+  hasException Boolean      @default(false)
+  exceptionStatus String?   @db.VarChar(20)
+  exceptionResponse String? @db.VarChar(500)
+  exceptionDecision String? @db.VarChar(20)
+  exceptionResolution String? @db.VarChar(500)
   submittedAt DateTime      @default(now()) @db.Timestamptz(6)
   createdAt   DateTime      @default(now()) @db.Timestamptz(6)
   shipment    Shipment      @relation(fields: [shipmentId], references: [id])
   items       ReceiptItem[]
   evidenceFiles FileObject[]
+  exceptionReplies ReceiptExceptionReply[]
 
   @@unique([shipmentId, revision])
   @@index([shipmentId, isCurrent])
+}
+
+model ReceiptExceptionReply {
+  id String @id @default(uuid()) @db.Uuid
+  receiptId String @db.Uuid
+  actorUserId String @db.Uuid
+  decision String @db.VarChar(20)
+  note String @db.VarChar(500)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  receipt Receipt @relation(fields: [receiptId], references: [id])
+  actor User @relation(fields: [actorUserId], references: [id])
+  evidenceFiles FileObject[]
+
+  @@index([receiptId, createdAt])
 }
 
 model ReceiptItem {
@@ -1050,7 +1077,7 @@ model DiscrepancyReturn {
 
 model ReplenishmentGap {
   id                  String                  @id @default(uuid()) @db.Uuid
-  discrepancyId       String                  @unique @db.Uuid
+  discrepancyId       String?                 @unique @db.Uuid
   orderItemId         String                  @db.Uuid
   quantity            Decimal                 @db.Decimal(20, 6)
   remainingQuantity   Decimal                 @db.Decimal(20, 6)
@@ -1058,7 +1085,7 @@ model ReplenishmentGap {
   version             Int                     @default(1)
   createdAt           DateTime                @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime                @updatedAt @db.Timestamptz(6)
-  discrepancy         Discrepancy             @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
+  discrepancy         Discrepancy?            @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
   orderItem           OrderItem               @relation(fields: [orderItemId], references: [id])
   shipmentAllocations ShipmentGapAllocation[]
 
@@ -1244,6 +1271,7 @@ model FileObject {
   rechargeId      String?        @db.Uuid
   clearingId      String?        @db.Uuid
   shipmentRevisionId String?     @db.Uuid
+  receiptExceptionReplyId String? @db.Uuid
   createdAt       DateTime       @default(now()) @db.Timestamptz(6)
   owner           User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   payment         PaymentRecord? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
@@ -1251,6 +1279,7 @@ model FileObject {
   recharge        RechargeDocument? @relation(fields: [rechargeId], references: [id], onDelete: SetNull)
   clearing        ClearingDocument? @relation(fields: [clearingId], references: [id], onDelete: SetNull)
   shipmentRevision ShipmentRevision? @relation(fields: [shipmentRevisionId], references: [id], onDelete: SetNull)
+  receiptExceptionReply ReceiptExceptionReply? @relation(fields: [receiptExceptionReplyId], references: [id], onDelete: SetNull)
   product         Product?       @relation("ProductImage")
 
   @@index([ownerId, status])
@@ -1259,6 +1288,7 @@ model FileObject {
   @@index([rechargeId])
   @@index([clearingId])
   @@index([shipmentRevisionId])
+  @@index([receiptExceptionReplyId])
 }
 
 model Overpayment {

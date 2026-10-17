@@ -1,14 +1,23 @@
 <wxs src="../../utils/labels.wxs" module="labels" />
 <view class="center" wx:if="{{active}}">
+  <view wx:if="{{pendingDelivery}}" class="band"><text>整单收货提交结果待确认</text><button bindtap="recoverDelivery" disabled="{{deliveryBusy}}" loading="{{deliveryBusy}}">核对原提交结果</button></view>
   <block wx:if="{{!selectedId}}">
-    <view class="controls"><input placeholder="搜索订单号、下货单号、门店或供应商" value="{{search}}" bindinput="onSearch" confirm-type="search" /><scroll-view scroll-x show-scrollbar="{{false}}"><view class="filters"><text class="{{filter === 'all' ? 'selected' : ''}}" data-filter="all" bindtap="chooseFilter">全部</text><text class="{{filter === 'pending' ? 'selected' : ''}}" data-filter="pending" bindtap="chooseFilter">待发货</text><text class="{{filter === 'receiving' ? 'selected' : ''}}" data-filter="receiving" bindtap="chooseFilter">履约中</text><text class="{{filter === 'completed' ? 'selected' : ''}}" data-filter="completed" bindtap="chooseFilter">已完成</text><text class="{{filter === 'closed' ? 'selected' : ''}}" data-filter="closed" bindtap="chooseFilter">已关闭 / 拒单</text></view></scroll-view></view>
+    <view class="controls">
+      <input placeholder="搜索订单号、下货单号、门店或供应商" value="{{search}}" bindinput="onSearch" confirm-type="search" />
+      <view class="status-bar">
+        <scroll-view class="status-scroll" scroll-x scroll-with-animation scroll-into-view="{{statusScrollTarget}}" show-scrollbar="{{false}}"><view class="status-track"><text id="store-status-{{item.value}}" wx:for="{{tabs}}" wx:key="value" class="status-tab {{filter === item.value ? 'is-selected' : ''}}" data-filter="{{item.value}}" bindtap="chooseFilter">{{item.label}} {{item.count}}</text></view></scroll-view>
+        <button class="status-toggle {{statusExpanded ? 'is-expanded' : ''}}" bindtap="toggleStatusExpanded" aria-label="{{statusExpanded ? '收起状态筛选' : '展开全部状态'}}"><view class="status-chevron" /></button>
+      </view>
+      <view wx:if="{{statusExpanded}}" class="status-grid"><view wx:for="{{tabs}}" wx:key="value" class="status-option {{filter === item.value ? 'is-selected' : ''}}" data-filter="{{item.value}}" bindtap="chooseFilter"><text>{{item.label}}</text><text>{{item.count}}</text></view></view>
+    </view>
     <view class="dates"><picker mode="date" value="{{from}}" data-field="from" bindchange="chooseDate"><text>{{from || '开始日期'}}</text></picker><text>至</text><picker mode="date" value="{{to}}" data-field="to" bindchange="chooseDate"><text>{{to || '结束日期'}}</text></picker><text wx:if="{{from || to}}" bindtap="clearDates">清除</text></view>
     <text class="date-error" wx:if="{{dateError}}">{{dateError}}</text>
     <view class="caption"><text>{{loading || error ? '—' : total}} 张订单</text><text bindtap="load">刷新</text></view>
     <view class="error" wx:if="{{error}}">{{error}}<button bindtap="load">重试</button></view>
     <view class="empty" wx:elif="{{loading}}">正在读取订单</view>
     <view class="entry" wx:for="{{visible}}" wx:key="id" data-id="{{item.id}}" bindtap="open">
-      <view class="row"><text class="title">{{mode === 'store' ? item.supplierName : item.storeName}}</text><text class="state">{{labels.status(item.status)}}</text></view>
+      <view class="row"><text class="title">{{mode === 'store' ? item.supplierName : item.storeName}}</text><text class="state">{{item.displayStatus}}</text></view>
+      <text class="order-exception-marker" wx:if="{{item.stage === 'receiving' && item.exceptionLabel}}">{{item.exceptionLabel}}</text>
       <text class="meta" wx:if="{{mode === 'purchaser'}}">{{item.supplierName}}</text>
       <view class="number">订单号 <document-no value="{{item.supplierOrderNo}}" /></view>
       <text class="summary">{{item.productSummary || '查看商品清单'}}</text>
@@ -22,13 +31,82 @@
     <view class="empty" wx:if="{{detailing}}">正在读取订单</view>
     <view class="error" wx:if="{{detailError}}">{{detailError}}<button bindtap="open">重试</button></view>
     <block wx:if="{{selected}}">
-      <view class="band"><view class="row"><text class="title">{{selected.supplierName}}</text><text class="state">{{labels.status(selected.status)}}</text></view><text class="meta">门店：{{selected.storeName}}</text><view class="number">订单号 <document-no value="{{selected.supplierOrderNo}}" /></view><view class="row"><text class="meta">{{selected.createdText}}</text><text class="money">¥{{labels.money(selected.salesGoodsAmount)}}</text></view></view>
-      <view class="band"><view class="row"><text class="title">商品清单 · {{selected.items.length}} 种</text><view class="price-switch" wx:if="{{mode === 'purchaser'}}"><text>供应商价格</text><switch checked="{{showPrices}}" bindchange="prices" color="#167e5a" /></view></view>
-        <view class="product" wx:for="{{selected.items}}" wx:key="id"><product-card product="{{item}}" variant="compact" bind:retryimage="retryImage"><view class="row"><text class="product-name">{{item.productName}}</text><text class="money">¥{{labels.money(item.salesLineAmount)}}</text></view><text class="meta">{{item.quantity}} {{item.unitName || item.unitSnapshot.salesUnitName || ''}} × ¥{{labels.money(item.salesUnitPrice)}}</text><text class="meta">已发 {{item.shippedQuantity}} · 已收 {{item.receivedQuantity}}</text><text class="meta" wx:if="{{showPrices && mode === 'purchaser'}}">供应商价格 ¥{{labels.money(item.supplyUnitPrice)}} · 金额 ¥{{labels.money(item.supplyLineAmount)}}</text></product-card></view>
+      <view class="band order-overview">
+        <view class="row"><text class="overview-name">{{mode === 'store' ? selected.supplierName : selected.storeName}}</text><text class="detail-status {{selected.openReceiptExceptionCount ? 'status-warning' : ''}}">{{selected.displayStatus}}</text></view>
+        <text class="meta" wx:if="{{mode === 'purchaser'}}">{{selected.supplierName}}</text>
+        <view class="overview-number"><text>订单号</text><document-no value="{{selected.supplierOrderNo}}" /></view>
+        <view class="overview-total"><text>{{selected.items.length}} 种商品 · {{selected.shipments.length}} 批发货</text><text class="overview-amount">¥{{labels.money(selected.salesGoodsAmount)}}</text></view>
       </view>
-      <view class="band" wx:if="{{selected.supplierContact}}"><text class="title">供应商联系信息</text><text class="meta" wx:if="{{selected.supplierContact.contactName}}">联系人：{{selected.supplierContact.contactName}}</text><text class="meta phone" wx:if="{{selected.supplierContact.contactPhone}}" data-phone="{{selected.supplierContact.contactPhone}}" bindtap="callContact">业务电话：{{selected.supplierContact.contactPhone}}</text><text class="meta phone" wx:if="{{selected.supplierContact.deliveryContactPhone}}" data-phone="{{selected.supplierContact.deliveryContactPhone}}" bindtap="callContact">配送电话：{{selected.supplierContact.deliveryContactPhone}}</text><text class="meta" wx:if="{{selected.supplierContact.address}}">地址：{{selected.supplierContact.address}}</text></view>
-      <view class="band"><text class="title">发货与收货</text><view class="batch" wx:for="{{selected.shipments}}" wx:key="id"><view class="row"><text>{{item.kind === 'REPLENISHMENT' ? '补发' : '发货'}} · {{item.shippedText}}</text><text class="state">{{item.currentReceiptRevision ? '已提交收货' : '待收货'}}</text></view><view class="number">发货单号 <document-no value="{{item.shipmentNo}}" /></view><text class="meta" wx:if="{{item.trackingNo}}">物流单号 {{item.trackingNo}}</text><button wx:if="{{canReceive}}" data-id="{{item.id}}" bindtap="receipt">{{item.currentReceiptRevision ? '查看本批收货' : '核对本批收货'}}</button></view><text class="meta" wx:if="{{!selected.shipments.length}}">{{selected.status === 'REJECTED' ? '供应商拒单，等待采购处理' : selected.status === 'CANCELED' ? '订单已取消' : '尚未发货'}}</text><button wx:if="{{mode === 'purchaser' && canReallocate && selected.status === 'REJECTED'}}" bindtap="reallocate">查看拒单及改派处理</button></view>
-      <view class="band source" bindtap="source"><text class="meta">来源下货单</text><view class="number"><document-no value="{{selected.requestNo || '查看来源记录'}}" /> ›</view></view>
+      <view class="receipt-notice" wx:if="{{receiptNotice && receiptNotice.supplierOrderId === selected.id}}">{{receiptNotice.detail}}</view>
+      <view class="detail-tabs">
+        <view class="detail-tab {{detailTab === 'products' ? 'tab-active' : ''}}" data-tab="products" bindtap="chooseDetailTab">商品<text>{{selected.items.length}}</text></view>
+        <view class="detail-tab {{detailTab === 'shipments' ? 'tab-active' : ''}}" data-tab="shipments" bindtap="chooseDetailTab">发货<text>{{selected.shipments.length}}</text></view>
+        <view class="detail-tab {{detailTab === 'exceptions' ? 'tab-active' : ''}}" data-tab="exceptions" bindtap="chooseDetailTab">异常<text class="{{selected.openReceiptExceptionCount ? 'count-warning' : ''}}">{{selected.receiptExceptions.length}}</text></view>
+      </view>
+
+      <view class="band detail-panel" wx:if="{{detailTab === 'products'}}">
+        <view class="section-heading"><text class="title">商品明细</text><view class="price-switch" wx:if="{{mode === 'purchaser'}}"><text>供应商价格</text><switch checked="{{showPrices}}" bindchange="prices" color="#167e5a" /></view></view>
+        <view class="product" wx:for="{{selected.items}}" wx:key="id"><product-card product="{{item}}" variant="compact" bind:retryimage="retryImage"><view class="row"><text class="product-name">{{item.productName}}</text><text class="money">¥{{labels.money(item.salesLineAmount)}}</text></view><text class="meta">{{labels.quantity(item.quantity)}} {{item.unitName || item.unitSnapshot.salesUnitName || ''}} × ¥{{labels.money(item.salesUnitPrice)}}</text><text class="meta">已发 {{labels.quantity(item.shippedQuantity)}} · 已收 {{labels.quantity(item.receivedQuantity)}}</text><text class="meta" wx:if="{{showPrices && mode === 'purchaser'}}">供应商价格 ¥{{labels.money(item.supplyUnitPrice)}} · 金额 ¥{{labels.money(item.supplyLineAmount)}}</text></product-card></view>
+      </view>
+
+      <view class="band detail-panel" wx:if="{{detailTab === 'shipments'}}">
+        <view class="section-heading"><text class="title">发货记录</text><text class="section-count">{{selected.shipments.length}} 批</text></view>
+        <view class="batch" wx:for="{{selected.shipments}}" wx:key="id">
+          <view class="row"><text class="record-title">第 {{item.batchNumber}} 批 · {{item.kind === 'REPLENISHMENT' ? '补发' : '发货'}}</text><text class="record-status {{item.receiptHasException ? 'text-warning' : ''}}">{{item.receiptHasException ? item.receiptExceptionLabel : item.currentReceiptRevision ? '已登记收货' : '待收货'}}</text></view>
+          <text class="meta">{{item.shippedText}}</text>
+          <view class="record-number"><text>发货单</text><document-no value="{{item.shipmentNo}}" /></view>
+          <text class="meta" wx:if="{{item.trackingNo}}">{{item.carrierName || '物流'}} · {{item.trackingNo}}</text>
+          <view class="record-actions"><button class="text-action" wx:if="{{item.receiptHasException}}" data-id="{{item.id}}" bindtap="showReceiptExceptions">查看异常 ›</button><button class="{{item.currentReceiptRevision ? 'text-action' : 'small-primary'}}" wx:if="{{canReceive}}" data-id="{{item.id}}" bindtap="receipt">{{item.currentReceiptRevision ? '查看收货记录 ›' : '确认本批收货'}}</button></view>
+        </view>
+        <view class="panel-empty" wx:if="{{!selected.shipments.length}}">{{selected.status === 'REJECTED' ? '供应商拒单，等待采购处理' : selected.status === 'CANCELED' ? '订单已取消' : '尚未发货'}}</view>
+        <button wx:if="{{mode === 'purchaser' && canReallocate && selected.status === 'REJECTED'}}" bindtap="reallocate">查看拒单及改派处理</button>
+      </view>
+
+      <view class="band detail-panel" wx:if="{{detailTab === 'exceptions'}}">
+        <view class="section-heading"><text class="title">收货异常</text><text class="section-count">{{selected.receiptExceptions.length}} 条记录</text></view>
+        <view id="receipt-exception-{{item.id}}" class="exception-record receipt-exception" wx:for="{{selected.receiptExceptions}}" wx:key="id">
+          <view class="row"><text class="record-title">第 {{item.batchNumber}} 批收货</text><text class="record-status {{item.receiptExceptionStatus === 'RESOLVED' ? '' : 'text-warning'}}">{{item.receiptExceptionLabel}}</text></view>
+          <view class="record-number"><text>发货单</text><document-no value="{{item.shipmentNo}}" /></view>
+          <text class="exception-note">{{item.receiptNote || '本批收货存在数量差异'}}</text>
+          <view class="receipt-differences" wx:if="{{item.receiptDifferences.length}}"><view class="receipt-difference" wx:for="{{item.receiptDifferences}}" wx:for-item="difference" wx:key="productName"><text>{{difference.productName}}</text><text>发货 {{labels.quantity(difference.shippedQuantity)}} · 实收 {{labels.quantity(difference.receivedQuantity)}} · 少收 {{labels.quantity(difference.missingQuantity)}}</text></view></view>
+          <evidence-files files="{{item.receiptEvidenceFiles}}" compact="{{true}}" />
+          <view class="reply-history" wx:for="{{item.receiptExceptionReplies}}" wx:for-item="reply" wx:key="id"><view class="row"><text class="reply-heading">{{reply.decision === 'DECLINED' ? '供应商无法处理' : '供应商已处理'}}</text><text class="section-count">{{reply.createdText}}</text></view><text class="meta">{{reply.actorName}}</text><text class="exception-note">{{reply.note}}</text><evidence-files files="{{reply.evidenceFiles}}" compact="{{true}}" /></view>
+          <view class="response-line" wx:if="{{!item.receiptExceptionReplies.length && item.receiptExceptionResponse}}"><text>供应商回复</text><text>{{item.receiptExceptionDecision === 'DECLINED' ? '无法处理：' : ''}}{{item.receiptExceptionResponse}}</text></view>
+          <view class="response-line" wx:if="{{item.receiptExceptionResolution}}"><text>门店说明</text><text>{{item.receiptExceptionResolution}}</text></view>
+          <text class="fulfillment-hint" wx:if="{{item.receiptExceptionDecision === 'REPLENISH' && item.canConfirmReceiptException === false}}">补发尚未收齐或少收尚未协商，请先核对补发进度。</text>
+          <view class="delivery-actions" wx:if="{{canReceive && (item.receiptExceptionStatus === 'REGISTERED' || item.receiptExceptionStatus === 'RESPONDED')}}"><button wx:if="{{item.receiptExceptionStatus === 'RESPONDED' && item.canConfirmReceiptException !== false}}" class="small-primary" data-receipt-id="{{item.receiptId}}" data-action="confirm-receipt-exception" bindtap="receiptExceptionAction" disabled="{{deliveryBusy}}">{{item.receiptDifferences.length && (item.receiptExceptionDecision === 'ACCEPT_SHORTAGE' || item.receiptExceptionDecision === 'DECLINED') ? '接受不补发，按实收结算' : '确认已解决'}}</button><button wx:if="{{item.receiptExceptionDecision !== 'REPLENISH'}}" data-receipt-id="{{item.receiptId}}" data-action="submit-receipt-exception" bindtap="receiptExceptionAction" disabled="{{deliveryBusy}}">{{item.receiptExceptionStatus === 'RESPONDED' ? '继续提出异议' : '提交供应商处理'}}</button></view>
+        </view>
+        <view class="panel-empty" wx:if="{{!selected.receiptExceptions.length}}">暂无收货异常</view>
+        <view class="delivery-error" wx:if="{{deliveryError && selected.openReceiptExceptionCount}}">{{deliveryError}}</view>
+      </view>
+
+      <view class="band fulfillment-section" wx:if="{{selected.deliveryState}}">
+        <view class="section-heading"><text class="title">收货确认</text><text class="section-count">{{labels.status(selected.deliveryState)}}</text></view>
+        <text class="meta" wx:if="{{selected.deliveryNote}}">发货说明：{{selected.deliveryNote}}</text>
+        <text class="meta" wx:if="{{selected.deliveryReview}}">门店异议：{{selected.deliveryReview.reason}}</text>
+        <text class="meta" wx:if="{{selected.deliveryReview.response}}">供应商回复：{{selected.deliveryReview.response}}</text>
+        <text class="fulfillment-hint" wx:if="{{selected.openReceiptExceptionCount}}">收货异常尚未解决，暂不能完成订单。</text>
+        <button class="text-action" wx:if="{{selected.openReceiptExceptionCount && detailTab !== 'exceptions'}}" bindtap="showReceiptExceptions">查看待处理异常 ›</button>
+        <text class="fulfillment-hint" wx:if="{{!selected.openReceiptExceptionCount && (selected.deliveryState === 'IN_PROGRESS' || selected.deliveryState === 'REPLENISHING')}}">供应商仍在发货，请先核对已送达批次。</text>
+        <text class="fulfillment-hint" wx:if="{{!selected.openReceiptExceptionCount && (selected.deliveryState === 'FINISHED' || selected.deliveryState === 'DECLINED') && !selected.canFinalize}}">请先登记所有发货批次的实收数量。</text>
+        <text class="fulfillment-hint" wx:if="{{selected.canRaiseObjection && selected.shortageAgreementRequired}}">存在尚未协商的未收数量，请提交供应商处理，不能直接核减货款结单。</text>
+        <block wx:if="{{canReceive && (selected.canFinalize || selected.canRaiseObjection)}}">
+          <view class="receipt-differences" wx:if="{{objectionItems.length}}"><view class="receipt-difference" wx:for="{{objectionItems}}" wx:key="id"><text>{{item.productName}}</text><text>订购 {{labels.quantity(item.quantity)}} · 实收 {{labels.quantity(item.receivedQuantity)}} · 少收 {{labels.quantity(item.objectionQuantity)}} {{item.unitName}}</text></view></view>
+          <view class="delivery-error" wx:if="{{deliveryError}}">{{deliveryError}}</view>
+          <view class="delivery-actions"><button wx:if="{{selected.canFinalize}}" type="primary" bindtap="finalize" disabled="{{deliveryBusy}}" loading="{{deliveryBusy}}">{{selected.deliveryState === 'DECLINED' ? '接受不补发并完成' : '确认整单完成'}}</button><button wx:if="{{selected.canRaiseObjection}}" bindtap="toggleObjection" disabled="{{deliveryBusy}}">{{objectionOpen ? '收起异议填写' : selected.deliveryState === 'DECLINED' ? '继续提出异议' : '提交未收数量处理'}}</button></view>
+          <view wx:if="{{objectionOpen}}" class="objection-form"><view class="objection-line" wx:for="{{objectionItems}}" wx:key="id" data-id="{{item.id}}" bindtap="selectObjection"><checkbox checked="{{item.checked}}" disabled="{{deliveryBusy}}" color="#176b4c" /><text>{{item.productName}}</text><text>少收 {{labels.quantity(item.objectionQuantity)}} {{item.unitName}}</text></view><textarea maxlength="500" placeholder="填写异议原因" value="{{objectionReason}}" bindinput="objectionReason" disabled="{{deliveryBusy}}" /><button data-action="raise-objection" bindtap="finalize" disabled="{{deliveryBusy}}">提交供应商处理</button></view>
+        </block>
+      </view>
+      <view class="band" wx:if="{{canReceive && !selected.deliveryState && selected.receiptExceptionCount}}"><text class="title">收货差异待处理</text><button bindtap="differences">处理本单收货差异 ›</button></view>
+
+      <view class="band order-information">
+        <view class="information-heading" bindtap="toggleOrderInfo"><text>订单信息与联系</text><text>{{orderInfoOpen ? '收起 −' : '展开 ›'}}</text></view>
+        <block wx:if="{{orderInfoOpen}}">
+          <text class="meta">门店：{{selected.storeName}}</text><text class="meta">创建时间：{{selected.createdText}}</text>
+          <view wx:if="{{selected.supplierContact}}"><text class="meta" wx:if="{{selected.supplierContact.contactName}}">联系人：{{selected.supplierContact.contactName}}</text><text class="meta phone" wx:if="{{selected.supplierContact.contactPhone}}" data-phone="{{selected.supplierContact.contactPhone}}" bindtap="callContact">业务电话：{{selected.supplierContact.contactPhone}}</text><text class="meta phone" wx:if="{{selected.supplierContact.deliveryContactPhone}}" data-phone="{{selected.supplierContact.deliveryContactPhone}}" bindtap="callContact">配送电话：{{selected.supplierContact.deliveryContactPhone}}</text><text class="meta" wx:if="{{selected.supplierContact.address}}">地址：{{selected.supplierContact.address}}</text></view>
+          <view class="source source-link" bindtap="source"><text>来源下货单</text><document-no value="{{selected.requestNo || '查看来源记录'}}" /><text>›</text></view>
+        </block>
+      </view>
     </block>
   </block>
 </view>

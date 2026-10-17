@@ -9,9 +9,11 @@ function page(role, request = async () => ({}), apiOverrides = {}, wxOverrides =
   vm.runInNewContext(readFileSync('apps/miniprogram/utils/quantity.js', 'utf8'), { module: quantityModule });
   const viewModule = { exports: {} };
   vm.runInNewContext(readFileSync('apps/miniprogram/utils/store-view.js', 'utf8'), { module: viewModule });
+  const deliveryModule = { exports: {} };
+  vm.runInNewContext(readFileSync('apps/miniprogram/utils/delivery.js', 'utf8'), { module: deliveryModule, require: () => quantityModule.exports });
   vm.runInNewContext(readFileSync(`apps/miniprogram/pages/${role}/index.js`, 'utf8'), {
     Page: value => { definition = value; },
-    require: path => path.includes('quantity') ? quantityModule.exports : path.includes('store-view') ? viewModule.exports : { request, roleCommand: (_role, path, options) => request(path, options), ...apiOverrides },
+    require: path => path.includes('delivery') ? deliveryModule.exports : path.includes('quantity') ? quantityModule.exports : path.includes('store-view') ? viewModule.exports : { request, roleCommand: (_role, path, options) => request(path, options), ...apiOverrides },
     wx: wxOverrides,
   });
   definition.setData = function (value) { Object.assign(this.data, value); };
@@ -22,6 +24,271 @@ function page(role, request = async () => ({}), apiOverrides = {}, wxOverrides =
 }
 
 const tap = (id, extra = {}) => ({ currentTarget: { dataset: { id, ...extra } } });
+
+test('purchaser request status picker shares expand, select and reset behavior', () => {
+  const purchaser = page('purchaser');
+  purchaser.data.requests = [];
+  purchaser.toggleStatusExpanded(); assert.equal(purchaser.data.statusExpanded, true);
+  purchaser.filterStatus(tap('', { filter: 'CONFIRMED' }));
+  assert.equal(purchaser.data.statusFilter, 'CONFIRMED');
+  assert.equal(purchaser.data.statusExpanded, false);
+  assert.equal(purchaser.data.statusScrollTarget, 'request-status-CONFIRMED');
+  purchaser.toggleStatusExpanded(); purchaser.clearOrderFilter();
+  assert.equal(purchaser.data.statusExpanded, false);
+  assert.equal(purchaser.data.statusScrollTarget, 'request-status-all');
+});
+
+test('role status pickers share styles and regional scope and book tabs have one sticky parent', () => {
+  for (const file of ['pages/supplier/index.wxml', 'pages/purchaser/index.wxml', 'components/order-center/index.wxml']) {
+    const markup = readFileSync(`apps/miniprogram/${file}`, 'utf8');
+    assert.ok(markup.includes('class="status-track"'));
+    assert.ok(markup.includes('bindtap="toggleStatusExpanded"'));
+    assert.ok(markup.includes('scroll-into-view="{{statusScrollTarget}}"'));
+  }
+  const region = readFileSync('apps/miniprogram/pages/region/index.wxml', 'utf8');
+  assert.ok(region.includes('class="scope-controls sticky-bar"'));
+  assert.ok(!region.includes('class="task-tabs sticky-bar"'));
+  const shared = readFileSync('apps/miniprogram/styles/status-picker.wxss', 'utf8');
+  assert.ok(shared.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'));
+});
+
+test('supplier reply form uploads optional evidence and submits it for a declined response', async () => {
+  let payload;
+  const supplier = page('supplier', async (_, options) => { payload = options.data; return {}; }, {
+    currentUser: () => ({ id: 'supplier' }), chooseEvidence: async () => [{ path: '/proof.jpg' }],
+    uploadEvidence: async (path, purpose) => { assert.equal(path, '/proof.jpg'); assert.equal(purpose, 'RECEIPT_EXCEPTION_REPLY'); return { id: 'proof', mimeType: 'image/jpeg' }; },
+  });
+  supplier.data.supplierOrderId = 'order';
+  supplier.data.selectedOrder = { id: 'order', version: 3, shipments: [{ receiptId: 'receipt', receiptExceptionStatus: 'SUBMITTED' }] };
+  supplier.loadOrders = async () => {}; supplier.loadOrder = async () => {};
+  supplier.respondReceiptException(tap('', { receiptId: 'receipt', decision: 'DECLINED' }));
+  await supplier.chooseReceiptReplyEvidence();
+  assert.equal(supplier.data.exceptionReplyEvidence[0].id, 'proof');
+  await supplier.submitReceiptExceptionReply(); assert.equal(payload, undefined);
+  supplier.data.exceptionReplyNote = '暂时无法处理，请门店补充说明';
+  await supplier.submitReceiptExceptionReply();
+  assert.deepEqual(Array.from(payload.evidenceFileIds), ['proof']);
+  assert.equal(payload.decision, 'DECLINED');
+  assert.equal(supplier.data.exceptionReplyEvidence.length, 0);
+});
+
+test('supplier can explicitly arrange replenishment and revise it to no further delivery', async () => {
+  const payloads = [];
+  const supplier = page('supplier', async (_, options) => { payloads.push(options.data); return {}; });
+  supplier.data.selectedOrder = { id: 'o', version: 2, shipments: [{ receiptId: 'r', receiptExceptionStatus: 'SUBMITTED', receiptDifferences: [{ missingQuantity: '1' }] }] };
+  supplier.loadOrders = async () => {}; supplier.loadOrder = async () => {};
+  supplier.respondReceiptException(tap('', { receiptId: 'r', decision: 'REPLENISH' }));
+  assert.equal(supplier.data.exceptionReplyDecision, 'REPLENISH');
+  supplier.data.exceptionReplyNote = '安排补发1件'; await supplier.submitReceiptExceptionReply();
+  assert.equal(payloads[0].decision, 'REPLENISH');
+  supplier.data.selectedOrder.shipments[0].receiptExceptionStatus = 'RESPONDED';
+  supplier.data.selectedOrder.shipments[0].receiptExceptionDecision = 'REPLENISH';
+  supplier.respondReceiptException(tap('', { receiptId: 'r', decision: 'ACCEPT_SHORTAGE' }));
+  supplier.data.exceptionReplyNote = '缺货，不再补发，请门店确认'; await supplier.submitReceiptExceptionReply();
+  assert.equal(payloads[1].decision, 'ACCEPT_SHORTAGE');
+});
+
+test('supplier detail heading uses the same exception and replenishment states as the list', async () => {
+  let order = { id: 'o', status: 'SHIPPED', deliveryState: 'FINISHED', pendingReceiptCount: 0,
+    pendingSupplierReceiptExceptionCount: 1, pendingReplenishmentCount: 0, items: [], shipments: [] };
+  const supplier = page('supplier', async path => path === '/supplier-orders' ? [order] : order);
+  await supplier.loadOrders(); await supplier.loadOrder('o');
+  assert.equal(supplier.data.selectedOrder.displayStatus, '待处理异常');
+  assert.equal(supplier.data.selectedOrder.displayStatus, supplier.data.orders[0].displayStatus);
+  order = { ...order, deliveryState: 'IN_PROGRESS', pendingSupplierReceiptExceptionCount: 0, pendingReplenishmentCount: 1 };
+  await supplier.loadOrders(); await supplier.loadOrder('o');
+  assert.equal(supplier.data.selectedOrder.displayStatus, '待补发');
+  assert.equal(supplier.data.selectedOrder.displayStatus, supplier.data.orders[0].displayStatus);
+});
+
+test('exception receipt submits once and opens the supplier order already awaiting handling', async () => {
+  const writes = []; let opened;
+  const store = page('store', async (path, options) => {
+    if (options) { writes.push(path); return { id: 'receipt', revision: 1, exceptionStatus: 'SUBMITTED' }; }
+    return { id: 'batch', supplierOrderId: 'order1', deliveryState: 'FINISHED', supplierOrderVersion: 1, currentReceiptRevision: 0,
+      items: [{ id: 'line', shippedQuantity: '3' }] };
+  });
+  store.selectComponent = () => ({ open: event => { opened = event.currentTarget.dataset.id; } });
+  await store.selectShipment(tap('batch'));
+  store.markReceiptException();
+  store.data.receiptNote = '数量齐全，包装破损'; store.data.receiptEvidence = [{ id: 'proof', status: 'READY' }];
+  await store.receiveShipment(tap('', { mode: 'SHORT' }));
+  assert.deepEqual(writes, ['/shipments/batch/receipts']);
+  assert.equal(opened, 'order1');
+  assert.match(store.data.receiptResult.detail, /已提交，等待供应商处理/);
+  assert.doesNotMatch(store.data.receiptResult.detail, /尚未提交/);
+});
+
+test('supplier replies to submitted receipt exceptions without changing delivery quantities', async () => {
+  const calls = [];
+  const supplier = page('supplier', async (path, options) => { calls.push({ path, body: options.data }); return {}; }, {}, {
+    showModal: options => options.success({ confirm: true, content: '已核实并更换破损包装' }),
+  });
+  supplier.data.selectedOrder = { id: 'order', version: 6, shipments: [{ receiptId: 'receipt', receiptExceptionStatus: 'SUBMITTED' }] };
+  supplier.loadOrders = async () => {}; supplier.loadOrder = async () => {};
+  await supplier.respondReceiptException(tap('', { receiptId: 'receipt', decision: 'HANDLED' }));
+  assert.equal(calls.length, 0);
+  await supplier.submitReceiptExceptionReply();
+  assert.match(supplier.data.error, /填写处理说明/);
+  supplier.data.exceptionReplyNote = '已核实并更换破损包装';
+  await supplier.submitReceiptExceptionReply();
+  assert.equal(calls[0].path, '/supplier-orders/order/respond-receipt-exception');
+  assert.deepEqual(plain(calls[0].body), { expectedVersion: 6, receiptId: 'receipt', decision: 'HANDLED', reason: '已核实并更换破损包装' });
+  supplier.data.selectedOrder.shipments[0].receiptExceptionStatus = 'RESPONDED';
+  await supplier.respondReceiptException(tap('', { receiptId: 'receipt', decision: 'HANDLED' }));
+  assert.equal(calls.length, 1);
+});
+
+test('store abnormal receipt requires a remark and submits it with the receipt', async () => {
+  let payload;
+  const store = page('store', async (path, options) => {
+    if (options) { payload = options.data; return { id: 'receipt', revision: 1 }; }
+    return { id: 'shipment', supplierOrderVersion: 1, currentReceiptRevision: 0, items: [{ id: 'line', shippedQuantity: '3' }] };
+  });
+  await store.selectShipment(tap('shipment'));
+  store.onReceiptQuantity({ currentTarget: { dataset: { id: 'line' } }, detail: { value: '2' } });
+  store.data.receiptEvidence = [{ id: 'proof', status: 'READY' }];
+  await store.receiveShipment(tap('', { mode: 'SHORT' }));
+  assert.equal(payload, undefined); assert.match(store.data.error, /异常收货备注/);
+  store.data.receiptNote = '  破损一件  ';
+  await store.receiveShipment(tap('', { mode: 'SHORT' }));
+  assert.equal(payload.note, '破损一件');
+});
+
+test('supplier ending delivery cannot submit with only evidence or only remark', async () => {
+  let writes = 0;
+  const supplier = page('supplier', async () => { writes++; return {}; });
+  supplier.data.selectedOrder = { id: 'order', version: 1 };
+  supplier.data.shipmentItems = [{ remainingQuantity: '2' }];
+  supplier.data.revisionEvidence = [{ id: 'proof' }];
+  await supplier.deliveryAction(tap('', { action: 'finish-delivery' }));
+  assert.match(supplier.data.error, /异常发货备注/);
+  assert.equal(supplier.data.finishNeedsMaterials, true);
+  supplier.data.revisionNote = '库存不足'; supplier.data.revisionEvidence = [];
+  await supplier.deliveryAction(tap('', { action: 'finish-delivery' }));
+  assert.match(supplier.data.error, /上传发货差异凭证/);
+  assert.equal(writes, 0);
+});
+
+test('supplier reducing a batch requires remark and evidence in the explicit workflow', async () => {
+  let writes = 0;
+  const supplier = page('supplier', async () => { writes++; return {}; });
+  supplier.data.selectedOrder = { deliveryState: 'IN_PROGRESS' };
+  supplier.data.revisionShipment = { id: 'shipment' };
+  supplier.data.revisionItems = [{ id: 'item', quantity: '10', orderedQuantity: '10', explanationBaseline: '10', revisedQuantity: '8' }];
+  supplier.data.revisionEvidence = [{ id: 'proof' }];
+  await supplier.reviseShipment();
+  assert.match(supplier.data.error, /异常发货备注/);
+  supplier.data.revisionNote = '库存不足'; supplier.data.revisionEvidence = [];
+  await supplier.reviseShipment();
+  assert.match(supplier.data.error, /上传发货差异凭证/);
+  assert.equal(writes, 0);
+});
+
+test('supplier deselection creates a normal partial batch without a shortage explanation', async () => {
+  const calls = [];
+  const supplier = page('supplier', async (path, options) => {
+    if (options) { calls.push({ path, body: options.data }); return {}; }
+    return { id: 'o', version: 1, status: 'PUSHED', items: ['a', 'b'].map(id => ({ id, quantity: '10', shippedQuantity: '0', receivedQuantity: '0' })), shipments: [] };
+  });
+  await supplier.loadOrder('o');
+  supplier.selectShipmentItem(tap('b'));
+  assert.equal(supplier.data.completeDelivery, false);
+  assert.equal(supplier.data.shipmentNeedsExplanation, false);
+  await supplier.shipOrder();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].body.completeDelivery, false);
+  assert.equal(calls[1].body.items.length, 1);
+  assert.equal(calls[1].body.items[0].orderItemId, 'a');
+});
+
+for (const completeDelivery of [true, false]) {
+  test(`supplier successful shipment refreshes list, tabs and tasks before returning (${completeDelivery ? 'finished' : 'partial'})`, async () => {
+    let shipped = false;
+    const calls = [];
+    const supplier = page('supplier', async (path, options) => {
+      calls.push(path);
+      if (path.endsWith('/shipment-preview')) return {};
+      if (path.endsWith('/shipments') && options) { shipped = true; return { id: 'shipment' }; }
+      if (path === '/supplier-orders') return [{ id: 'o', status: shipped ? 'SHIPPED' : 'PUSHED',
+        deliveryState: shipped ? completeDelivery ? 'FINISHED' : 'IN_PROGRESS' : null, pendingReceiptCount: shipped ? 1 : 0 }];
+      return { id: 'o', version: 1, status: 'PUSHED', items: [{ id: 'a', quantity: '1', shippedQuantity: '0' }], shipments: [] };
+    });
+    await supplier.loadOrders(); await supplier.loadOrder('o');
+    supplier.filterStatus(tap('', { filter: 'pending' }));
+    supplier.data.orderMode = 'ship'; supplier.data.completeDelivery = completeDelivery;
+    await supplier.shipOrder();
+    assert.equal(supplier.data.selectedOrder, null);
+    assert.equal(supplier.data.orderMode, 'detail');
+    assert.equal(supplier.data.shipping, false);
+    assert.equal(supplier.data.orderTotal, 0);
+    assert.equal(supplier.data.orderTabs.find(tab => tab.value === 'pending').count, 0);
+    const state = completeDelivery ? 'SHIPPED' : 'PARTIAL_SHIPPED';
+    assert.equal(supplier.data.orderTabs.find(tab => tab.value === state).count, 1);
+    assert.equal(supplier.data.shippingTasks.length, completeDelivery ? 0 : 1);
+    assert.equal(calls.at(-1), '/supplier-orders');
+    assert.ok(!calls.some(path => path.includes('/reports/')));
+  });
+}
+
+test('confirmed shipment with a failed list refresh clears stale pending orders without resubmission', async () => {
+  let shipped = false, writes = 0;
+  const supplier = page('supplier', async (path, options) => {
+    if (path.endsWith('/shipment-preview')) return {};
+    if (path.endsWith('/shipments') && options) { shipped = true; writes++; return { id: 'shipment' }; }
+    if (path === '/supplier-orders') {
+      if (shipped) throw new Error('网络断开');
+      return [{ id: 'o', status: 'PUSHED' }];
+    }
+    return { id: 'o', version: 1, status: 'PUSHED', items: [{ id: 'a', quantity: '1', shippedQuantity: '0' }], shipments: [] };
+  });
+  await supplier.loadOrders(); await supplier.loadOrder('o');
+  await supplier.shipOrder();
+  assert.equal(writes, 1);
+  assert.equal(supplier.data.selectedOrder, null);
+  assert.equal(supplier.data.orders.length, 0);
+  assert.equal(supplier.data.visibleOrders.length, 0);
+  assert.equal(supplier.data.shippingTasks.length, 0);
+  assert.match(supplier.data.error, /发货已成功.*列表刷新失败/);
+  await supplier.shipOrder(); assert.equal(writes, 1);
+});
+
+test('supplier ending a reduced shipment requires explanation, but normal partial quantity does not', async () => {
+  const supplier = page('supplier', async () => ({ id: 'o', version: 1, status: 'PUSHED', items: [{ id: 'a', quantity: '10', shippedQuantity: '0' }], shipments: [] }));
+  await supplier.loadOrder('o'); supplier.onShipQuantity({ currentTarget: { dataset: { id: 'a' } }, detail: { value: '8' } });
+  assert.equal(supplier.data.shipmentNeedsExplanation, true);
+  await supplier.shipOrder(); assert.match(supplier.data.error, /异常发货备注/);
+  supplier.toggleCompleteDelivery({ detail: { value: false } });
+  assert.equal(supplier.data.shipmentNeedsExplanation, false);
+});
+
+test('supplier replenishment choices are limited to the store objection and subtract prior replenishment', async () => {
+  const supplier = page('supplier', async () => ({ id: 'o', status: 'PARTIAL_SHIPPED', deliveryState: 'REPLENISHING',
+    deliveryReview: { items: [{ orderItemId: 'a', quantity: '2', shippedBefore: '8' }] }, shipments: [],
+    items: [{ id: 'a', quantity: '10', shippedQuantity: '9' }, { id: 'b', quantity: '10', shippedQuantity: '0' }] }));
+  await supplier.loadOrder('o');
+  assert.equal(supplier.data.shipmentItems[0].remainingQuantity, '1');
+  assert.equal(supplier.data.shipmentItems[1].selectedForShipment, false);
+  assert.equal(supplier.data.selectedOrder.canFinish, false);
+});
+test('purchaser confirmation shows current funding and supplier details without generating orders', async () => {
+  const calls = [];
+  const purchaser = page('purchaser', async path => {
+    calls.push(path);
+    return { funding: { canConfirm: false, stored: { required: '140.00', available: '540.00', shortfall: '0.00' }, credit: { required: '510.00', available: '210.00', shortfall: '300.00' } },
+      settlementGroups: [{ supplierId: 's', supplierName: '供应商9', mode: 'CREDIT', amount: '510.00' }] };
+  });
+  purchaser.data.requestId = 'r'; purchaser.data.selectedRequest = { id: 'r', version: 1 };
+  await purchaser.confirmRequest();
+  assert.deepEqual(calls, ['/purchase-requests/r/confirmation-preview']);
+  assert.equal(purchaser.data.fundingFailure.funding.credit.shortfall, '300.00');
+  assert.equal(purchaser.data.fundingFailure.suppliers[0].settlementLabel, '挂账支付');
+  assert.equal(purchaser.data.fundingFailure.suppliers[0].amount, '510.00');
+  assert.equal(purchaser.data.confirming, false);
+  purchaser.closeFundingFailure();
+  assert.equal(purchaser.data.selectedRequest.id, 'r');
+});
+
 test('purchaser supplier funding hints do not restrict the product editor', () => {
   const purchaser = page('purchaser', undefined, {}, { pageScrollTo() {} });
   purchaser.data.editingRequest = true;
@@ -754,20 +1021,70 @@ test('assigned-store recovery never replays manager pricing or reallocation comm
   assert.equal(region.data.pendingCommand.path, pending.path);
 });
 
-test('store receipt reminders exclude received shipments and retain returned editable receipts', async () => {
+test('store receipt tasks use the scoped pending batch endpoint rather than notification history', async () => {
+  const reads = [];
   const workspace = page('store', async path => {
-    if (path === '/notifications') return { notifications: [
-      { payload: { shipmentId: 'done', type: 'SHIPMENT_CREATED' } },
-      { payload: { shipmentId: 'new', type: 'SHIPMENT_CREATED' } },
-      { payload: { shipmentId: 'returned', type: 'DISCREPANCY_RESOLVED', action: 'RETURN' } },
-      { payload: { shipmentId: 'locked', type: 'DISCREPANCY_RESOLVED', action: 'RETURN' } },
-    ] };
-    return { currentReceiptRevision: path.endsWith('/new') ? 0 : 1,
-      items: [{ receiptLocked: !path.endsWith('/returned') }] };
+    reads.push(path);
+    return Array.from({ length: 25 }, (_, index) => ({ id: `batch${index}`, supplierOrderNo: 'SO1', supplierName: '供应商1', shippedAt: '2026-10-17T00:00:00Z', returned: index === 24 }));
   });
   await workspace.loadShipments();
   assert.equal(workspace.data.error, '');
-  assert.deepEqual(plain(workspace.data.shipmentTodos.map(item => item.id)), ['new', 'returned']);
+  assert.deepEqual(reads, ['/shipments/pending-receipts']);
+  assert.equal(workspace.data.shipmentTodos.length, 25);
+  assert.match(workspace.data.shipmentTodos[24].title, /重新核对/);
+});
+
+test('store batch receipt returns to its originating order, request or pending batch list', async () => {
+  const store = page('store', async () => ({ id: 'batch', supplierOrderId: 'order', items: [{ id: 'i', shippedQuantity: '10' }] }));
+  let opened;
+  store.selectComponent = () => ({ open: event => { opened = event.currentTarget.dataset.id; } });
+  await store.openOrderReceipt({ detail: { id: 'batch', orderId: 'order' } });
+  assert.equal(store.data.receiptBackText, '‹ 返回订单详情');
+  store.closeShipment();
+  assert.equal(opened, 'order');
+  assert.equal(store.data.activeView, 'orders');
+  store.data.selectedRequest = { id: 'request' };
+  await store.selectShipment(tap('batch'));
+  assert.equal(store.data.receiptBackText, '‹ 返回下货单详情');
+  store.closeShipment();
+  assert.equal(store.data.recordType, 'requests');
+  assert.equal(store.data.selectedRequest.id, 'request');
+  store.data.activeView = 'receive'; store.data.selectedRequest = null;
+  await store.selectShipment(tap('batch'));
+  store.closeShipment();
+  assert.equal(store.data.activeView, 'receive');
+  assert.equal(store.data.selectedShipment, null);
+  store.closeShipment();
+  assert.equal(store.data.activeView, 'orders');
+});
+
+test('store can submit quality exceptions with unchanged received quantities', async () => {
+  let writes = 0;
+  let payload;
+  const store = page('store', async (path, options) => {
+    if (options) { writes++; payload = options.data; return { id: 'receipt', revision: 1 }; }
+    return { id: 'batch', items: [{ id: 'line', shippedQuantity: '10' }] };
+  });
+  await store.selectShipment(tap('batch'));
+  store.markReceiptException();
+  assert.equal(store.data.receiptException, true);
+  store.data.receiptEvidence = [{ id: 'photo', status: 'READY' }];
+  await store.receiveShipment(tap('', { mode: 'SHORT' }));
+  assert.equal(writes, 0);
+  assert.match(store.data.error, /异常收货备注/);
+  store.onReceiptQuantity({ currentTarget: { dataset: { id: 'line' } }, detail: { value: '8' } });
+  assert.equal(store.data.receiptHasDifference, true);
+  assert.equal(store.data.receiptItems[0].missingQuantity, '2');
+  store.fillReceipt();
+  assert.equal(store.data.receiptException, false);
+  assert.equal(store.data.receiptItems[0].receivedQuantity, '10');
+  store.markReceiptException();
+  store.data.receiptNote = '数量齐全，外包装破损';
+  await store.receiveShipment(tap('', { mode: 'SHORT' }));
+  assert.equal(writes, 1);
+  assert.equal(payload.hasException, true);
+  assert.equal(payload.items[0].receivedQuantity, '10');
+  assert.equal(payload.note, '数量齐全，外包装破损');
 });
 
 test('workspace forms reserve space for fixed actions and financial review has one submit control', () => {
@@ -915,6 +1232,115 @@ test('supplier orders prioritize workflow state and sort active work oldest firs
   assert.ok(markup.includes('待处理订单优先 · 处理中按下单时间从早到晚'));
 });
 
+test('supplier filters and task lists use the explicit delivery state before legacy statuses', async () => {
+  const workspace = page('supplier', async () => [
+    { id: 'pending', status: 'PUSHED' },
+    { id: 'progress', status: 'SHIPPED', fulfillmentStatus: 'COMPLETED', deliveryState: 'IN_PROGRESS' },
+    { id: 'finished', status: 'PARTIAL_SHIPPED', deliveryState: 'FINISHED' },
+    { id: 'disputed', status: 'SHIPPED', deliveryState: 'DISPUTED' },
+    { id: 'replacement', status: 'SHIPPED', deliveryState: 'REPLENISHING' },
+    { id: 'declined', status: 'SHIPPED', deliveryState: 'DECLINED' },
+    { id: 'done', status: 'SHIPPED', deliveryState: 'COMPLETED' },
+    { id: 'legacy-done', status: 'SHIPPED', fulfillmentStatus: 'COMPLETED' },
+    { id: 'rejected', status: 'REJECTED', fulfillmentStatus: 'CANCELED' },
+  ]);
+  await workspace.loadOrders();
+  const expected = { pending: ['pending'], PARTIAL_SHIPPED: ['progress'], SHIPPED: ['finished'],
+    WAITING_STORE_CONFIRM: ['declined'], closed: ['rejected'],
+    DISPUTED: ['disputed'], REPLENISHING: ['replacement'], COMPLETED: ['done', 'legacy-done'] };
+  for (const [filter, ids] of Object.entries(expected)) {
+    workspace.filterStatus(tap('', { filter }));
+    assert.deepEqual(plain(workspace.data.visibleOrders.map(item => item.id)), ids);
+    assert.equal(workspace.data.orderTabs.find(tab => tab.value === filter).count, ids.length);
+  }
+  assert.deepEqual(plain(workspace.data.shippingTasks.map(item => item.id)), ['pending', 'replacement', 'progress']);
+  assert.deepEqual(plain(workspace.data.objectionTasks.map(item => item.id)), ['disputed']);
+  assert.equal(workspace.data.orders.find(item => item.id === 'finished').displayStatus, '待收货');
+  assert.equal(workspace.data.orders.find(item => item.id === 'legacy-done').displayStatus, '已完成');
+  assert.equal(workspace.data.orderTabs.find(tab => tab.value === 'all').count, 9);
+});
+
+test('supplier separates batch receipt from final confirmation and closed orders', async () => {
+  const workspace = page('supplier', async () => [
+    { id: 'in-transit', status: 'SHIPPED', deliveryState: 'FINISHED', pendingReceiptCount: 1 },
+    { id: 'received', status: 'SHIPPED', deliveryState: 'FINISHED', pendingReceiptCount: 0 },
+    { id: 'replied', status: 'SHIPPED', deliveryState: 'FINISHED', pendingReceiptCount: 0, openReceiptExceptionCount: 1, pendingSupplierReceiptExceptionCount: 0 },
+    { id: 'exception', status: 'SHIPPED', deliveryState: 'FINISHED', pendingReceiptCount: 0, pendingSupplierReceiptExceptionCount: 1 },
+    { id: 'declined-transit', status: 'SHIPPED', deliveryState: 'DECLINED', pendingReceiptCount: 1 },
+    { id: 'completed', status: 'COMPLETED', deliveryState: 'COMPLETED', pendingSupplierReceiptExceptionCount: 1 },
+    { id: 'canceled', status: 'CANCELED', deliveryState: 'FINISHED', pendingReceiptCount: 0 },
+    { id: 'rejected', status: 'REJECTED', pendingSupplierReceiptExceptionCount: 1 }
+  ]);
+  await workspace.loadOrders();
+  const states = Object.fromEntries(workspace.data.orders.map(item => [item.id, item.listState]));
+  assert.deepEqual(plain(states), { exception: 'DISPUTED', 'in-transit': 'SHIPPED', 'declined-transit': 'SHIPPED', received: 'WAITING_STORE_CONFIRM', replied: 'WAITING_STORE_CONFIRM', completed: 'COMPLETED', canceled: 'CANCELED', rejected: 'REJECTED' });
+  assert.equal(workspace.data.orderTabs.length, 9);
+  assert.equal(workspace.data.orderTabs.slice(1).reduce((sum, tab) => sum + tab.count, 0), 8);
+  assert.equal(workspace.data.shippingTasks.length, 0);
+  assert.deepEqual(plain(workspace.data.objectionTasks.map(item => item.id)), ['exception']);
+  workspace.filterStatus(tap('', { filter: 'WAITING_STORE_CONFIRM' }));
+  assert.deepEqual(plain(workspace.data.visibleOrders.map(item => item.id)), ['received', 'replied']);
+  workspace.filterStatus(tap('', { filter: 'closed' }));
+  assert.deepEqual(plain(workspace.data.visibleOrders.map(item => item.id)), ['canceled', 'rejected']);
+});
+
+test('supplier status counts follow search results before pagination and show an explicit empty state', async () => {
+  const workspace = page('supplier', async () => Array.from({ length: 14 }, (_, index) => ({
+    id: String(index), status: 'PUSHED', storeName: index < 12 ? '门店1' : '门店2'
+  })));
+  await workspace.loadOrders();
+  workspace.onSearch({ detail: { value: '门店1' } });
+  assert.equal(workspace.data.visibleOrders.length, 10);
+  assert.equal(workspace.data.orderTabs.find(tab => tab.value === 'pending').count, 12);
+  workspace.nextOrders();
+  assert.equal(workspace.data.visibleOrders.length, 12);
+  workspace.filterStatus(tap('', { filter: 'COMPLETED' }));
+  assert.equal(workspace.data.visibleOrders.length, 0);
+  assert.match(workspace.data.orderEmptyText, /搜索条件/);
+  workspace.onSearch({ detail: { value: '' } });
+  assert.equal(workspace.data.orderEmptyText, '当前供应商暂无已完成订单');
+});
+
+test('supplier status picker expands all options and returns selected status to the strip', () => {
+  const workspace = page('supplier', async () => []);
+  workspace.toggleStatusExpanded();
+  assert.equal(workspace.data.statusExpanded, true);
+  workspace.filterStatus(tap('', { filter: 'closed' }));
+  assert.equal(workspace.data.statusExpanded, false);
+  assert.equal(workspace.data.statusScrollTarget, 'supplier-status-closed');
+  assert.equal(workspace.data.statusFilter, 'closed');
+  workspace.toggleStatusExpanded();
+  workspace.toggleStatusExpanded();
+  assert.equal(workspace.data.statusExpanded, false);
+  assert.equal(workspace.data.statusFilter, 'closed');
+});
+
+test('supplier sort keeps completed orders out of active priority even when legacy status is shipped', async () => {
+  const workspace = page('supplier', async () => [
+    { id: 'done-old', status: 'SHIPPED', fulfillmentStatus: 'COMPLETED', createdAt: '2026-10-01T00:00:00Z' },
+    { id: 'done-new', status: 'COMPLETED', createdAt: '2026-10-03T00:00:00Z' },
+    { id: 'pending-new', status: 'PUSHED', createdAt: '2026-10-04T00:00:00Z' },
+    { id: 'pending-old', status: 'ACCEPTED', createdAt: '2026-10-02T00:00:00Z' },
+    { id: 'disputed', status: 'SHIPPED', deliveryState: 'DISPUTED', createdAt: '2026-10-05T00:00:00Z' },
+  ]);
+  await workspace.loadOrders();
+  assert.deepEqual(plain(workspace.data.visibleOrders.map(item => item.id)), ['disputed', 'pending-old', 'pending-new', 'done-new', 'done-old']);
+});
+
+test('supplier entering orders refreshes the list and ignores an older response', async () => {
+  const pending = [];
+  const workspace = page('supplier', () => new Promise(resolve => pending.push(resolve)));
+  const entering = workspace.changeView(tap('', { view: 'orders' }));
+  const latest = workspace.loadOrders();
+  pending[1]([{ id: 'latest', status: 'SHIPPED', deliveryState: 'COMPLETED' }]);
+  await latest;
+  pending[0]([{ id: 'old', status: 'PUSHED' }]);
+  await entering;
+  assert.deepEqual(plain(workspace.data.orders.map(item => item.id)), ['latest']);
+  assert.equal(workspace.data.orderTabs.find(tab => tab.value === 'COMPLETED').count, 1);
+  assert.equal(workspace.data.loading, false);
+});
+
 test('supplier order list separates each order and presents store, status, items and amount in clear hierarchy', () => {
   const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
   const styles = readFileSync('apps/miniprogram/pages/supplier/index.wxss', 'utf8');
@@ -942,6 +1368,24 @@ test('supplier enters shipping or rejection only when permitted and cannot switc
   assert.equal(workspace.data.orderMode, 'reject');
   workspace.backToList();
   assert.equal(workspace.data.orderMode, 'detail');
+});
+
+test('supplier can cancel a shipment revision without changing the order and cannot leave during saving', () => {
+  const supplier = page('supplier');
+  supplier.data.selectedOrder = { id: 'order', shipments: [], items: [] };
+  Object.assign(supplier.data, { orderMode: 'revise', revisionShipment: { id: 'batch' }, revisionItems: [{ revisedQuantity: '8' }],
+    revisionNote: 'draft', revisionEvidence: [{ id: 'file' }], revisionNeedsEvidence: true });
+  supplier.data.revising = true;
+  supplier.changeOrderMode(tap('', { mode: 'detail' }));
+  assert.equal(supplier.data.orderMode, 'revise');
+  supplier.data.revising = false;
+  supplier.changeOrderMode(tap('', { mode: 'detail' }));
+  assert.equal(supplier.data.orderMode, 'detail');
+  assert.equal(supplier.data.selectedOrder.id, 'order');
+  assert.equal(supplier.data.revisionShipment, null);
+  assert.equal(supplier.data.revisionItems.length, 0);
+  assert.equal(supplier.data.revisionEvidence.length, 0);
+  assert.equal(supplier.data.revisionNote, '');
 });
 
 for (const role of ['supplier', 'purchaser']) {
@@ -1315,6 +1759,25 @@ test('native product brand choices include registered brands even before a produ
   const editor = page('products', async path => path === '/brands' ? [{ id: 'brand-unused', name: 'Unused registered brand' }] : path === '/products' ? [{ id: 'p', name: 'Product', brand: 'Legacy brand' }] : []);
   await editor.loadProducts();
   assert.deepEqual(plain(editor.data.brands), ['Legacy brand', 'Unused registered brand']);
+});
+
+test('supplier order detail preserves document numbers and separates shipment history', async () => {
+  const supplier = page('supplier', async () => ({
+    id: 'order', supplierOrderNo: 'SO202610160001', status: 'SHIPPED', fulfillmentStatus: 'PENDING', items: [],
+    shipments: [{ id: 'shipment', shipmentNo: 'SH202610160001', kind: 'INITIAL', revision: 1, items: [], shippedAt: '2026-10-16T02:00:00Z', canRevise: true }]
+  }));
+  await supplier.loadOrder('order');
+  assert.equal(supplier.data.selectedOrder.supplierOrderNo, 'SO202610160001');
+  assert.equal(supplier.data.selectedOrder.shipments[0].shipmentNo, 'SH202610160001');
+  assert.equal(supplier.data.selectedOrder.shipments[0].canRevise, true);
+  const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
+  assert.ok(markup.includes('<view class="supplier-detail-number">'));
+  assert.ok(markup.includes('value="{{selectedOrder.supplierOrderNo}}"'));
+  assert.doesNotMatch(markup, /<text\b[^>]*>[^<]*<document-no\b/);
+  assert.equal(markup.includes('首次发货'), false);
+  assert.ok(markup.includes("item.kind === 'INITIAL' ? '发货单号' : '补发单号'"));
+  assert.ok(markup.includes('wx:if="{{item.revision > 1}}"'));
+  assert.ok(markup.includes('bindtap="beginShipmentRevision">修改发货数量'));
 });
 
 test('supplier freight choices follow the order snapshot and legacy unknown remains compatible', async () => {
@@ -1706,13 +2169,15 @@ test('late store-bill list cannot overwrite a newer parent or a child selection'
 });
 
 test('product expansion requires current bill membership and view change does not reopen its parent', async () => {
-  let reads = 0;
-  const supplier = page('supplier', async () => { reads++; return {}; });
+  const reads = [];
+  const supplier = page('supplier', async path => { reads.push(path); return []; });
   Object.assign(supplier.data, { selectedStatement: { lines: [{ supplierOrderId: 'order' }] }, statementId: 'child', statementKind: 'store', statementParentId: 'parent', activeView: 'reports' });
   supplier.toggleStatementProducts(tap('foreign')); assert.equal(supplier.data.expandedStatementOrderId, '');
   supplier.toggleStatementProducts(tap('order')); assert.equal(supplier.data.expandedStatementOrderId, 'order');
   supplier.toggleStatementProducts(tap('order')); assert.equal(supplier.data.expandedStatementOrderId, '');
-  supplier.changeView(tap('', { view: 'orders' })); assert.equal(reads, 0); assert.equal(supplier.data.statementId, '');
+  await supplier.changeView(tap('', { view: 'orders' }));
+  assert.deepEqual(reads, ['/supplier-orders']);
+  assert.equal(supplier.data.statementId, '');
 });
 
 test('bill quantities and unit prices trim display zeros without floating-point conversion', async () => {
@@ -1836,7 +2301,7 @@ test('role order lists search and filter without silently truncating twenty rows
     assert.equal(screen.data.moreOrders, false);
     screen.onSearch({ detail: { value: '24' } });
     assert.equal(screen.data[list][0].id, '24');
-    screen.filterStatus(tap('', { filter: 'PUSHED' }));
+    screen.filterStatus(tap('', { filter: role === 'supplier' ? 'pending' : 'PUSHED' }));
     assert.equal(screen.data[list].length, 0);
     screen.onSearch({ detail: { value: '' } });
     assert.equal(screen.data[list].length, 10);
@@ -1974,7 +2439,9 @@ test('purchaser replaces one product supplier only after valid price preview and
 test('purchaser blocks adjusted confirmation on shortage and generates orders after funds are sufficient', async () => {
   const calls = [];
   const preview = { items: [{ productId: 'p1', priceVersionId: 'sale-1', supplyPriceVersionId: 'supply-1' }],
-    totals: { salesGoodsAmount: '12.00', supplyGoodsAmount: '10.00' }, funding: { canConfirm: false } };
+    totals: { salesGoodsAmount: '12.00', supplyGoodsAmount: '10.00' },
+    funding: { canConfirm: false, stored: { required: '12.00', available: '2.00', shortfall: '10.00' }, credit: { required: '0.00', available: '0.00', shortfall: '0.00' } },
+    settlementGroups: [{ supplierId: 'supplier-1', mode: 'STORED_VALUE', amount: '12.00' }] };
   const purchaser = page('purchaser', async (path, options) => {
     calls.push({ path, options });
     if (path.endsWith('/items-preview')) return preview;
@@ -1995,7 +2462,13 @@ test('purchaser blocks adjusted confirmation on shortage and generates orders af
   assert.equal(purchaser.data.editItems[0].quantity, '4');
   await purchaser.confirmRequestEdit();
   assert.equal(calls.length, 1);
-  assert.match(purchaser.data.error, /资金不足/);
+  assert.equal(purchaser.data.error, '');
+  assert.equal(purchaser.data.fundingFailure.funding.stored.shortfall, '10.00');
+  assert.equal(purchaser.data.fundingFailure.suppliers[0].supplierName, '供应商甲');
+  assert.equal(purchaser.data.fundingFailure.suppliers[0].settlementLabel, '储值支付');
+  purchaser.closeFundingFailure();
+  assert.equal(purchaser.data.fundingFailure, null);
+  assert.equal(purchaser.data.editItems[0].quantity, '4');
   assert.equal(purchaser.data.editingRequest, true);
   preview.funding.canConfirm = true;
   calls.length = 0;
@@ -2013,6 +2486,16 @@ test('purchaser blocks adjusted confirmation on shortage and generates orders af
   assert.equal(markup.includes('核对调整'), false);
   for (const handler of ['chooseEditPrimaryCategory', 'stepEditProduct', 'setEditProductQuantity', 'changeEditSupplier']) assert.ok(markup.includes(`bindtap="${handler}"`) || markup.includes(`bindblur="${handler}"`) || markup.includes(`bindchange="${handler}"`));
   assert.equal(markup.includes('>编辑商品</button>'), false);
+});
+
+test('supplier navigation does not show a cached todo badge', () => {
+  const markup = readFileSync('apps/miniprogram/pages/supplier/index.wxml', 'utf8');
+  const navigation = markup.split('\n').find(line => line.includes('class="business-nav"'));
+  assert.ok(navigation);
+  assert.ok(navigation.includes('>待办</view>'));
+  assert.equal(navigation.includes('nav-badge'), false);
+  assert.equal(navigation.includes('shippingTasks.length'), false);
+  assert.equal(navigation.includes('differenceTasks.length'), false);
 });
 
 test('purchaser navigation does not show a combined cached todo badge', () => {
@@ -2377,11 +2860,44 @@ test('receipt retry keeps the original revision and quantities after a network f
     return { id: 'receipt', revision: 2 };
   });
   store.data.user = { id: 'user' }; await store.selectShipment(tap('s1'));
-  store.data.receiptEvidence = [{ id: 'evidence', status: 'READY' }];
+  store.data.receiptEvidence = [{ id: 'evidence', status: 'READY' }]; store.data.receiptNote = '到货数量不足';
   store.onReceiptQuantity(input('i1', '2')); await store.receiveShipment(tap('', { mode: 'SHORT' }));
   store.onReceiptQuantity(input('i1', '3')); assert.equal(store.data.receiptItems[0].receivedQuantity, '2');
   await store.receiveShipment(tap('', { mode: 'FULL' }));
   assert.deepEqual(writes[0], writes[1]); assert.equal(store.data.pendingReceipt, null);
+});
+
+test('store receipt differences retain the order link through retry and open that order for follow-up', async () => {
+  let attempts = 0;
+  const writes = [];
+  const store = page('store', async (path, options) => {
+    if (!options) return { id: 'batch', shipmentNo: 'SH1', supplierOrderId: 'order1', deliveryState: 'FINISHED',
+      supplierOrderVersion: 4, currentReceiptRevision: 0, items: [{ id: 'line', shippedQuantity: '10' }] };
+    writes.push(plain(options));
+    if (++attempts === 1) { const error = new Error('network'); error.uncertain = true; throw error; }
+    return { id: 'receipt', revision: 1 };
+  });
+  store.data.user = { id: 'user' };
+  await store.selectShipment(tap('batch'));
+  store.onReceiptQuantity({ currentTarget: { dataset: { id: 'line' } }, detail: { value: '8' } });
+  store.data.receiptEvidence = [{ id: 'evidence', status: 'READY' }]; store.data.receiptNote = '到货数量不足';
+  await store.receiveShipment(tap('', { mode: 'SHORT' }));
+  assert.equal(store.data.pendingReceipt.supplierOrderId, 'order1');
+  let automaticallyOpened;
+  store.selectComponent = () => ({ open: event => { automaticallyOpened = event.currentTarget.dataset.id; } });
+  await store.receiveShipment(tap('', { mode: 'SHORT' }));
+  assert.equal(automaticallyOpened, 'order1');
+  assert.equal(store.data.activeView, 'orders');
+  assert.deepEqual(writes[0], writes[1]);
+  assert.equal(store.data.receiptResult.supplierOrderId, 'order1');
+  assert.match(store.data.receiptResult.detail, /已提交，等待供应商处理/);
+  let opened;
+  store.selectComponent = selector => { assert.equal(selector, '#formal-orders'); return { open: event => { opened = event.currentTarget.dataset.id; } }; };
+  store.openReceiptOrder();
+  assert.equal(opened, 'order1');
+  assert.equal(store.data.recordType, 'orders');
+  assert.equal(store.data.activeView, 'orders');
+  assert.equal(writes.length, 2);
 });
 
 test('unchanged submitted receipts cannot create another revision but correction remains available', async () => {
@@ -2391,7 +2907,7 @@ test('unchanged submitted receipts cannot create another revision but correction
     return { id: 's1', supplierOrderVersion: 8, currentReceiptRevision: 1, items: [{ id: 'i1', shippedQuantity: '3', currentReceivedQuantity: '3', receiptLocked: false }] };
   });
   await store.selectShipment(tap('s1')); assert.equal(store.data.receiptCanSubmit, false);
-  store.data.receiptEvidence = [{ id: 'evidence', status: 'READY' }];
+  store.data.receiptEvidence = [{ id: 'evidence', status: 'READY' }]; store.data.receiptNote = '到货数量不足';
   await store.receiveShipment(tap('', { mode: 'FULL' })); assert.equal(writes, 0);
   store.onReceiptQuantity(input('i1', '2')); assert.equal(store.data.receiptCanSubmit, true);
   await store.receiveShipment(tap('', { mode: 'SHORT' })); assert.equal(writes, 1);
@@ -2433,9 +2949,9 @@ test('store receipts preserve per-item counts and displayed version; reject over
   });
   await store.selectShipment(tap('s1'));
   store.onReceiptQuantity(input('i1', '2')); store.onReceiptQuantity(input('i2', '0'));
-  store.data.receiptEvidence = [{ id: 'evidence', status: 'READY' }];
+  store.data.receiptEvidence = [{ id: 'evidence', status: 'READY' }]; store.data.receiptNote = '到货数量不足';
   await store.receiveShipment(tap('', { mode: 'SHORT' }));
-  assert.deepEqual(plain(payload), { expectedOrderVersion: 7, expectedReceiptRevision: 2, evidenceFileIds: ['evidence'],
+  assert.deepEqual(plain(payload), { expectedOrderVersion: 7, expectedReceiptRevision: 2, hasException: true, note: '到货数量不足', evidenceFileIds: ['evidence'],
     items: [{ shipmentItemId: 'i1', receivedQuantity: '2' }, { shipmentItemId: 'i2', receivedQuantity: '0' }] });
   payload = null; await store.selectShipment(tap('s1')); store.onReceiptQuantity(input('i2', '4'));
   await store.receiveShipment(tap('', { mode: 'SHORT' })); assert.equal(payload, null); assert.match(store.data.error, /超过/);
@@ -2459,7 +2975,7 @@ test('returned receipt review preserves finalized rows and applies only the revi
     items: [{ shipmentItemId: 'accepted', receivedQuantity: '2' }, { shipmentItemId: 'returned', receivedQuantity: '3' }] });
 });
 
-test('receipt evidence is required before a new native submission and failures remain retryable', async () => {
+test('optional normal receipt evidence must finish uploading and failures remain retryable', async () => {
   let writes = 0, attempts = 0;
   const store = page('store', async (path, options) => {
     if (options) { writes++; return { id: 'r', revision: 1 }; }
@@ -2468,11 +2984,27 @@ test('receipt evidence is required before a new native submission and failures r
     assert.equal(purpose, 'RECEIPT'); if (++attempts === 1) throw new Error('断网'); return { id: 'file', mimeType: 'image/jpeg' };
   } });
   await store.selectShipment(tap('s'));
-  await store.receiveShipment(tap('', { mode: 'FULL' })); assert.equal(writes, 0); assert.match(store.data.error, /凭证/);
   await store.chooseReceiptEvidence(); assert.equal(store.data.receiptEvidence[0].status, 'FAILED');
   await store.receiveShipment(tap('', { mode: 'FULL' })); assert.equal(writes, 0);
   await store.retryReceiptEvidence(tap('', { index: 0 })); assert.equal(store.data.receiptEvidence[0].status, 'READY');
   await store.receiveShipment(tap('', { mode: 'FULL' })); assert.equal(writes, 1); assert.equal(store.data.receiptEvidence.length, 0);
+});
+
+test('normal receipts allow no evidence while exception receipts still require note and evidence', async () => {
+  let payload;
+  const store = page('store', async (path, options) => {
+    if (options) { payload = options.data; return { id: 'r', revision: 1 }; }
+    return { id: 's', supplierOrderVersion: 1, currentReceiptRevision: 0, items: [{ id: 'i', shippedQuantity: '1' }] };
+  });
+  await store.selectShipment(tap('s'));
+  await store.receiveShipment(tap('', { mode: 'SHORT' }));
+  assert.match(store.data.error, /备注/); assert.equal(payload, undefined);
+  store.data.receiptNote = '包装破损';
+  await store.receiveShipment(tap('', { mode: 'SHORT' }));
+  assert.match(store.data.error, /凭证/); assert.equal(payload, undefined);
+  await store.receiveShipment(tap('', { mode: 'FULL' }));
+  assert.equal(payload.evidenceFileIds, undefined);
+  assert.deepEqual(plain(payload.items), [{ shipmentItemId: 'i', receivedQuantity: '1' }]);
 });
 
 test('receipt upload locks navigation and cannot attach a stale image to another shipment', async () => {
@@ -2544,8 +3076,10 @@ test('supplier partial shipment uses remaining quantities and omits zero rows', 
   });
   await supplier.loadOrder('o1'); assert.equal(supplier.data.shipmentItems[0].shipQuantity, '0.1');
   supplier.onShipQuantity(input('i2', '0')); await supplier.shipOrder();
-  assert.equal(payload, undefined); assert.match(supplier.data.error, /说明或上传凭证/);
+  assert.equal(payload, undefined); assert.match(supplier.data.error, /异常发货备注/);
   supplier.data.revisionNote = '库存不足，分批发货'; await supplier.shipOrder();
+  assert.equal(payload, undefined); assert.match(supplier.data.error, /上传发货差异凭证/);
+  supplier.data.revisionEvidence = [{ id: 'proof', path: '/proof.jpg' }]; await supplier.shipOrder();
   assert.equal(payload.expectedVersion, 9);
   assert.equal(payload.note, '库存不足，分批发货');
   assert.deepEqual(plain(payload.items), [{ orderItemId: 'i1', shipQuantity: '0.1', permanentlyReduceQuantity: '0' }]);
@@ -2713,13 +3247,11 @@ test('supplier allocates replenishment gaps and uses only confirmed unused freig
     ] };
   });
   await supplier.loadOrder('o1'); assert.equal(supplier.data.freightChoices.length, 2);
-  supplier.onGapQuantity({ currentTarget: { dataset: { id: 'i1', gapId: 'g1' } }, detail: { value: '2' } });
   supplier.selectFreight({ detail: { value: '1' } }); await supplier.shipOrder();
   assert.equal(payload.freight, '8.50'); assert.equal(payload.freightConfirmationId, 'f1');
   assert.equal(supplier.data.result, null);
   assert.deepEqual(plain(payload.items[0].gapAllocations), [{ gapId: 'g1', quantity: '2' }]);
-  await supplier.loadOrder('o1'); supplier.onShipQuantity(input('i1', '1'));
-  supplier.onGapQuantity({ currentTarget: { dataset: { id: 'i1', gapId: 'g1' } }, detail: { value: '2' } });
+  await supplier.loadOrder('o1'); supplier.onShipQuantity(input('i1', '5'));
   await supplier.shipOrder(); assert.equal(previews, 1); assert.match(supplier.data.error, /超过/);
 });
 
@@ -2730,7 +3262,7 @@ test('fully shipped supplier order exposes only the open gap as replenishment ca
   await supplier.loadOrder('o1');
   assert.equal(supplier.data.selectedOrder.canShip, true);
   assert.equal(supplier.data.shipmentItems[0].remainingQuantity, '1');
-  assert.equal(supplier.data.shipmentItems[0].shipQuantity, '0');
+  assert.equal(supplier.data.shipmentItems[0].shipQuantity, '1');
 });
 
 test('supplier finds authorized replenishment even without notification history', async () => {

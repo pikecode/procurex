@@ -34,6 +34,10 @@ Page({
     recovering: false,
     search: '',
     statusFilter: 'all',
+    statusExpanded: false,
+    statusScrollTarget: 'request-status-all',
+    requestStatusTabs: [{ value: 'all', label: '全部' }, { value: 'PENDING_PROCUREMENT', label: '待确认' },
+      { value: 'PENDING_FUNDS', label: '待补款' }, { value: 'PENDING_FINANCE', label: '待采购处理' }, { value: 'CONFIRMED', label: '已生成订单' }],
     visibleRequests: [],
     user: {},
     roleText: '未登录',
@@ -50,6 +54,7 @@ Page({
     assignmentGroups: [],
     fundingGroups: [],
     fundingSupplierRows: [],
+    fundingFailure: null,
     editCatalog: null,
     editingRequest: false,
     editItems: [],
@@ -113,7 +118,7 @@ Page({
       this.setData({ reportRange: view.reportPreset('month'), reportDraft: view.reportPreset('month'), reportPreset: 'month', reportSummary: null, reportsError: '',
         reportFilterDraft: { storeId: '', supplierId: '' }, reportFilters: { storeId: '', supplierId: '' }, reportStoreIndex: 0, reportSupplierIndex: 0,
         reportStoreOptions: [{ id: '', name: '全部门店' }], reportSupplierOptions: [{ id: '', name: '全部供应商' }] });
-      this.setData({ visibleRequests: [], search: '', statusFilter: 'all', activeView: 'tasks', taskType: 'requests', taskOrigin: false });
+      this.setData({ visibleRequests: [], search: '', statusFilter: 'all', statusExpanded: false, statusScrollTarget: 'request-status-all', activeView: 'tasks', taskType: 'requests', taskOrigin: false });
       this.setData({ requests: [], rejectionTodos: [], selectedRequest: null, requestId: '', rejectedOrderId: '', targetSupplierId: '',
         suppliers: [], supplierIndex: -1, assignmentItems: [], assignmentGroups: [], editCatalog: null, editingRequest: false, editItems: [], addableProducts: [], editReason: '', savingRequest: false, rejectReason: '', rejectingRequest: false, showPriceDetails: false, detailError: '', result: null, freightConfirmations: [], selectedFreight: null, procurementTasks: [], pendingFreight: [],
         reports: { orderAmount: null, productQuantity: null } });
@@ -239,15 +244,18 @@ Page({
   },
 
   filterStatus(event) {
-    this.setData({ statusFilter: event.currentTarget.dataset.filter });
+    const filter = event.currentTarget.dataset.filter;
+    this.setData({ statusFilter: filter, statusExpanded: false, statusScrollTarget: `request-status-${filter}` });
     this.refreshList();
     if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
 
   clearOrderFilter() {
-    this.setData({ search: '', statusFilter: 'all' });
+    this.setData({ search: '', statusFilter: 'all', statusExpanded: false, statusScrollTarget: 'request-status-all' });
     this.refreshList();
   },
+
+  toggleStatusExpanded() { this.setData({ statusExpanded: !this.data.statusExpanded, statusScrollTarget: `request-status-${this.data.statusFilter}` }); },
 
   nextOrders() { this.refreshList((this.data.orderLimit || 10) + 10); },
   refreshList(limit = 10) {
@@ -582,13 +590,13 @@ Page({
 
   async confirmRequest() {
     if (this.data.confirming || this.data.reallocating || this.data.detailing || this.data.detailError || this.data.pendingCommand || !this.data.requestId) return;
-    this.setData({ confirming: true, error: '', result: null });
+    this.setData({ confirming: true, error: '', result: null, fundingFailure: null });
     try {
       const detail = this.data.selectedRequest || await api.request(`/purchase-requests/${this.data.requestId}`);
       this.setData({ selectedRequest: detail });
       const review = await api.request(`/purchase-requests/${this.data.requestId}/confirmation-preview`);
       this.setData({ fundingView: review.funding });
-      if (!review.funding?.canConfirm) throw new Error('资金不足，补足储值或挂账额度后才能生成订单');
+      if (!review.funding?.canConfirm) { this.showFundingFailure(review); return; }
       const confirmed = await this.submitCommand(`/purchase-requests/${this.data.requestId}/confirm`, {
         method: 'POST',
         data: { expectedVersion: detail.version },
@@ -614,6 +622,21 @@ Page({
     }
   },
 
+  fundingSuppliers(review) {
+    const supplierNames = new Map((this.data.editCatalog?.items || []).flatMap(item => item.suppliers.map(supplier => [supplier.supplierId, supplier.supplierName])));
+    return (review.settlementGroups || []).map(group => ({ ...group, supplierName: group.supplierName || supplierNames.get(group.supplierId) || '供应商', settlementLabel: settlementLabels[group.mode] || '结算方式待核验' }));
+  },
+
+  showFundingFailure(review) {
+    if (!review.funding?.stored || !review.funding?.credit) {
+      this.setData({ error: '资金核验数据不完整，请重新核验', fundingFailure: null });
+      return;
+    }
+    this.setData({ fundingFailure: { funding: review.funding, suppliers: this.fundingSuppliers(review) }, error: '' });
+  },
+
+  closeFundingFailure() { this.setData({ fundingFailure: null }); },
+
   async refreshConfirmationFunding() {
     const id = this.data.requestId;
     const revision = this.data.editRevision;
@@ -624,8 +647,7 @@ Page({
         : await api.request(`/purchase-requests/${id}/confirmation-preview`);
       if (id === this.data.requestId && revision === this.data.editRevision) {
         const fundingGroups = review.settlementGroups || [];
-        const supplierNames = new Map((this.data.editCatalog?.items || []).flatMap(item => item.suppliers.map(supplier => [supplier.supplierId, supplier.supplierName])));
-        const fundingSupplierRows = fundingGroups.map(group => ({ ...group, supplierName: group.supplierName || supplierNames.get(group.supplierId) || '供应商', settlementLabel: settlementLabels[group.mode] || '结算方式待核验' }));
+        const fundingSupplierRows = this.fundingSuppliers(review);
         this.setData({ fundingView: review.funding, fundingGroups, fundingSupplierRows, error: '',
           assignmentGroups: this.data.assignmentGroups.map(group => ({ ...group,
             settlementLabel: settlementLabels[fundingGroups.find(row => row.supplierId === group.supplierId)?.mode] || '结算方式待核验' })) });
@@ -911,7 +933,7 @@ Page({
       const preview = await api.request(`/purchase-requests/${requestId}/items-preview`, { method: 'POST', data: body });
       if (requestId !== this.data.requestId || revision !== this.data.editRevision) return;
       this.setData({ fundingView: preview.funding });
-      if (!preview.funding?.canConfirm) throw new Error('资金不足，暂不能生成订单；可先保存调整，再联系财务补足');
+      if (!preview.funding?.canConfirm) { this.showFundingFailure(preview); return; }
       const prices = new Map((preview.items || []).map(item => [item.productId, item]));
       body.items = body.items.map(item => {
         const priced = prices.get(item.productId);

@@ -29,6 +29,7 @@ import {
   type SupplierOrderSummaryView,
 } from './supplier-orders.service.js';
 import { DeliveryMode, SupplierOrderStatus } from '../../../../packages/backend/generated/prisma/enums.js';
+import type { DeliveryAction, DeliveryInput } from './delivery-workflow.js';
 import {
   validateDecimalString,
   validateExpectedVersion,
@@ -52,6 +53,7 @@ type ReconcileFundingBody = {
 };
 
 type ShipmentPreviewBody = {
+  completeDelivery?: unknown;
   note?: unknown;
   evidenceFileIds?: unknown;
   deliveryMode?: unknown;
@@ -124,6 +126,76 @@ export class SupplierOrdersController {
   shipmentPreview(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: ShipmentPreviewBody): Promise<ShipmentPreviewView> {
     const input = parseShipmentPreviewBody(id, body);
     return this.supplierOrdersService.shipmentPreview(input.id, input.expectedVersion, input.preview, supplierScope(request));
+  }
+
+  @Post(':id/finish-delivery')
+  @RequireRoles('ADMIN', 'SUPPLIER')
+  finishDelivery(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: DeliveryInput) {
+    return this.runDeliveryAction(request, id, 'finish-delivery', body);
+  }
+
+  @Post(':id/confirm-receipt')
+  @RequireRoles('ADMIN', 'STORE')
+  confirmOrderReceipt(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: DeliveryInput) {
+    return this.runDeliveryAction(request, id, 'confirm-receipt', body);
+  }
+
+  @Post(':id/raise-objection')
+  @RequireRoles('ADMIN', 'STORE')
+  raiseObjection(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: DeliveryInput) {
+    return this.runDeliveryAction(request, id, 'raise-objection', body);
+  }
+
+  @Post(':id/respond-objection')
+  @RequireRoles('ADMIN', 'SUPPLIER')
+  respondObjection(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: DeliveryInput) {
+    return this.runDeliveryAction(request, id, 'respond-objection', body);
+  }
+
+  @Post(':id/submit-receipt-exception')
+  @RequireRoles('ADMIN', 'STORE')
+  submitReceiptException(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: DeliveryInput) {
+    return this.runDeliveryAction(request, id, 'submit-receipt-exception', body);
+  }
+
+  @Post(':id/respond-receipt-exception')
+  @RequireRoles('ADMIN', 'SUPPLIER')
+  respondReceiptException(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: DeliveryInput) {
+    return this.runDeliveryAction(request, id, 'respond-receipt-exception', body);
+  }
+
+  @Post(':id/confirm-receipt-exception')
+  @RequireRoles('ADMIN', 'STORE')
+  confirmReceiptException(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: DeliveryInput) {
+    return this.runDeliveryAction(request, id, 'confirm-receipt-exception', body);
+  }
+
+  private async runDeliveryAction(request: AuthenticatedRequest, id: string, action: DeliveryAction, body: DeliveryInput) {
+    const issues = [...validateUuid('id', id), ...validateExpectedVersion('expectedVersion', body.expectedVersion)];
+    if (action.endsWith('receipt-exception')) issues.push(...validateUuid('receiptId', body.receiptId));
+    if (body.reason !== undefined && (typeof body.reason !== 'string' || body.reason.length > 500)) issues.push({ field: 'reason', code: 'INVALID_REASON', message: '说明最多500字' });
+    if (body.evidenceFileIds !== undefined) {
+      if (!Array.isArray(body.evidenceFileIds) || body.evidenceFileIds.length > 6) issues.push({ field: 'evidenceFileIds', code: 'INVALID_EVIDENCE', message: '最多上传6张发货凭证' });
+      else body.evidenceFileIds.forEach((fileId, index) => issues.push(...validateUuid(`evidenceFileIds.${index}`, fileId)));
+    }
+    if (body.items !== undefined) {
+      if (!Array.isArray(body.items)) issues.push({ field: 'items', code: 'INVALID_ITEMS', message: '商品必须为数组' });
+      else for (const [index, item] of body.items.entries()) {
+        issues.push(...validateUuid(`items.${index}.orderItemId`, item?.orderItemId), ...validateDecimalString(`items.${index}.quantity`, item?.quantity, 6));
+      }
+    }
+    throwIfInvalid(issues);
+    const auth = request.auth!;
+    const scope = auth.user.scope;
+    const traceId = getOrCreateTraceId(request);
+    const command = await this.commandsService.begin({ actorUserId: auth.user.actorUserId ?? auth.user.id, action: `supplier-order.${action}`, idempotencyKey: requireIdempotencyKey(request.headers), requestBody: { id, ...body } as never, traceId });
+    if (command.state === 'replay') { await this.supplierOrdersService.get(id, scope); return command.command.responseBody; }
+    return this.commandsService.performAtomic(command, async tx => {
+      const result = await this.supplierOrdersService.deliveryAction(id, action, body, tx, scope, auth.user.id);
+      await this.commandsService.succeed({ commandId: command.command.id, resourceType: 'SupplierOrder', resourceId: id, responseBody: result }, tx);
+      await this.audit.record({ actorUserId: auth.user.actorUserId ?? auth.user.id, activeScope: auditScope(auth), action: `supplier-order.${action}`, entityType: 'SupplierOrder', entityId: id, traceId, reason: body.reason, after: { ...result, ...body } as never }, tx);
+      return result;
+    });
   }
 
   @Post(':id/shipments')
@@ -450,6 +522,7 @@ function parseShipmentPreviewBody(
     ...validateExpectedVersion('expectedVersion', body.expectedVersion),
   ];
   const items: ShipmentPreviewInput['items'] = [];
+  if (body.completeDelivery !== undefined && typeof body.completeDelivery !== 'boolean') issues.push({ field: 'completeDelivery', code: 'INVALID_BOOLEAN', message: '请选择是否结束发货' });
 
   if (!Array.isArray(body.items) || body.items.length === 0) {
     issues.push({ field: 'items', code: 'INVALID_ITEMS', message: 'items must be a non-empty array' });
@@ -516,6 +589,7 @@ function parseShipmentPreviewBody(
     id,
     expectedVersion: body.expectedVersion as number,
     preview: {
+      completeDelivery: body.completeDelivery as boolean | undefined,
       deliveryMode: body.deliveryMode as DeliveryMode | undefined,
       items,
       freight: freight as string,

@@ -1,4 +1,5 @@
 var names = {
+  IN_PROGRESS: '发货中', FINISHED: '发货结束 · 待门店确认', DISPUTED: '门店异议待处理', REPLENISHING: '待补发', DECLINED: '拒绝补发 · 待门店确认',
   SUCCEEDED: '已确认', FAILED: '未成功', PROCESSING: '待确认',
   AMBIENT: '常温', CHILLED: '冷藏', FROZEN: '冷冻', WARM: '保温',
   RESERVED: '待确认', RELEASED: '已释放', PENDING_DISPOSAL: '待处理', DISPOSED: '已处理',

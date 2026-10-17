@@ -1,6 +1,6 @@
 const api = require('../../utils/api');
 Component({
-  properties: { files: { type: Array, value: [], observer: 'loadFiles' } },
+  properties: { files: { type: Array, value: [], observer: 'loadFiles' }, compact: { type: Boolean, value: false } },
   data: { rows: [], opening: false, error: '' },
   lifetimes: { detached() { this.sequence = (this.sequence || 0) + 1; } },
   methods: {

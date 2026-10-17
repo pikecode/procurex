@@ -11,6 +11,13 @@ const storeId = '11111111-1111-4111-8111-111111111111';
 const otherId = '22222222-2222-4222-8222-222222222222';
 const auth = (role: string, scope = { type: 'STORE', storeId }) => ({ auth: { user: { roles: [role], scope } } }) as never;
 
+test('receipt exception commands keep store and supplier responsibilities separate', () => {
+  for (const method of ['submitReceiptException', 'confirmReceiptException'] as const) {
+    assert.deepEqual(Reflect.getMetadata(REQUIRED_ROLES_METADATA, SupplierOrdersController.prototype[method]), ['ADMIN', 'STORE']);
+  }
+  assert.deepEqual(Reflect.getMetadata(REQUIRED_ROLES_METADATA, SupplierOrdersController.prototype.respondReceiptException), ['ADMIN', 'SUPPLIER']);
+});
+
 test('formal order reads explicitly allow both store roles and retain store price privacy', () => {
   for (const name of ['list', 'get'] as const) for (const role of ['STORE', 'STORE_FINANCE']) {
     assert.ok(Reflect.getMetadata(REQUIRED_ROLES_METADATA, SupplierOrdersController.prototype[name]).includes(role));

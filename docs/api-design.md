@@ -1,5 +1,58 @@
 # 接口详细设计
 
+## 2026-10-17 数量异常统一与双方结单校验
+
+本节覆盖下方旧的“数量差异需二次提交整单异议”“REGISTERED可直接确认解决”“旧客户端可无备注提交少收”约定。
+
+- `POST /shipments/{id}/receipts` 自动识别实收小于本批实发；不论是否传 `hasException`，数量异常及主动标记的其他异常均强制非空备注和收货凭证。新Receipt立即为SUBMITTED，通知供应商；已提交异常的当前批次不允许更改实收或发货数量，解决后也不能覆盖。
+- `respond-receipt-exception`：数量异常的decision使用REPLENISH（安排补发）、ACCEPT_SHORTAGE（确认不再补发）或DECLINED（说明无法处理）；非数量异常仍为HANDLED/DECLINED。均保存回复说明和可选图片历史。安排补发复用Discrepancy及ReplenishmentGap，不增加订购量，不占用正常尚未发的商品数量；不能重复安排已有在途或未消费的补发数量。
+- 供应商执行补发期间Receipt维持RESPONDED、decision=REPLENISH；可改为ACCEPT_SHORTAGE/DECLINED并取消该差异尚未发出的缺口，已发批次不撤销。门店不接受“不补发”时可重新提交，重新安排补发复用原缺口、保留已发分配历史。
+- `confirm-receipt-exception`仅接受RESPONDED，REGISTERED/SUBMITTED不能跳过供应商回复。补发未收齐或剩余少收未协商时拒绝确认解决。门店接受ACCEPT_SHORTAGE/DECLINED时记录明确接受说明，不立即改货款；REPLENISH方案执行中不重复提交同一异议，补发再次少收登记新批异常。
+- `confirm-receipt`除原有发货结束、所有批次收货及未解决异常校验外，拒绝缺少双方确认依据的少收（SHORTAGE_NOT_AGREED）。只有RESOLVED且供应商已确认不补发的批次差额、或有真实供应商回应的整单DECLINED方案，可作为少收结算依据。通过后才沿既有事务按实收完成货款、资金、差额单及账单调整。
+- 详情新增 `shortageAgreementRequired/unagreedShortageItems`，批次新增 `canConfirmReceiptException`；列表及详情新增 `pendingReplenishmentCount`，统一待办与状态筛选。作用域、版本、命令幂等、审计和私有附件授权保持原合同。
+- 数据迁移只将尚未进入整单异议/旧补发方案的未完成订单当前OPEN数量差异纳入SUBMITTED，不改数量、金额或已完成订单，补齐/修正通知入口。
+
+## 2026-10-17 供应商异常回复凭证
+
+`respond-receipt-exception` 处理说明必填，可选 `evidenceFileIds`（最多6张不重复的当前账号 READY 图片，用途 RECEIPT_EXCEPTION_REPLY）。已处理、无法处理均可附图。每次回复新增不可覆盖的 ReceiptExceptionReply，保存处理人、时间、说明、结论及私有凭证；事务失败整体回滚，沿用订单版本、幂等与审计。详情批次返回 `receiptExceptionReplies` 时间序列供门店和供应商查看。新提交或重新提出异议不删除历史回复。旧回复从可核实的审计记录补入历史，无附件的历史回复继续显示。附件只允许所属门店、供应商、授权总部人员及上传者访问，不作为公开图片。
+
+## 2026-10-17 收货异常处理闭环
+
+收货成功后小程序自动打开该批所属供应商订单。数量一致的异常 Receipt 在保存事务中直接进入 SUBMITTED 并通知供应商，不再二次提交；后续为 RESPONDED → RESOLVED，门店不认可回复时 RESPONDED 可重新提交。REGISTERED 仅兼容历史，增量迁移将未完成订单的当前 REGISTERED 记录补入 SUBMITTED 并补发通知。数量差异仍沿既有订单异议/补发流程，提交收货时即通知供应商，是否申请补发仍由门店决定。
+
+- `POST /supplier-orders/{id}/submit-receipt-exception`：ADMIN/STORE，`expectedVersion/receiptId/reason`，已登记或已回复才允许提交。
+- `POST /supplier-orders/{id}/respond-receipt-exception`：ADMIN/SUPPLIER，`expectedVersion/receiptId/reason/decision`，decision 为 HANDLED 或 DECLINED，说明必填；只能回复本供应商、当前有效收货版本的 SUBMITTED 异常。
+- `POST /supplier-orders/{id}/confirm-receipt-exception`：ADMIN/STORE，`expectedVersion/receiptId/reason`，已登记线下解决或供应商已回复才可确认；等待供应商回复时不得直接解决。
+
+以上复用订单版本、门店/供应商范围、命令幂等、事务审计及通知。未解决异常阻止整单完成及覆盖收货版本。订单列表返回 `openReceiptExceptionCount/pendingSupplierReceiptExceptionCount`；详情批次返回 `receiptId/receiptExceptionStatus/receiptExceptionResponse/receiptExceptionDecision/receiptExceptionResolution` 及原备注、凭证。处理不自动改变商品数量、价格或金额。
+
+## 2026-10-17 异常收货备注
+
+异常收货不限于数量差异，可记录破损、质量、规格等问题；实收可等于发货量。请求增加 `hasException: true`，明确标记异常时服务端要求非空 `note` 和至少一张凭证。Receipt 独立保存异常标记，详情返回 `receiptHasException`，供应商发货记录返回该标记、备注及收货凭证。异常记录本身不改变数量或金额，也不自动视为数量补发申请；数量缺口仍沿原异议流程处理。
+
+收货请求支持 `note`（最多500字），保存于本次 Receipt 版本，响应返回 `note`，发货批次详情返回 `receiptNote`。小程序异常收货必须填写备注并上传凭证；正常收货不显示备注输入。显式传入空备注且存在少收时服务端返回 `RECEIPT_NOTE_REQUIRED`；未传备注的历史客户端保留兼容，历史收货记录不补写。备注纳入幂等请求，重试沿用原值，不重复创建版本。
+
+## 2026-10-17 待收货批次及订单进度
+
+`GET /shipments/pending-receipts` 按当前账号门店范围返回未登记收货、退回重新核对的批次，按 `shippedAt ASC, id ASC` 排序，不依赖通知。排除订单已完成/拒单/取消、异议已锁定批次及已结束的收货事实。返回批次ID/编号、所属订单ID/编号、供应商、门店、商品种数、发货时间和returned标记；允许管理员、采购、公司财务、门店、门店财务及授权门店查询角色读取，供应商不使用此门店待办接口。
+
+`GET /supplier-orders` 及详情补充 `shipmentCount`、`pendingReceiptCount`、`receiptExceptionCount`，分别为发货批次数、当前可待收货批次数、当前收货中的历史开放/补发差异条数。待收批次与订单统计复用同一规则；小程序据此区分待收货和待整单确认。价格字段仍按原角色隐私规则过滤。
+
+## 2026-10-16 分批发货与整单确认
+
+发货预览/提交增加可选布尔 `completeDelivery`。`false` 表示本批之后继续发货，`true` 表示本批后结束发货；传入任一值后订单进入新整单确认流程。未选商品不出现在本批 items 中；普通第二批仍为 INITIAL，仅异议补发为 REPLENISHMENT。新流程禁止供应商直接永久减量。结束时仍有未发数量须 note 或 evidenceFileIds，正常分批不强制差异材料。
+
+以下 POST 接口均在 `/supplier-orders/:id` 下，要求 `expectedVersion` 与幂等键，权限和归属检查、业务更新、资金更新、通知及审计同事务提交：
+
+| 路由 | 角色 | 附加参数与条件 |
+|---|---|---|
+| `/finish-delivery` | SUPPLIER/ADMIN | 有发货批次；剩余缺量时 reason 必填；结束发货不完成订单 |
+| `/confirm-receipt` | STORE/ADMIN | 结束发货/拒绝补发，且所有批次已登记实收；按实收结单 |
+| `/raise-objection` | STORE/ADMIN | reason、items[{orderItemId,quantity}]；每种不得超过未实收量 |
+| `/respond-objection` | SUPPLIER/ADMIN | response=REPLENISH/DECLINE；拒绝时 reason 必填 |
+
+订单列表/详情新增 `deliveryState`、`deliveryCompletedAt`；详情另含 `deliveryNote`、`deliveryReview`。状态为 IN_PROGRESS、FINISHED、DISPUTED、REPLENISHING、DECLINED、COMPLETED。旧订单为 null；新流程不会因客户端漏传标记退回旧逻辑。批次收货接口只登记实收，整单确认才完成履约和储值扣款。新流程异议不混入旧 `/discrepancies` 待办，旧差异处理命令不能绕过整单确认。
+
 ## 2026-10-16 门店修改下货单
 
 新增 `PATCH /purchase-requests/:id/store-items`，仅 STORE 且必须属于当前门店；必填 expectedVersion、items、幂等键。商品与供应商按当前有效模板校验，价格由服务端计算；采购首次确认后（含财务退回）不允许门店修改。并发保存/采购确认由版本与事务锁保护。
@@ -14,7 +67,7 @@
 
 `GET /logistics-companies` 返回物流公司及启停状态，供应商用于选择启用项；仅 ADMIN/PURCHASER 可通过 `POST` 新增、`PATCH` 改名或启停。发货预览和提交都提交 `carrierId`；物流配送必须选启用公司，服务端在发货事务内重新校验并在 Shipment 保存 `carrierId` 和 `carrierName` 快照。`trackingNo` 仍选填。自配送携带物流字段返回校验错误。发货与补发各自保留承运方快照。
 
-`POST /supplier-orders/{id}/shipments` 支持 `note`（最多500字）及 `evidenceFileIds`（最多6张 SHIPMENT_ADJUSTMENT 图片）。累计未满足订购数量时两者至少一项，否则返回 `SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED`。凭证归属、用途、就绪状态及未使用状态在发货事务内校验；材料保存于首版 ShipmentRevision，并随订单发货记录返回。
+`POST /supplier-orders/{id}/shipments` 支持 `note`（最多500字）及 `evidenceFileIds`（最多6张 SHIPMENT_ADJUSTMENT 图片）。少发且结束本单发货时两者都必填，否则返回 `SHIPMENT_SHORTAGE_EVIDENCE_REQUIRED`；普通分批未结束发货不强制填写。减少已发批次数量同样要求两者都必填。独立 `finish-delivery` 少发结束时传 `reason` 和 `evidenceFileIds`，凭证关联最后一个发货批次的当前版本，结束备注记录于订单及审计。凭证归属、用途、就绪状态及未使用状态在事务内校验；材料随订单发货记录返回。
 
 ## 2026-10-14 门店删除
 
@@ -132,7 +185,7 @@ POST /commands/{id}/reviews仅ADMIN，必须Idempotency-Key，body为expectedSta
 
 2026-10-03 商品资料更新：商品读模型增加可空 specification（240字）、brand（120字）、storageCondition（AMBIENT/CHILLED/FROZEN/WARM）及 imageFileId/imageFile 安全元数据。创建/修改允许省略保留、null清空，文本空白清空。修改按 expectedVersion 原子比较更新，冲突409；普通资料不发布价格。PRODUCT会话仅ADMIN/PURCHASER创建，JPEG/PNG最大2MiB；完成要求实际解码成功、单帧、正方形且边长不超过4096。新绑定图片必须本人上传、READY、PRODUCT且未关联其他业务，文件行锁与商品保存同事务。门店下载要求有效模板可见且启用商品，供应商要求商品关联；门店无权读未绑定或已替换图片。真实设备和OSS尚未验收。
 
-2026-10-03 收货凭证更新：文件用途增加 `RECEIPT`，仅接受JPEG/PNG、每张最大10MiB，沿用私有目录、内容签名/校验和及24小时未完成会话清理。收货命令可提交 `evidenceFileIds`（显式提交时1至6个、不重复）；事务内只允许当前操作人上传、READY、正确用途且未关联其他付款/收货的文件，绑定到新收货版本，失败整体回滚。原生门店新提交/更正必须先上传至少一张；旧API省略该字段暂保持兼容，尚未完成全入口必传切换，不能视为S05全部验收。历史无附件版本仍可读。收货响应及当前批次详情返回 `evidenceFiles`（id/filename/mimeType/sizeBytes），供应商差异详情返回该差异所属收货版本的凭证。下载允许上传者、关联门店/供应商及总部财务/管理员，拒绝空scope和无关主体；旧版本凭证不被更正覆盖。真实相机/相册、断网和OSS尚待外部验收。
+2026-10-03 收货凭证更新：文件用途增加 `RECEIPT`，仅接受JPEG/PNG、每张最大10MiB，沿用私有目录、内容签名/校验和及24小时未完成会话清理。收货命令可提交 `evidenceFileIds`（显式提交时1至6个、不重复）；事务内只允许当前操作人上传、READY、正确用途且未关联其他付款/收货的文件，绑定到新收货版本，失败整体回滚。正常收货凭证选填，无图片时省略该字段；异常收货须提交备注及至少一张凭证。选择上传图片后须全部上传成功。历史无附件版本仍可读。收货响应及当前批次详情返回 `evidenceFiles`（id/filename/mimeType/sizeBytes），供应商差异详情返回该差异所属收货版本的凭证。下载允许上传者、关联门店/供应商及总部财务/管理员，拒绝空scope和无关主体；旧版本凭证不被更正覆盖。真实相机/相册、断网和OSS尚待外部验收。
 
 门店履约读模型补充：`fulfillmentStage` 为 pending/receive/completed/canceled，按当前商品归属和有效执行单计算；已改派/取消的历史拒单不计为未完成义务，同供应商新执行单可以接替旧拒单。详情历史执行单通过 `rejectionHandled` 标记保留历史，不删除原单。
 
@@ -369,7 +422,7 @@ O10 只处理拒单留下的待重分配商品；同次订货中目标供应商�
 
 F03 自动采用供应商唯一配送方式并保存快照；物流配送必须选择启用的 `carrierId`，服务端保存当时 `carrierName` 快照，物流单号选填；自配送提交物流字段返回 409。运费开关关闭时金额必须 0；补发非零运费必须有匹配且未使用的确认记录。首次发货重新取有效价；补发用原单有效价。资金不足返回 409 且无成功发货批次；供应商不能通过重复提交绕过。
 
-F04 首次收货实收默认发货量；重确认读取 `currentReceivedQuantity` 与 `receiptLocked`。退回核对行可修改，已经同意少收或进入补发的行只能原样提交。允许 0 到本次发货量，至少一张有效凭证；少收进入差异，不直接替供应商同意。新 receiptRevision 替代旧有效版本，旧记录保留，累计数量只增加新旧有效版本的差量。RETURN 的动作记录虽为 RESOLVED，但待门店核对的差异仍阻止履约完成，不能当作 ACCEPT。
+F04 首次收货实收默认发货量；重确认读取 `currentReceivedQuantity` 与 `receiptLocked`。退回核对行可修改，已经同意少收或进入补发的行只能原样提交。允许 0 到本次发货量，正常收货凭证选填，异常收货备注及至少一张有效凭证必填；少收进入差异，不直接替供应商同意。新 receiptRevision 替代旧有效版本，旧记录保留，累计数量只增加新旧有效版本的差量。RETURN 的动作记录虽为 RESOLVED，但待门店核对的差异仍阻止履约完成，不能当作 ACCEPT。
 
 F05 的 REPLENISH 与 RETURN 不能对已解决差异重复执行。ACCEPT 降低有效目标、调整资金和两侧账单；只有所有待补和差异结束才完成履约。执行单完成时同步核价，若资金仍待补则返回 `fulfillmentStatus=COMPLETED`、资金未结清，不能混为同一个状态。
 

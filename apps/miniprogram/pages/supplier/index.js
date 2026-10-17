@@ -1,6 +1,7 @@
 const api = require('../../utils/api');
 const quantity = require('../../utils/quantity');
 const view = require('../../utils/store-view');
+const delivery = require('../../utils/delivery');
 
 function shipmentQuantityError(value, max, unitName) {
   if (String(value).trim() === '') return '';
@@ -20,23 +21,28 @@ function createdTime(order) {
 }
 
 function supplierOrderPriority(order) {
-  if (order.status === 'PUSHED' || order.status === 'ACCEPTED' || order.status === 'DRAFT') return 0;
-  if (order.status === 'PARTIAL_SHIPPED' || order.fulfillmentStatus === 'PARTIAL_SHIPPED') return 1;
-  if (order.status === 'SHIPPED' || order.fulfillmentStatus === 'SHIPPED') return 2;
-  if (order.fulfillmentStatus === 'COMPLETED' || order.status === 'COMPLETED') return 3;
-  if (order.status === 'REJECTED' || order.status === 'CANCELED' || order.fulfillmentStatus === 'CANCELED') return 4;
-  return 2;
+  return { DISPUTED: 0, pending: 1, REPLENISHING: 2, PARTIAL_SHIPPED: 3, SHIPPED: 4,
+    WAITING_STORE_CONFIRM: 5, COMPLETED: 6, REJECTED: 7, CANCELED: 7 }[delivery.supplierOrderState(order)] ?? 7;
 }
+
+const orderTabs = [
+  { value: 'all', label: '全部' }, { value: 'pending', label: '待发货' },
+  { value: 'PARTIAL_SHIPPED', label: '发货中' }, { value: 'SHIPPED', label: '待收货' },
+  { value: 'WAITING_STORE_CONFIRM', label: '待门店确认' },
+  { value: 'DISPUTED', label: '异常处理' }, { value: 'REPLENISHING', label: '待补发' },
+  { value: 'COMPLETED', label: '已完成' }, { value: 'closed', label: '已关闭' }
+];
 
 function sortSupplierOrders(orders) {
   return orders.map((order, index) => ({ order, index, priority: supplierOrderPriority(order), createdAt: createdTime(order) }))
     .sort((a, b) => {
       if (a.priority !== b.priority) return a.priority - b.priority;
       if (a.createdAt !== null && b.createdAt !== null && a.createdAt !== b.createdAt) {
-        const inProgress = a.priority <= 2;
+        const inProgress = a.priority <= 5;
         return inProgress ? a.createdAt - b.createdAt : b.createdAt - a.createdAt;
       }
-      return a.index - b.index;
+      return a.createdAt !== null && b.createdAt !== null
+        ? String(a.order.id || '').localeCompare(String(b.order.id || '')) || a.index - b.index : a.index - b.index;
     }).map(item => item.order);
 }
 
@@ -55,6 +61,10 @@ Page({
     recovering: false,
     search: '',
     statusFilter: 'all',
+    statusExpanded: false,
+    statusScrollTarget: 'supplier-status-all',
+    orderTabs: orderTabs.map(tab => ({ ...tab, count: 0 })),
+    orderEmptyText: '当前供应商暂无订单',
     orderMode: 'detail',
     visibleOrders: [],
     user: {},
@@ -94,6 +104,12 @@ Page({
     revisionItems: [],
     revisionNote: '',
     revisionEvidence: [],
+    finishNeedsMaterials: false,
+    exceptionReplyReceiptId: '',
+    exceptionReplyDecision: '',
+    exceptionReplyNote: '',
+    exceptionReplyEvidence: [],
+    exceptionReplyUploading: false,
     revisionNeedsEvidence: false,
     revisionUploading: false,
     revising: false,
@@ -135,7 +151,7 @@ Page({
     if (this.data.user.id !== user.id) {
       this.statementRequestSequence = (this.statementRequestSequence || 0) + 1;
       this.setData({ statementPayments: [], statementPaymentError: '', statementPaymentsLoading: false, statementReturnId: '', selectedAdjustment: null, adjustmentId: '', adjustmentLoading: false });
-      this.setData({ visibleOrders: [], search: '', statusFilter: 'all', orderMode: 'detail', activeView: 'tasks', shippingTasks: [], differenceTasks: [] });
+      this.setData({ visibleOrders: [], search: '', statusFilter: 'all', statusExpanded: false, statusScrollTarget: 'supplier-status-all', orderMode: 'detail', activeView: 'tasks', shippingTasks: [], differenceTasks: [] });
       this.setData({ selectedStatement: null, statementId: '', statementLoading: false });
       this.setData({ statementKind: 'total', statementParentId: '', statementStores: [], statementStoresLoading: false,
         statementStoresError: '', expandedStatementOrderId: '', statementReturnKind: 'total', statementReturnParentId: '' });
@@ -178,16 +194,18 @@ Page({
   },
 
   changeView(event) {
-    if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting || this.data.evidenceLoading || this.data.revising || this.data.revisionUploading) return;
+    if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting || this.data.evidenceLoading || this.data.revising || this.data.revisionUploading || this.data.exceptionReplyUploading || this.data.deliveryBusy) return;
     if (event.currentTarget.dataset.view === 'differences' && !this.data.discrepancies.length && !this.data.loading) {
       wx.showToast({ title: '暂无收货异常记录', icon: 'none' });
       return;
     }
-    if (event.currentTarget.dataset.view !== this.data.activeView) {
+    const changed = event.currentTarget.dataset.view !== this.data.activeView;
+    if (changed) {
       this.setData({ statementReturnId: '', statementParentId: '', statementKind: 'total' });
       this.backToList();
     }
     this.setData({ activeView: event.currentTarget.dataset.view, error: '' });
+    if (changed && this.data.activeView === 'orders') return this.loadOrders();
   },
 
   openTaskOrder(event) {
@@ -211,7 +229,7 @@ Page({
   },
 
   backToList() {
-    if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting || this.data.evidenceLoading || this.data.revising || this.data.revisionUploading) return;
+    if (this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting || this.data.evidenceLoading || this.data.revising || this.data.revisionUploading || this.data.exceptionReplyUploading || this.data.deliveryBusy) return;
     const returnId = this.data.statementReturnId;
     const returnKind = this.data.statementReturnKind;
     const returnParentId = this.data.statementReturnParentId;
@@ -343,15 +361,20 @@ Page({
   },
 
   filterStatus(event) {
-    this.setData({ statusFilter: event.currentTarget.dataset.filter });
+    const filter = event.currentTarget.dataset.filter;
+    this.setData({ statusFilter: filter, statusExpanded: false, statusScrollTarget: `supplier-status-${filter}` });
     this.refreshList();
     if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+  },
+
+  toggleStatusExpanded() {
+    this.setData({ statusExpanded: !this.data.statusExpanded, statusScrollTarget: `supplier-status-${this.data.statusFilter}` });
   },
 
   // Empty groups point somewhere useful instead of dead-ending the page.
   gotoView(event) {
     const { view, filter } = event.currentTarget.dataset;
-    if (filter) this.setData({ statusFilter: filter });
+    if (filter) this.setData({ statusFilter: filter, statusExpanded: false, statusScrollTarget: `supplier-status-${filter}` });
     this.changeView({ currentTarget: { dataset: { view } } });
     if (filter) this.refreshList();
   },
@@ -359,23 +382,23 @@ Page({
   nextOrders() { this.refreshList((this.data.orderLimit || 10) + 10); },
   refreshList(limit = 10) {
     const search = this.data.search.trim().toLowerCase();
-    const matches = item => this.data.statusFilter === 'all' ||
-      (this.data.statusFilter === 'pending' ? ['PUSHED', 'ACCEPTED'].includes(item.status) :
-        this.data.statusFilter === 'COMPLETED' ? item.fulfillmentStatus === 'COMPLETED' || item.status === 'COMPLETED' :
-          this.data.statusFilter === 'SHIPPED' ? item.status === 'SHIPPED' && item.fulfillmentStatus !== 'COMPLETED' :
-            item.status === this.data.statusFilter);
-    const filtered = sortSupplierOrders(this.data.orders).filter(item =>
-      matches(item) &&
+    const searched = sortSupplierOrders(this.data.orders).filter(item =>
       [item.supplierOrderNo, item.requestNo, item.storeName, item.productSummary].some(value => String(value || '').toLowerCase().includes(search)));
-    this.setData({ visibleOrders: filtered.slice(0, limit), orderLimit: limit, orderTotal: filtered.length, moreOrders: filtered.length > limit });
+    const matches = (item, filter) => filter === 'all' || (filter === 'closed' ? ['REJECTED', 'CANCELED'].includes(delivery.supplierOrderState(item)) : delivery.supplierOrderState(item) === filter);
+    const filtered = searched.filter(item => matches(item, this.data.statusFilter));
+    const tab = orderTabs.find(item => item.value === this.data.statusFilter);
+    this.setData({ visibleOrders: filtered.slice(0, limit), orderLimit: limit, orderTotal: filtered.length, moreOrders: filtered.length > limit,
+      orderTabs: orderTabs.map(tab => ({ ...tab, count: searched.filter(item => matches(item, tab.value)).length })),
+      orderEmptyText: search ? '当前搜索条件下没有匹配的订单' : `当前供应商暂无${tab?.value === 'all' ? '' : tab?.label || '该状态'}订单` });
   },
 
   changeOrderMode(event) {
-    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting || this.data.revisionUploading) return;
+    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting || this.data.revising || this.data.revisionUploading || this.data.exceptionReplyUploading || this.data.deliveryBusy) return;
     const mode = event.currentTarget.dataset.mode;
     if (mode === 'ship' && !this.data.selectedOrder?.canShip) return;
     if (mode === 'reject' && !this.data.selectedOrder?.canReject) return;
-    if (['detail', 'ship', 'reject'].includes(mode)) this.setData({ orderMode: mode, error: '', result: null });
+    if (['detail', 'ship', 'reject'].includes(mode)) this.setData({ orderMode: mode, error: '', result: null,
+      ...(mode === 'detail' && this.data.orderMode === 'revise' ? { revisionShipment: null, revisionItems: [], revisionNote: '', revisionEvidence: [], revisionNeedsEvidence: false } : {}) });
   },
 
   beginShipmentRevision(event) {
@@ -383,18 +406,19 @@ Page({
     const shipment = (this.data.selectedOrder?.shipments || []).find(item => item.id === event.currentTarget.dataset.id);
     if (!shipment?.canRevise) return;
     const orderItems = new Map(this.data.selectedOrder.items.map(item => [item.id, item]));
-    const revisionItems = shipment.items.map(item => ({ ...item, productName: orderItems.get(item.orderItemId)?.productName || '商品', orderedQuantity: orderItems.get(item.orderItemId)?.quantity || '0', revisedQuantity: item.quantity }));
-    this.setData({ orderMode: 'revise', revisionShipment: shipment, revisionItems, revisionNote: '', revisionEvidence: [], revisionNeedsEvidence: revisionItems.some(item => Number(item.revisedQuantity) < Number(item.orderedQuantity)), error: '' });
+    const revisionItems = shipment.items.map(item => ({ ...item, productName: orderItems.get(item.orderItemId)?.productName || '商品', orderedQuantity: orderItems.get(item.orderItemId)?.quantity || '0', explanationBaseline: this.data.selectedOrder.deliveryState ? item.quantity : orderItems.get(item.orderItemId)?.quantity || '0', revisedQuantity: item.quantity }));
+    this.setData({ orderMode: 'revise', revisionShipment: shipment, revisionItems, revisionNote: '', revisionEvidence: [], revisionNeedsEvidence: revisionItems.some(item => Number(item.revisedQuantity) < Number(item.explanationBaseline)), error: '' });
+    if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
 
   onRevisionQuantity(event) {
     if (this.data.revising || this.data.revisionUploading) return;
     const revisionItems = this.data.revisionItems.map(item => item.id === event.currentTarget.dataset.id ? { ...item, revisedQuantity: event.detail.value } : item);
-    this.setData({ revisionItems, revisionNeedsEvidence: revisionItems.some(item => Number(item.revisedQuantity || 0) < Number(item.orderedQuantity)) });
+    this.setData({ revisionItems, revisionNeedsEvidence: revisionItems.some(item => Number(item.revisedQuantity || 0) < Number(item.explanationBaseline ?? item.orderedQuantity)) });
   },
 
   async chooseRevisionEvidence() {
-    if (this.data.shipping || this.data.revising || this.data.revisionUploading || this.data.revisionEvidence.length >= 6) return;
+    if (this.data.shipping || this.data.revising || this.data.deliveryBusy || this.data.revisionUploading || this.data.revisionEvidence.length >= 6) return;
     const orderId = this.data.supplierOrderId, actorId = api.currentUser()?.id;
     const active = () => this.data.supplierOrderId === orderId && api.currentUser()?.id === actorId;
     this.setData({ revisionUploading: true, error: '' });
@@ -413,7 +437,7 @@ Page({
   },
 
   removeRevisionEvidence(event) {
-    if (this.data.shipping || this.data.revising || this.data.revisionUploading) return;
+    if (this.data.shipping || this.data.revising || this.data.deliveryBusy || this.data.revisionUploading) return;
     this.setData({ revisionEvidence: this.data.revisionEvidence.filter((_, index) => index !== Number(event.currentTarget.dataset.index)) });
   },
 
@@ -423,9 +447,14 @@ Page({
     try {
       const shipment = this.data.revisionShipment;
       const items = this.data.revisionItems.map(item => ({ shipmentItemId: item.id, quantity: quantity.validate(item.revisedQuantity, { allowZero: true, max: item.orderedQuantity }) }));
-      const needsEvidence = items.some(line => Number(line.quantity) < Number(this.data.revisionItems.find(item => item.id === line.shipmentItemId).orderedQuantity));
-      if (needsEvidence && !this.data.revisionNote.trim()) throw new Error('少于门店订购数量时请填写差异说明');
-      if (needsEvidence && !this.data.revisionEvidence.length) throw new Error('请上传发货差异凭证');
+      const needsEvidence = items.some(line => {
+        const item = this.data.revisionItems.find(item => item.id === line.shipmentItemId);
+        return Number(line.quantity) < Number(item.explanationBaseline ?? item.orderedQuantity);
+      });
+      if (needsEvidence) {
+        if (!this.data.revisionNote.trim()) throw new Error('请填写异常发货备注');
+        if (!this.data.revisionEvidence.length) throw new Error('请上传发货差异凭证');
+      }
       if (items.every(line => Number(line.quantity) === Number(this.data.revisionItems.find(item => item.id === line.shipmentItemId).quantity))) throw new Error('发货数量未变更');
       const orderId = this.data.supplierOrderId;
       const result = await this.submitCommand(`/supplier-orders/${orderId}/shipments/${shipment.id}/revisions`, {
@@ -435,6 +464,7 @@ Page({
       });
       this.setData({ orderMode: 'detail', revisionShipment: null, revisionItems: [], revisionNote: '', revisionEvidence: [], result: { title: shipment.shipmentNo, status: 'UPDATED', detail: `发货数量已修订到第 ${result.revision} 版` } });
       await this.loadOrder(orderId);
+      await this.loadOrders(false);
     } catch (error) { this.setData({ error: error.message }); }
     finally { this.setData({ revising: false }); }
   },
@@ -474,30 +504,30 @@ Page({
   },
 
   async loadOrder(id) {
-    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting) return;
+    if (this.data.shipping || this.data.rejecting || this.data.freightRequesting || this.data.exceptionReplyUploading) return;
+    this.setData({ exceptionReplyReceiptId: '', exceptionReplyNote: '', exceptionReplyEvidence: [] });
     const actorId = this.data.user.id;
     this.setData({ supplierOrderId: id, selectedOrder: null, shipmentItems: [], orderLoading: true, freightIndex: 0, freightChoices: [], error: '', orderMode: 'detail', trackingNo: '', carrierId: '', carrierIndex: 0, rejectionReason: '', freightRequestAmount: '', freightRequestReason: '', result: null, revisionNote: '', revisionEvidence: [], shipmentNeedsExplanation: false });
     try {
       const selectedOrder = await api.request(`/supplier-orders/${id}`);
       if (this.data.supplierOrderId !== id || this.data.user.id !== actorId) return;
+      const shipmentItems = delivery.shipmentLines(selectedOrder);
+      this.setData({ completeDelivery: true, deliveryBusy: false, finishNeedsMaterials: false });
       this.setData({ deliveryIndex: selectedOrder.defaultDeliveryMode === 'LOGISTICS' ? 1 : 0, selectedOrder: { ...selectedOrder,
+        listState: delivery.supplierOrderState(selectedOrder), displayStatus: delivery.supplierOrderLabel(selectedOrder),
         canRequestFreight: selectedOrder.requiresFreightSnapshot !== false,
         shipments: (selectedOrder.shipments || []).map(shipment => {
           const items = shipment.items.map(line => ({ ...line, productName: selectedOrder.items.find(item => item.id === line.orderItemId)?.productName || '商品' }));
           return { ...shipment, shippedDate: view.dateText(shipment.shippedAt), items,
+            receiptExceptionReplies: (shipment.receiptExceptionReplies || []).map(reply => ({ ...reply, createdText: view.dateText(reply.createdAt) })),
             productPreview: items.length ? `${items[0].productName}${items.length > 1 ? ` 等 ${items.length} 种` : ''}` : '暂无商品' };
         }),
-        canShip: ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED'].includes(selectedOrder.status) || (selectedOrder.status === 'SHIPPED' && selectedOrder.items.some(item => (item.replenishmentGaps || []).some(gap => ['PENDING', 'PARTIAL_FILLED'].includes(gap.status) && Number(gap.remainingQuantity) > 0))),
+        canFinish: selectedOrder.shipments?.length > 0 && ['IN_PROGRESS', 'REPLENISHING'].includes(selectedOrder.deliveryState),
+        canShip: (!selectedOrder.deliveryState || ['IN_PROGRESS', 'REPLENISHING'].includes(selectedOrder.deliveryState)) && !['COMPLETED', 'REJECTED', 'CANCELED'].includes(selectedOrder.status) && shipmentItems.some(item => Number(item.remainingQuantity) > 0),
         canReject: ['PUSHED', 'ACCEPTED'].includes(selectedOrder.status) && !selectedOrder.firstShippedAt && selectedOrder.fulfillmentStatus === 'PENDING'
       }, freightChoices: [{ id: '', amount: '0.00', label: '无运费' }].concat((selectedOrder.freightConfirmations || [])
         .filter(item => selectedOrder.requiresFreightSnapshot !== false && item.status === 'CONFIRMED' && !item.usedAt).map(item => ({ ...item, label: `¥${view.moneyText(item.amount)} · ${item.reason}` }))),
-      shipmentItems: selectedOrder.items.map(item => ({
-        ...item, imageUrl: '', imageFailed: false, imageLoading: Boolean(item.imageFile?.id || item.imageFileId), remainingQuantity: quantity.sum([quantity.remaining(item.quantity, item.shippedQuantity), ...(item.replenishmentGaps || []).filter(gap => Number(gap.remainingQuantity) > 0 && ['PENDING', 'PARTIAL_FILLED'].includes(gap.status)).map(gap => gap.remainingQuantity)]),
-        shipQuantity: quantity.remaining(item.quantity, item.shippedQuantity),
-        shipQuantityError: '',
-        gaps: (item.replenishmentGaps || []).filter(gap => gap.status !== 'COMPLETED' && Number(gap.remainingQuantity) > 0)
-          .map(gap => ({ ...gap, allocationQuantity: '0' }))
-      })) });
+      shipmentItems });
       this.loadOrderImages(id);
     } catch (error) {
       if (this.data.supplierOrderId === id) this.setData({ error: error.message });
@@ -537,7 +567,100 @@ Page({
     if (this.data.shipping || this.data.rejecting) return;
     this.setData({ shipmentItems: this.data.shipmentItems.map(item => item.id === event.currentTarget.dataset.id
       ? { ...item, shipQuantity: event.detail.value, shipQuantityError: shipmentQuantityError(event.detail.value, item.remainingQuantity, item.unitName) } : item) });
-    this.setData({ shipmentNeedsExplanation: this.data.shipmentItems.some(item => Number(item.shipQuantity || 0) < Number(quantity.remaining(item.quantity || item.remainingQuantity, item.shippedQuantity || '0'))) });
+    this.refreshShipmentExplanation();
+  },
+
+  refreshShipmentExplanation() {
+    this.setData({ shipmentNeedsExplanation: delivery.needsExplanation(this.data.shipmentItems, this.data.completeDelivery) });
+  },
+  selectShipmentItem(event) {
+    if (this.data.shipping) return;
+    const id = event.currentTarget.dataset.id;
+    this.setData({ shipmentItems: this.data.shipmentItems.map(item => item.id === id ? { ...item, selectedForShipment: !item.selectedForShipment } : item), completeDelivery: false });
+    this.refreshShipmentExplanation();
+  },
+  toggleCompleteDelivery(event) {
+    if (this.data.shipping) return;
+    this.setData({ completeDelivery: event.detail.value });
+    this.refreshShipmentExplanation();
+  },
+  async deliveryAction(event) {
+    if (this.data.deliveryBusy || this.data.revisionUploading || !this.data.selectedOrder) return;
+    const action = event.currentTarget.dataset.action;
+    if (!['finish-delivery', 'REPLENISH', 'DECLINE'].includes(action)) return;
+    const order = this.data.selectedOrder;
+    const needsReason = action === 'DECLINE' || (action === 'finish-delivery' && this.data.shipmentItems.some(item => Number(item.remainingQuantity) > 0));
+    const finishingShort = action === 'finish-delivery' && needsReason;
+    if (finishingShort) {
+      this.setData({ finishNeedsMaterials: true, error: '' });
+      if (!this.data.revisionNote.trim()) { this.setData({ error: '请填写异常发货备注' }); return; }
+      if (!this.data.revisionEvidence.length) { this.setData({ error: '请上传发货差异凭证' }); return; }
+    }
+    const prompt = await new Promise(resolve => wx.showModal({ title: action === 'finish-delivery' ? '结束本单发货' : action === 'REPLENISH' ? '确认安排补发' : '拒绝补发',
+      content: finishingShort ? this.data.revisionNote.trim() : needsReason ? '' : '确认后将通知门店。', editable: needsReason && !finishingShort, placeholderText: '填写原因（必填）', success: resolve, fail: () => resolve({ confirm: false }) }));
+    if (!prompt.confirm) return;
+    const reason = finishingShort ? this.data.revisionNote.trim() : (prompt.content || '').trim();
+    if (needsReason && !reason) { this.setData({ error: '请填写原因' }); return; }
+    this.setData({ deliveryBusy: true, error: '' });
+    try {
+      await this.submitCommand(`/supplier-orders/${order.id}/${action === 'finish-delivery' ? action : 'respond-objection'}`, { method: 'POST',
+        data: { expectedVersion: order.version, ...(reason ? { reason } : {}), ...(finishingShort ? { evidenceFileIds: this.data.revisionEvidence.map(file => file.id) } : {}), ...(action !== 'finish-delivery' ? { response: action } : {}) },
+        header: { 'idempotency-key': `mini-delivery-${Date.now()}` } });
+      await this.loadOrders(false);
+      await this.loadOrder(order.id);
+    } catch (error) { this.setData({ error: error.message }); }
+    finally { this.setData({ deliveryBusy: false }); }
+  },
+
+  respondReceiptException(event) {
+    if (this.data.deliveryBusy || this.data.exceptionReplyUploading || !this.data.selectedOrder) return;
+    const { receiptId, decision } = event.currentTarget.dataset;
+    const batch = this.data.selectedOrder.shipments.find(item => item.receiptId === receiptId);
+    const changingPlan = batch?.receiptExceptionStatus === 'RESPONDED' && batch.receiptExceptionDecision === 'REPLENISH' && decision === 'ACCEPT_SHORTAGE';
+    if ((!changingPlan && batch?.receiptExceptionStatus !== 'SUBMITTED') || !['HANDLED', 'DECLINED', 'REPLENISH', 'ACCEPT_SHORTAGE'].includes(decision)) return;
+    this.setData({ exceptionReplyReceiptId: receiptId, exceptionReplyDecision: decision, exceptionReplyNote: '', exceptionReplyEvidence: [], error: '' });
+  },
+  cancelReceiptExceptionReply() {
+    if (this.data.deliveryBusy || this.data.exceptionReplyUploading) return;
+    this.setData({ exceptionReplyReceiptId: '', exceptionReplyDecision: '', exceptionReplyNote: '', exceptionReplyEvidence: [] });
+  },
+  async chooseReceiptReplyEvidence() {
+    if (this.data.deliveryBusy || this.data.exceptionReplyUploading || !this.data.exceptionReplyReceiptId || this.data.exceptionReplyEvidence.length >= 6) return;
+    const receiptId = this.data.exceptionReplyReceiptId, orderId = this.data.supplierOrderId, actorId = api.currentUser()?.id;
+    const active = () => this.data.exceptionReplyReceiptId === receiptId && this.data.supplierOrderId === orderId && api.currentUser()?.id === actorId;
+    this.setData({ exceptionReplyUploading: true, error: '' });
+    try {
+      const files = await api.chooseEvidence(6 - this.data.exceptionReplyEvidence.length);
+      for (const file of files) {
+        if (!active()) return;
+        const uploaded = await api.uploadEvidence(file.path, 'RECEIPT_EXCEPTION_REPLY');
+        if (active()) this.setData({ exceptionReplyEvidence: [...this.data.exceptionReplyEvidence, { ...uploaded, path: file.path }] });
+      }
+    } catch (error) { if (active()) this.setData({ error: error.message }); }
+    finally { this.setData({ exceptionReplyUploading: false }); }
+  },
+  removeReceiptReplyEvidence(event) {
+    if (!this.data.deliveryBusy && !this.data.exceptionReplyUploading) this.setData({ exceptionReplyEvidence: this.data.exceptionReplyEvidence.filter((_, index) => index !== Number(event.currentTarget.dataset.index)) });
+  },
+  async submitReceiptExceptionReply() {
+    if (this.data.deliveryBusy || this.data.exceptionReplyUploading || !this.data.selectedOrder) return;
+    const receiptId = this.data.exceptionReplyReceiptId, decision = this.data.exceptionReplyDecision;
+    const batch = this.data.selectedOrder.shipments.find(item => item.receiptId === receiptId);
+    const changingPlan = batch?.receiptExceptionStatus === 'RESPONDED' && batch.receiptExceptionDecision === 'REPLENISH' && decision === 'ACCEPT_SHORTAGE';
+    if ((!changingPlan && batch?.receiptExceptionStatus !== 'SUBMITTED') || !['HANDLED', 'DECLINED', 'REPLENISH', 'ACCEPT_SHORTAGE'].includes(decision)) return;
+    const reason = this.data.exceptionReplyNote.trim();
+    if (!reason) { this.setData({ error: '请填写处理说明' }); return; }
+    if (reason.length > 500) { this.setData({ error: '处理说明最多500字' }); return; }
+    if (this.data.exceptionReplyEvidence.some(file => !file.id)) { this.setData({ error: '请等待凭证上传完成' }); return; }
+    const order = this.data.selectedOrder;
+    this.setData({ deliveryBusy: true, error: '' });
+    try {
+      await this.submitCommand(`/supplier-orders/${order.id}/respond-receipt-exception`, { method: 'POST', data: { expectedVersion: order.version, receiptId, decision, reason, ...(this.data.exceptionReplyEvidence.length ? { evidenceFileIds: this.data.exceptionReplyEvidence.map(file => file.id) } : {}) }, header: { 'idempotency-key': `mini-receipt-response-${Date.now()}` } });
+      this.setData({ exceptionReplyReceiptId: '', exceptionReplyNote: '', exceptionReplyEvidence: [] });
+      await this.loadOrders(false);
+      await this.loadOrder(order.id);
+    } catch (error) { this.setData({ error: error.message }); }
+    finally { this.setData({ deliveryBusy: false }); }
   },
 
   selectDelivery(event) {
@@ -700,25 +823,35 @@ Page({
 
   async loadOrders(toggleLoading = true) {
     const actorId = this.data.user.id;
+    const sequence = this.orderRequestSequence = (this.orderRequestSequence || 0) + 1;
     if (toggleLoading) this.setData({ loading: true, error: '' });
     try {
       const orders = await api.request('/supplier-orders');
-      if (this.data.user.id !== actorId) return;
+      if (this.data.user.id !== actorId || this.orderRequestSequence !== sequence) return;
       const rows = Array.isArray(orders) ? orders.map(order => {
         const names = (order.items || []).map(item => item.productName || '商品');
         const fallbackNames = String(order.productSummary || '').split('、').filter(Boolean);
         const products = names.length ? names : fallbackNames;
-        return { ...order, createdText: view.dateText(order.createdAt), itemCount: products.length || order.itemCount || 0,
+        const state = delivery.supplierOrderState(order);
+        return { ...order, listState: state,
+          displayStatus: delivery.supplierOrderLabel(order),
+          createdText: view.dateText(order.createdAt), itemCount: products.length || order.itemCount || 0,
           productPreview: products.slice(0, 2).join('、'), productMoreCount: Math.max(0, products.length - 2),
           productSummary: order.productSummary || (order.items || []).map(item => `${item.productName || '商品'} ${view.decimalText(item.quantity)}${item.unitName || ''}`).join('、') };
       }) : [];
       const sortedRows = sortSupplierOrders(rows);
-      this.setData({ orders: sortedRows, shippingTasks: oldestFirst(sortedRows.filter(item => ['PUSHED', 'ACCEPTED', 'PARTIAL_SHIPPED'].includes(item.status) && item.fulfillmentStatus !== 'COMPLETED')) });
+      this.setData({ orders: sortedRows, objectionTasks: oldestFirst(sortedRows.filter(item => item.listState === 'DISPUTED')),
+        shippingTasks: oldestFirst(sortedRows.filter(item => ['pending', 'PARTIAL_SHIPPED', 'REPLENISHING'].includes(item.listState))) });
       this.refreshList();
+      return true;
     } catch (error) {
-      this.setData({ error: error.message });
+      if (this.data.user.id === actorId && this.orderRequestSequence === sequence) {
+        this.setData({ error: error.message, orders: [], visibleOrders: [], shippingTasks: [], objectionTasks: [], orderTotal: 0, moreOrders: false,
+          orderTabs: orderTabs.map(tab => ({ ...tab, count: 0 })) });
+        return false;
+      }
     } finally {
-      if (toggleLoading) this.setData({ loading: false });
+      if (toggleLoading && this.data.user.id === actorId && this.orderRequestSequence === sequence) this.setData({ loading: false });
     }
   },
 
@@ -759,7 +892,8 @@ Page({
         details.push(...await Promise.all(discrepancies.slice(index, index + 5).map(async item => ({ ...item, ...await api.request(`/discrepancies/${encodeURIComponent(item.id)}`) }))));
         if (this.data.user.id !== actorId) return;
       }
-      this.setData({ discrepancies: details, differenceTasks: oldestFirst(details.filter(item => item.status === 'OPEN' || Number(item.replenishmentGap?.remainingQuantity) > 0)) });
+      const legacyDetails = details.filter(item => !item.deliveryState);
+      this.setData({ discrepancies: legacyDetails, differenceTasks: oldestFirst(legacyDetails.filter(item => item.status === 'OPEN' || Number(item.replenishmentGap?.remainingQuantity) > 0)) });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -816,26 +950,21 @@ Page({
     this.setData({ shipping: true, error: '', result: null });
     try {
       const order = this.data.selectedOrder;
-      const items = this.data.shipmentItems.map(item => {
-        const shipQuantity = quantity.validate(item.shipQuantity, { allowZero: true, max: item.remainingQuantity });
-        const gapAllocations = (item.gaps || []).map(gap => ({ gapId: gap.id,
-          quantity: quantity.validate(gap.allocationQuantity, { allowZero: true, max: gap.remainingQuantity })
-        })).filter(gap => Number(gap.quantity) > 0);
-        quantity.validate(quantity.sum(gapAllocations.map(gap => gap.quantity)), { allowZero: true, max: shipQuantity });
-        return { orderItemId: item.id, shipQuantity, permanentlyReduceQuantity: '0', ...(gapAllocations.length ? { gapAllocations } : {}) };
-      }).filter(item => Number(item.shipQuantity) > 0);
+      const items = delivery.shipmentPayload(this.data.shipmentItems);
       if (!items.length) throw new Error('至少填写一项发货数量');
-      const shortShipment = this.data.shipmentItems.some(item => Number(item.shipQuantity || 0) < Number(quantity.remaining(item.quantity, item.shippedQuantity)));
-      if (shortShipment && !this.data.revisionNote.trim() && !this.data.revisionEvidence.length) throw new Error('发货数量少于订购数量，请填写说明或上传凭证');
+      const shortShipment = delivery.needsExplanation(this.data.shipmentItems, this.data.completeDelivery);
+      if (shortShipment && !this.data.revisionNote.trim()) throw new Error('请填写异常发货备注');
+      if (shortShipment && !this.data.revisionEvidence.length) throw new Error('请上传发货差异凭证');
       const freight = this.data.freightChoices[this.data.freightIndex] || { amount: '0.00' };
       const preview = await api.request(`/supplier-orders/${this.data.supplierOrderId}/shipment-preview`, {
         method: 'POST',
-        data: { expectedVersion: order.version, items, freight: freight.amount, deliveryMode: this.data.deliveryChoices[this.data.deliveryIndex].value, ...(freight.id ? { freightConfirmationId: freight.id } : {}), ...(this.data.deliveryIndex === 1 ? { carrierId: this.data.carrierId } : {}) }
+        data: { expectedVersion: order.version, completeDelivery: this.data.completeDelivery, items, freight: freight.amount, deliveryMode: this.data.deliveryChoices[this.data.deliveryIndex].value, ...(freight.id ? { freightConfirmationId: freight.id } : {}), ...(this.data.deliveryIndex === 1 ? { carrierId: this.data.carrierId } : {}) }
       });
       await this.submitCommand(`/supplier-orders/${this.data.supplierOrderId}/shipments`, {
         method: 'POST',
         data: {
           expectedVersion: order.version,
+          completeDelivery: this.data.completeDelivery,
           items,
           ...(this.data.revisionNote.trim() ? { note: this.data.revisionNote.trim() } : {}),
           ...(this.data.revisionEvidence.length ? { evidenceFileIds: this.data.revisionEvidence.map(file => file.id) } : {}),
@@ -846,10 +975,12 @@ Page({
         },
         header: { 'idempotency-key': `mini-supplier-ship-${Date.now()}` }
       });
-      this.setData({ result: null });
-      await this.loadWork();
-      this.setData({ supplierOrderId: '', selectedOrder: null, shipmentItems: [], trackingNo: '', carrierId: '', carrierIndex: 0 });
-      if (wx.showToast) wx.showToast({ title: '发货成功', icon: 'success' });
+      this.setData({ result: null, supplierOrderId: '', selectedOrder: null, orderMode: 'detail', shipmentItems: [],
+        trackingNo: '', carrierId: '', carrierIndex: 0, revisionNote: '', revisionEvidence: [],
+        visibleOrders: [], shippingTasks: [], objectionTasks: [] });
+      const refreshed = await this.loadOrders();
+      if (refreshed === false) this.setData({ error: `发货已成功，订单列表刷新失败，请刷新重试。${this.data.error || ''}` });
+      if (wx.showToast) wx.showToast({ title: refreshed === false ? '已发货，列表待刷新' : '发货成功', icon: refreshed === false ? 'none' : 'success' });
     } catch (error) {
       this.setData({ error: error.message });
     } finally {
@@ -966,7 +1097,7 @@ Page({
   },
 
   logout() {
-    if (this.data.recovering || this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting) return;
+    if (this.data.recovering || this.data.shipping || this.data.rejecting || this.data.resolving || this.data.paying || this.data.freightRequesting || this.data.exceptionReplyUploading || this.data.deliveryBusy) return;
     api.logout();
     wx.redirectTo({ url: '/pages/login/index' });
   }

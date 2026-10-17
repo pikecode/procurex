@@ -1,0 +1,1 @@
+ALTER TABLE "Receipt" ADD COLUMN "hasException" BOOLEAN NOT NULL DEFAULT false;

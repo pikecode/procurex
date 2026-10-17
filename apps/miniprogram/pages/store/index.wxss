@@ -568,6 +568,10 @@
 }
 .result-banner > view { min-width: 0; flex: 1; }
 .result-banner .secondary-text { color: var(--ink-2); }
+.receipt-followup { display: inline-block; margin: 16rpx 0 0; padding: 0 20rpx; font-size: 25rpx; line-height: 2.5; }
+.receipt-modes { display: flex; gap: 16rpx; margin-bottom: 20rpx; }
+.receipt-modes button { flex: 1; margin: 0; font-size: 27rpx; border-radius: 8rpx; background: var(--surface, #fff); color: var(--ink-2); }
+.receipt-modes .mode-selected { color: var(--brand); background: var(--brand-soft); box-shadow: inset 0 0 0 2rpx var(--brand); }
 
 .discrepancy-store-entry { padding: 24rpx var(--space-content-x); }
 .discrepancy-store-entry .button-row { grid-template-columns: 1fr 1fr; }
@@ -628,7 +632,7 @@
   font-size: 52rpx;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: .4rpx;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
 }
 .account-grid {
@@ -709,3 +713,5 @@
 .checkout-funding-group { padding: 12rpx 0; }
 .checkout-funding-group + .checkout-funding-group { border-top: 1rpx solid #e2e6e4; }
 .checkout-remaining { color: #167e5a; font-size: 24rpx; }
+.receipt-note { box-sizing: border-box; width: 100%; min-height: 144rpx; height: 160rpx; margin: 16rpx 0 24rpx; padding: 20rpx; border: 1rpx solid #dce3df; border-radius: 8rpx; background: #f6f8f7; font-size: 28rpx; line-height: 1.5; }
+.receipt-note-text { display: block; margin: 16rpx 0 24rpx; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 28rpx; line-height: 1.5; }

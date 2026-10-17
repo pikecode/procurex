@@ -1,5 +1,11 @@
 # 采购协同系统架构设计与开发方案
 
+## 2026-10-16 履约状态增量修订
+
+新小程序订单采用显式分批结束及整单确认，优先于下方旧自动完成状态图。SupplierOrder 增加 deliveryState、deliveryCompletedAt、deliveryNote、deliveryReview；OrderItem.closedQuantity 保存门店结单时放弃的余量，原 quantity 不改写。普通后续批次仍为 INITIAL，只有门店异议批准后的替代履约为 REPLENISHMENT。
+
+门店异议按整单提出并留审计；ReplenishmentGap.discrepancyId 可空，以支持不来源于单一批次的少发差额。只为已发少收部分建立替代缺口，未发部分继续占用原普通待发量；补发总量另受异议请求上限约束。结单需所有批次已登记、无待处理异议；同步关闭缺口、按实收修改行金额及订单汇总、同步储值/挂账资金。所有动作使用资金账户/下货单锁、版本校验和幂等命令，防止并发发货/收货重复计账。完整方案见 [分批履约设计](./shipment-quantity-and-replenishment-design.md)。
+
 > 版本：v1.0 已确认
 > 日期：2026-09-24
 > 需求基线：[软件需求规格说明书 v1.4](./requirements.md)

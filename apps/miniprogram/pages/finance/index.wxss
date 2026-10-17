@@ -18,7 +18,7 @@
   font-size: 48rpx;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: .4rpx;
+  letter-spacing: 0;
 }
 
 .review-band {
